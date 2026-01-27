@@ -444,7 +444,7 @@ class BuildValidator:
             print("\n⚠️ Some non-critical issues found")
             return 0
         else:
-            print("\n✅ All validations passed!")
+            print("\n[OK] All validations passed!")
             return 0
 
 

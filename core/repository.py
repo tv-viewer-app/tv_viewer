@@ -4,7 +4,10 @@ import asyncio
 import aiohttp
 from typing import List, Dict, Any, Optional, Callable
 from utils.helpers import parse_m3u
+from utils.logger import get_logger
 import config
+
+logger = get_logger(__name__)
 
 
 class RepositoryHandler:
@@ -50,7 +53,7 @@ class RepositoryHandler:
         """
         # Security: Validate URL
         if not self._validate_url(url):
-            print(f"Invalid or unsafe URL: {url}")
+            logger.debug(f"Invalid or unsafe URL: {url}")
             return []
         
         try:
@@ -60,19 +63,19 @@ class RepositoryHandler:
                     content = await response.text(errors='replace')
                     # Security: Limit content size to prevent memory issues
                     if len(content) > 50 * 1024 * 1024:  # 50MB limit
-                        print(f"Content too large from {url}")
+                        logger.debug(f"Content too large from {url}")
                         return []
                     channels = parse_m3u(content)
-                    print(f"Fetched {len(channels)} channels from {url}")
+                    logger.debug(f"Fetched {len(channels)} channels from {url}")
                     return channels
                 else:
-                    print(f"Failed to fetch {url}: HTTP {response.status}")
+                    logger.debug(f"Failed to fetch {url}: HTTP {response.status}")
         except asyncio.TimeoutError:
-            print(f"Timeout fetching {url}")
+            logger.debug(f"Timeout fetching {url}")
         except aiohttp.ClientError as e:
-            print(f"Error fetching {url}: {e}")
+            logger.debug(f"Error fetching {url}: {e}")
         except Exception as e:
-            print(f"Unexpected error fetching {url}: {e}")
+            logger.debug(f"Unexpected error fetching {url}: {e}")
         
         return []
     
@@ -111,5 +114,5 @@ class RepositoryHandler:
             # Always close session when done
             await self.close()
         
-        print(f"Total unique channels fetched: {len(all_channels)}")
+        logger.debug(f"Total unique channels fetched: {len(all_channels)}")
         return all_channels

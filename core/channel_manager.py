@@ -128,7 +128,7 @@ class ChannelManager:
                     if 'scan_status' not in ch:
                         ch['scan_status'] = 'pending' if ch.get('is_working') is None else 'scanned'
                 self._organize_channels()
-            print(f"Loaded {len(self.channels)} channels from cache")
+            logger.debug(f"Loaded {len(self.channels)} channels from cache")
             return True
         return False
     
@@ -262,7 +262,7 @@ class ChannelManager:
         
         for idx, channel in enumerate(self.channels):
             if idx % 5000 == 0 and idx > 0:
-                print(f"Organizing channels: {idx}/{total}...")
+                logger.debug(f"Organizing channels: {idx}/{total}...")
             
             # Build URL index for fast lookups
             url = channel.get('url')
@@ -295,7 +295,7 @@ class ChannelManager:
                 channel['media_type'] = detect_media_type(channel)
         
         if total > 0:
-            print(f"Organizing channels: {total}/{total} done.")
+            logger.debug(f"Organizing channels: {total}/{total} done.")
     
     def get_categories(self) -> List[str]:
         """Get list of all categories with channels (only actual content categories)."""
@@ -391,7 +391,7 @@ class ChannelManager:
     
     async def _fetch_and_update(self):
         """Fetch channels from repositories and update the list."""
-        print("_fetch_and_update starting...")
+        logger.debug("_fetch_and_update starting...")
         
         def progress(current, total):
             if self.on_fetch_progress:
@@ -399,7 +399,7 @@ class ChannelManager:
         
         try:
             channels = await self.repository_handler.fetch_all_repositories(progress)
-            print(f"Repository fetch complete, got {len(channels)} channels")
+            logger.debug(f"Repository fetch complete, got {len(channels)} channels")
         except Exception as e:
             logger.error(f"Error fetching repositories: {e}")
             
@@ -452,20 +452,20 @@ class ChannelManager:
                                 channel['scan_status'] = 'pending'
                             merged_channels.append(channel)
                             seen_urls.add(url)
-                            print(f"Added custom channel: {channel.get('name')}")
+                            logger.debug(f"Added custom channel: {channel.get('name')}")
                 
                 self.channels = merged_channels
-                print(f"Merged channels: {len(self.channels)}")
+                logger.debug(f"Merged channels: {len(self.channels)}")
                 self._organize_channels()
-                print("Channels organized")
+                logger.debug("Channels organized")
         except Exception as e:
-            print(f"Error merging channels: {e}")
+            logger.debug(f"Error merging channels: {e}")
             
             return
         
         if self.on_channels_loaded:
             self.on_channels_loaded(len(channels))
-        print("_fetch_and_update complete")
+        logger.debug("_fetch_and_update complete")
     
     def fetch_channels_async(self, callback: Optional[Callable] = None):
         """
@@ -481,9 +481,9 @@ class ChannelManager:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(self._fetch_and_update())
-                print(f"Fetch complete. {len(self.channels)} channels ready. Starting validation...")
+                logger.debug(f"Fetch complete. {len(self.channels)} channels ready. Starting validation...")
             except Exception as e:
-                print(f"Error in fetch: {e}")
+                logger.debug(f"Error in fetch: {e}")
                 
             finally:
                 if callback:
@@ -569,7 +569,7 @@ class ChannelManager:
             
             working_count = sum(1 for ch in self.channels if ch.get('is_working'))
             total_count = len(self.channels)
-            print(f"Validation complete: {working_count}/{total_count} channels working")
+            logger.debug(f"Validation complete: {working_count}/{total_count} channels working")
         
         self.stream_checker.start_background_check(
             channels_to_check,

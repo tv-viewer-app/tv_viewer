@@ -58,7 +58,7 @@ class StreamChecker:
         checker = StreamChecker()
         checker.start_background_check(
             channels,
-            on_channel_checked=lambda ch, cur, tot: print(f"{cur}/{tot}")
+            on_channel_checked=lambda ch, cur, tot: logger.debug(f"{cur}/{tot}")
         )
     """
     
@@ -268,7 +268,7 @@ class StreamChecker:
             - Asyncio sleep() calls yield CPU time
         """
         if self._running:
-            print("Stream checker already running")
+            logger.debug("Stream checker already running")
             return
         
         self._stop_event.clear()
