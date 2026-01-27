@@ -194,6 +194,9 @@ class PlayerWindow(ctk.CTkToplevel):
             corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
             fg_color=FluentColors.CONTROL_DEFAULT,
             hover_color=FluentColors.CONTROL_HOVER,
+            text_color=FluentColors.TEXT_PRIMARY,
+            border_width=1,
+            border_color=FluentColors.CONTROL_BORDER,
             command=self.stop,
             font=ctk.CTkFont(size=16)
         )
@@ -250,6 +253,9 @@ class PlayerWindow(ctk.CTkToplevel):
             corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
             fg_color=FluentColors.CONTROL_DEFAULT,
             hover_color=FluentColors.CONTROL_HOVER,
+            text_color=FluentColors.TEXT_PRIMARY,
+            border_width=1,
+            border_color=FluentColors.CONTROL_BORDER,
             command=self._toggle_mute,
             font=ctk.CTkFont(size=14)
         )
@@ -265,6 +271,9 @@ class PlayerWindow(ctk.CTkToplevel):
             corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
             fg_color=FluentColors.CONTROL_DEFAULT,
             hover_color=FluentColors.CONTROL_HOVER,
+            text_color=FluentColors.TEXT_PRIMARY,
+            border_width=1,
+            border_color=FluentColors.CONTROL_BORDER,
             command=self._toggle_fullscreen,
             font=ctk.CTkFont(size=14)
         )
@@ -280,6 +289,9 @@ class PlayerWindow(ctk.CTkToplevel):
             corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
             fg_color=FluentColors.CONTROL_DEFAULT,
             hover_color=FluentColors.CONTROL_HOVER,
+            text_color=FluentColors.TEXT_PRIMARY,
+            border_width=1,
+            border_color=FluentColors.CONTROL_BORDER,
             command=self._open_in_external_vlc,
             font=ctk.CTkFont(size=12)
         )
@@ -296,6 +308,9 @@ class PlayerWindow(ctk.CTkToplevel):
                 corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
                 fg_color=FluentColors.CONTROL_DEFAULT,
                 hover_color=FluentColors.CONTROL_HOVER,
+                text_color=FluentColors.TEXT_PRIMARY,
+                border_width=1,
+                border_color=FluentColors.CONTROL_BORDER,
                 command=self._show_cast_menu,
                 font=ctk.CTkFont(size=14)
             )
@@ -675,7 +690,7 @@ class PlayerWindow(ctk.CTkToplevel):
             
             # Stop embedded player and close window if VLC was launched
             if vlc_launched:
-                self._stop_playback()
+                self.stop()
                 self.destroy()
                 
         except Exception as e:

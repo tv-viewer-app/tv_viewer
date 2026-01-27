@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-01-28
+
+### Fixed
+- **VLC Button** - Fixed AttributeError when clicking VLC button (stop_playback → stop)
+- **Player Button Visibility** - Added dark text color and borders to player control buttons for visibility on light background
+
 ## [1.4.1] - 2026-01-27
 
 ### Security
