@@ -6,7 +6,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -38,10 +37,24 @@ ENV/
 .coverage
 htmlcov/
 
-# PyInstaller
+# PyInstaller build output
+dist/
 *.manifest
-*.spec
 
-# Local config (optional - remove if you want to track)
-# channels.json
-# channels_config.json
+# Logs (keep structure, ignore content)
+logs/*.log
+
+# Temp files
+*.tmp
+*.bak
+*.temp
+
+# Android build artifacts
+android/.buildozer/
+android/bin/
+android/.gradle/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

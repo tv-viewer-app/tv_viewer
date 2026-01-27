@@ -4,15 +4,22 @@
 
 TV Viewer is a cross-platform IPTV streaming application built with Python. It discovers, validates, and plays live TV streams from public IPTV repositories.
 
+**Version:** 1.3.0  
+**Platforms:** Windows, Linux, macOS, Android
+
 ## Technology Stack
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| UI Framework | CustomTkinter | Modern Material Design UI |
+| UI Framework | CustomTkinter | Windows 11 Fluent Design UI |
 | Video Player | VLC (python-vlc) | Hardware-accelerated playback |
 | HTTP Client | aiohttp | Async network operations |
 | Concurrency | asyncio + threading | Non-blocking operations |
 | Data Storage | JSON files | Channel cache and config |
+| Logging | Python logging | Rotating file logs |
+| Mobile | Kivy | Android app UI |
+| Build | PyInstaller | Windows executable |
+| CI/CD | GitHub Actions | Automated builds |
 
 ## Project Structure
 
