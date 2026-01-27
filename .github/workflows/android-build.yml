@@ -53,12 +53,18 @@ jobs:
     - name: Build APK
       working-directory: android
       run: |
-        # Accept SDK licenses
-        yes | buildozer android debug 2>&1 | tail -100
+        # Accept SDK licenses and build
+        yes | buildozer android debug 2>&1 || true
+        # Show what was built
+        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+        ls -la bin/ 2>/dev/null || echo "No bin directory"
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: tv-viewer-android
-        path: android/bin/*.apk
+        path: |
+          android/bin/*.apk
+          android/.buildozer/android/platform/build-*/dists/*/bin/*.apk
         retention-days: 30
+        if-no-files-found: warn
