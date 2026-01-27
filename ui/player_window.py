@@ -54,6 +54,9 @@ except ImportError:
 import config
 from utils.helpers import format_duration
 from ui.constants import FluentColors, FluentSpacing
+from ui.tooltip import add_tooltip
+
+
 def get_vlc_hardware_acceleration_args() -> list:
     """Get VLC arguments for hardware-accelerated video decoding.
     
@@ -180,6 +183,7 @@ class PlayerWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=16)
         )
         self.play_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE, pady=8)
+        add_tooltip(self.play_btn, "Play/Pause (Space)")
         
         # Stop button
         self.stop_btn = ctk.CTkButton(
@@ -194,6 +198,7 @@ class PlayerWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=16)
         )
         self.stop_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_SMALL)
+        add_tooltip(self.stop_btn, "Stop playback")
         
         # Time label
         self.time_label = ctk.CTkLabel(
@@ -224,6 +229,7 @@ class PlayerWindow(ctk.CTkToplevel):
             button_hover_color=FluentColors.ACCENT_LIGHT
         )
         self.volume_slider.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_MEDIUM)
+        add_tooltip(self.volume_slider, "Adjust volume")
         
         # Volume percentage label
         self.volume_label = ctk.CTkLabel(
@@ -248,6 +254,7 @@ class PlayerWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14)
         )
         self.mute_btn.pack(side=tk.LEFT)
+        add_tooltip(self.mute_btn, "Mute/Unmute (M)")
         
         # Fullscreen button
         self.fullscreen_btn = ctk.CTkButton(
@@ -262,6 +269,7 @@ class PlayerWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14)
         )
         self.fullscreen_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
+        add_tooltip(self.fullscreen_btn, "Fullscreen (F) - Press ESC to exit")
         
         # Open in VLC button
         self.vlc_btn = ctk.CTkButton(
@@ -276,6 +284,7 @@ class PlayerWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=12)
         )
         self.vlc_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
+        add_tooltip(self.vlc_btn, "Open in external VLC player")
         
         # Cast button (if available)
         if CAST_AVAILABLE:
@@ -291,6 +300,7 @@ class PlayerWindow(ctk.CTkToplevel):
                 font=ctk.CTkFont(size=14)
             )
             self.cast_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
+            add_tooltip(self.cast_btn, "Cast to TV/Chromecast")
         
         # Channel info
         channel_name = self.channel.get('name', 'Unknown')
@@ -379,32 +389,60 @@ class PlayerWindow(ctk.CTkToplevel):
     
     def _show_vlc_error(self):
         """Show error message when VLC is not available with recovery options."""
+        import webbrowser
+        
         error_frame = ctk.CTkFrame(self.video_canvas, fg_color=FluentColors.BG_CARD)
         error_frame.place(relx=0.5, rely=0.5, anchor='center')
         
         ctk.CTkLabel(
             error_frame,
-            text="⚠️ VLC is not available",
+            text="⚠️ VLC Media Player Required",
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=FluentColors.WARNING
         ).pack(pady=(20, 10), padx=30)
         
         ctk.CTkLabel(
             error_frame,
-            text="Please install VLC media player and python-vlc package.",
+            text="VLC is required for video playback.\nPlease install it to watch streams.",
             font=ctk.CTkFont(size=12),
-            text_color=FluentColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY,
+            justify="center"
         ).pack(pady=5, padx=30)
+        
+        # Buttons frame
+        btn_frame = ctk.CTkFrame(error_frame, fg_color="transparent")
+        btn_frame.pack(pady=(15, 20))
+        
+        # Download VLC button
+        def open_vlc_download():
+            webbrowser.open("https://www.videolan.org/vlc/")
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="Download VLC",
+            width=120,
+            fg_color=FluentColors.ACCENT,
+            hover_color=FluentColors.ACCENT_DARK,
+            command=open_vlc_download
+        ).pack(side=tk.LEFT, padx=5)
         
         # Retry button
         ctk.CTkButton(
-            error_frame,
+            btn_frame,
             text="Retry",
-            width=100,
-            fg_color=FluentColors.ACCENT,
-            hover_color=FluentColors.ACCENT_DARK,
+            width=80,
+            fg_color=FluentColors.CONTROL_DEFAULT,
+            hover_color=FluentColors.CONTROL_HOVER,
             command=lambda: [error_frame.destroy(), self._init_vlc(), self.play() if self.player else None]
-        ).pack(pady=(15, 20))
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Help text
+        ctk.CTkLabel(
+            error_frame,
+            text="After installing VLC, also run: pip install python-vlc",
+            font=ctk.CTkFont(size=10),
+            text_color=FluentColors.TEXT_DISABLED
+        ).pack(pady=(0, 15))
     
     def play(self):
         """Start playing the stream."""
