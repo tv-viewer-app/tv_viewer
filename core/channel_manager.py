@@ -25,10 +25,14 @@ from typing import List, Dict, Any, Optional, Callable, Set
 from collections import defaultdict
 
 from utils.helpers import load_json_file, save_json_file, categorize_channel, get_channel_country, get_minimum_age, detect_media_type
+from utils.logger import get_logger
 from .repository import RepositoryHandler
 from .stream_checker import StreamChecker
 import config
 from datetime import datetime
+
+# Module logger
+logger = get_logger(__name__)
 
 
 def import_time_str() -> str:
@@ -203,23 +207,25 @@ class ChannelManager:
         with self._lock:
             self._non_working_urls = urls
     
+    # Pre-compiled adult content keywords set for O(1) lookup
+    _ADULT_KEYWORDS: Set[str] = frozenset({
+        'adult', 'xxx', '18+', 'erotic', 'playboy', 'penthouse', 'hustler',
+        'vivid', 'spice', 'redlight', 'private tv', 'sexe', 'porn', 'brazzers',
+        'naughty', 'pleasure', 'xtreme', 'x-rated', 'xrated', 'mature',
+    })
+    
     def _is_adult_channel(self, channel: Dict[str, Any]) -> bool:
-        """Check if a channel is adult content that should be filtered out."""
+        """Check if a channel is adult content that should be filtered out.
+        
+        Uses pre-compiled keyword set for O(1) lookup per keyword.
+        """
         name = (channel.get('name') or '').lower()
         category = (channel.get('category') or '').lower()
         url = (channel.get('url') or '').lower()
         
-        adult_keywords = [
-            'adult', 'xxx', '18+', 'erotic', 'playboy', 'penthouse', 'hustler',
-            'vivid', 'spice', 'redlight', 'private tv', 'sexe', 'porn', 'brazzers',
-            'naughty', 'pleasure', 'xtreme', 'x-rated', 'xrated', 'mature',
-        ]
-        
         combined = f"{name} {category} {url}"
-        for keyword in adult_keywords:
-            if keyword in combined:
-                return True
-        return False
+        # Early exit on first match
+        return any(kw in combined for kw in self._ADULT_KEYWORDS)
     
     def _organize_by_category(self):
         """Organize channels into category buckets."""
@@ -395,9 +401,8 @@ class ChannelManager:
             channels = await self.repository_handler.fetch_all_repositories(progress)
             print(f"Repository fetch complete, got {len(channels)} channels")
         except Exception as e:
-            print(f"Error fetching repositories: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error fetching repositories: {e}")
+            
             return
         
         try:
@@ -455,8 +460,7 @@ class ChannelManager:
                 print("Channels organized")
         except Exception as e:
             print(f"Error merging channels: {e}")
-            import traceback
-            traceback.print_exc()
+            
             return
         
         if self.on_channels_loaded:
@@ -480,8 +484,7 @@ class ChannelManager:
                 print(f"Fetch complete. {len(self.channels)} channels ready. Starting validation...")
             except Exception as e:
                 print(f"Error in fetch: {e}")
-                import traceback
-                traceback.print_exc()
+                
             finally:
                 if callback:
                     callback()
@@ -493,11 +496,11 @@ class ChannelManager:
     
     def validate_channels_async(self, rescan_all: bool = False):
         """Start validating channels in the background."""
-        print(f"validate_channels_async called, rescan_all={rescan_all}")
+        logger.debug(f"validate_channels_async called, rescan_all={rescan_all}")
         
         # Check if already running
         if self.stream_checker.is_running:
-            print("Stream checker already running, skipping...")
+            logger.debug("Stream checker already running, skipping...")
             return
         
         with self._lock:
@@ -510,17 +513,17 @@ class ChannelManager:
             total = len(self.channels)
             to_check = len(channels_to_check)
             skipped = total - to_check
-            print(f"Scan skip: {skipped}/{total} channels skipped (scanned within {config.SCAN_SKIP_MINUTES} min)")
+            logger.debug(f"Scan skip: {skipped}/{total} channels skipped (scanned within {config.SCAN_SKIP_MINUTES} min)")
         
-        print(f"Channels to check: {len(channels_to_check)}")
+        logger.debug(f"Channels to check: {len(channels_to_check)}")
         
         if not channels_to_check:
-            print("No channels to scan")
+            logger.debug("No channels to scan")
             if self.on_validation_complete:
                 self.on_validation_complete()
             return
         
-        print(f"Starting validation of {len(channels_to_check)} channels...")
+        logger.info(f"Starting validation of {len(channels_to_check)} channels...")
         
         def on_checked(channel: Dict[str, Any], current: int, total: int):
             # Update the channel in our list
@@ -529,7 +532,7 @@ class ChannelManager:
             # Log progress every 100 channels or at start/end (reduced frequency)
             if current <= 3 or current % 100 == 0 or current == total:
                 status = 'Working' if is_working else 'Failed'
-                print(f"[{current}/{total}] {channel.get('name', 'Unknown')[:40]} -> {status}")
+                logger.debug(f"[{current}/{total}] {channel.get('name', 'Unknown')[:40]} -> {status}")
             
             url = channel.get('url')
             if not url:

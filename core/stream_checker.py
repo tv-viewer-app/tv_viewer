@@ -129,17 +129,22 @@ class StreamChecker:
                         # Redirect - consider as potentially working
                         channel['is_working'] = True
         except (asyncio.TimeoutError, asyncio.CancelledError):
-            pass  # Timeout or cancelled - expected for unreachable streams
+            # Timeout or cancelled - expected for unreachable streams
+            channel['is_working'] = False
         except aiohttp.ClientConnectorError:
-            pass  # Connection error - stream unreachable
+            # Connection error - stream unreachable
+            channel['is_working'] = False
         except aiohttp.ClientError:
-            pass  # Other client errors - stream issues
-        except ssl.SSLError:
-            pass  # SSL certificate errors - try anyway
+            # Other client errors - stream issues
+            channel['is_working'] = False
+        except ssl.SSLError as e:
+            # SSL certificate errors - mark as failed, log warning
+            channel['is_working'] = False
+            logger.warning(f"SSL error for {url[:50]}: {e}")
         except Exception as e:
             # Log unexpected errors for debugging
-            import logging
-            logging.getLogger(__name__).debug(f"Stream check error for {url}: {e}")
+            channel['is_working'] = False
+            logger.debug(f"Stream check error for {url[:50]}: {e}")
         
         return channel
     

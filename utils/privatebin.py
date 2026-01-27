@@ -124,12 +124,11 @@ def upload_scan_results(channels: List[Dict[str, Any]]) -> Optional[str]:
                         result = await resp.json()
                         if result.get("status") == 0:
                             paste_id = result.get("id", "")
-                            paste_key = result.get("deletetoken", "")
+                            # NOTE: Don't store deletetoken for security reasons
                             
-                            # Save to settings
+                            # Save only paste_id and timestamp to settings
                             settings = _load_settings()
                             settings["paste_id"] = paste_id
-                            settings["paste_key"] = paste_key
                             settings["timestamp"] = datetime.now().isoformat()
                             _save_settings(settings)
                             

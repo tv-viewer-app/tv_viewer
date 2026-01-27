@@ -553,8 +553,8 @@ class PlayerWindow(ctk.CTkToplevel):
                 if time_ms > 0:
                     time_sec = time_ms // 1000
                     self.time_label.configure(text=format_duration(time_sec))
-            except Exception:
-                pass
+            except (AttributeError, OSError):
+                pass  # VLC instance may be closed
         
         # Schedule next update (every 2 seconds to reduce CPU)
         if self.winfo_exists():
@@ -815,16 +815,16 @@ class PlayerWindow(ctk.CTkToplevel):
             try:
                 self.active_cast.media_controller.stop()
                 self.active_cast = None
-            except Exception:
-                pass
+            except (AttributeError, OSError):
+                pass  # Cast may be disconnected
         
         # Stop cast browser
         if self.cast_browser:
             try:
                 self.cast_browser.stop_discovery()
                 self.cast_browser = None
-            except Exception:
-                pass
+            except (AttributeError, OSError):
+                pass  # Browser may be stopped
         
         # Clear cast devices list
         self.cast_devices.clear()
@@ -834,15 +834,15 @@ class PlayerWindow(ctk.CTkToplevel):
             try:
                 self.player.stop()
                 self.player.release()
-            except Exception:
-                pass
+            except (AttributeError, OSError):
+                pass  # Player may be released
             self.player = None
         
         if self.instance:
             try:
                 self.instance.release()
-            except Exception:
-                pass
+            except (AttributeError, OSError):
+                pass  # Instance may be released
             self.instance = None
         
         # Clear references

@@ -93,8 +93,9 @@ class MainWindow:
         self._thumbnail_cache_limit = 100
         self._current_thumbnail = None
         
-        # Track displayed channels for click handling
+        # Track displayed channels for click handling (with name index for O(1) lookup)
         self._displayed_channels: List[Dict[str, Any]] = []
+        self._displayed_channel_names: Dict[str, Dict[str, Any]] = {}
         
         # UI update debouncing and batching
         self._pending_group_update = None
@@ -761,8 +762,9 @@ class MainWindow:
         # Sort channels
         filtered_channels = self._sort_channels(filtered_channels)
         
-        # Store displayed channels for click handling
+        # Store displayed channels for click handling with name index
         self._displayed_channels = filtered_channels
+        self._displayed_channel_names = {ch.get('name', ''): ch for ch in filtered_channels}
         
         # Clear existing items
         self.channel_tree.delete(*self.channel_tree.get_children())
@@ -944,13 +946,12 @@ class MainWindow:
         self._show_channel_thumbnail(channel)
     
     def _find_channel_by_name(self, name: str) -> Optional[Dict[str, Any]]:
-        """Find a channel by name from displayed channels first."""
-        # First search in displayed (filtered) channels for performance
-        for ch in self._displayed_channels:
-            if ch.get('name') == name:
-                return ch
+        """Find a channel by name using O(1) index lookup."""
+        # Use name index for O(1) lookup
+        if name in self._displayed_channel_names:
+            return self._displayed_channel_names[name]
         
-        # Fallback to full search if not found
+        # Fallback to full search if not in displayed channels
         if self.current_group == '__all__':
             channels = self.channel_manager.get_all_channels()
         elif self.current_group:
@@ -981,7 +982,8 @@ class MainWindow:
                 photo = ctk.CTkImage(light_image=img, dark_image=img, size=(128, 72))
                 self._current_thumbnail = photo
                 self.thumbnail_label.configure(image=photo, text='')
-            except Exception:
+            except (IOError, OSError) as e:
+                logger.debug(f"Thumbnail load error: {e}")
                 self.thumbnail_label.configure(image=None, text="Error")
         else:
             if channel.get('is_working'):
@@ -1083,8 +1085,8 @@ class MainWindow:
             self._set_status(f"Validating channels... {current}/{total}")
             # Process any pending events to keep UI responsive
             self.root.update_idletasks()
-        except Exception:
-            pass  # Ignore errors if window is closing
+        except tk.TclError:
+            pass  # Window closed during update - expected
     
     def _debounced_refresh(self):
         """Debounced UI refresh."""

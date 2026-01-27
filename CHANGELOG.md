@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-01-27
+
+### Security
+- **SSL/TLS Error Handling** - SSL errors now properly logged and marked as failed (was silently ignored)
+- **PrivateBin** - Removed plaintext deletion token storage for security
+- **Exception Handling** - Replaced bare except blocks with specific exception types throughout
+
+### Performance
+- **Channel Lookup** - O(1) name-to-channel index for instant lookups (was O(n))
+- **Adult Filter** - Pre-compiled keyword set with early-exit matching
+- **UI Updates** - Optimized batch updates to reduce screen refreshes
+
+### Code Quality
+- **Logging** - Replaced all print() statements with structured logging
+- **Error Handling** - Specific exception types instead of generic Exception
+- **Documentation** - Added missing docstrings to key methods
+- Removed unsafe `exec()` helper scripts (organize_project.py, _create_prd.py)
+
 ## [1.4.0] - 2026-01-27
 
 ### Added
