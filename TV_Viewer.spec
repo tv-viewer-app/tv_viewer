@@ -5,8 +5,8 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('config.py', '.'), ('channels_config.json', '.')],
-    hiddenimports=['customtkinter', 'PIL', 'aiohttp', 'vlc', 'pychromecast'],
+    datas=[('channels_config.json', '.')],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['tv_viewer.ico'],
+    icon='NONE',
 )

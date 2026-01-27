@@ -62,7 +62,15 @@ def capture_thumbnail(url: str, timeout: int = 5) -> Optional[str]:
     
     try:
         # Create VLC instance with snapshot options
-        instance = vlc.Instance('--no-xlib', '--quiet', '--no-audio', '--vout=dummy')
+        # Using video memory output for reliable snapshot capture
+        import sys
+        if sys.platform == 'win32':
+            # On Windows, use vmem or direct3d
+            instance = vlc.Instance('--no-xlib', '--quiet', '--no-audio', 
+                                    '--vout=vmem', '--avcodec-hw=none')
+        else:
+            instance = vlc.Instance('--no-xlib', '--quiet', '--no-audio', '--vout=dummy')
+        
         if not instance:
             return None
         
@@ -77,36 +85,53 @@ def capture_thumbnail(url: str, timeout: int = 5) -> Optional[str]:
         player.set_media(media)
         player.play()
         
-        # Wait for video to start
+        # Wait for video to start with better state checking
         import time
         start = time.time()
+        video_ready = False
+        
         while time.time() - start < timeout:
             state = player.get_state()
             if state == vlc.State.Playing:
-                # Give it a moment to get a good frame
-                time.sleep(0.5)
-                break
-            elif state in (vlc.State.Error, vlc.State.Ended):
+                # Check if video has dimensions
+                width = player.video_get_width()
+                height = player.video_get_height()
+                if width > 0 and height > 0:
+                    # Wait a bit more for a good frame
+                    time.sleep(1.0)
+                    video_ready = True
+                    break
+            elif state in (vlc.State.Error, vlc.State.Ended, vlc.State.Stopped):
                 return None
-            time.sleep(0.1)
+            time.sleep(0.2)
         
-        # Try to take snapshot
+        if not video_ready:
+            return None
+        
+        # Try to take snapshot with retries
         width = player.video_get_width()
         height = player.video_get_height()
         
         if width > 0 and height > 0:
             # Take snapshot to temp file
             temp_path = thumb_path + ".tmp.png"
-            result = player.video_take_snapshot(0, temp_path, 
-                                                 config.THUMBNAIL_WIDTH, 
-                                                 config.THUMBNAIL_HEIGHT)
             
-            if result == 0 and os.path.exists(temp_path):
-                # Rename to final path
-                if os.path.exists(thumb_path):
-                    os.remove(thumb_path)
-                os.rename(temp_path, thumb_path)
-                return thumb_path
+            # Try snapshot multiple times
+            for attempt in range(3):
+                result = player.video_take_snapshot(0, temp_path, 
+                                                     config.THUMBNAIL_WIDTH, 
+                                                     config.THUMBNAIL_HEIGHT)
+                
+                if result == 0:
+                    # Wait for file to be written
+                    time.sleep(0.3)
+                    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                        # Rename to final path
+                        if os.path.exists(thumb_path):
+                            os.remove(thumb_path)
+                        os.rename(temp_path, thumb_path)
+                        return thumb_path
+                time.sleep(0.3)
         
         return None
         

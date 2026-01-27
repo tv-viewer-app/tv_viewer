@@ -67,17 +67,17 @@ class ToolTip:
         self.tooltip_window.wm_overrideredirect(True)
         self.tooltip_window.wm_geometry(f"+{x}+{y}")
         
-        # Style the tooltip - dark theme
+        # Style the tooltip - light theme compatible
         label = tk.Label(
             self.tooltip_window,
             text=self.text,
-            background="#2D2D2D",
+            background="#1A1A1A",  # Dark tooltip on light bg for contrast
             foreground="#FFFFFF",
-            relief="solid",
-            borderwidth=1,
+            relief="flat",
+            borderwidth=0,
             font=("Segoe UI", 9),
-            padx=8,
-            pady=4
+            padx=10,
+            pady=6
         )
         label.pack()
         

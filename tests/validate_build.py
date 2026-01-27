@@ -416,7 +416,7 @@ class BuildValidator:
             
             print(f"\n{severity.value}:")
             for r in results:
-                status = "✓ PASS" if r.passed else "✗ FAIL"
+                status = "[PASS]" if r.passed else "[FAIL]"
                 print(f"  {status} {r.name}: {r.message} ({r.duration_ms:.0f}ms)")
                 
                 if r.passed:

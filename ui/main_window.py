@@ -33,9 +33,16 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-# Set CustomTkinter appearance for Windows 11 look
-ctk.set_appearance_mode("dark")
+# Set CustomTkinter appearance for Windows 11 Light theme
+ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
+
+
+class _DummyScanAnimation:
+    """Dummy class for backward compatibility when scan animation is removed."""
+    def update_progress(self, *args): pass
+    def set_complete(self, *args): pass
+    def set_progress(self, *args): pass
 
 
 class MainWindow:
@@ -86,6 +93,9 @@ class MainWindow:
         self._thumbnail_cache_limit = 100
         self._current_thumbnail = None
         
+        # Track displayed channels for click handling
+        self._displayed_channels: List[Dict[str, Any]] = []
+        
         # UI update debouncing and batching
         self._pending_group_update = None
         self._pending_channel_update = None
@@ -120,76 +130,72 @@ class MainWindow:
         # Sidebar frame
         self.sidebar = ctk.CTkFrame(
             self.root,
-            width=320,
+            width=300,
             corner_radius=0,
             fg_color=FluentColors.BG_ACRYLIC
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(7, weight=1)  # Make category list expandable
+        # Row 5 = category list (scrollable, expands)
+        self.sidebar.grid_rowconfigure(5, weight=1)
         self.sidebar.grid_propagate(False)
         
-        # App title with logo
+        # App title with version on same line
         title_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        title_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        title_frame.grid(row=0, column=0, padx=12, pady=(10, 5), sticky="ew")
         
         self.title_label = ctk.CTkLabel(
             title_frame,
             text=f"📺 {config.APP_NAME}",
-            font=ctk.CTkFont(size=24, weight="bold"),
+            font=ctk.CTkFont(size=18, weight="bold"),
             text_color=FluentColors.ACCENT
         )
-        self.title_label.pack(anchor="w")
+        self.title_label.pack(side="left")
         
         self.version_label = ctk.CTkLabel(
             title_frame,
             text=f"v{config.APP_VERSION}",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=10),
             text_color=FluentColors.TEXT_SECONDARY
         )
-        self.version_label.pack(anchor="w")
+        self.version_label.pack(side="right", padx=5)
         
-        # Scan progress indicator
-        self._create_scan_indicator()
-        
-        # Search box with Material Design
+        # Search box
         self._create_search_box()
         
-        # Group by selector
-        self._create_group_selector()
-        
-        # Media type selector (All/TV/Radio)
-        self._create_media_type_selector()
+        # Group by and media type selectors
+        self._create_compact_selectors()
         
         # Filter toggles
         self._create_filter_toggles()
         
-        # Category list
+        # Category list (now at row 5 - expandable)
         self._create_category_list()
+        
+        # Scan indicator (compact)
+        self._create_scan_indicator()
         
         # Action buttons at bottom
         self._create_action_buttons()
     
     def _create_scan_indicator(self):
-        """Create scan progress indicator with animation widget."""
+        """Create compact scan progress indicator."""
         self.scan_frame = ctk.CTkFrame(
             self.sidebar,
             fg_color=FluentColors.BG_CARD,
-            corner_radius=FluentSpacing.CORNER_RADIUS_MEDIUM
+            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+            height=60
         )
-        self.scan_frame.grid(row=1, column=0, padx=15, pady=10, sticky="ew")
+        self.scan_frame.grid(row=6, column=0, padx=10, pady=5, sticky="ew")
+        self.scan_frame.grid_propagate(False)
         
-        # Pixel art scan animation widget
-        self.scan_animation = ScanProgressFrame(self.scan_frame)
-        self.scan_animation.pack(padx=5, pady=5)
-        
-        # Progress label
+        # Simple progress bar and label
         self.scan_label = ctk.CTkLabel(
             self.scan_frame,
             text="Ready",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
             text_color=FluentColors.TEXT_SECONDARY
         )
-        self.scan_label.pack(padx=15, pady=(5, 5))
+        self.scan_label.pack(padx=10, pady=(8, 2))
         
         # Progress bar
         self.progress_var = ctk.DoubleVar(value=0)
@@ -197,46 +203,49 @@ class MainWindow:
             self.scan_frame,
             variable=self.progress_var,
             progress_color=FluentColors.ACCENT,
-            fg_color=FluentColors.BG_SOLID
+            fg_color=FluentColors.SURFACE_VARIANT,
+            height=8
         )
-        self.progress_bar.pack(padx=15, pady=(0, 5), fill="x")
+        self.progress_bar.pack(padx=10, pady=(0, 5), fill="x")
         
-        # Stats with legend
-        stats_frame = ctk.CTkFrame(self.scan_frame, fg_color="transparent")
-        stats_frame.pack(padx=15, pady=(0, 8), fill="x")
-        
+        # Stats label
         self.stats_label = ctk.CTkLabel(
-            stats_frame,
-            text="✓ Working  ✗ Failed  ◌ Checking",
+            self.scan_frame,
+            text="",
             font=ctk.CTkFont(size=10),
             text_color=FluentColors.TEXT_DISABLED
         )
-        self.stats_label.pack(side="left")
+        self.stats_label.pack(padx=10)
+        
+        # Hidden animation widget (for backwards compatibility)
+        self.scan_animation = _DummyScanAnimation()
     
     def _create_search_box(self):
-        """Create Material Design search box."""
+        """Create search box."""
         self.search_var = ctk.StringVar()
         self.search_entry = ctk.CTkEntry(
             self.sidebar,
             placeholder_text="🔍 Search channels...",
             textvariable=self.search_var,
-            height=40,
-            corner_radius=20,
-            border_width=0,
-            fg_color=FluentColors.SURFACE_VARIANT
+            height=36,
+            corner_radius=18,
+            border_width=1,
+            border_color=FluentColors.SURFACE_STROKE,
+            fg_color=FluentColors.SURFACE
         )
-        self.search_entry.grid(row=2, column=0, padx=15, pady=10, sticky="ew")
+        self.search_entry.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
         self.search_var.trace('w', self._on_search)
     
-    def _create_group_selector(self):
-        """Create group by selector."""
+    def _create_compact_selectors(self):
+        """Create group by and media type selectors."""
+        # Group by selector
         group_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        group_frame.grid(row=3, column=0, padx=15, pady=5, sticky="ew")
+        group_frame.grid(row=2, column=0, padx=15, pady=3, sticky="ew")
         
         ctk.CTkLabel(
             group_frame,
-            text="Group by:",
-            font=ctk.CTkFont(size=12),
+            text="Group:",
+            font=ctk.CTkFont(size=11),
             text_color=FluentColors.TEXT_SECONDARY
         ).pack(side="left")
         
@@ -244,23 +253,22 @@ class MainWindow:
             group_frame,
             values=["Category", "Country"],
             command=self._on_group_by_change,
-            font=ctk.CTkFont(size=11),
+            font=ctk.CTkFont(size=10),
             selected_color=FluentColors.PRIMARY,
             selected_hover_color=FluentColors.PRIMARY_DARK,
-            width=180
+            height=28
         )
         self.group_segmented.set("Category")
-        self.group_segmented.pack(side="right", fill="x", expand=True)
-    
-    def _create_media_type_selector(self):
-        """Create media type selector (All/TV/Radio)."""
+        self.group_segmented.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        
+        # Media type selector
         media_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        media_frame.grid(row=4, column=0, padx=15, pady=5, sticky="ew")
+        media_frame.grid(row=3, column=0, padx=15, pady=3, sticky="ew")
         
         ctk.CTkLabel(
             media_frame,
-            text="Media:",
-            font=ctk.CTkFont(size=12),
+            text="Type:",
+            font=ctk.CTkFont(size=11),
             text_color=FluentColors.TEXT_SECONDARY
         ).pack(side="left")
         
@@ -270,40 +278,68 @@ class MainWindow:
             values=["All", "TV", "Radio"],
             command=self._on_media_type_change,
             variable=self.media_type_var,
-            font=ctk.CTkFont(size=11),
+            font=ctk.CTkFont(size=10),
             selected_color=FluentColors.PRIMARY,
             selected_hover_color=FluentColors.PRIMARY_DARK,
-            width=180
+            height=28
         )
         self.media_segmented.set("All")
-        self.media_segmented.pack(side="right", fill="x", expand=True)
+        self.media_segmented.pack(side="right", fill="x", expand=True, padx=(5, 0))
     
     def _create_filter_toggles(self):
-        """Create filter toggle switches."""
+        """Create filter toggle switches - compact layout."""
+        # Filter options in a compact frame
         filter_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        filter_frame.grid(row=5, column=0, padx=15, pady=5, sticky="ew")
+        filter_frame.grid(row=4, column=0, padx=15, pady=3, sticky="ew")
+        
+        # Row 1: Hide checking + Hide failed
+        row1 = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        row1.pack(fill="x", pady=1)
         
         self.hide_checking_var = ctk.BooleanVar(value=False)
         self.hide_checking_switch = ctk.CTkSwitch(
-            filter_frame,
+            row1,
             text="Hide checking",
             variable=self.hide_checking_var,
             command=self._apply_filters,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=10),
+            width=32,
+            height=18,
             progress_color=FluentColors.PRIMARY
         )
-        self.hide_checking_switch.pack(side="left", padx=(0, 15))
+        self.hide_checking_switch.pack(side="left")
         
         self.hide_failed_var = ctk.BooleanVar(value=False)
         self.hide_failed_switch = ctk.CTkSwitch(
-            filter_frame,
+            row1,
             text="Hide failed",
             variable=self.hide_failed_var,
             command=self._apply_filters,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=10),
+            width=32,
+            height=18,
             progress_color=FluentColors.PRIMARY
         )
-        self.hide_failed_switch.pack(side="left")
+        self.hide_failed_switch.pack(side="right")
+        
+        # Row 2: Share toggle
+        from utils.privatebin import is_enabled, set_enabled
+        
+        row2 = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        row2.pack(fill="x", pady=1)
+        
+        self.privatebin_var = ctk.BooleanVar(value=is_enabled())
+        self.privatebin_switch = ctk.CTkSwitch(
+            row2,
+            text="Share scan results",
+            variable=self.privatebin_var,
+            command=lambda: set_enabled(self.privatebin_var.get()),
+            font=ctk.CTkFont(size=10),
+            width=32,
+            height=18,
+            progress_color=FluentColors.PRIMARY
+        )
+        self.privatebin_switch.pack(side="left")
     
     def _create_category_list(self):
         """Create the category/country scrollable list."""
@@ -311,20 +347,21 @@ class MainWindow:
         self.group_header = ctk.CTkLabel(
             self.sidebar,
             text="📂 Categories",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            font=ctk.CTkFont(size=13, weight="bold"),
             text_color=FluentColors.TEXT_PRIMARY,
             anchor="w"
         )
-        self.group_header.grid(row=6, column=0, padx=20, pady=(15, 5), sticky="w")
+        self.group_header.grid(row=5, column=0, padx=15, pady=(8, 3), sticky="w")
         
-        # Scrollable frame for categories
+        # Scrollable frame for categories (this is the expandable row)
         self.category_scroll = ctk.CTkScrollableFrame(
             self.sidebar,
             fg_color="transparent",
             scrollbar_button_color=FluentColors.SURFACE_VARIANT,
             scrollbar_button_hover_color=FluentColors.PRIMARY
         )
-        self.category_scroll.grid(row=7, column=0, padx=10, pady=5, sticky="nsew")
+        # Row 5 is set as weight=1 in _create_sidebar, so use row index that matches
+        self.category_scroll.grid(row=5, column=0, padx=10, pady=3, sticky="nsew")
         
         # Store category buttons
         self.category_buttons = []
@@ -332,7 +369,7 @@ class MainWindow:
     def _create_action_buttons(self):
         """Create action buttons at bottom of sidebar."""
         button_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        button_frame.grid(row=8, column=0, padx=15, pady=15, sticky="ew")
+        button_frame.grid(row=7, column=0, padx=10, pady=10, sticky="ew")
         
         # Scan toggle button
         self.scan_btn = ctk.CTkButton(
@@ -345,6 +382,19 @@ class MainWindow:
             hover_color=FluentColors.PRIMARY_DARK
         )
         self.scan_btn.pack(fill="x", pady=(0, 8))
+        
+        # Export M3U button
+        self.export_btn = ctk.CTkButton(
+            button_frame,
+            text="📥 Export M3U",
+            command=self._export_m3u,
+            height=36,
+            corner_radius=18,
+            fg_color=FluentColors.SURFACE_VARIANT,
+            hover_color=FluentColors.BG_ELEVATED,
+            text_color=FluentColors.TEXT_PRIMARY
+        )
+        self.export_btn.pack(fill="x", pady=(0, 8))
         
         # Settings button
         self.settings_btn = ctk.CTkButton(
@@ -711,6 +761,9 @@ class MainWindow:
         # Sort channels
         filtered_channels = self._sort_channels(filtered_channels)
         
+        # Store displayed channels for click handling
+        self._displayed_channels = filtered_channels
+        
         # Clear existing items
         self.channel_tree.delete(*self.channel_tree.get_children())
         
@@ -891,7 +944,13 @@ class MainWindow:
         self._show_channel_thumbnail(channel)
     
     def _find_channel_by_name(self, name: str) -> Optional[Dict[str, Any]]:
-        """Find a channel by name."""
+        """Find a channel by name from displayed channels first."""
+        # First search in displayed (filtered) channels for performance
+        for ch in self._displayed_channels:
+            if ch.get('name') == name:
+                return ch
+        
+        # Fallback to full search if not found
         if self.current_group == '__all__':
             channels = self.channel_manager.get_all_channels()
         elif self.current_group:
@@ -975,10 +1034,7 @@ class MainWindow:
         
         if channel.get('is_working'):
             self.scan_working_count += 1
-            if self.scan_working_count % 10 == 1:
-                url = channel.get('url', '')
-                if url and not thumbnail_exists(url):
-                    capture_thumbnail_async(url)
+            # Don't capture thumbnails during scan - do it on channel select
         else:
             self.scan_failed_count += 1
         self.scan_total_count = total
@@ -1049,6 +1105,14 @@ class MainWindow:
         # Update scan animation to show complete
         self.root.after(0, lambda: self.scan_animation.set_complete(working, total))
         
+        # Upload results to PrivateBin if enabled
+        try:
+            from utils.privatebin import is_enabled, upload_scan_results
+            if is_enabled():
+                self.root.after(1000, lambda: upload_scan_results(self.channel_manager.channels))
+        except ImportError:
+            pass
+        
         self.scan_working_count = 0
         self.scan_failed_count = 0
         self._scan_running = False
@@ -1110,6 +1174,67 @@ class MainWindow:
             )
         except Exception as e:
             messagebox.showerror("Error", f"Could not open config file:\n{e}")
+    
+    def _export_m3u(self):
+        """Export all channels as M3U playlist file."""
+        from tkinter import filedialog
+        
+        # Get all working channels
+        channels = self.channel_manager.get_all_channels()
+        working_channels = [ch for ch in channels if ch.get('is_working', False)]
+        
+        if not working_channels:
+            messagebox.showwarning("No Channels", 
+                "No working channels to export.\nRun a scan first to validate channels.")
+            return
+        
+        # Ask for save location
+        filepath = filedialog.asksaveasfilename(
+            title="Export M3U Playlist",
+            defaultextension=".m3u",
+            filetypes=[("M3U Playlist", "*.m3u"), ("M3U8 Playlist", "*.m3u8"), ("All Files", "*.*")],
+            initialfile="tv_channels.m3u"
+        )
+        
+        if not filepath:
+            return
+        
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("#EXTM3U\n")
+                f.write(f"# TV Viewer Export - {len(working_channels)} channels\n")
+                f.write(f"# Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                
+                for ch in working_channels:
+                    name = ch.get('name', 'Unknown')
+                    url = ch.get('url', '')
+                    category = ch.get('category', 'Other')
+                    logo = ch.get('logo', '')
+                    country = ch.get('country', '')
+                    
+                    if not url:
+                        continue
+                    
+                    # Build EXTINF line with attributes
+                    extinf = f'#EXTINF:-1 tvg-name="{name}"'
+                    if category:
+                        extinf += f' group-title="{category}"'
+                    if logo:
+                        extinf += f' tvg-logo="{logo}"'
+                    if country:
+                        extinf += f' tvg-country="{country}"'
+                    extinf += f',{name}\n'
+                    
+                    f.write(extinf)
+                    f.write(f'{url}\n')
+            
+            messagebox.showinfo("Export Complete", 
+                f"Exported {len(working_channels)} channels to:\n{filepath}")
+            logger.info(f"Exported {len(working_channels)} channels to {filepath}")
+            
+        except Exception as e:
+            messagebox.showerror("Export Failed", f"Could not export playlist:\n{e}")
+            logger.error(f"Export failed: {e}")
     
     def _show_about(self):
         """Show about dialog with IPTV information."""
@@ -1206,10 +1331,11 @@ class MainWindow:
             "• Auto-discover IPTV repositories worldwide",
             "• Background stream validation",
             "• Filter by category, country, or media type",
-            "• Material Design user interface",
+            "• Windows 11 Fluent Design interface",
             "• Embedded VLC-powered video player",
             "• Support for TV and Radio streams",
             "• Thumbnail previews for channels",
+            "• Export channels to M3U playlist",
             "• No login or subscription required"
         ]
         
@@ -1260,12 +1386,34 @@ class MainWindow:
         self._set_status("Loading cached channels...")
         self.scan_label.configure(text="Loading...")
         
+        # Check for shared scan results from PrivateBin
+        shared_scan_data = None
+        try:
+            from utils.privatebin import is_enabled, get_recent_scan_results, get_non_working_urls
+            if is_enabled():
+                self._set_status("Checking for shared scan results...")
+                shared_scan_data = get_recent_scan_results()
+                if shared_scan_data:
+                    non_working = get_non_working_urls(shared_scan_data)
+                    if non_working:
+                        logger.info(f"Found {len(non_working)} non-working channels from shared scan")
+                        self.channel_manager.set_non_working_urls(non_working)
+        except Exception as e:
+            logger.warning(f"Could not check shared scan results: {e}")
+        
         has_cache = self.channel_manager.load_cached_channels()
         if has_cache:
             self._update_groups()
             cached_count = len(self.channel_manager.channels)
             working = len(self.channel_manager.get_working_channels())
-            self._set_status(f"Loaded {cached_count} cached channels ({working} working)")
+            
+            # Select "All Channels" to show content immediately
+            self.root.after(100, lambda: self._select_group('__all__'))
+            
+            if shared_scan_data:
+                self._set_status(f"Loaded {cached_count} channels - scanning only failed channels")
+            else:
+                self._set_status(f"Loaded {cached_count} cached channels ({working} working)")
             
             self.root.after(500, lambda: self.channel_manager.validate_channels_async(rescan_all=False))
             self.root.after(2000, self.channel_manager.fetch_channels_async)

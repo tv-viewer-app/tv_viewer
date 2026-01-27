@@ -54,7 +54,7 @@ class ChannelManager:
     __slots__ = ('channels', 'categories', 'countries', 'repository_handler', 
                  'stream_checker', '_lock', 'group_by', 'media_type_filter', '_url_to_index',
                  '_on_channels_loaded', '_on_channel_validated', 
-                 '_on_validation_complete', '_on_fetch_progress')
+                 '_on_validation_complete', '_on_fetch_progress', '_non_working_urls')
     
     def __init__(self):
         """Initialize ChannelManager with empty state."""
@@ -67,6 +67,7 @@ class ChannelManager:
         self.group_by = 'category'
         self.media_type_filter = 'All'
         self._url_to_index: Dict[str, int] = {}  # O(1) URL lookups
+        self._non_working_urls: Set[str] = set()  # URLs known to be non-working
         
         # Callbacks for UI updates
         self._on_channels_loaded: Optional[Callable[[int], None]] = None
@@ -156,6 +157,7 @@ class ChannelManager:
         """
         Internal version that assumes lock is already held.
         Skips channels scanned within SCAN_SKIP_MINUTES.
+        If non-working URLs were provided from shared scan, only scan those first.
         """
         from datetime import datetime, timedelta
         skip_threshold = datetime.now() - timedelta(minutes=config.SCAN_SKIP_MINUTES)
@@ -171,6 +173,16 @@ class ChannelManager:
             except (ValueError, TypeError):
                 return True
         
+        # If we have shared non-working URLs, prioritize rescanning those
+        if self._non_working_urls:
+            # First scan channels known to be non-working
+            known_failed = [ch for ch in self.channels 
+                          if ch.get('url') in self._non_working_urls]
+            # Clear after use - only use for initial scan
+            self._non_working_urls.clear()
+            if known_failed:
+                return known_failed
+        
         # First, get channels never scanned
         pending = [ch for ch in self.channels if ch.get('scan_status') == 'pending']
         
@@ -185,6 +197,11 @@ class ChannelManager:
                  and needs_rescan(ch)]
         
         return pending + working + failed
+    
+    def set_non_working_urls(self, urls: Set[str]):
+        """Set URLs known to be non-working from shared scan results."""
+        with self._lock:
+            self._non_working_urls = urls
     
     def _is_adult_channel(self, channel: Dict[str, Any]) -> bool:
         """Check if a channel is adult content that should be filtered out."""

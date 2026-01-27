@@ -46,7 +46,7 @@ class ScanAnimationWidget(tk.Canvas):
     
     def __init__(self, parent, width=200, height=100, **kwargs):
         super().__init__(parent, width=width, height=height, 
-                        bg='#1a1a2e', highlightthickness=0, **kwargs)
+                        bg='#F5F5F5', highlightthickness=0, **kwargs)
         
         self.width = width
         self.height = height

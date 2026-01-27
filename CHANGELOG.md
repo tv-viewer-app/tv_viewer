@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-01-27
+
+### Added
+- **Export M3U** - Export all working channels as M3U playlist file
+- **PrivateBin Integration** - Share scan results with other users
+  - Upload scan results to privatebin.info after validation
+  - On startup, check for recent shared scan (<4 hours old)
+  - Only scan non-working channels if shared results available
+  - Toggle in sidebar to enable/disable sharing
+- **Windows 11 Light Theme** - Complete UI redesign with light Fluent colors
+
+### Changed
+- **VLC Button** - Now closes embedded player when opening external VLC
+- **UI Theme** - Switched from dark to light Windows 11 Fluent Design
+- **About Dialog** - Updated text to reference Windows 11 Fluent Design
+
+### Fixed
+- **Double-click on filtered channels** - Now correctly finds channel from displayed list
+- **Thumbnail capture** - Improved VLC snapshot with retries and better timing
+- **Search in filtered results** - Channel lookup now searches displayed channels first
+
 ## [1.3.0] - 2026-01-27
 
 ### Added

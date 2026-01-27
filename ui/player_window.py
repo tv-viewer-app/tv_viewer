@@ -625,7 +625,7 @@ class PlayerWindow(ctk.CTkToplevel):
             self._quality_update_job = self.after(5000, self._update_quality_info)
     
     def _open_in_external_vlc(self):
-        """Open the current stream in external VLC player."""
+        """Open the current stream in external VLC player and close embedded player."""
         url = self.channel.get('url', '')
         if not url:
             messagebox.showwarning("No URL", "No stream URL available.")
@@ -640,6 +640,8 @@ class PlayerWindow(ctk.CTkToplevel):
             return
         
         try:
+            vlc_launched = False
+            
             if sys.platform == 'win32':
                 # Try common VLC locations on Windows
                 vlc_paths = [
@@ -656,16 +658,25 @@ class PlayerWindow(ctk.CTkToplevel):
                 if vlc_exe:
                     # Use '--' to prevent URL from being interpreted as option
                     subprocess.Popen([vlc_exe, '--', url], creationflags=subprocess.DETACHED_PROCESS)
+                    vlc_launched = True
                 else:
                     messagebox.showwarning("VLC Not Found", 
                         "VLC media player not found.\nPlease install VLC or check installation path.")
+                    return
                     
             elif sys.platform == 'darwin':
                 # macOS
                 subprocess.Popen(['open', '-a', 'VLC', '--args', '--', url])
+                vlc_launched = True
             else:
                 # Linux
                 subprocess.Popen(['vlc', '--', url])
+                vlc_launched = True
+            
+            # Stop embedded player and close window if VLC was launched
+            if vlc_launched:
+                self._stop_playback()
+                self.destroy()
                 
         except Exception as e:
             messagebox.showerror("Error", f"Could not open VLC:\n{e}")
