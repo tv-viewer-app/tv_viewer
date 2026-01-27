@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-01-27
+
+### Added
+- **Windows EXE** - Compiled standalone executable (24 MB)
+- **Android App** - Kivy-based mobile app for Samsung Galaxy S24 Ultra
+  - Browse 10,000+ IPTV channels
+  - Search and category filters
+  - Plays streams via VLC for Android
+  - Dark theme optimized for OLED
+- **GitHub Actions** - Automated Android APK build workflow
+- `android/` directory with full mobile app source
+- `android/buildozer.spec` for APK configuration
+
+### Build Outputs
+- Windows: `dist/TV_Viewer.exe`
+- Android: Build via GitHub Actions or `buildozer android debug`
+
 ## [1.2.0] - 2026-01-27
 
 ### Added

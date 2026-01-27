@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'android/**'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-pip \
+          build-essential \
+          git \
+          python3-dev \
+          ffmpeg \
+          libsdl2-dev \
+          libsdl2-image-dev \
+          libsdl2-mixer-dev \
+          libsdl2-ttf-dev \
+          libportmidi-dev \
+          libswscale-dev \
+          libavformat-dev \
+          libavcodec-dev \
+          zlib1g-dev \
+          openjdk-17-jdk \
+          autoconf \
+          libtool \
+          pkg-config \
+          libffi-dev \
+          libssl-dev
+    
+    - name: Install Buildozer
+      run: |
+        pip install --upgrade pip
+        pip install buildozer cython==0.29.33
+    
+    - name: Build APK
+      working-directory: android
+      run: |
+        # Accept SDK licenses
+        yes | buildozer android debug 2>&1 | tail -100
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: tv-viewer-android
+        path: android/bin/*.apk
+        retention-days: 30
