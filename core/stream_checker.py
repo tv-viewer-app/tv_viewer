@@ -8,16 +8,18 @@ Optimization Notes:
 - Thread priority is set to low (background) to minimize UI impact
 - DNS caching reduces repeated DNS lookups
 - Connection pooling with keep-alive for efficient HTTP connections
+- Chunked processing with sleep intervals for CPU breathing room
 
 Threading Model:
 - Single background thread runs the asyncio event loop
-- Semaphore limits concurrent HTTP requests (default: 10)
+- Semaphore limits concurrent HTTP requests (default: 5)
 - Stop event allows graceful cancellation
 
 Memory Optimization:
 - Channels modified in-place (no copying)
 - Batch processing with GC between batches
 - Connection cleanup after each batch
+- Minimal object allocation in hot paths
 """
 
 import asyncio
@@ -30,6 +32,9 @@ import logging
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 import config
+
+# Get module logger
+logger = logging.getLogger(__name__)
 
 # Platform-specific thread priority
 if sys.platform == 'win32':
@@ -63,9 +68,9 @@ class StreamChecker:
     """
     
     __slots__ = ('_running', '_thread', '_semaphore', '_stop_event', '_loop', 
-                 '_batch_size', '_request_delay')
+                 '_batch_size', '_request_delay', '_completed', '_session')
     
-    def __init__(self, batch_size: int = 500, request_delay: float = 0.01):
+    def __init__(self, batch_size: int = None, request_delay: float = None):
         """Initialize StreamChecker with configurable parameters.
         
         Args:
@@ -77,8 +82,10 @@ class StreamChecker:
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._stop_event = threading.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._batch_size = batch_size
-        self._request_delay = request_delay
+        self._batch_size = batch_size or getattr(config, 'SCAN_BATCH_SIZE', 200)
+        self._request_delay = request_delay or getattr(config, 'SCAN_REQUEST_DELAY', 0.02)
+        self._completed = 0
+        self._session: Optional[aiohttp.ClientSession] = None
     
     async def check_stream(
         self, 
@@ -86,7 +93,7 @@ class StreamChecker:
         session: aiohttp.ClientSession
     ) -> Dict[str, Any]:
         """
-        Check if a single stream is accessible.
+        Check if a single stream is accessible - optimized for minimal CPU.
         
         Args:
             channel: Channel dictionary with 'url' key
@@ -113,15 +120,15 @@ class StreamChecker:
         
         try:
             async with self._semaphore:
-                # Just check if we can connect and get headers
+                # Just check if we can connect and get headers - fastest method
                 async with session.head(url, allow_redirects=True) as response:
                     if response.status == 200:
                         channel['is_working'] = True
                     elif response.status == 405:
-                        # HEAD not allowed, try GET with small range
+                        # HEAD not allowed, try GET with minimal range
                         async with session.get(
                             url, 
-                            headers={'Range': 'bytes=0-1024'},
+                            headers={'Range': 'bytes=0-512'},
                             allow_redirects=True
                         ) as get_response:
                             channel['is_working'] = get_response.status in (200, 206)
@@ -129,22 +136,15 @@ class StreamChecker:
                         # Redirect - consider as potentially working
                         channel['is_working'] = True
         except (asyncio.TimeoutError, asyncio.CancelledError):
-            # Timeout or cancelled - expected for unreachable streams
-            channel['is_working'] = False
+            pass  # Timeout or cancelled - expected for unreachable streams
         except aiohttp.ClientConnectorError:
-            # Connection error - stream unreachable
-            channel['is_working'] = False
+            pass  # Connection error - stream unreachable
         except aiohttp.ClientError:
-            # Other client errors - stream issues
-            channel['is_working'] = False
+            pass  # Other client errors - stream issues
         except ssl.SSLError as e:
-            # SSL certificate errors - mark as failed, log warning
-            channel['is_working'] = False
-            logger.warning(f"SSL error for {url[:50]}: {e}")
-        except Exception as e:
-            # Log unexpected errors for debugging
-            channel['is_working'] = False
-            logger.debug(f"Stream check error for {url[:50]}: {e}")
+            logger.debug(f"SSL error for {url[:40]}: {type(e).__name__}")
+        except Exception:
+            pass  # Silently handle other errors in background scan
         
         return channel
     
@@ -168,79 +168,76 @@ class StreamChecker:
             
         Returns:
             Same list of channels with 'is_working' status updated in-place
-            
-        Memory Optimization:
-            Channels are modified in-place to avoid creating copies.
-            GC is triggered between batches to free temporary objects.
         """
-        self._semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHECKS)
+        max_concurrent = getattr(config, 'MAX_CONCURRENT_CHECKS', 5)
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        
         timeout = aiohttp.ClientTimeout(
-            total=config.STREAM_CHECK_TIMEOUT,
-            connect=5,  # Connection timeout
-            sock_read=config.STREAM_CHECK_TIMEOUT  # Read timeout
+            total=getattr(config, 'STREAM_CHECK_TIMEOUT', 5),
+            connect=3,  # Fast connection timeout
+            sock_read=getattr(config, 'STREAM_CHECK_TIMEOUT', 5)
         )
         
         total = len(channels)
-        completed = 0
-        completed_lock = asyncio.Lock()
+        self._completed = 0
         
         async def check_with_callback(channel: Dict[str, Any], session: aiohttp.ClientSession):
             """Check single channel with callback notification."""
-            nonlocal completed
-            
             # Check for stop signal before processing
             if self._stop_event.is_set():
                 return channel
             
             result = await self.check_stream(channel, session)
             
-            # Adaptive delay: yield control to event loop for CPU efficiency
-            # This prevents 100% CPU usage during intensive scanning
-            await asyncio.sleep(self._request_delay)
+            # CPU breathing room - yield control
+            if self._request_delay > 0:
+                await asyncio.sleep(self._request_delay)
             
-            async with completed_lock:
-                completed += 1
-                current = completed
+            self._completed += 1
             
             if on_channel_checked:
-                # Call callback in a try block to prevent errors from stopping scan
                 try:
-                    on_channel_checked(result, current, total)
-                except Exception as e:
-                    logging.getLogger(__name__).warning(f"Callback error: {e}")
+                    on_channel_checked(result, self._completed, total)
+                except Exception:
+                    pass  # Don't let callback errors stop the scan
             
             return result
         
-        # Optimized connection pooling configuration
+        # Optimized connection pooling - fewer connections = less resource usage
         connector = aiohttp.TCPConnector(
-            limit=config.MAX_CONCURRENT_CHECKS,  # Total connection limit
-            limit_per_host=3,  # Prevent overwhelming single servers
-            force_close=True,  # Close connections after use (reduces memory)
+            limit=max_concurrent,        # Total connection limit
+            limit_per_host=2,            # Prevent overwhelming single servers
+            force_close=True,            # Close connections after use
             enable_cleanup_closed=True,  # Clean up closed connections
-            ttl_dns_cache=300,  # Cache DNS for 5 minutes
-            use_dns_cache=True,  # Enable DNS caching
+            ttl_dns_cache=600,           # Cache DNS for 10 minutes
+            use_dns_cache=True,          # Enable DNS caching
         )
         
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            # Process in batches to reduce memory pressure
+            self._session = session
+            
+            # Process in smaller batches to reduce memory pressure
             for i in range(0, len(channels), self._batch_size):
                 if self._stop_event.is_set():
                     break
                     
                 batch = channels[i:i + self._batch_size]
+                
+                # Create tasks for this batch only
                 tasks = [check_with_callback(ch, session) for ch in batch]
                 
-                # gather with return_exceptions prevents one failure from stopping all
+                # Gather with return_exceptions to continue on individual failures
                 await asyncio.gather(*tasks, return_exceptions=True)
                 
                 # Memory optimization: trigger generation-0 GC between batches
-                # This frees short-lived objects created during HTTP requests
                 gc.collect(0)
                 
-                # Yield to allow other tasks (like UI updates) to run
-                await asyncio.sleep(0)
+                # CPU breathing room between batches
+                await asyncio.sleep(0.1)
+            
+            self._session = None
         
-        return channels  # Return same list, modified in-place
+        return channels
     
     def start_background_check(
         self,
@@ -257,15 +254,6 @@ class StreamChecker:
             channels: List of channel dictionaries to validate
             on_channel_checked: Optional callback(channel, current, total) per channel
             on_complete: Optional callback(results) when validation finishes
-            
-        Thread Safety:
-            - Uses daemon thread (auto-cleanup on app exit)
-            - Stop event for graceful cancellation
-            - Proper cleanup of asyncio resources
-            
-        CPU Optimization:
-            - Thread priority set to below-normal (Windows) or nice (Unix)
-            - Asyncio sleep() calls yield CPU time
         """
         if self._running:
             logger.debug("Stream checker already running")
@@ -294,7 +282,7 @@ class StreamChecker:
                     on_complete(results)
                     
             except Exception as e:
-                logging.getLogger(__name__).error(f"Error in background stream check: {e}")
+                logger.error(f"Error in background stream check: {e}")
             finally:
                 # Proper cleanup of asyncio resources
                 self._cleanup_loop()
@@ -305,7 +293,7 @@ class StreamChecker:
         # Create and start daemon thread
         self._thread = threading.Thread(
             target=_run, 
-            daemon=True,  # Auto-cleanup on app exit
+            daemon=True,
             name="StreamChecker-Background"
         )
         self._thread.start()
@@ -320,9 +308,9 @@ class StreamChecker:
             else:
                 # Unix: Set nice value (higher = lower priority)
                 import os
-                os.nice(10)  # Lower priority
-        except Exception as e:
-            logging.getLogger(__name__).debug(f"Could not set thread priority: {e}")
+                os.nice(10)
+        except Exception:
+            pass  # Silently continue if priority cannot be set
     
     def _cleanup_loop(self):
         """Clean up asyncio event loop resources."""
@@ -332,7 +320,6 @@ class StreamChecker:
                 pending = asyncio.all_tasks(self._loop)
                 for task in pending:
                     task.cancel()
-                # Run until all cancelled
                 if pending:
                     self._loop.run_until_complete(
                         asyncio.gather(*pending, return_exceptions=True)

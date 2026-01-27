@@ -1031,62 +1031,51 @@ class MainWindow:
         self.root.after(0, lambda: self._set_status(f"Loaded {count} channels, validating..."))
     
     def _on_channel_validated(self, channel: Dict[str, Any], current: int, total: int):
-        """Callback when channel validated - optimized for UI responsiveness."""
-        progress = (current / total)
-        
+        """Callback when channel validated - optimized for minimal UI updates."""
         if channel.get('is_working'):
             self.scan_working_count += 1
-            # Don't capture thumbnails during scan - do it on channel select
         else:
             self.scan_failed_count += 1
         self.scan_total_count = total
         
-        # Adaptive update interval based on total channels
+        # Very aggressive throttling - UI updates are expensive
+        # Only update UI every 100-500 channels depending on total
         if total > 10000:
-            update_interval = 200
+            update_interval = 500
         elif total > 5000:
-            update_interval = 100
+            update_interval = 200
         else:
-            update_interval = 50
+            update_interval = 100
         
-        # Check if enough time has passed since last update
-        current_time = time.time() * 1000  # ms
-        time_since_last = current_time - self._last_ui_refresh
-        
+        # Minimal update conditions
         should_update = (
             (current % update_interval == 0) or 
             (current == total) or 
-            (current <= 3) or
-            (time_since_last > 500)  # Force update every 500ms
+            (current == 1)  # First channel only
         )
         
         if should_update:
-            self._last_ui_refresh = current_time
-            # Use after_idle for non-blocking UI updates
-            self.root.after_idle(lambda p=progress, c=current, t=total: self._batch_ui_update(p, c, t))
+            progress = current / total
+            # Schedule update on main thread, but don't force immediate processing
+            self.root.after(0, lambda p=progress, c=current, t=total: self._batch_ui_update(p, c, t))
         
-        # Refresh group list less frequently
-        refresh_interval = 500 if total > 5000 else 250
-        if current % refresh_interval == 0 or current == total:
+        # Refresh channel list even less frequently
+        if current == total or (current % 1000 == 0 and current > 0):
             if self._pending_group_update:
                 self.root.after_cancel(self._pending_group_update)
-            self._pending_group_update = self.root.after(200, self._debounced_refresh)
+            self._pending_group_update = self.root.after(500, self._debounced_refresh)
     
     def _batch_ui_update(self, progress: float, current: int, total: int):
-        """Perform batched UI updates without blocking."""
+        """Perform batched UI updates - minimal work only."""
         try:
             self.progress_var.set(progress)
             self.scan_label.configure(text=f"Scanning {current}/{total}")
             self.stats_label.configure(
-                text=f"{self.scan_working_count} working • {self.scan_failed_count} failed"
+                text=f"{self.scan_working_count} ok • {self.scan_failed_count} fail"
             )
-            # Update scan animation widget
-            self.scan_animation.update_progress(current, total, self.scan_working_count, self.scan_failed_count)
-            self._set_status(f"Validating channels... {current}/{total}")
-            # Process any pending events to keep UI responsive
-            self.root.update_idletasks()
+            # Skip animation update and status bar to reduce work
         except tk.TclError:
-            pass  # Window closed during update - expected
+            pass  # Window closed during update
     
     def _debounced_refresh(self):
         """Debounced UI refresh."""

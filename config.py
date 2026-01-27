@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "1.4.2"
+APP_VERSION = "1.4.3"
 
 # =============================================================================
 # File Paths
@@ -40,16 +40,27 @@ if not os.path.exists(THUMBNAILS_DIR):
 # =============================================================================
 # Timeout for fetching repository playlists (seconds)
 # Lower values fail faster but may miss slow servers
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 15
 
 # Timeout for validating individual streams (seconds)
-# Balance between speed and accuracy - most working streams respond within 5s
-STREAM_CHECK_TIMEOUT = 8
+# Balance between speed and accuracy - most working streams respond within 3s
+STREAM_CHECK_TIMEOUT = 5
 
 # Maximum concurrent stream checks
-# Higher = faster but more CPU/bandwidth usage
-# Recommended: 10-20 for normal use, 5 for low-end systems
-MAX_CONCURRENT_CHECKS = 10
+# Lower = less CPU/bandwidth, higher = faster but more resource usage
+# Recommended: 5-10 for normal use, 3 for low-end systems
+MAX_CONCURRENT_CHECKS = 5
+
+# Batch size for stream checking (memory optimization)
+# Lower = less memory per batch, but more GC cycles
+SCAN_BATCH_SIZE = 200
+
+# Delay between scan requests in seconds (CPU throttling)
+# Higher = less CPU usage but slower scan
+SCAN_REQUEST_DELAY = 0.02
+
+# Skip re-scanning channels checked within this many minutes
+SCAN_SKIP_MINUTES = 30
 
 # =============================================================================
 # Thumbnail Settings

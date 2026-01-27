@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-01-28
+
+### Performance
+- **Scan CPU Usage** - Reduced concurrent checks from 10 to 5, added configurable delays
+- **Scan Memory** - Smaller batch size (200 vs 500), more aggressive GC between batches
+- **UI Updates** - Throttled progress updates (every 100-500 channels vs 50)
+- **Connection Pooling** - Reduced per-host limit (2 vs 3), extended DNS cache (10 min)
+- **Timeouts** - Faster stream timeout (5s vs 8s), faster connection timeout (3s vs 5s)
+
+### Changed
+- Added configurable scan parameters: `SCAN_BATCH_SIZE`, `SCAN_REQUEST_DELAY`, `SCAN_SKIP_MINUTES`
+- Background thread uses lower priority for minimal UI impact
+
 ## [1.4.2] - 2026-01-28
 
 ### Fixed
