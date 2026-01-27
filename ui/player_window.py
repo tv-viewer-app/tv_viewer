@@ -1,4 +1,4 @@
-"""Video player window with embedded controls and Material Design.
+"""Video player window with embedded controls and Windows 11 Fluent Design.
 
 This module provides an embedded video player using VLC with hardware acceleration
 and optimized resource management.
@@ -27,7 +27,13 @@ import os
 import subprocess
 import threading
 import gc
+import logging
 from typing import Optional, Dict, Any, List
+
+from utils.logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 # Try to import VLC
 try:
@@ -35,7 +41,7 @@ try:
     VLC_AVAILABLE = True
 except ImportError:
     VLC_AVAILABLE = False
-    print("Warning: python-vlc not installed. Video playback will not work.")
+    logger.warning("python-vlc not installed. Video playback will not work.")
 
 # Try to import pychromecast for Google Cast
 try:
@@ -43,11 +49,11 @@ try:
     CAST_AVAILABLE = True
 except ImportError:
     CAST_AVAILABLE = False
-    print("Info: pychromecast not installed. Casting will not be available.")
+    logger.info("pychromecast not installed. Casting will not be available.")
 
 import config
 from utils.helpers import format_duration
-from ui.constants import MaterialColors
+from ui.constants import FluentColors, FluentSpacing
 def get_vlc_hardware_acceleration_args() -> list:
     """Get VLC arguments for hardware-accelerated video decoding.
     
@@ -129,12 +135,12 @@ class PlayerWindow(ctk.CTkToplevel):
         self.columnconfigure(0, weight=1)
     
     def _create_widgets(self):
-        """Create the player UI components with Material Design."""
+        """Create the player UI components with Windows 11 Fluent Design."""
         # Configure window background
-        self.configure(fg_color=MaterialColors.BG_DARK)
+        self.configure(fg_color=FluentColors.BG_MICA)
         
         # Main container
-        self.main_frame = ctk.CTkFrame(self, fg_color=MaterialColors.BG_DARK, corner_radius=0)
+        self.main_frame = ctk.CTkFrame(self, fg_color=FluentColors.BG_MICA, corner_radius=0)
         self.main_frame.grid(row=0, column=0, sticky="nsew")
         self.main_frame.rowconfigure(0, weight=1)
         self.main_frame.columnconfigure(0, weight=1)
@@ -151,43 +157,43 @@ class PlayerWindow(ctk.CTkToplevel):
         )
         self.video_canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Controls frame with Material Design
+        # Controls frame with Fluent Design
         self.controls_frame = ctk.CTkFrame(
             self.main_frame,
-            fg_color=MaterialColors.BG_CARD,
+            fg_color=FluentColors.BG_ACRYLIC,
             corner_radius=0,
             height=60
         )
         self.controls_frame.grid(row=1, column=0, sticky="ew")
         self.controls_frame.grid_propagate(False)
         
-        # Play/Pause button
+        # Play/Pause button - Windows 11 style
         self.play_btn = ctk.CTkButton(
             self.controls_frame,
             text="⏸",
-            width=50,
-            height=40,
-            corner_radius=20,
-            fg_color=MaterialColors.PRIMARY,
-            hover_color=MaterialColors.PRIMARY_DARK,
+            width=44,
+            height=44,
+            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+            fg_color=FluentColors.ACCENT,
+            hover_color=FluentColors.ACCENT_DARK,
             command=self._toggle_play,
             font=ctk.CTkFont(size=16)
         )
-        self.play_btn.pack(side=tk.LEFT, padx=10, pady=10)
+        self.play_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE, pady=8)
         
         # Stop button
         self.stop_btn = ctk.CTkButton(
             self.controls_frame,
             text="⏹",
-            width=50,
-            height=40,
-            corner_radius=20,
-            fg_color=MaterialColors.BG_ELEVATED,
-            hover_color=MaterialColors.SURFACE,
+            width=44,
+            height=44,
+            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+            fg_color=FluentColors.CONTROL_DEFAULT,
+            hover_color=FluentColors.CONTROL_HOVER,
             command=self.stop,
             font=ctk.CTkFont(size=16)
         )
-        self.stop_btn.pack(side=tk.LEFT, padx=5)
+        self.stop_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_SMALL)
         
         # Time label
         self.time_label = ctk.CTkLabel(
@@ -195,13 +201,13 @@ class PlayerWindow(ctk.CTkToplevel):
             text="00:00",
             width=80,
             font=ctk.CTkFont(size=14),
-            text_color=MaterialColors.TEXT_PRIMARY
+            text_color=FluentColors.TEXT_PRIMARY
         )
-        self.time_label.pack(side=tk.LEFT, padx=15)
+        self.time_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE)
         
         # Volume controls
         volume_frame = ctk.CTkFrame(self.controls_frame, fg_color="transparent")
-        volume_frame.pack(side=tk.RIGHT, padx=10)
+        volume_frame.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_LARGE)
         
         ctk.CTkLabel(volume_frame, text="🔊", font=ctk.CTkFont(size=14)).pack(side=tk.LEFT)
         
@@ -213,21 +219,31 @@ class PlayerWindow(ctk.CTkToplevel):
             variable=self.volume_var,
             command=self._on_volume_change,
             width=120,
-            progress_color=MaterialColors.PRIMARY,
-            button_color=MaterialColors.PRIMARY,
-            button_hover_color=MaterialColors.PRIMARY_DARK
+            progress_color=FluentColors.ACCENT,
+            button_color=FluentColors.ACCENT,
+            button_hover_color=FluentColors.ACCENT_LIGHT
         )
-        self.volume_slider.pack(side=tk.LEFT, padx=10)
+        self.volume_slider.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_MEDIUM)
+        
+        # Volume percentage label
+        self.volume_label = ctk.CTkLabel(
+            volume_frame,
+            text="80%",
+            width=40,
+            font=ctk.CTkFont(size=12),
+            text_color=FluentColors.TEXT_SECONDARY
+        )
+        self.volume_label.pack(side=tk.LEFT, padx=2)
         
         # Mute button
         self.mute_btn = ctk.CTkButton(
             volume_frame,
             text="🔇",
-            width=40,
-            height=32,
-            corner_radius=16,
-            fg_color=MaterialColors.BG_ELEVATED,
-            hover_color=MaterialColors.SURFACE,
+            width=36,
+            height=36,
+            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+            fg_color=FluentColors.CONTROL_DEFAULT,
+            hover_color=FluentColors.CONTROL_HOVER,
             command=self._toggle_mute,
             font=ctk.CTkFont(size=14)
         )
@@ -237,44 +253,44 @@ class PlayerWindow(ctk.CTkToplevel):
         self.fullscreen_btn = ctk.CTkButton(
             self.controls_frame,
             text="⛶",
-            width=40,
-            height=32,
-            corner_radius=16,
-            fg_color=MaterialColors.BG_ELEVATED,
-            hover_color=MaterialColors.SURFACE,
+            width=36,
+            height=36,
+            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+            fg_color=FluentColors.CONTROL_DEFAULT,
+            hover_color=FluentColors.CONTROL_HOVER,
             command=self._toggle_fullscreen,
             font=ctk.CTkFont(size=14)
         )
-        self.fullscreen_btn.pack(side=tk.RIGHT, padx=5)
+        self.fullscreen_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         
         # Open in VLC button
         self.vlc_btn = ctk.CTkButton(
             self.controls_frame,
             text="VLC",
-            width=50,
-            height=32,
-            corner_radius=16,
-            fg_color=MaterialColors.BG_ELEVATED,
-            hover_color=MaterialColors.SURFACE,
+            width=48,
+            height=36,
+            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+            fg_color=FluentColors.CONTROL_DEFAULT,
+            hover_color=FluentColors.CONTROL_HOVER,
             command=self._open_in_external_vlc,
             font=ctk.CTkFont(size=12)
         )
-        self.vlc_btn.pack(side=tk.RIGHT, padx=5)
+        self.vlc_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         
         # Cast button (if available)
         if CAST_AVAILABLE:
             self.cast_btn = ctk.CTkButton(
                 self.controls_frame,
                 text="📺",
-                width=40,
-                height=32,
-                corner_radius=16,
-                fg_color=MaterialColors.BG_ELEVATED,
-                hover_color=MaterialColors.SURFACE,
+                width=36,
+                height=36,
+                corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
+                fg_color=FluentColors.CONTROL_DEFAULT,
+                hover_color=FluentColors.CONTROL_HOVER,
                 command=self._show_cast_menu,
                 font=ctk.CTkFont(size=14)
             )
-            self.cast_btn.pack(side=tk.RIGHT, padx=5)
+            self.cast_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         
         # Channel info
         channel_name = self.channel.get('name', 'Unknown')
@@ -282,16 +298,16 @@ class PlayerWindow(ctk.CTkToplevel):
             self.controls_frame,
             text=channel_name,
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY
+            text_color=FluentColors.TEXT_PRIMARY
         )
-        self.channel_label.pack(side=tk.LEFT, padx=20)
+        self.channel_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_XLARGE)
         
         # Quality info frame (below controls)
         self.quality_frame = ctk.CTkFrame(
             self.main_frame,
-            fg_color=MaterialColors.BG_CARD,
+            fg_color=FluentColors.BG_CARD,
             corner_radius=0,
-            height=25
+            height=28
         )
         self.quality_frame.grid(row=2, column=0, sticky="ew")
         self.quality_frame.grid_propagate(False)
@@ -300,9 +316,9 @@ class PlayerWindow(ctk.CTkToplevel):
             self.quality_frame,
             text="Quality: --",
             font=ctk.CTkFont(size=11),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         )
-        self.quality_label.pack(side=tk.LEFT, padx=10, pady=3)
+        self.quality_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE, pady=4)
         
         # Bind keyboard shortcuts
         self.bind('<space>', lambda e: self._toggle_play())
@@ -356,21 +372,39 @@ class PlayerWindow(ctk.CTkToplevel):
             self.player.audio_set_volume(self.volume_var.get())
             
         except Exception as e:
-            print(f"Error initializing VLC: {e}")
+            logger.error(f"Error initializing VLC: {e}")
             self.player = None
             self.instance = None
             self._show_vlc_error()
     
     def _show_vlc_error(self):
-        """Show error message when VLC is not available."""
-        error_label = ttk.Label(
-            self.video_canvas,
-            text="VLC is not available.\n\nPlease install VLC media player\nand python-vlc package.",
-            font=('TkDefaultFont', 12),
-            foreground='white',
-            background='black'
-        )
-        error_label.place(relx=0.5, rely=0.5, anchor='center')
+        """Show error message when VLC is not available with recovery options."""
+        error_frame = ctk.CTkFrame(self.video_canvas, fg_color=FluentColors.BG_CARD)
+        error_frame.place(relx=0.5, rely=0.5, anchor='center')
+        
+        ctk.CTkLabel(
+            error_frame,
+            text="⚠️ VLC is not available",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=FluentColors.WARNING
+        ).pack(pady=(20, 10), padx=30)
+        
+        ctk.CTkLabel(
+            error_frame,
+            text="Please install VLC media player and python-vlc package.",
+            font=ctk.CTkFont(size=12),
+            text_color=FluentColors.TEXT_SECONDARY
+        ).pack(pady=5, padx=30)
+        
+        # Retry button
+        ctk.CTkButton(
+            error_frame,
+            text="Retry",
+            width=100,
+            fg_color=FluentColors.ACCENT,
+            hover_color=FluentColors.ACCENT_DARK,
+            command=lambda: [error_frame.destroy(), self._init_vlc(), self.play() if self.player else None]
+        ).pack(pady=(15, 20))
     
     def play(self):
         """Start playing the stream."""
@@ -385,18 +419,20 @@ class PlayerWindow(ctk.CTkToplevel):
         url_lower = url.lower()
         allowed_schemes = ('http://', 'https://', 'rtmp://', 'rtsp://', 'mms://')
         if not url_lower.startswith(allowed_schemes):
-            print(f"Invalid URL scheme: {url}")
+            logger.warning(f"Invalid URL scheme: {url}")
+            messagebox.showwarning("Invalid URL", "This stream URL scheme is not supported.")
             return
         
         # Security: Block dangerous schemes
         if url_lower.startswith(('file://', 'javascript:', 'data:')):
-            print(f"Blocked dangerous URL: {url}")
+            logger.warning(f"Blocked dangerous URL: {url}")
             return
         
         try:
             media = self.instance.media_new(url)
             if not media:
-                print(f"Failed to create media for: {url}")
+                logger.error(f"Failed to create media for: {url}")
+                messagebox.showerror("Playback Error", "Failed to load stream. The URL may be invalid.")
                 return
             
             self.player.set_media(media)
@@ -411,7 +447,8 @@ class PlayerWindow(ctk.CTkToplevel):
             self.after(2000, self._update_quality_info)
             
         except Exception as e:
-            print(f"Error playing stream: {e}")
+            logger.error(f"Error playing stream: {e}")
+            messagebox.showerror("Playback Error", f"Failed to play stream:\n{e}")
     
     def pause(self):
         """Pause playback."""
@@ -452,6 +489,7 @@ class PlayerWindow(ctk.CTkToplevel):
         if self.player:
             volume = int(float(value))
             self.player.audio_set_volume(volume)
+            self.volume_label.configure(text=f"{volume}%")
     
     def _toggle_fullscreen(self):
         """Toggle fullscreen mode."""
@@ -555,6 +593,14 @@ class PlayerWindow(ctk.CTkToplevel):
             messagebox.showwarning("No URL", "No stream URL available.")
             return
         
+        # Security: Validate URL scheme before subprocess execution
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        allowed_schemes = ('http', 'https', 'rtmp', 'rtsp', 'mms')
+        if parsed.scheme.lower() not in allowed_schemes:
+            messagebox.showerror("Invalid URL", f"URL scheme '{parsed.scheme}' is not allowed.")
+            return
+        
         try:
             if sys.platform == 'win32':
                 # Try common VLC locations on Windows
@@ -570,17 +616,18 @@ class PlayerWindow(ctk.CTkToplevel):
                         break
                 
                 if vlc_exe:
-                    subprocess.Popen([vlc_exe, url], creationflags=subprocess.DETACHED_PROCESS)
+                    # Use '--' to prevent URL from being interpreted as option
+                    subprocess.Popen([vlc_exe, '--', url], creationflags=subprocess.DETACHED_PROCESS)
                 else:
-                    # Try to open with default association
-                    os.startfile(url)
+                    messagebox.showwarning("VLC Not Found", 
+                        "VLC media player not found.\nPlease install VLC or check installation path.")
                     
             elif sys.platform == 'darwin':
                 # macOS
-                subprocess.Popen(['open', '-a', 'VLC', url])
+                subprocess.Popen(['open', '-a', 'VLC', '--args', '--', url])
             else:
                 # Linux
-                subprocess.Popen(['vlc', url])
+                subprocess.Popen(['vlc', '--', url])
                 
         except Exception as e:
             messagebox.showerror("Error", f"Could not open VLC:\n{e}")
@@ -601,8 +648,8 @@ class PlayerWindow(ctk.CTkToplevel):
             x = self.cast_btn.winfo_rootx()
             y = self.cast_btn.winfo_rooty() + self.cast_btn.winfo_height()
             menu.tk_popup(x, y)
-        except:
-            pass
+        except tk.TclError:
+            pass  # Widget may have been destroyed
         
         # Search for devices in background
         threading.Thread(target=self._discover_cast_devices, daemon=True).start()
@@ -622,7 +669,7 @@ class PlayerWindow(ctk.CTkToplevel):
             self.after(0, self._show_cast_devices_menu)
             
         except Exception as e:
-            print(f"Error discovering cast devices: {e}")
+            logger.error(f"Error discovering cast devices: {e}")
             self.after(0, lambda: messagebox.showerror("Cast Error", 
                 f"Error discovering devices:\n{e}"))
     
@@ -652,8 +699,8 @@ class PlayerWindow(ctk.CTkToplevel):
             x = self.cast_btn.winfo_rootx()
             y = self.cast_btn.winfo_rooty() + self.cast_btn.winfo_height()
             menu.tk_popup(x, y)
-        except:
-            pass
+        except tk.TclError:
+            pass  # Widget may have been destroyed
     
     def _cast_to_device(self, cast):
         """Cast current stream to a Chromecast device."""
@@ -702,7 +749,7 @@ class PlayerWindow(ctk.CTkToplevel):
                 self.active_cast.media_controller.stop()
                 self.active_cast = None
             except Exception as e:
-                print(f"Error stopping cast: {e}")
+                logger.debug(f"Error stopping cast: {e}")
     
     def _on_close(self):
         """Handle window close with proper resource cleanup."""

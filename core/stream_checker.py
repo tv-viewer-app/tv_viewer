@@ -25,6 +25,8 @@ import aiohttp
 import threading
 import gc
 import sys
+import ssl
+import logging
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 import config
@@ -112,7 +114,7 @@ class StreamChecker:
         try:
             async with self._semaphore:
                 # Just check if we can connect and get headers
-                async with session.head(url, allow_redirects=True, ssl=False) as response:
+                async with session.head(url, allow_redirects=True) as response:
                     if response.status == 200:
                         channel['is_working'] = True
                     elif response.status == 405:
@@ -120,21 +122,24 @@ class StreamChecker:
                         async with session.get(
                             url, 
                             headers={'Range': 'bytes=0-1024'},
-                            allow_redirects=True,
-                            ssl=False
+                            allow_redirects=True
                         ) as get_response:
                             channel['is_working'] = get_response.status in (200, 206)
                     elif response.status in (301, 302, 303, 307, 308):
                         # Redirect - consider as potentially working
                         channel['is_working'] = True
         except (asyncio.TimeoutError, asyncio.CancelledError):
-            pass  # Timeout or cancelled
+            pass  # Timeout or cancelled - expected for unreachable streams
         except aiohttp.ClientConnectorError:
-            pass  # Connection error
+            pass  # Connection error - stream unreachable
         except aiohttp.ClientError:
-            pass  # Other client errors
-        except Exception:
-            pass  # Unexpected errors
+            pass  # Other client errors - stream issues
+        except ssl.SSLError:
+            pass  # SSL certificate errors - try anyway
+        except Exception as e:
+            # Log unexpected errors for debugging
+            import logging
+            logging.getLogger(__name__).debug(f"Stream check error for {url}: {e}")
         
         return channel
     
@@ -196,8 +201,8 @@ class StreamChecker:
                 # Call callback in a try block to prevent errors from stopping scan
                 try:
                     on_channel_checked(result, current, total)
-                except Exception:
-                    pass  # Don't let callback errors stop the scan
+                except Exception as e:
+                    logging.getLogger(__name__).warning(f"Callback error: {e}")
             
             return result
         
@@ -284,7 +289,7 @@ class StreamChecker:
                     on_complete(results)
                     
             except Exception as e:
-                print(f"Error in background stream check: {e}")
+                logging.getLogger(__name__).error(f"Error in background stream check: {e}")
             finally:
                 # Proper cleanup of asyncio resources
                 self._cleanup_loop()
@@ -311,8 +316,8 @@ class StreamChecker:
                 # Unix: Set nice value (higher = lower priority)
                 import os
                 os.nice(10)  # Lower priority
-        except Exception:
-            pass  # Ignore priority setting failures
+        except Exception as e:
+            logging.getLogger(__name__).debug(f"Could not set thread priority: {e}")
     
     def _cleanup_loop(self):
         """Clean up asyncio event loop resources."""

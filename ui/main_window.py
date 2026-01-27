@@ -1,4 +1,4 @@
-"""Main application window with Material Design UI using CustomTkinter."""
+"""Main application window with Windows 11 Fluent Design UI using CustomTkinter."""
 
 import customtkinter as ctk
 from tkinter import ttk, messagebox
@@ -11,10 +11,14 @@ import os
 from core.channel_manager import ChannelManager
 from utils.helpers import format_age_rating
 from utils.thumbnail import capture_thumbnail_async, get_thumbnail_path, thumbnail_exists
+from utils.logger import get_logger
 from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
-from .constants import MaterialColors
+from .constants import FluentColors, FluentSpacing, FluentTypography
 import config
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 # Try to import icon module
 try:
@@ -29,13 +33,13 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-# Set CustomTkinter appearance
-ctk.set_appearance_mode("dark")  # "dark", "light", or "system"
-ctk.set_default_color_theme("blue")  # "blue", "green", "dark-blue"
+# Set CustomTkinter appearance for Windows 11 look
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
 
 
 class MainWindow:
-    """Main application window with Material Design."""
+    """Main application window with Windows 11 Fluent Design."""
     
     def __init__(self):
         # Initialize CustomTkinter window
@@ -77,17 +81,18 @@ class MainWindow:
         self.scan_total_count = 0
         self._scan_running = False
         
-        # Thumbnail images cache
+        # Thumbnail images cache (with size limit)
         self._thumbnail_images = {}
+        self._thumbnail_cache_limit = 100
         self._current_thumbnail = None
         
         # UI update debouncing and batching
         self._pending_group_update = None
         self._pending_channel_update = None
         self._last_ui_refresh = 0
-        self._ui_update_queue = []  # Queue for batched updates
-        self._ui_batch_timer = None  # Timer for batch processing
-        self._min_update_interval = 50  # Minimum ms between UI updates
+        self._ui_update_queue = []
+        self._ui_batch_timer = None
+        self._min_update_interval = 50
         
         # Create UI
         self._create_sidebar()
@@ -96,6 +101,9 @@ class MainWindow:
         
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        # Show loading indicator
+        logger.info("TV Viewer starting up...")
         
         # Load channels on startup
         self.root.after(100, self._initialize)
@@ -108,13 +116,13 @@ class MainWindow:
         self.channel_manager.on_fetch_progress = self._on_fetch_progress
     
     def _create_sidebar(self):
-        """Create the left sidebar with Material Design."""
+        """Create the left sidebar with Windows 11 Fluent Design."""
         # Sidebar frame
         self.sidebar = ctk.CTkFrame(
             self.root,
             width=320,
             corner_radius=0,
-            fg_color=MaterialColors.BG_CARD
+            fg_color=FluentColors.BG_ACRYLIC
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_rowconfigure(7, weight=1)  # Make category list expandable
@@ -128,7 +136,7 @@ class MainWindow:
             title_frame,
             text=f"📺 {config.APP_NAME}",
             font=ctk.CTkFont(size=24, weight="bold"),
-            text_color=MaterialColors.PRIMARY
+            text_color=FluentColors.ACCENT
         )
         self.title_label.pack(anchor="w")
         
@@ -136,7 +144,7 @@ class MainWindow:
             title_frame,
             text=f"v{config.APP_VERSION}",
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         )
         self.version_label.pack(anchor="w")
         
@@ -165,8 +173,8 @@ class MainWindow:
         """Create scan progress indicator with animation widget."""
         self.scan_frame = ctk.CTkFrame(
             self.sidebar,
-            fg_color=MaterialColors.SURFACE_VARIANT,
-            corner_radius=10
+            fg_color=FluentColors.BG_CARD,
+            corner_radius=FluentSpacing.CORNER_RADIUS_MEDIUM
         )
         self.scan_frame.grid(row=1, column=0, padx=15, pady=10, sticky="ew")
         
@@ -179,7 +187,7 @@ class MainWindow:
             self.scan_frame,
             text="Ready",
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         )
         self.scan_label.pack(padx=15, pady=(5, 5))
         
@@ -188,19 +196,22 @@ class MainWindow:
         self.progress_bar = ctk.CTkProgressBar(
             self.scan_frame,
             variable=self.progress_var,
-            progress_color=MaterialColors.PRIMARY,
-            fg_color=MaterialColors.BG_DARK
+            progress_color=FluentColors.ACCENT,
+            fg_color=FluentColors.BG_SOLID
         )
         self.progress_bar.pack(padx=15, pady=(0, 5), fill="x")
         
-        # Stats
+        # Stats with legend
+        stats_frame = ctk.CTkFrame(self.scan_frame, fg_color="transparent")
+        stats_frame.pack(padx=15, pady=(0, 8), fill="x")
+        
         self.stats_label = ctk.CTkLabel(
-            self.scan_frame,
-            text="0 working • 0 failed",
-            font=ctk.CTkFont(size=11),
-            text_color=MaterialColors.TEXT_SECONDARY
+            stats_frame,
+            text="✓ Working  ✗ Failed  ◌ Checking",
+            font=ctk.CTkFont(size=10),
+            text_color=FluentColors.TEXT_DISABLED
         )
-        self.stats_label.pack(padx=15, pady=(0, 10))
+        self.stats_label.pack(side="left")
     
     def _create_search_box(self):
         """Create Material Design search box."""
@@ -212,7 +223,7 @@ class MainWindow:
             height=40,
             corner_radius=20,
             border_width=0,
-            fg_color=MaterialColors.SURFACE_VARIANT
+            fg_color=FluentColors.SURFACE_VARIANT
         )
         self.search_entry.grid(row=2, column=0, padx=15, pady=10, sticky="ew")
         self.search_var.trace('w', self._on_search)
@@ -226,7 +237,7 @@ class MainWindow:
             group_frame,
             text="Group by:",
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         ).pack(side="left")
         
         self.group_segmented = ctk.CTkSegmentedButton(
@@ -234,8 +245,8 @@ class MainWindow:
             values=["Category", "Country"],
             command=self._on_group_by_change,
             font=ctk.CTkFont(size=11),
-            selected_color=MaterialColors.PRIMARY,
-            selected_hover_color=MaterialColors.PRIMARY_DARK,
+            selected_color=FluentColors.PRIMARY,
+            selected_hover_color=FluentColors.PRIMARY_DARK,
             width=180
         )
         self.group_segmented.set("Category")
@@ -250,7 +261,7 @@ class MainWindow:
             media_frame,
             text="Media:",
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         ).pack(side="left")
         
         self.media_type_var = ctk.StringVar(value="All")
@@ -260,8 +271,8 @@ class MainWindow:
             command=self._on_media_type_change,
             variable=self.media_type_var,
             font=ctk.CTkFont(size=11),
-            selected_color=MaterialColors.PRIMARY,
-            selected_hover_color=MaterialColors.PRIMARY_DARK,
+            selected_color=FluentColors.PRIMARY,
+            selected_hover_color=FluentColors.PRIMARY_DARK,
             width=180
         )
         self.media_segmented.set("All")
@@ -279,7 +290,7 @@ class MainWindow:
             variable=self.hide_checking_var,
             command=self._apply_filters,
             font=ctk.CTkFont(size=12),
-            progress_color=MaterialColors.PRIMARY
+            progress_color=FluentColors.PRIMARY
         )
         self.hide_checking_switch.pack(side="left", padx=(0, 15))
         
@@ -290,7 +301,7 @@ class MainWindow:
             variable=self.hide_failed_var,
             command=self._apply_filters,
             font=ctk.CTkFont(size=12),
-            progress_color=MaterialColors.PRIMARY
+            progress_color=FluentColors.PRIMARY
         )
         self.hide_failed_switch.pack(side="left")
     
@@ -301,7 +312,7 @@ class MainWindow:
             self.sidebar,
             text="📂 Categories",
             font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY,
+            text_color=FluentColors.TEXT_PRIMARY,
             anchor="w"
         )
         self.group_header.grid(row=6, column=0, padx=20, pady=(15, 5), sticky="w")
@@ -310,8 +321,8 @@ class MainWindow:
         self.category_scroll = ctk.CTkScrollableFrame(
             self.sidebar,
             fg_color="transparent",
-            scrollbar_button_color=MaterialColors.SURFACE_VARIANT,
-            scrollbar_button_hover_color=MaterialColors.PRIMARY
+            scrollbar_button_color=FluentColors.SURFACE_VARIANT,
+            scrollbar_button_hover_color=FluentColors.PRIMARY
         )
         self.category_scroll.grid(row=7, column=0, padx=10, pady=5, sticky="nsew")
         
@@ -330,8 +341,8 @@ class MainWindow:
             command=self._toggle_scan,
             height=36,
             corner_radius=18,
-            fg_color=MaterialColors.PRIMARY,
-            hover_color=MaterialColors.PRIMARY_DARK
+            fg_color=FluentColors.PRIMARY,
+            hover_color=FluentColors.PRIMARY_DARK
         )
         self.scan_btn.pack(fill="x", pady=(0, 8))
         
@@ -342,9 +353,9 @@ class MainWindow:
             command=self._edit_channel_config,
             height=36,
             corner_radius=18,
-            fg_color=MaterialColors.SURFACE_VARIANT,
-            hover_color=MaterialColors.BG_ELEVATED,
-            text_color=MaterialColors.TEXT_PRIMARY
+            fg_color=FluentColors.SURFACE_VARIANT,
+            hover_color=FluentColors.BG_ELEVATED,
+            text_color=FluentColors.TEXT_PRIMARY
         )
         self.settings_btn.pack(fill="x", pady=(0, 8))
         
@@ -356,10 +367,10 @@ class MainWindow:
             height=36,
             corner_radius=18,
             fg_color="transparent",
-            hover_color=MaterialColors.SURFACE_VARIANT,
-            text_color=MaterialColors.TEXT_SECONDARY,
+            hover_color=FluentColors.SURFACE_VARIANT,
+            text_color=FluentColors.TEXT_SECONDARY,
             border_width=1,
-            border_color=MaterialColors.SURFACE_VARIANT
+            border_color=FluentColors.SURFACE_VARIANT
         )
         self.about_btn.pack(fill="x")
     
@@ -368,7 +379,7 @@ class MainWindow:
         # Main content frame
         self.main_frame = ctk.CTkFrame(
             self.root,
-            fg_color=MaterialColors.BG_DARK,
+            fg_color=FluentColors.BG_DARK,
             corner_radius=0
         )
         self.main_frame.grid(row=0, column=1, sticky="nsew")
@@ -388,7 +399,7 @@ class MainWindow:
         """Create the content header."""
         header_frame = ctk.CTkFrame(
             self.main_frame,
-            fg_color=MaterialColors.BG_CARD,
+            fg_color=FluentColors.BG_CARD,
             corner_radius=0,
             height=60
         )
@@ -400,7 +411,7 @@ class MainWindow:
             header_frame,
             text="Select a category",
             font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY
+            text_color=FluentColors.TEXT_PRIMARY
         )
         self.channel_header.pack(side="left", padx=20, pady=15)
         
@@ -409,7 +420,7 @@ class MainWindow:
             header_frame,
             text="",
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         )
         self.channel_count_label.pack(side="right", padx=20, pady=15)
     
@@ -418,7 +429,7 @@ class MainWindow:
         # Container frame
         list_container = ctk.CTkFrame(
             self.main_frame,
-            fg_color=MaterialColors.BG_DARK,
+            fg_color=FluentColors.BG_DARK,
             corner_radius=0
         )
         list_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
@@ -432,42 +443,42 @@ class MainWindow:
         # Configure Treeview colors
         style.configure(
             "Material.Treeview",
-            background=MaterialColors.BG_CARD,
-            foreground=MaterialColors.TEXT_PRIMARY,
-            fieldbackground=MaterialColors.BG_CARD,
+            background=FluentColors.BG_CARD,
+            foreground=FluentColors.TEXT_PRIMARY,
+            fieldbackground=FluentColors.BG_CARD,
             borderwidth=0,
             font=('Segoe UI', 11),
             rowheight=36
         )
         style.configure(
             "Material.Treeview.Heading",
-            background=MaterialColors.SURFACE_VARIANT,
-            foreground=MaterialColors.TEXT_PRIMARY,
+            background=FluentColors.SURFACE_VARIANT,
+            foreground=FluentColors.TEXT_PRIMARY,
             borderwidth=0,
             font=('Segoe UI', 11, 'bold'),
             padding=(10, 8)
         )
         style.map(
             "Material.Treeview",
-            background=[('selected', MaterialColors.PRIMARY)],
-            foreground=[('selected', MaterialColors.TEXT_PRIMARY)]
+            background=[('selected', FluentColors.PRIMARY)],
+            foreground=[('selected', FluentColors.TEXT_PRIMARY)]
         )
         style.map(
             "Material.Treeview.Heading",
-            background=[('active', MaterialColors.BG_ELEVATED)]
+            background=[('active', FluentColors.BG_ELEVATED)]
         )
         
         # Scrollbar styling
         style.configure(
             "Material.Vertical.TScrollbar",
-            background=MaterialColors.SURFACE_VARIANT,
-            troughcolor=MaterialColors.BG_DARK,
+            background=FluentColors.SURFACE_VARIANT,
+            troughcolor=FluentColors.BG_DARK,
             borderwidth=0,
             arrowsize=0
         )
         
         # Create Treeview
-        tree_frame = ctk.CTkFrame(list_container, fg_color=MaterialColors.BG_CARD, corner_radius=10)
+        tree_frame = ctk.CTkFrame(list_container, fg_color=FluentColors.BG_CARD, corner_radius=10)
         tree_frame.grid(row=0, column=0, sticky="nsew")
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
@@ -501,9 +512,9 @@ class MainWindow:
             self.channel_tree.column(col, width=width, minwidth=50)
         
         # Configure tags for status colors
-        self.channel_tree.tag_configure('working', foreground=MaterialColors.SUCCESS)
-        self.channel_tree.tag_configure('not_working', foreground=MaterialColors.ERROR)
-        self.channel_tree.tag_configure('checking', foreground=MaterialColors.WARNING)
+        self.channel_tree.tag_configure('working', foreground=FluentColors.SUCCESS)
+        self.channel_tree.tag_configure('not_working', foreground=FluentColors.ERROR)
+        self.channel_tree.tag_configure('checking', foreground=FluentColors.WARNING)
         
         # Bindings
         self.channel_tree.bind('<Double-1>', self._on_channel_double_click)
@@ -514,7 +525,7 @@ class MainWindow:
         """Create the preview panel."""
         preview_frame = ctk.CTkFrame(
             self.main_frame,
-            fg_color=MaterialColors.BG_CARD,
+            fg_color=FluentColors.BG_CARD,
             corner_radius=10,
             height=100
         )
@@ -524,7 +535,7 @@ class MainWindow:
         # Thumbnail container
         thumb_container = ctk.CTkFrame(
             preview_frame,
-            fg_color=MaterialColors.BG_DARK,
+            fg_color=FluentColors.BG_DARK,
             corner_radius=8,
             width=128,
             height=72
@@ -536,7 +547,7 @@ class MainWindow:
             thumb_container,
             text="No preview",
             font=ctk.CTkFont(size=11),
-            text_color=MaterialColors.TEXT_DISABLED
+            text_color=FluentColors.TEXT_DISABLED
         )
         self.thumbnail_label.pack(expand=True)
         
@@ -548,7 +559,7 @@ class MainWindow:
             info_frame,
             text="Select a channel",
             font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY,
+            text_color=FluentColors.TEXT_PRIMARY,
             anchor="w"
         )
         self.preview_name_label.pack(anchor="w")
@@ -557,7 +568,7 @@ class MainWindow:
             info_frame,
             text="",
             font=ctk.CTkFont(size=11),
-            text_color=MaterialColors.TEXT_SECONDARY,
+            text_color=FluentColors.TEXT_SECONDARY,
             anchor="w"
         )
         self.preview_url_label.pack(anchor="w", pady=(2, 0))
@@ -578,8 +589,8 @@ class MainWindow:
             width=100,
             height=40,
             corner_radius=20,
-            fg_color=MaterialColors.ACCENT,
-            hover_color=MaterialColors.ACCENT_DARK,
+            fg_color=FluentColors.ACCENT,
+            hover_color=FluentColors.ACCENT_DARK,
             font=ctk.CTkFont(size=14, weight="bold")
         )
         self.play_btn.pack(side="right", padx=20)
@@ -588,7 +599,7 @@ class MainWindow:
         """Create the status bar."""
         self.status_frame = ctk.CTkFrame(
             self.root,
-            fg_color=MaterialColors.SURFACE,
+            fg_color=FluentColors.SURFACE,
             corner_radius=0,
             height=30
         )
@@ -599,7 +610,7 @@ class MainWindow:
             self.status_frame,
             text="Starting...",
             font=ctk.CTkFont(size=11),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         )
         self.status_label.pack(side="left", padx=15, pady=5)
     
@@ -623,8 +634,8 @@ class MainWindow:
             text=f"📺 All Channels  ({all_working}/{len(all_channels)})",
             command=lambda: self._select_group('__all__'),
             fg_color="transparent",
-            hover_color=MaterialColors.SURFACE_VARIANT,
-            text_color=MaterialColors.TEXT_PRIMARY,
+            hover_color=FluentColors.SURFACE_VARIANT,
+            text_color=FluentColors.TEXT_PRIMARY,
             anchor="w",
             height=36,
             corner_radius=8
@@ -633,7 +644,7 @@ class MainWindow:
         self.category_buttons.append(all_btn)
         
         # Separator
-        sep = ctk.CTkFrame(self.category_scroll, height=1, fg_color=MaterialColors.SURFACE_VARIANT)
+        sep = ctk.CTkFrame(self.category_scroll, height=1, fg_color=FluentColors.SURFACE_VARIANT)
         sep.pack(fill="x", pady=8)
         self.category_buttons.append(sep)
         
@@ -653,8 +664,8 @@ class MainWindow:
                 text=f"{icon} {group}  ({working}/{len(channels)})",
                 command=lambda g=group: self._select_group(g),
                 fg_color="transparent",
-                hover_color=MaterialColors.SURFACE_VARIANT,
-                text_color=MaterialColors.TEXT_PRIMARY,
+                hover_color=FluentColors.SURFACE_VARIANT,
+                text_color=FluentColors.TEXT_PRIMARY,
                 anchor="w",
                 height=32,
                 corner_radius=8
@@ -702,6 +713,17 @@ class MainWindow:
         
         # Clear existing items
         self.channel_tree.delete(*self.channel_tree.get_children())
+        
+        # Show "no results" message if empty
+        if not filtered_channels:
+            self.channel_tree.insert('', tk.END, 
+                values=("No channels found", "", "", "", "", ""),
+                tags=('no_results',))
+            self.channel_tree.tag_configure('no_results', foreground=FluentColors.TEXT_DISABLED)
+            self.channel_count_label.configure(
+                text=f"No channels match current filters"
+            )
+            return
         
         # Add channels
         for channel in filtered_channels:
@@ -859,11 +881,11 @@ class MainWindow:
         
         is_working = channel.get('is_working')
         if is_working is True:
-            self.preview_status_label.configure(text='✓ Working', text_color=MaterialColors.SUCCESS)
+            self.preview_status_label.configure(text='✓ Working', text_color=FluentColors.SUCCESS)
         elif is_working is False:
-            self.preview_status_label.configure(text='✗ Offline', text_color=MaterialColors.ERROR)
+            self.preview_status_label.configure(text='✗ Offline', text_color=FluentColors.ERROR)
         else:
-            self.preview_status_label.configure(text='◌ Checking...', text_color=MaterialColors.WARNING)
+            self.preview_status_label.configure(text='◌ Checking...', text_color=FluentColors.WARNING)
         
         # Show thumbnail
         self._show_channel_thumbnail(channel)
@@ -1112,14 +1134,14 @@ class MainWindow:
             scroll_frame,
             text=f"📺 {config.APP_NAME}",
             font=ctk.CTkFont(size=24, weight="bold"),
-            text_color=MaterialColors.PRIMARY
+            text_color=FluentColors.PRIMARY
         ).pack(pady=(10, 5))
         
         ctk.CTkLabel(
             scroll_frame,
             text=f"Version {config.APP_VERSION}",
             font=ctk.CTkFont(size=14),
-            text_color=MaterialColors.TEXT_SECONDARY
+            text_color=FluentColors.TEXT_SECONDARY
         ).pack(pady=(0, 15))
         
         # What is IPTV section
@@ -1127,7 +1149,7 @@ class MainWindow:
             scroll_frame,
             text="📡 What is IPTV?",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY,
+            text_color=FluentColors.TEXT_PRIMARY,
             anchor="w"
         ).pack(fill="x", pady=(10, 5))
         
@@ -1142,7 +1164,7 @@ class MainWindow:
             scroll_frame,
             text=iptv_text,
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY,
+            text_color=FluentColors.TEXT_SECONDARY,
             wraplength=480,
             justify="left"
         ).pack(fill="x", pady=(0, 10))
@@ -1152,7 +1174,7 @@ class MainWindow:
             scroll_frame,
             text="🔧 How It Works",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY,
+            text_color=FluentColors.TEXT_PRIMARY,
             anchor="w"
         ).pack(fill="x", pady=(10, 5))
         
@@ -1166,7 +1188,7 @@ class MainWindow:
             scroll_frame,
             text=how_text,
             font=ctk.CTkFont(size=12),
-            text_color=MaterialColors.TEXT_SECONDARY,
+            text_color=FluentColors.TEXT_SECONDARY,
             wraplength=480,
             justify="left"
         ).pack(fill="x", pady=(0, 10))
@@ -1176,7 +1198,7 @@ class MainWindow:
             scroll_frame,
             text="✨ Features",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=MaterialColors.TEXT_PRIMARY,
+            text_color=FluentColors.TEXT_PRIMARY,
             anchor="w"
         ).pack(fill="x", pady=(10, 5))
         
@@ -1196,7 +1218,7 @@ class MainWindow:
                 scroll_frame,
                 text=feature,
                 font=ctk.CTkFont(size=12),
-                text_color=MaterialColors.TEXT_PRIMARY,
+                text_color=FluentColors.TEXT_PRIMARY,
                 anchor="w"
             ).pack(fill="x", padx=10)
         
@@ -1205,7 +1227,7 @@ class MainWindow:
             scroll_frame,
             text="⚠️ Disclaimer",
             font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=MaterialColors.ACCENT,
+            text_color=FluentColors.ACCENT,
             anchor="w"
         ).pack(fill="x", pady=(15, 5))
         
@@ -1218,7 +1240,7 @@ class MainWindow:
             scroll_frame,
             text=disclaimer_text,
             font=ctk.CTkFont(size=11),
-            text_color=MaterialColors.TEXT_SECONDARY,
+            text_color=FluentColors.TEXT_SECONDARY,
             wraplength=480,
             justify="left"
         ).pack(fill="x", pady=(0, 15))
@@ -1229,8 +1251,8 @@ class MainWindow:
             text="Close",
             command=dialog.destroy,
             width=100,
-            fg_color=MaterialColors.PRIMARY,
-            hover_color=MaterialColors.PRIMARY_DARK
+            fg_color=FluentColors.PRIMARY,
+            hover_color=FluentColors.PRIMARY_DARK
         ).pack(pady=15)
     
     def _initialize(self):

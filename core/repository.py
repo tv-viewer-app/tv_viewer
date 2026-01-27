@@ -28,8 +28,8 @@ class RepositoryHandler:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=config.REQUEST_TIMEOUT)
-            # Security: Disable following redirects to untrusted domains by limiting
-            connector = aiohttp.TCPConnector(limit=10, ssl=False)
+            # Security: Enable SSL verification for HTTPS connections
+            connector = aiohttp.TCPConnector(limit=10)
             self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         return self._session
     
