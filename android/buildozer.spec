@@ -9,7 +9,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json
 
 # Application requirements
-requirements = python3,kivy,aiohttp,asyncio,certifi
+requirements = python3,kivy,aiohttp,certifi
 
 # Android SDK/NDK versions
 android.api = 33
@@ -23,20 +23,14 @@ android.archs = arm64-v8a, armeabi-v7a
 # Permissions
 android.permissions = INTERNET, ACCESS_NETWORK_STATE, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
 
-# App orientation (support both)
-orientation = all
+# App orientation (landscape + portrait)
+orientation = portrait
 
 # Fullscreen
 fullscreen = 0
 
-# Icon
-icon.filename = %(source.dir)s/icon.png
-
-# Presplash
-presplash.filename = %(source.dir)s/presplash.png
-
 # Version
-version = 1.2.0
+version = 1.4.1
 
 # Android specific
 android.accept_sdk_license = True
@@ -46,7 +40,7 @@ android.enable_androidx = True
 android.release_artifact = apk
 
 # Java heap size for building
-android.gradle_dependencies = 
+android.gradle_dependencies =
 
 # Optimization
 android.allow_backup = True
