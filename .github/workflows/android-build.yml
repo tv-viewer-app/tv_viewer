@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
     - name: Checkout code
@@ -18,7 +18,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.10'
     
     - name: Install system dependencies
       run: |
@@ -40,15 +40,21 @@ jobs:
           zlib1g-dev \
           openjdk-17-jdk \
           autoconf \
+          automake \
           libtool \
+          libtool-bin \
           pkg-config \
           libffi-dev \
-          libssl-dev
+          libssl-dev \
+          cmake \
+          ninja-build \
+          unzip \
+          zip
     
     - name: Install Buildozer
       run: |
-        pip install --upgrade pip
-        pip install buildozer cython==0.29.33
+        pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.36 virtualenv
     
     - name: Build APK
       working-directory: android
