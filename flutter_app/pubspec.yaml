@@ -16,11 +16,9 @@ dependencies:
   
   # HTTP & Networking
   http: ^1.2.0
-  dio: ^5.4.0
   
-  # Video Player
+  # Video Player - use basic video_player, skip chewie
   video_player: ^2.8.2
-  chewie: ^1.7.4
   
   # State Management
   provider: ^6.1.1
@@ -31,7 +29,6 @@ dependencies:
   
   # Utils
   url_launcher: ^6.2.4
-  share_plus: ^7.2.1
 
 dev_dependencies:
   flutter_test:
@@ -40,6 +37,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
-  assets:
-    - assets/
