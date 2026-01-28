@@ -112,6 +112,14 @@ def main():
     """Application entry point."""
     print("Starting TV Viewer...")
     
+    # Install crash reporter early
+    try:
+        from utils.crash_reporter import install_global_handler
+        install_global_handler()
+        print("Crash reporter installed")
+    except Exception as e:
+        print(f"Warning: Could not install crash reporter: {e}")
+    
     # Check requirements first
     success, missing, warnings = check_requirements()
     

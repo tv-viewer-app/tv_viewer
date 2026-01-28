@@ -38,13 +38,6 @@ ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
 
-class _DummyScanAnimation:
-    """Dummy class for backward compatibility when scan animation is removed."""
-    def update_progress(self, *args): pass
-    def set_complete(self, *args): pass
-    def set_progress(self, *args): pass
-
-
 class MainWindow:
     """Main application window with Windows 11 Fluent Design."""
     
@@ -179,33 +172,36 @@ class MainWindow:
         self._create_action_buttons()
     
     def _create_scan_indicator(self):
-        """Create compact scan progress indicator."""
+        """Create scan progress indicator with animation."""
+        # Container frame
         self.scan_frame = ctk.CTkFrame(
             self.sidebar,
             fg_color=FluentColors.BG_CARD,
             corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-            height=60
         )
         self.scan_frame.grid(row=6, column=0, padx=10, pady=5, sticky="ew")
-        self.scan_frame.grid_propagate(False)
         
-        # Simple progress bar and label
+        # Scan animation widget (pixel art)
+        self.scan_animation = ScanProgressFrame(self.scan_frame)
+        self.scan_animation.pack(padx=5, pady=5)
+        
+        # Simple text labels below animation
         self.scan_label = ctk.CTkLabel(
             self.scan_frame,
             text="Ready",
-            font=ctk.CTkFont(size=11),
+            font=ctk.CTkFont(size=10),
             text_color=FluentColors.TEXT_SECONDARY
         )
-        self.scan_label.pack(padx=10, pady=(8, 2))
+        self.scan_label.pack(padx=10, pady=(0, 2))
         
-        # Progress bar
+        # Progress bar (backup visual)
         self.progress_var = ctk.DoubleVar(value=0)
         self.progress_bar = ctk.CTkProgressBar(
             self.scan_frame,
             variable=self.progress_var,
             progress_color=FluentColors.ACCENT,
             fg_color=FluentColors.SURFACE_VARIANT,
-            height=8
+            height=4
         )
         self.progress_bar.pack(padx=10, pady=(0, 5), fill="x")
         
@@ -213,13 +209,10 @@ class MainWindow:
         self.stats_label = ctk.CTkLabel(
             self.scan_frame,
             text="",
-            font=ctk.CTkFont(size=10),
+            font=ctk.CTkFont(size=9),
             text_color=FluentColors.TEXT_DISABLED
         )
-        self.stats_label.pack(padx=10)
-        
-        # Hidden animation widget (for backwards compatibility)
-        self.scan_animation = _DummyScanAnimation()
+        self.stats_label.pack(padx=10, pady=(0, 5))
     
     def _create_search_box(self):
         """Create search box."""
@@ -1073,7 +1066,8 @@ class MainWindow:
             self.stats_label.configure(
                 text=f"{self.scan_working_count} ok • {self.scan_failed_count} fail"
             )
-            # Skip animation update and status bar to reduce work
+            # Update scan animation widget
+            self.scan_animation.update_progress(current, total, self.scan_working_count, self.scan_failed_count)
         except tk.TclError:
             pass  # Window closed during update
     

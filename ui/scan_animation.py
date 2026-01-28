@@ -32,7 +32,7 @@ class ScanAnimationWidget(tk.Canvas):
         ],
     ]
     
-    # Color palettes
+    # Color palettes (light theme compatible)
     COLORS = {
         '0': '',  # Transparent
         '1': '#1e90ff',  # Ocean blue
@@ -41,12 +41,13 @@ class ScanAnimationWidget(tk.Canvas):
         '4': '#104e8b',  # Dark ocean
     }
     
-    # Signal wave colors
-    SIGNAL_COLORS = ['#00ff00', '#00dd00', '#00bb00', '#009900', '#007700']
+    # Signal wave colors (green)
+    SIGNAL_COLORS = ['#00cc00', '#00aa00', '#008800', '#006600', '#004400']
     
-    def __init__(self, parent, width=200, height=100, **kwargs):
+    def __init__(self, parent, width=180, height=80, **kwargs):
+        # Light theme background
         super().__init__(parent, width=width, height=height, 
-                        bg='#F5F5F5', highlightthickness=0, **kwargs)
+                        bg='#E8E8E8', highlightthickness=0, **kwargs)
         
         self.width = width
         self.height = height
@@ -54,14 +55,14 @@ class ScanAnimationWidget(tk.Canvas):
         self.working_count = 0
         self.failed_count = 0
         self.total_count = 0
-        self.pixel_size = 3
+        self.pixel_size = 2
         self.animation_frame = 0
         self._animation_job = None
         self.is_scanning = False
         
         # Satellite dish position
-        self.dish_x = width - 50
-        self.dish_y = height - 30
+        self.dish_x = width - 40
+        self.dish_y = height - 25
         
         # Start animation
         self._animate()
@@ -100,9 +101,9 @@ class ScanAnimationWidget(tk.Canvas):
         x, y = self.dish_x, self.dish_y
         ps = 2  # Pixel size for dish
         
-        # Dish base (triangle/parabola shape)
-        dish_color = '#c0c0c0'
-        dish_dark = '#808080'
+        # Dish base colors
+        dish_color = '#808080'
+        dish_dark = '#505050'
         
         # Dish shape
         dish_pixels = [
@@ -155,97 +156,81 @@ class ScanAnimationWidget(tk.Canvas):
     def _draw_progress_bar(self):
         """Draw a progress bar at the bottom."""
         bar_x = 10
-        bar_y = self.height - 15
+        bar_y = self.height - 12
         bar_width = self.width - 20
-        bar_height = 8
+        bar_height = 6
         
-        # Background
+        # Background (light theme)
         self.create_rectangle(
             bar_x, bar_y, bar_x + bar_width, bar_y + bar_height,
-            fill='#333333', outline='#555555'
+            fill='#C0C0C0', outline='#A0A0A0'
         )
         
-        # Progress fill with gradient effect
-        if self.progress > 0:
-            fill_width = int(bar_width * self.progress)
-            
+        # Progress fill
+        if self.progress > 0 and self.total_count > 0:
             # Working portion (green)
-            if self.total_count > 0:
-                working_ratio = self.working_count / self.total_count
-                working_width = int(bar_width * working_ratio * self.progress)
-                if working_width > 0:
-                    self.create_rectangle(
-                        bar_x, bar_y, bar_x + working_width, bar_y + bar_height,
-                        fill='#00ff00', outline=''
-                    )
-                
-                # Failed portion (red) - after working
-                failed_ratio = self.failed_count / self.total_count
-                failed_width = int(bar_width * failed_ratio * self.progress)
-                if failed_width > 0:
-                    self.create_rectangle(
-                        bar_x + working_width, bar_y,
-                        bar_x + working_width + failed_width, bar_y + bar_height,
-                        fill='#ff4444', outline=''
-                    )
+            working_ratio = self.working_count / self.total_count
+            working_width = int(bar_width * working_ratio * self.progress)
+            if working_width > 0:
+                self.create_rectangle(
+                    bar_x, bar_y, bar_x + working_width, bar_y + bar_height,
+                    fill='#107C10', outline=''
+                )
+            
+            # Failed portion (red)
+            failed_ratio = self.failed_count / self.total_count
+            failed_width = int(bar_width * failed_ratio * self.progress)
+            if failed_width > 0:
+                self.create_rectangle(
+                    bar_x + working_width, bar_y,
+                    bar_x + working_width + failed_width, bar_y + bar_height,
+                    fill='#C42B1C', outline=''
+                )
     
     def _draw_stats(self):
         """Draw scan statistics."""
-        # Stats text
         if self.total_count > 0:
-            stats_text = f"✓{self.working_count}  ✗{self.failed_count}  ◷{self.total_count - self.working_count - self.failed_count}"
+            # Stats text (dark for light theme)
+            stats_text = f"{self.working_count} ok • {self.failed_count} fail"
             self.create_text(
-                self.width // 2, 10,
-                text=stats_text, fill='#ffffff',
-                font=('Consolas', 9, 'bold')
+                self.width // 2, 8,
+                text=stats_text, fill='#333333',
+                font=('Segoe UI', 8)
             )
         
         # Percentage
         pct = int(self.progress * 100)
         self.create_text(
-            self.width // 2, self.height - 22,
-            text=f"{pct}%", fill='#00ff00' if pct == 100 else '#ffff00',
-            font=('Consolas', 8, 'bold')
+            self.width // 2, self.height - 20,
+            text=f"{pct}%", fill='#107C10' if pct == 100 else '#0078D4',
+            font=('Segoe UI', 8, 'bold')
         )
     
     def _draw_scanning_text(self):
         """Draw 'SCANNING' text with animation."""
         if self.is_scanning:
             dots = '.' * ((self.animation_frame // 5) % 4)
-            text = f"SCANNING{dots}"
+            text = f"Scanning{dots}"
+            color = '#0078D4'
         elif self.progress >= 1.0:
-            text = "COMPLETE!"
+            text = "Complete!"
+            color = '#107C10'
         else:
-            text = "READY"
+            text = "Ready"
+            color = '#666666'
         
         self.create_text(
-            self.width // 2, self.height // 2 + 25,
-            text=text, fill='#00ffff',
-            font=('Consolas', 10, 'bold')
+            self.width // 2, self.height // 2 + 15,
+            text=text, fill=color,
+            font=('Segoe UI', 9, 'bold')
         )
-    
-    def _draw_stars(self):
-        """Draw twinkling stars in background."""
-        import random
-        random.seed(42)  # Consistent star positions
-        
-        for _ in range(20):
-            x = random.randint(0, self.width)
-            y = random.randint(0, self.height - 20)
-            
-            # Twinkle effect
-            brightness = 150 + int(50 * math.sin(self.animation_frame * 0.1 + x))
-            color = f'#{brightness:02x}{brightness:02x}{brightness:02x}'
-            
-            self.create_rectangle(x, y, x+1, y+1, fill=color, outline='')
     
     def _animate(self):
         """Animation loop."""
         self.delete('all')
         
         # Draw all elements
-        self._draw_stars()
-        self._draw_earth(20, 25)
+        self._draw_earth(15, 18)
         self._draw_satellite_dish()
         self._draw_signal_waves()
         self._draw_progress_bar()
@@ -254,8 +239,8 @@ class ScanAnimationWidget(tk.Canvas):
         
         self.animation_frame += 1
         
-        # Schedule next frame (reduced from 100ms to 150ms to save CPU)
-        self._animation_job = self.after(150, self._animate)
+        # Schedule next frame (200ms to save CPU)
+        self._animation_job = self.after(200, self._animate)
     
     def stop_animation(self):
         """Stop the animation loop."""
@@ -276,15 +261,8 @@ class ScanProgressFrame(ttk.Frame):
         super().__init__(parent, **kwargs)
         
         # Animation widget
-        self.animation = ScanAnimationWidget(self, width=200, height=100)
-        self.animation.pack(pady=5)
-        
-        # Detailed stats label
-        self.stats_label = ttk.Label(
-            self, text="Waiting to scan...",
-            font=('Consolas', 8)
-        )
-        self.stats_label.pack()
+        self.animation = ScanAnimationWidget(self, width=180, height=80)
+        self.animation.pack(pady=2)
     
     def update_progress(self, current: int, total: int, working: int, failed: int):
         """Update the scan progress display."""
@@ -292,20 +270,11 @@ class ScanProgressFrame(ttk.Frame):
             progress = current / total
         else:
             progress = 0
-        
-        checking = current - working - failed
-        
         self.animation.set_progress(progress, working, failed, total)
-        self.stats_label.config(
-            text=f"Scanned: {current}/{total} | Working: {working} | Failed: {failed}"
-        )
     
     def set_complete(self, working: int, total: int):
         """Set scan as complete."""
         self.animation.set_progress(1.0, working, total - working, total)
-        self.stats_label.config(
-            text=f"Complete! {working}/{total} channels working"
-        )
     
     def destroy(self):
         """Clean up."""

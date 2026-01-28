@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-01-28
+
+### Added
+- **Crash Reporter** - Automatic crash reporting via GitHub Issues
+  - Opens browser to create issue with crash details
+  - No personal data collected (paths sanitized)
+  - User prompted before reporting
+  - Categorizes errors (network, UI, filesystem, etc.)
+
+### Fixed
+- **Scan Animation** - Restored pixel art Earth/satellite animation during scan
+  - Light theme compatible colors
+  - Optimized to 200ms frame rate for lower CPU
+
 ## [1.4.3] - 2026-01-28
 
 ### Performance
