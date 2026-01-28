@@ -10,6 +10,9 @@ on:
 jobs:
   build-flutter-apk:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
     
     steps:
     - name: Checkout code
@@ -27,12 +30,16 @@ jobs:
         flutter-version: '3.19.0'
         channel: 'stable'
     
+    - name: Verify Flutter setup
+      run: |
+        flutter --version
+        ls -la
+        ls -la lib/
+    
     - name: Get dependencies
-      working-directory: flutter_app
       run: flutter pub get
     
     - name: Build APK
-      working-directory: flutter_app
       run: flutter build apk --release
     
     - name: Upload APK
