@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-01-28
+
+### Added (Flutter Android App)
+- **Cast Button** - Cast button in player with dialog for external player casting
+- **Resolution/Bitrate Display** - Shows stream quality info in channel list and player
+- **Country Filter** - Dropdown to filter channels by country
+- **Radio Station Support** - Media type filter (TV/Radio) with auto-detection
+- **Category Dropdown** - Replaced horizontal chips with dropdown selector
+
+### Fixed (Flutter Android App)
+- **External App Launch** - Added Android intent queries for VLC, MX Player with proper fallback
+- **Category Normalization** - Categories with semicolons now consolidated to single topic
+- **Memory Leak** - VideoPlayerController listener now properly removed on dispose
+- **Memory Leak** - Controller properly disposed on retry
+- **Race Condition** - Batch state updates in channel validation to prevent UI inconsistencies
+
+### Changed (Flutter Android App)
+- Updated AndroidManifest.xml with queries for external video players
+- Improved player UI with show/hide controls on tap
+- Added helpful hints in player overlay
+
 ## [1.4.4] - 2026-01-28
 
 ### Added

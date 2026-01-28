@@ -106,27 +106,48 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Category Filter
+          // Filter Row with Dropdowns
           Consumer<ChannelProvider>(
             builder: (context, provider, _) {
-              return SizedBox(
-                height: 50,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: provider.categories.length,
-                  itemBuilder: (context, index) {
-                    final category = provider.categories[index];
-                    final isSelected = category == provider.selectedCategory;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(category),
-                        selected: isSelected,
-                        onSelected: (_) => provider.setCategory(category),
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: Row(
+                  children: [
+                    // Media Type Filter (TV/Radio)
+                    Expanded(
+                      child: _buildDropdown(
+                        value: provider.selectedMediaType,
+                        items: provider.mediaTypes,
+                        hint: 'Type',
+                        icon: Icons.live_tv,
+                        onChanged: (value) => provider.setMediaType(value!),
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 8),
+                    // Category Dropdown
+                    Expanded(
+                      flex: 2,
+                      child: _buildDropdown(
+                        value: provider.selectedCategory,
+                        items: provider.categories,
+                        hint: 'Category',
+                        icon: Icons.category,
+                        onChanged: (value) => provider.setCategory(value!),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Country Dropdown
+                    Expanded(
+                      flex: 2,
+                      child: _buildDropdown(
+                        value: provider.selectedCountry,
+                        items: provider.countries,
+                        hint: 'Country',
+                        icon: Icons.flag,
+                        onChanged: (value) => provider.setCountry(value!),
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
@@ -206,6 +227,41 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+  
+  Widget _buildDropdown({
+    required String value,
+    required List<String> items,
+    required String hint,
+    required IconData icon,
+    required void Function(String?) onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          icon: Icon(icon, size: 18),
+          hint: Text(hint),
+          items: items.map((item) {
+            return DropdownMenuItem<String>(
+              value: item,
+              child: Text(
+                item,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
 
   Widget _buildScanProgress(ChannelProvider provider) {
     final progress = provider.scanTotal > 0
@@ -238,6 +294,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildChannelTile(Channel channel) {
+    // Build subtitle with resolution/bitrate info
+    String subtitle = channel.category ?? 'Other';
+    if (channel.resolution != null) {
+      subtitle += ' • ${channel.resolution}';
+    }
+    if (channel.formattedBitrate != null) {
+      subtitle += ' • ${channel.formattedBitrate}';
+    }
+    if (channel.country != null && channel.country != 'Unknown') {
+      subtitle += ' • ${channel.country}';
+    }
+    
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: channel.isWorking ? Colors.green : Colors.grey,
@@ -248,13 +316,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 40,
                   height: 40,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.tv,
+                  errorBuilder: (_, __, ___) => Icon(
+                    channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
                     color: Colors.white,
                   ),
                 ),
               )
-            : const Icon(Icons.tv, color: Colors.white),
+            : Icon(
+                channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
+                color: Colors.white,
+              ),
       ),
       title: Text(
         channel.name,
@@ -262,13 +333,23 @@ class _HomeScreenState extends State<HomeScreen> {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        channel.category ?? 'Other',
+        subtitle,
         style: Theme.of(context).textTheme.bodySmall,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
-      trailing: Icon(
-        channel.isWorking ? Icons.check_circle : Icons.error,
-        color: channel.isWorking ? Colors.green : Colors.red,
-        size: 20,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (channel.mediaType == 'Radio')
+            const Icon(Icons.radio, size: 16, color: Colors.blue),
+          const SizedBox(width: 4),
+          Icon(
+            channel.isWorking ? Icons.check_circle : Icons.error,
+            color: channel.isWorking ? Colors.green : Colors.red,
+            size: 20,
+          ),
+        ],
       ),
       onTap: () => _playChannel(channel),
     );

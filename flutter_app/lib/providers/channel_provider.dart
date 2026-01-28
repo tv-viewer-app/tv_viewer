@@ -9,7 +9,10 @@ class ChannelProvider extends ChangeNotifier {
   List<Channel> _channels = [];
   List<Channel> _filteredChannels = [];
   Set<String> _categories = {};
+  Set<String> _countries = {};
   String _selectedCategory = 'All';
+  String _selectedCountry = 'All';
+  String _selectedMediaType = 'All'; // 'All', 'TV', or 'Radio'
   String _searchQuery = '';
   bool _isLoading = false;
   bool _isScanning = false;
@@ -21,7 +24,11 @@ class ChannelProvider extends ChangeNotifier {
   // Getters
   List<Channel> get channels => _filteredChannels;
   List<String> get categories => ['All', ..._categories.toList()..sort()];
+  List<String> get countries => ['All', ..._countries.toList()..sort()];
+  List<String> get mediaTypes => ['All', 'TV', 'Radio'];
   String get selectedCategory => _selectedCategory;
+  String get selectedCountry => _selectedCountry;
+  String get selectedMediaType => _selectedMediaType;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
   bool get isScanning => _isScanning;
@@ -109,6 +116,11 @@ class ChannelProvider extends ChangeNotifier {
       if (!_isScanning) break; // Allow cancellation
 
       final batch = _channels.skip(i).take(batchSize).toList();
+      
+      // Collect results from batch before updating state
+      int batchWorking = 0;
+      int batchFailed = 0;
+      
       await Future.wait(
         batch.map((channel) async {
           final isWorking = await M3UService.checkStream(channel.url);
@@ -116,15 +128,18 @@ class ChannelProvider extends ChangeNotifier {
           channel.lastChecked = DateTime.now();
 
           if (isWorking) {
-            _workingCount++;
+            batchWorking++;
           } else {
-            _failedCount++;
+            batchFailed++;
           }
-
-          _scanProgress++;
-          notifyListeners();
         }),
       );
+      
+      // Update state once after batch completes (fixes race condition)
+      _workingCount += batchWorking;
+      _failedCount += batchFailed;
+      _scanProgress += batch.length;
+      notifyListeners();
 
       // Small delay to prevent overwhelming
       await Future.delayed(const Duration(milliseconds: 50));
@@ -147,6 +162,20 @@ class ChannelProvider extends ChangeNotifier {
     _applyFilters();
     notifyListeners();
   }
+  
+  /// Set country filter
+  void setCountry(String country) {
+    _selectedCountry = country;
+    _applyFilters();
+    notifyListeners();
+  }
+  
+  /// Set media type filter (TV/Radio)
+  void setMediaType(String mediaType) {
+    _selectedMediaType = mediaType;
+    _applyFilters();
+    notifyListeners();
+  }
 
   /// Set search query
   void setSearchQuery(String query) {
@@ -160,6 +189,10 @@ class ChannelProvider extends ChangeNotifier {
         .map((c) => c.category ?? 'Other')
         .where((c) => c.isNotEmpty)
         .toSet();
+    _countries = _channels
+        .map((c) => c.country ?? 'Unknown')
+        .where((c) => c.isNotEmpty && c != 'Unknown')
+        .toSet();
   }
 
   void _applyFilters() {
@@ -167,6 +200,20 @@ class ChannelProvider extends ChangeNotifier {
       // Category filter
       if (_selectedCategory != 'All') {
         if ((channel.category ?? 'Other') != _selectedCategory) {
+          return false;
+        }
+      }
+      
+      // Country filter
+      if (_selectedCountry != 'All') {
+        if ((channel.country ?? 'Unknown') != _selectedCountry) {
+          return false;
+        }
+      }
+      
+      // Media type filter
+      if (_selectedMediaType != 'All') {
+        if (channel.mediaType != _selectedMediaType) {
           return false;
         }
       }
