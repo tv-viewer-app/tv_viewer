@@ -1,17 +1,34 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'providers/channel_provider.dart';
 import 'utils/logger_service.dart';
+import 'utils/error_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize logger service
-  await logger.initialize(minLogLevel: LogLevel.info);
+  await LoggerService.instance.initialize(minLogLevel: LogLevel.info);
   logger.info('TV Viewer app starting...');
   
-  runApp(const TVViewerApp());
+  // Wrap app in error zone to catch all errors
+  runZonedGuarded(() {
+    // Catch Flutter framework errors
+    FlutterError.onError = (FlutterErrorDetails details) {
+      logger.error(
+        'Flutter framework error',
+        details.exception,
+        details.stack,
+      );
+    };
+    
+    runApp(const TVViewerApp());
+  }, (error, stackTrace) {
+    // Catch async errors not caught by Flutter
+    logger.error('Uncaught async error', error, stackTrace);
+  });
 }
 
 class TVViewerApp extends StatelessWidget {

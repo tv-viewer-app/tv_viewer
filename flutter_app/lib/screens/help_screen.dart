@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/onboarding_service.dart';
 import 'package:package_info_plus/package_info_plus.dart' show PackageInfo;
+import '../utils/logger_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -75,18 +77,41 @@ class _HelpScreenState extends State<HelpScreen> {
     });
 
     try {
-      // Simulate log export (in a real app, you'd read from a log file or service)
-      await Future.delayed(const Duration(seconds: 1));
+      logger.info('User requested log export');
       
-      if (mounted) {
+      // Export logs using LoggerService
+      final exportedFile = await LoggerService.instance.exportLogs();
+      
+      if (exportedFile != null && mounted) {
+        // Share the log file
+        await Share.shareXFiles(
+          [XFile(exportedFile.path)],
+          subject: 'TV Viewer App Logs',
+          text: 'Exported logs from TV Viewer app',
+        );
+        
+        logger.info('Logs exported and shared successfully');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Logs exported successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (mounted) {
+        logger.warning('No logs available to export');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Logs exported successfully'),
-            backgroundColor: Colors.green,
+            content: Text('No logs available to export'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      logger.error('Failed to export logs', e, stackTrace);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

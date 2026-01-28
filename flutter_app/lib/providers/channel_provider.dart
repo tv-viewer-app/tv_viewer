@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../services/m3u_service.dart';
 import '../services/favorites_service.dart';
+import '../utils/logger_service.dart';
 
 /// Provider for managing channel state
 class ChannelProvider extends ChangeNotifier {
@@ -48,6 +49,7 @@ class ChannelProvider extends ChangeNotifier {
 
   /// Load channels from cache or fetch new
   Future<void> loadChannels() async {
+    logger.info('Loading channels...');
     _isLoading = true;
     notifyListeners();
 
@@ -57,6 +59,7 @@ class ChannelProvider extends ChangeNotifier {
     // Try to load from cache first
     final cached = await _loadFromCache();
     if (cached.isNotEmpty) {
+      logger.info('Loaded ${cached.length} channels from cache');
       _channels = cached;
       _updateCategories();
       _applyFilters();
@@ -66,6 +69,7 @@ class ChannelProvider extends ChangeNotifier {
       // Fetch updates in background
       _fetchChannelsInBackground();
     } else {
+      logger.info('No cached channels found, fetching fresh data');
       // No cache, fetch fresh
       await fetchChannels();
     }
@@ -73,6 +77,7 @@ class ChannelProvider extends ChangeNotifier {
 
   /// Fetch channels from repositories
   Future<void> fetchChannels() async {
+    logger.info('Fetching channels from repositories...');
     _isLoading = true;
     notifyListeners();
 
@@ -83,12 +88,13 @@ class ChannelProvider extends ChangeNotifier {
         },
       );
 
+      logger.info('Successfully fetched ${channels.length} channels');
       _channels = channels;
       _updateCategories();
       _applyFilters();
       await _saveToCache();
-    } catch (e) {
-      debugPrint('Error fetching channels: $e');
+    } catch (e, stackTrace) {
+      logger.error('Error fetching channels', e, stackTrace);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -96,17 +102,21 @@ class ChannelProvider extends ChangeNotifier {
   }
 
   void _fetchChannelsInBackground() async {
+    logger.debug('Starting background channel fetch...');
     try {
       final channels = await M3UService.fetchAllChannels();
       if (channels.length > _channels.length) {
+        logger.info('Background fetch found ${channels.length - _channels.length} new channels');
         _channels = channels;
         _updateCategories();
         _applyFilters();
         await _saveToCache();
         notifyListeners();
+      } else {
+        logger.debug('Background fetch completed, no new channels');
       }
-    } catch (e) {
-      debugPrint('Background fetch error: $e');
+    } catch (e, stackTrace) {
+      logger.error('Background fetch error', e, stackTrace);
     }
   }
 
@@ -114,6 +124,7 @@ class ChannelProvider extends ChangeNotifier {
   Future<void> validateChannels() async {
     if (_isScanning) return;
 
+    logger.info('Starting channel validation for ${_channels.length} channels');
     _isScanning = true;
     _scanProgress = 0;
     _scanTotal = _channels.length;
@@ -169,6 +180,7 @@ class ChannelProvider extends ChangeNotifier {
     }
 
     _isScanning = false;
+    logger.info('Channel validation completed: $_workingCount working, $_failedCount failed');
     await _saveToCache();
     notifyListeners();
   }
@@ -306,8 +318,8 @@ class ChannelProvider extends ChangeNotifier {
         final List<dynamic> data = jsonDecode(json);
         return data.map((e) => Channel.fromJson(e)).toList();
       }
-    } catch (e) {
-      debugPrint('Error loading cache: $e');
+    } catch (e, stackTrace) {
+      logger.error('Error loading cache', e, stackTrace);
     }
     return [];
   }
@@ -317,8 +329,9 @@ class ChannelProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final json = jsonEncode(_channels.map((c) => c.toJson()).toList());
       await prefs.setString('channels_cache', json);
-    } catch (e) {
-      debugPrint('Error saving cache: $e');
+      logger.debug('Saved ${_channels.length} channels to cache');
+    } catch (e, stackTrace) {
+      logger.error('Error saving cache', e, stackTrace);
     }
   }
 

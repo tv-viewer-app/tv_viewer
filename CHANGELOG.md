@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-01-28
+
+### Added (Flutter Android App)
+- **Persistent Logging Service** - File-based logging with rotation (5 files, 1MB each) ([#2](https://github.com/arielsaghiv/tv_viewer/issues/2))
+- **User-Friendly Error Messages** - Comprehensive error handler with recovery suggestions ([#1](https://github.com/arielsaghiv/tv_viewer/issues/1))
+- **Language Filter** - Filter channels by language with dropdown selector ([#12](https://github.com/arielsaghiv/tv_viewer/issues/12))
+- **Wake Lock** - Screen stays awake during video playback ([#9](https://github.com/arielsaghiv/tv_viewer/issues/9))
+- **Help Screen** - In-app FAQ, troubleshooting guide, and support contact ([#8](https://github.com/arielsaghiv/tv_viewer/issues/8))
+- **Diagnostics Screen** - Device info, network status, stream URL tester ([#17](https://github.com/arielsaghiv/tv_viewer/issues/17))
+- **Onboarding Service** - First-time user tooltips system ([#5](https://github.com/arielsaghiv/tv_viewer/issues/5))
+- **Picture-in-Picture** - PiP support for Android 8.0+ ([#16](https://github.com/arielsaghiv/tv_viewer/issues/16))
+- **Enhanced External Players** - Support for 6+ external players (VLC, MX Player, MPV, Just Player) ([#18](https://github.com/arielsaghiv/tv_viewer/issues/18))
+- **USER_GUIDE.md** - End-user documentation ([#6](https://github.com/arielsaghiv/tv_viewer/issues/6))
+- **FAQ.md** - Frequently asked questions document ([#7](https://github.com/arielsaghiv/tv_viewer/issues/7))
+- **Global Error Handling** - All uncaught errors logged with stack traces
+- **Log Export** - Export logs via share dialog for support
+
+### Changed (Flutter Android App)
+- Logging system integrated throughout app (replaced debugPrint)
+- Help screen now exports actual logs via LoggerService
+- Home screen menu links to Help and Diagnostics screens
+
 ## [1.5.0] - 2026-01-28
 
 ### Added (Flutter Android App)
