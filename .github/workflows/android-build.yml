@@ -1,76 +1,44 @@
-name: Build Android APK
+name: Build Flutter Android APK
 
 on:
   push:
     branches: [ master ]
     paths:
-      - 'android/**'
+      - 'flutter_app/**'
   workflow_dispatch:
 
 jobs:
-  build-android:
-    runs-on: ubuntu-22.04
+  build-flutter-apk:
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Set up Java
+      uses: actions/setup-java@v4
       with:
-        python-version: '3.10'
+        distribution: 'temurin'
+        java-version: '17'
     
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          python3-pip \
-          build-essential \
-          git \
-          python3-dev \
-          ffmpeg \
-          libsdl2-dev \
-          libsdl2-image-dev \
-          libsdl2-mixer-dev \
-          libsdl2-ttf-dev \
-          libportmidi-dev \
-          libswscale-dev \
-          libavformat-dev \
-          libavcodec-dev \
-          zlib1g-dev \
-          openjdk-17-jdk \
-          autoconf \
-          automake \
-          libtool \
-          libtool-bin \
-          pkg-config \
-          libffi-dev \
-          libssl-dev \
-          cmake \
-          ninja-build \
-          unzip \
-          zip
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.0'
+        channel: 'stable'
     
-    - name: Install Buildozer
-      run: |
-        pip install --upgrade pip setuptools wheel
-        pip install buildozer cython==0.29.36 virtualenv
+    - name: Get dependencies
+      working-directory: flutter_app
+      run: flutter pub get
     
     - name: Build APK
-      working-directory: android
-      run: |
-        # Accept SDK licenses and build
-        yes | buildozer android debug 2>&1 || true
-        # Show what was built
-        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-        ls -la bin/ 2>/dev/null || echo "No bin directory"
+      working-directory: flutter_app
+      run: flutter build apk --release
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: tv-viewer-android
-        path: |
-          android/bin/*.apk
-          android/.buildozer/android/platform/build-*/dists/*/bin/*.apk
+        name: tv-viewer-flutter-apk
+        path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
         retention-days: 30
-        if-no-files-found: warn
+        if-no-files-found: error
