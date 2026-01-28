@@ -42,10 +42,30 @@ jobs:
     - name: Build APK
       run: flutter build apk --release
     
-    - name: Upload APK
+    - name: Get version from pubspec
+      id: version
+      run: |
+        VERSION=$(grep 'version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d'+' -f1)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Copy APK to dist folder
+      run: |
+        mkdir -p ../dist/android
+        cp build/app/outputs/flutter-apk/app-release.apk ../dist/android/TV_Viewer_v${{ steps.version.outputs.version }}.apk
+    
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: tv-viewer-flutter-apk
         path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
         retention-days: 30
         if-no-files-found: error
+    
+    - name: Commit APK to dist folder
+      run: |
+        cd ..
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add dist/android/TV_Viewer_v${{ steps.version.outputs.version }}.apk
+        git diff --staged --quiet || git commit -m "build: Add APK v${{ steps.version.outputs.version }} to dist folder [skip ci]"
+        git push
