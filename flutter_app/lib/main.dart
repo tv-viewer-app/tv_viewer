@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'providers/channel_provider.dart';
+import 'utils/logger_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize logger service
+  await logger.initialize(minLogLevel: LogLevel.info);
+  logger.info('TV Viewer app starting...');
+  
   runApp(const TVViewerApp());
 }
 

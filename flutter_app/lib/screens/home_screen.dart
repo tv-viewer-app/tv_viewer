@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/channel_provider.dart';
 import '../models/channel.dart';
+import '../services/feedback_service.dart';
+import '../services/onboarding_service.dart';
+import '../widgets/channel_tile.dart';
+import '../widgets/filter_dropdown.dart';
+import '../widgets/scan_progress_bar.dart';
+import '../widgets/onboarding_tooltip.dart';
+import 'diagnostics_screen.dart';
+import 'help_screen.dart';
 import 'player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -13,6 +21,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  
+  // Keys for onboarding tooltips
+  final GlobalKey _scanButtonKey = GlobalKey();
+  final GlobalKey _filterAreaKey = GlobalKey();
+  
+  bool _hasShownOnboarding = false;
+  int _currentTooltipIndex = 0;
+  List<String> _tooltipsToShow = [];
 
   @override
   void initState() {
@@ -20,12 +36,92 @@ class _HomeScreenState extends State<HomeScreen> {
     // Load channels on startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChannelProvider>().loadChannels();
+      _checkRatingPrompt(); // BL-032: Check if we should show rating prompt
+      _checkAndShowOnboarding();
     });
+  }
+  
+  /// BL-032: Check and show rating prompt if needed
+  Future<void> _checkRatingPrompt() async {
+    final shouldShow = await FeedbackService.shouldShowRatingPrompt();
+    if (shouldShow && mounted) {
+      // Delay to avoid showing immediately on app launch
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          FeedbackService.showRatingPrompt(context);
+        }
+      });
+    }
+  }
+  
+  Future<void> _checkAndShowOnboarding() async {
+    if (_hasShownOnboarding) return;
+    
+    _tooltipsToShow = await OnboardingService.getTooltipsToShow();
+    if (_tooltipsToShow.isNotEmpty && mounted) {
+      _hasShownOnboarding = true;
+      // Delay to ensure widgets are rendered
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        _showNextTooltip();
+      }
+    }
+  }
+
+  void _showNextTooltip() {
+    if (_currentTooltipIndex >= _tooltipsToShow.length) {
+      // All tooltips shown, mark onboarding as complete
+      OnboardingService.completeOnboarding();
+      return;
+    }
+
+    final tooltipId = _tooltipsToShow[_currentTooltipIndex];
+    GlobalKey? targetKey;
+    String message = '';
+    ArrowPosition position = ArrowPosition.bottom;
+
+    switch (tooltipId) {
+      case 'scan_button':
+        targetKey = _scanButtonKey;
+        message = 'Tap to check which channels are working';
+        position = ArrowPosition.bottom;
+        break;
+      case 'filter_area':
+        targetKey = _filterAreaKey;
+        message = 'Filter by category, country, or type';
+        position = ArrowPosition.top;
+        break;
+      case 'favorite_button':
+        // This will be shown on first channel tile (future enhancement)
+        _currentTooltipIndex++;
+        OnboardingService.markTooltipAsShown(tooltipId);
+        _showNextTooltip();
+        return;
+    }
+
+    if (targetKey != null && mounted) {
+      OnboardingOverlay.show(
+        context,
+        message: message,
+        targetKey: targetKey,
+        arrowPosition: position,
+        onDismiss: () {
+          OnboardingService.markTooltipAsShown(tooltipId);
+          _currentTooltipIndex++;
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              _showNextTooltip();
+            }
+          });
+        },
+      );
+    }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    OnboardingOverlay.dismiss();
     super.dispose();
   }
 
@@ -39,12 +135,14 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (context, provider, _) {
               if (provider.isScanning) {
                 return IconButton(
+                  key: _scanButtonKey,
                   icon: const Icon(Icons.stop),
                   tooltip: 'Stop Scan',
                   onPressed: () => provider.stopValidation(),
                 );
               }
               return IconButton(
+                key: _scanButtonKey,
                 icon: const Icon(Icons.refresh),
                 tooltip: 'Scan Channels',
                 onPressed: () => provider.validateChannels(),
@@ -53,14 +151,80 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'about') {
+              if (value == 'help') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HelpScreen(),
+                  ),
+                );
+              } else if (value == 'diagnostics') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DiagnosticsScreen(),
+                  ),
+                );
+              } else if (value == 'feedback') {
+                FeedbackService.showFeedbackDialog(context);
+              } else if (value == 'rate') {
+                FeedbackService.openAppStore();
+              } else if (value == 'about') {
                 _showAboutDialog();
               }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
+                value: 'help',
+                child: Row(
+                  children: [
+                    Icon(Icons.help_outline),
+                    SizedBox(width: 8),
+                    Text('Help & Support'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'diagnostics',
+                child: Row(
+                  children: [
+                    Icon(Icons.bug_report),
+                    SizedBox(width: 8),
+                    Text('Diagnostics'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'feedback',
+                child: Row(
+                  children: [
+                    Icon(Icons.feedback),
+                    SizedBox(width: 8),
+                    Text('Send Feedback'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'rate',
+                child: Row(
+                  children: [
+                    Icon(Icons.star),
+                    SizedBox(width: 8),
+                    Text('Rate App'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
                 value: 'about',
-                child: Text('About'),
+                child: Row(
+                  children: [
+                    Icon(Icons.info),
+                    SizedBox(width: 8),
+                    Text('About'),
+                  ],
+                ),
               ),
             ],
           ),
@@ -72,7 +236,12 @@ class _HomeScreenState extends State<HomeScreen> {
           Consumer<ChannelProvider>(
             builder: (context, provider, _) {
               if (provider.isScanning) {
-                return _buildScanProgress(provider);
+                return ScanProgressBar(
+                  progress: provider.scanProgress,
+                  total: provider.scanTotal,
+                  workingCount: provider.workingCount,
+                  failedCount: provider.failedCount,
+                );
               }
               return const SizedBox.shrink();
             },
@@ -106,50 +275,94 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Filter Row with Dropdowns
+          // Filter Row with Dropdowns (BL-017: Added Language filter)
           Consumer<ChannelProvider>(
             builder: (context, provider, _) {
               return Padding(
+                key: _filterAreaKey,
                 padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                child: Row(
+                child: Column(
                   children: [
-                    // Media Type Filter (TV/Radio)
-                    Expanded(
-                      child: _buildDropdown(
-                        value: provider.selectedMediaType,
-                        items: provider.mediaTypes,
-                        hint: 'Type',
-                        icon: Icons.live_tv,
-                        onChanged: (value) => provider.setMediaType(value!),
-                      ),
+                    // First row: Type, Category, Country
+                    Row(
+                      children: [
+                        // Media Type Filter (TV/Radio)
+                        Expanded(
+                          child: FilterDropdown(
+                            value: provider.selectedMediaType,
+                            items: provider.mediaTypes,
+                            hint: 'Type',
+                            icon: Icons.live_tv,
+                            onChanged: (value) => provider.setMediaType(value!),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Category Dropdown
+                        Expanded(
+                          flex: 2,
+                          child: FilterDropdown(
+                            value: provider.selectedCategory,
+                            items: provider.categories,
+                            hint: 'Category',
+                            icon: Icons.category,
+                            onChanged: (value) => provider.setCategory(value!),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Country Dropdown
+                        Expanded(
+                          flex: 2,
+                          child: FilterDropdown(
+                            value: provider.selectedCountry,
+                            items: provider.countries,
+                            hint: 'Country',
+                            icon: Icons.flag,
+                            onChanged: (value) => provider.setCountry(value!),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    // Category Dropdown
-                    Expanded(
-                      flex: 2,
-                      child: _buildDropdown(
-                        value: provider.selectedCategory,
-                        items: provider.categories,
-                        hint: 'Category',
-                        icon: Icons.category,
-                        onChanged: (value) => provider.setCategory(value!),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Country Dropdown
-                    Expanded(
-                      flex: 2,
-                      child: _buildDropdown(
-                        value: provider.selectedCountry,
-                        items: provider.countries,
-                        hint: 'Country',
-                        icon: Icons.flag,
-                        onChanged: (value) => provider.setCountry(value!),
-                      ),
+                    const SizedBox(height: 8),
+                    // Second row: Language filter (BL-017)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilterDropdown(
+                            value: provider.selectedLanguage,
+                            items: provider.languages,
+                            hint: 'Language',
+                            icon: Icons.language,
+                            onChanged: (value) => provider.setLanguage(value!),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               );
+            },
+          ),
+
+          // Clear Filters Button (BL-008)
+          Consumer<ChannelProvider>(
+            builder: (context, provider, _) {
+              if (provider.hasActiveFilters) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      _searchController.clear();
+                      provider.clearFilters();
+                    },
+                    icon: const Icon(Icons.clear_all, size: 18),
+                    label: const Text('Clear Filters'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 36),
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
             },
           ),
 
@@ -165,11 +378,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       '${provider.channels.length} channels',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    Text(
-                      '${provider.workingCount} working',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.green,
-                          ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.favorite,
+                          size: 14,
+                          color: Colors.red.shade300,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${provider.favoritesCount}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.red.shade300,
+                              ),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          '${provider.workingCount} working',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.green,
+                              ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -217,7 +447,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: provider.channels.length,
                   itemBuilder: (context, index) {
                     final channel = provider.channels[index];
-                    return _buildChannelTile(channel);
+                    return ChannelTile(
+                      channel: channel,
+                      onTap: () => _playChannel(channel),
+                    );
                   },
                 );
               },
@@ -225,133 +458,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
-  }
-  
-  Widget _buildDropdown({
-    required String value,
-    required List<String> items,
-    required String hint,
-    required IconData icon,
-    required void Function(String?) onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          icon: Icon(icon, size: 18),
-          hint: Text(hint),
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(
-                item,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13),
-              ),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScanProgress(ChannelProvider provider) {
-    final progress = provider.scanTotal > 0
-        ? provider.scanProgress / provider.scanTotal
-        : 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      color: Theme.of(context).colorScheme.surfaceVariant,
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Scanning: ${provider.scanProgress}/${provider.scanTotal}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              Text(
-                '✓ ${provider.workingCount}  ✗ ${provider.failedCount}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: progress),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelTile(Channel channel) {
-    // Build subtitle with resolution/bitrate info
-    String subtitle = channel.category ?? 'Other';
-    if (channel.resolution != null) {
-      subtitle += ' • ${channel.resolution}';
-    }
-    if (channel.formattedBitrate != null) {
-      subtitle += ' • ${channel.formattedBitrate}';
-    }
-    if (channel.country != null && channel.country != 'Unknown') {
-      subtitle += ' • ${channel.country}';
-    }
-    
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: channel.isWorking ? Colors.green : Colors.grey,
-        child: channel.logo != null
-            ? ClipOval(
-                child: Image.network(
-                  channel.logo!,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(
-                    channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
-                    color: Colors.white,
-                  ),
-                ),
-              )
-            : Icon(
-                channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
-                color: Colors.white,
-              ),
-      ),
-      title: Text(
-        channel.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        subtitle,
-        style: Theme.of(context).textTheme.bodySmall,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (channel.mediaType == 'Radio')
-            const Icon(Icons.radio, size: 16, color: Colors.blue),
-          const SizedBox(width: 4),
-          Icon(
-            channel.isWorking ? Icons.check_circle : Icons.error,
-            color: channel.isWorking ? Colors.green : Colors.red,
-            size: 20,
-          ),
-        ],
-      ),
-      onTap: () => _playChannel(channel),
     );
   }
 
@@ -368,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '1.4.4',
+      applicationVersion: '1.5.0',
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

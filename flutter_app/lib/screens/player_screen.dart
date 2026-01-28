@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:floating/floating.dart';
 import '../models/channel.dart';
+import '../services/pip_service.dart';
+import '../widgets/live_badge.dart';
+import '../widgets/quality_badge.dart';
+import '../utils/error_handler.dart';
+import '../utils/logger_service.dart';
 
 class PlayerScreen extends StatefulWidget {
   final Channel channel;
@@ -13,22 +20,33 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver {
   VideoPlayerController? _videoController;
   bool _isLoading = true;
   bool _isPlaying = false;
   bool _showControls = true;
-  String? _error;
+  AppError? _error; // Changed to AppError for better error handling
   String? _resolution;
   String? _bitrate;
+  double _volume = 1.0; // BL-018: Volume control
   
   // Named listener for proper cleanup
   VoidCallback? _playerListener;
+  
+  // PiP service
+  final PipService _pipService = PipService();
+  bool _isPipMode = false;
+  bool _isPipSupported = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
     _initializePlayer();
+    _initializeWakeLock();
+    _initializePip();
+    
     // Lock to landscape for video
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -43,10 +61,74 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
     });
   }
+  
+  /// Initialize wake lock to prevent screen from sleeping during playback
+  Future<void> _initializeWakeLock() async {
+    try {
+      await WakelockPlus.enable();
+      logger.info('Wake lock enabled for ${widget.channel.name}');
+    } catch (e) {
+      logger.warning('Failed to enable wake lock', e);
+    }
+  }
+  
+  /// Initialize PiP service
+  Future<void> _initializePip() async {
+    try {
+      await _pipService.initialize();
+      setState(() {
+        _isPipSupported = _pipService.isSupported;
+      });
+      logger.info('PiP initialized - Supported: $_isPipSupported');
+      
+      // Listen to PiP status changes
+      _pipService.pipStatusStream?.listen((status) {
+        if (mounted) {
+          setState(() {
+            _isPipMode = status == PiPStatus.enabled;
+          });
+          
+          // Handle PiP lifecycle
+          if (status == PiPStatus.enabled) {
+            logger.info('Entered PiP mode for ${widget.channel.name}');
+          } else if (status == PiPStatus.disabled) {
+            logger.info('Exited PiP mode');
+          }
+        }
+      });
+    } catch (e, stackTrace) {
+      logger.error('Failed to initialize PiP', e, stackTrace);
+    }
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Handle app lifecycle changes
+    switch (state) {
+      case AppLifecycleState.paused:
+        // App is in background (possibly in PiP)
+        if (!_isPipMode) {
+          _videoController?.pause();
+        }
+        break;
+      case AppLifecycleState.resumed:
+        // App is back in foreground
+        if (!_isPipMode) {
+          _videoController?.play();
+        }
+        break;
+      default:
+        break;
+    }
+  }
 
   Future<void> _initializePlayer() async {
     // Dispose existing controller before creating new one (fixes memory leak on retry)
     _disposeController();
+    
+    logger.info('Initializing player for ${widget.channel.name} (${widget.channel.url})');
     
     try {
       _videoController = VideoPlayerController.networkUrl(
@@ -54,13 +136,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
         httpHeaders: const {'User-Agent': 'TV Viewer/1.5.0'},
       );
 
-      await _videoController!.initialize();
+      // Add timeout to initialization
+      await _videoController!.initialize().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw ErrorHandler.streamError(
+            'timeout',
+            'Stream initialization timeout after 30 seconds for ${widget.channel.name}',
+          );
+        },
+      );
+      
       _videoController!.play();
+      _videoController!.setVolume(_volume); // Set initial volume
       
       // Get video info
       final value = _videoController!.value;
       if (value.isInitialized) {
         _resolution = '${value.size.width.toInt()}x${value.size.height.toInt()}';
+        logger.info('Stream initialized successfully - Resolution: $_resolution');
       }
 
       setState(() {
@@ -77,10 +171,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       };
       _videoController!.addListener(_playerListener!);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      final appError = ErrorHandler.handle(e, stackTrace);
+      logger.error('Player initialization failed for ${widget.channel.name}', e, stackTrace);
+      logger.error('Error details: ${appError.getDetailedLog()}');
+      
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _error = appError;
       });
     }
   }
@@ -104,6 +202,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else {
       _videoController!.play();
     }
+  }
+
+  void _setVolume(double volume) {
+    setState(() {
+      _volume = volume;
+    });
+    _videoController?.setVolume(volume);
   }
   
   void _toggleControls() {
@@ -143,7 +248,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           return;
         }
       } catch (e) {
-        debugPrint('Failed to launch $playerUri: $e');
+        logger.debug('Failed to launch $playerUri: $e');
       }
     }
     
@@ -162,7 +267,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           mode: LaunchMode.externalApplication,
         );
       }
-    } catch (e) {
+      logger.info('Opened ${widget.channel.name} in external player');
+    } catch (e, stackTrace) {
+      logger.warning('Failed to open external player', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -225,8 +332,52 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Enable PiP mode
+  Future<void> _enablePip() async {
+    if (!_isPipSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Picture-in-Picture not supported (requires Android 8.0+)'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
+    // Calculate aspect ratio from video
+    Rational aspectRatio = const Rational(16, 9); // Default
+    if (_videoController != null && _videoController!.value.isInitialized) {
+      final videoSize = _videoController!.value.size;
+      aspectRatio = _pipService.calculateAspectRatio(videoSize);
+    }
+    
+    // Enter PiP mode
+    final success = await _pipService.enablePip(aspectRatio: aspectRatio);
+    
+    if (success) {
+      // Hide controls in PiP mode
+      setState(() {
+        _showControls = false;
+      });
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to enter Picture-in-Picture mode'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+  
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    
+    // Disable wake lock
+    WakelockPlus.disable();
+    
     // Restore orientation
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -235,6 +386,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       DeviceOrientation.landscapeRight,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    
     _disposeController();
     super.dispose();
   }
@@ -277,30 +429,53 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                widget.channel.name,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              // Show resolution and bitrate
-                              if (_resolution != null || widget.channel.resolution != null)
-                                Text(
-                                  [
-                                    _resolution ?? widget.channel.resolution,
-                                    widget.channel.formattedBitrate,
-                                  ].where((e) => e != null).join(' • '),
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
+                              Row(
+                                children: [
+                                  // LIVE badge (BL-027)
+                                  const LiveBadge(),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      widget.channel.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
+                                ],
+                              ),
+                              // Show quality badge and bitrate
+                              Row(
+                                children: [
+                                  if (_resolution != null || widget.channel.resolution != null) ...[
+                                    QualityBadge(
+                                      resolution: _resolution ?? widget.channel.resolution,
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  if (widget.channel.formattedBitrate != null)
+                                    Text(
+                                      widget.channel.formattedBitrate!,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
+                        // PiP button (only show if supported and not in PiP mode)
+                        if (_isPipSupported && !_isPipMode)
+                          IconButton(
+                            icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white),
+                            tooltip: 'Picture in Picture',
+                            onPressed: _enablePip,
+                          ),
                         // Cast button
                         IconButton(
                           icon: const Icon(Icons.cast, color: Colors.white),
@@ -339,8 +514,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
               ),
-              
-            // Bottom info bar
+               
+            // Bottom control bar with volume slider (BL-018)
             if (_showControls && !_isLoading && _error == null)
               Positioned(
                 bottom: 0,
@@ -351,18 +526,56 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Colors.black54, Colors.transparent],
+                      colors: [Colors.black87, Colors.transparent],
                     ),
                   ),
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.white54, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Tap to hide controls • Double-tap to play/pause',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      // Volume control
+                      Row(
+                        children: [
+                          Icon(
+                            _volume == 0
+                                ? Icons.volume_off
+                                : _volume < 0.5
+                                    ? Icons.volume_down
+                                    : Icons.volume_up,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _volume,
+                              min: 0.0,
+                              max: 1.0,
+                              onChanged: _setVolume,
+                              activeColor: Colors.white,
+                              inactiveColor: Colors.white30,
+                            ),
+                          ),
+                          Text(
+                            '${(_volume * 100).round()}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Info text
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.white54, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Tap to hide controls • Double-tap to play/pause',
+                            style: TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -390,44 +603,102 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     if (_error != null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.red),
-          const SizedBox(height: 16),
-          Text(
-            'Could not load stream',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
+      return SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                _error!.userMessage,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white24),
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.info_outline, size: 16, color: Colors.white70),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'What to do:',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!.recoverySuggestion,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Error Code: ${_error!.code}',
+                style: const TextStyle(
+                  color: Colors.white30,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isLoading = true;
+                        _error = null;
+                      });
+                      _initializePlayer();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: _openInExternalPlayer,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('External Player'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white54),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              _error!,
-              style: const TextStyle(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _openInExternalPlayer,
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Open in External Player'),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _isLoading = true;
-                _error = null;
-              });
-              _initializePlayer();
-            },
-            child: const Text('Retry'),
-          ),
-        ],
+        ),
       );
     }
 

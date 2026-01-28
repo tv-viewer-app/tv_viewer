@@ -1,4 +1,4 @@
-/// Channel model for IPTV streams
+/// Channel model for IPTV streams (BL-031: Immutable)
 class Channel {
   final String name;
   final String url;
@@ -7,12 +7,12 @@ class Channel {
   final String? country;
   final String? language;
   final String mediaType; // 'TV' or 'Radio'
-  bool isWorking;
-  DateTime? lastChecked;
+  final bool isWorking;
+  final DateTime? lastChecked;
   
   // Stream metadata
-  String? resolution;
-  int? bitrate;
+  final String? resolution;
+  final int? bitrate;
 
   Channel({
     required this.name,
@@ -152,5 +152,34 @@ class Channel {
       return '${(bitrate! / 1000).toStringAsFixed(0)} Kbps';
     }
     return '$bitrate bps';
+  }
+  
+  /// BL-031: copyWith method for immutable updates
+  Channel copyWith({
+    String? name,
+    String? url,
+    String? category,
+    String? logo,
+    String? country,
+    String? language,
+    String? mediaType,
+    bool? isWorking,
+    DateTime? lastChecked,
+    String? resolution,
+    int? bitrate,
+  }) {
+    return Channel(
+      name: name ?? this.name,
+      url: url ?? this.url,
+      category: category ?? this.category,
+      logo: logo ?? this.logo,
+      country: country ?? this.country,
+      language: language ?? this.language,
+      mediaType: mediaType ?? this.mediaType,
+      isWorking: isWorking ?? this.isWorking,
+      lastChecked: lastChecked ?? this.lastChecked,
+      resolution: resolution ?? this.resolution,
+      bitrate: bitrate ?? this.bitrate,
+    );
   }
 }

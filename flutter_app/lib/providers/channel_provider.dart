@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../services/m3u_service.dart';
+import '../services/favorites_service.dart';
 
 /// Provider for managing channel state
 class ChannelProvider extends ChangeNotifier {
@@ -10,8 +11,11 @@ class ChannelProvider extends ChangeNotifier {
   List<Channel> _filteredChannels = [];
   Set<String> _categories = {};
   Set<String> _countries = {};
+  Set<String> _languages = {}; // BL-017: Language filter
+  Set<String> _favoriteUrls = {}; // Track favorite channel URLs
   String _selectedCategory = 'All';
   String _selectedCountry = 'All';
+  String _selectedLanguage = 'All'; // BL-017: Language filter
   String _selectedMediaType = 'All'; // 'All', 'TV', or 'Radio'
   String _searchQuery = '';
   bool _isLoading = false;
@@ -23,11 +27,13 @@ class ChannelProvider extends ChangeNotifier {
 
   // Getters
   List<Channel> get channels => _filteredChannels;
-  List<String> get categories => ['All', ..._categories.toList()..sort()];
+  List<String> get categories => ['All', 'Favorites', ..._categories.toList()..sort()];
   List<String> get countries => ['All', ..._countries.toList()..sort()];
+  List<String> get languages => ['All', ..._languages.toList()..sort()]; // BL-017
   List<String> get mediaTypes => ['All', 'TV', 'Radio'];
   String get selectedCategory => _selectedCategory;
   String get selectedCountry => _selectedCountry;
+  String get selectedLanguage => _selectedLanguage; // BL-017
   String get selectedMediaType => _selectedMediaType;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
@@ -37,11 +43,16 @@ class ChannelProvider extends ChangeNotifier {
   int get workingCount => _workingCount;
   int get failedCount => _failedCount;
   int get totalChannels => _channels.length;
+  int get favoritesCount => _favoriteUrls.length;
+
 
   /// Load channels from cache or fetch new
   Future<void> loadChannels() async {
     _isLoading = true;
     notifyListeners();
+
+    // Load favorites first
+    await _loadFavorites();
 
     // Try to load from cache first
     final cached = await _loadFromCache();
@@ -117,15 +128,19 @@ class ChannelProvider extends ChangeNotifier {
 
       final batch = _channels.skip(i).take(batchSize).toList();
       
-      // Collect results from batch before updating state
+      // Collect results from batch before updating state (BL-031: immutable)
+      final updatedChannels = <Channel>[];
       int batchWorking = 0;
       int batchFailed = 0;
       
       await Future.wait(
         batch.map((channel) async {
           final isWorking = await M3UService.checkStream(channel.url);
-          channel.isWorking = isWorking;
-          channel.lastChecked = DateTime.now();
+          final updated = channel.copyWith(
+            isWorking: isWorking,
+            lastChecked: DateTime.now(),
+          );
+          updatedChannels.add(updated);
 
           if (isWorking) {
             batchWorking++;
@@ -135,7 +150,15 @@ class ChannelProvider extends ChangeNotifier {
         }),
       );
       
-      // Update state once after batch completes (fixes race condition)
+      // Update channels list with new instances (BL-031: immutable pattern)
+      for (var updated in updatedChannels) {
+        final index = _channels.indexWhere((c) => c.url == updated.url);
+        if (index != -1) {
+          _channels[index] = updated;
+        }
+      }
+      
+      // Update state once after batch completes
       _workingCount += batchWorking;
       _failedCount += batchFailed;
       _scanProgress += batch.length;
@@ -170,6 +193,13 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
   
+  /// BL-017: Set language filter
+  void setLanguage(String language) {
+    _selectedLanguage = language;
+    _applyFilters();
+    notifyListeners();
+  }
+  
   /// Set media type filter (TV/Radio)
   void setMediaType(String mediaType) {
     _selectedMediaType = mediaType;
@@ -184,6 +214,26 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all filters (BL-008)
+  void clearFilters() {
+    _selectedCategory = 'All';
+    _selectedCountry = 'All';
+    _selectedLanguage = 'All';
+    _selectedMediaType = 'All';
+    _searchQuery = '';
+    _applyFilters();
+    notifyListeners();
+  }
+
+  /// Check if any filters are active (BL-008)
+  bool get hasActiveFilters {
+    return _selectedCategory != 'All' ||
+        _selectedCountry != 'All' ||
+        _selectedLanguage != 'All' ||
+        _selectedMediaType != 'All' ||
+        _searchQuery.isNotEmpty;
+  }
+
   void _updateCategories() {
     _categories = _channels
         .map((c) => c.category ?? 'Other')
@@ -193,12 +243,23 @@ class ChannelProvider extends ChangeNotifier {
         .map((c) => c.country ?? 'Unknown')
         .where((c) => c.isNotEmpty && c != 'Unknown')
         .toSet();
+    // BL-017: Extract languages
+    _languages = _channels
+        .map((c) => c.language ?? 'Unknown')
+        .where((c) => c.isNotEmpty && c != 'Unknown')
+        .toSet();
   }
 
   void _applyFilters() {
     _filteredChannels = _channels.where((channel) {
+      // Favorites filter (special category)
+      if (_selectedCategory == 'Favorites') {
+        if (!_favoriteUrls.contains(channel.url)) {
+          return false;
+        }
+      }
       // Category filter
-      if (_selectedCategory != 'All') {
+      else if (_selectedCategory != 'All') {
         if ((channel.category ?? 'Other') != _selectedCategory) {
           return false;
         }
@@ -207,6 +268,13 @@ class ChannelProvider extends ChangeNotifier {
       // Country filter
       if (_selectedCountry != 'All') {
         if ((channel.country ?? 'Unknown') != _selectedCountry) {
+          return false;
+        }
+      }
+      
+      // BL-017: Language filter
+      if (_selectedLanguage != 'All') {
+        if ((channel.language ?? 'Unknown') != _selectedLanguage) {
           return false;
         }
       }
@@ -271,4 +339,38 @@ class ChannelProvider extends ChangeNotifier {
 
     return buffer.toString();
   }
+
+  // ========== Favorites Management ==========
+
+  /// Check if a channel is favorited
+  bool isFavorite(Channel channel) {
+    return _favoriteUrls.contains(channel.url);
+  }
+
+  /// Toggle favorite status for a channel
+  Future<void> toggleFavorite(Channel channel) async {
+    if (_favoriteUrls.contains(channel.url)) {
+      _favoriteUrls.remove(channel.url);
+      await FavoritesService.removeFavorite(channel.url);
+    } else {
+      _favoriteUrls.add(channel.url);
+      await FavoritesService.addFavorite(channel.url);
+    }
+    
+    // If currently viewing favorites, reapply filters
+    if (_selectedCategory == 'Favorites') {
+      _applyFilters();
+    }
+    
+    notifyListeners();
+  }
+
+  /// Load favorites from persistent storage
+  Future<void> _loadFavorites() async {
+    _favoriteUrls = await FavoritesService.loadFavorites();
+  }
+
+  /// Get all favorite channels
+  List<Channel> get favoriteChannels =>
+      _channels.where((c) => _favoriteUrls.contains(c.url)).toList();
 }

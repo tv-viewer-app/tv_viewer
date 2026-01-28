@@ -44,7 +44,8 @@ android {
 
     defaultConfig {
         applicationId "com.tvviewer.app"
-        minSdk 21
+        // PiP requires API 26+ (Android 8.0)
+        minSdk 26
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName

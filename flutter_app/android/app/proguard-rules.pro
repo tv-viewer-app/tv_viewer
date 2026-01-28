@@ -41,6 +41,14 @@
 # Keep Google Fonts (if used)
 -keep class com.google.fonts.** { *; }
 
+# Wakelock Plus
+-keep class com.ryanheise.wakelock_plus.** { *; }
+-keep class androidx.core.app.NotificationCompat { *; }
+
+# Floating (PiP)
+-keep class floating.** { *; }
+-keep class io.flutter.plugins.floating.** { *; }
+
 # Keep Provider classes
 -keep class * extends androidx.lifecycle.ViewModel { *; }
 -keep class * extends androidx.lifecycle.AndroidViewModel { *; }
