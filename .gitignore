@@ -4,28 +4,58 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
 build/
-*.spec
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+# Python lib directories (not Flutter)
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Application
-channels.json
-privatebin_cache.json
-thumbnails/
-logs/
-*.log
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
 
 # IDE
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Test
-.pytest_cache/
+# Coverage
+.early.coverage/
 .coverage
 htmlcov/
+
+# PyInstaller build output
+dist/
+*.manifest
+
+# Logs (keep structure, ignore content)
+logs/*.log
+
+# Temp files
+*.tmp
+*.bak
+*.temp
+
+# Android build artifacts
+android/.buildozer/
+android/bin/
+android/.gradle/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,502 @@
+# Android Features - Visual Architecture
+
+## System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          TV Viewer App                               │
+│                         (Flutter/Dart)                               │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │                           │
+                    ▼                           ▼
+    ┌───────────────────────────┐   ┌──────────────────────────┐
+    │   player_screen.dart      │   │   pip_service.dart       │
+    │                           │   │                          │
+    │  • Video Playback         │◄──┤  • PiP Management        │
+    │  • Controls UI            │   │  • Aspect Ratio Calc     │
+    │  • Lifecycle Management   │   │  • Status Monitoring     │
+    └───────────────────────────┘   └──────────────────────────┘
+                │                                │
+                │                                │
+    ┌───────────┴─────────┐         ┌──────────┴─────────────┐
+    │                     │         │                        │
+    ▼                     ▼         ▼                        ▼
+┌─────────┐      ┌──────────────┐  ┌──────────┐    ┌──────────────┐
+│ Wake    │      │   Video      │  │ Floating │    │   Android    │
+│ Lock    │      │   Player     │  │ Plugin   │    │   Platform   │
+│ Plus    │      │   Plugin     │  │          │    │   Channel    │
+└─────────┘      └──────────────┘  └──────────┘    └──────────────┘
+    │                    │              │                   │
+    └────────────────────┴──────────────┴───────────────────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+                    ▼                       ▼
+        ┌──────────────────┐    ┌─────────────────────┐
+        │   Android OS     │    │   System Services   │
+        │   (API 26+)      │    │   • Power Manager   │
+        │                  │    │   • Window Manager  │
+        └──────────────────┘    └─────────────────────┘
+```
+
+---
+
+## Component Interaction Flow
+
+### Wake Lock Flow
+
+```
+User Opens Player
+        │
+        ▼
+┌──────────────────────┐
+│ player_screen.dart   │
+│ initState()          │
+└──────────────────────┘
+        │
+        ▼
+┌──────────────────────┐
+│ _initializeWakeLock()│
+└──────────────────────┘
+        │
+        ▼
+┌──────────────────────┐
+│ WakelockPlus.enable()│
+└──────────────────────┘
+        │
+        ▼
+┌──────────────────────┐
+│ Android Power Manager│
+│ Screen stays on      │
+└──────────────────────┘
+        │
+        │ (Video playing...)
+        │
+        ▼
+┌──────────────────────┐
+│ User exits player    │
+│ dispose()            │
+└──────────────────────┘
+        │
+        ▼
+┌──────────────────────┐
+│WakelockPlus.disable()│
+└──────────────────────┘
+        │
+        ▼
+┌──────────────────────┐
+│ Screen timeout reset │
+└──────────────────────┘
+```
+
+---
+
+### PiP Mode Flow
+
+```
+User Watching Video
+        │
+        ▼
+┌──────────────────────────┐
+│ User taps PiP button     │
+└──────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ player_screen.dart       │
+│ _enablePip()             │
+└──────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ PipService               │
+│ Check device support     │
+└──────────────────────────┘
+        │
+        ├─── Not Supported ──► Show error message
+        │
+        └─── Supported
+                │
+                ▼
+    ┌──────────────────────────┐
+    │ Calculate aspect ratio   │
+    │ from video dimensions    │
+    └──────────────────────────┘
+                │
+                ▼
+    ┌──────────────────────────┐
+    │ floating.enable()        │
+    │ with aspect ratio        │
+    └──────────────────────────┘
+                │
+                ▼
+    ┌──────────────────────────┐
+    │ Android Window Manager   │
+    │ Enter PiP mode           │
+    └──────────────────────────┘
+                │
+                ▼
+    ┌──────────────────────────┐
+    │ Video in floating window │
+    │ • User can switch apps   │
+    │ • Video keeps playing    │
+    │ • Tap to restore         │
+    └──────────────────────────┘
+```
+
+---
+
+## File Structure with Dependencies
+
+```
+tv_viewer/
+│
+├── android/
+│   ├── app/
+│   │   ├── build.gradle ───────────► minSdk: 26 (PiP requirement)
+│   │   ├── proguard-rules.pro ────► Rules for wakelock & PiP
+│   │   └── src/main/
+│   │       └── AndroidManifest.xml ► Permissions & PiP config
+│   │
+│   └── gradle/
+│       └── wrapper/ ───────────────► Gradle 8.x
+│
+├── lib/
+│   ├── main.dart
+│   │
+│   ├── screens/
+│   │   └── player_screen.dart ────► Wake lock + PiP integration
+│   │       │
+│   │       ├── Uses: wakelock_plus
+│   │       ├── Uses: floating
+│   │       ├── Uses: pip_service
+│   │       └── Manages: VideoPlayerController
+│   │
+│   ├── services/
+│   │   └── pip_service.dart ──────► PiP management service
+│   │       │
+│   │       ├── Wraps: floating package
+│   │       ├── Provides: Aspect ratio calculation
+│   │       └── Handles: PiP lifecycle
+│   │
+│   ├── models/
+│   │   └── channel.dart
+│   │
+│   └── providers/
+│       └── ...
+│
+└── pubspec.yaml ──────────────────► Dependencies:
+    │                                 • wakelock_plus: ^1.2.0
+    │                                 • floating: ^2.0.0
+    └────────────────────────────────• video_player: ^2.8.2
+```
+
+---
+
+## Android Permission & Configuration Flow
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    AndroidManifest.xml                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│  <uses-permission android:name="                              │
+│      android.permission.WAKE_LOCK"/>                          │
+│      ▲                                                        │
+│      │ Enables screen wake lock                              │
+│      │                                                        │
+│  <activity                                                    │
+│      android:supportsPictureInPicture="true"                  │
+│      ▲                                                        │
+│      │ Enables PiP mode                                      │
+│      │                                                        │
+│      android:resizeableActivity="true"                        │
+│      ▲                                                        │
+│      │ Allows window resizing                                │
+│      │                                                        │
+│      android:configChanges="orientation|screenSize|...">      │
+│      ▲                                                        │
+│      │ Handle config changes without restart                 │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## State Management - PiP Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     App Lifecycle States                     │
+└─────────────────────────────────────────────────────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+        ▼                       ▼                       ▼
+┌─────────────┐        ┌─────────────┐        ┌─────────────┐
+│   RESUMED   │        │   PAUSED    │        │  INACTIVE   │
+│             │        │             │        │             │
+│ Full screen │◄──────►│  PiP mode   │◄──────►│ Background  │
+│ Normal play │        │  Keep play  │        │ Pause play  │
+└─────────────┘        └─────────────┘        └─────────────┘
+      ▲                       │
+      │                       │
+      │    Tap PiP window     │
+      └───────────────────────┘
+```
+
+---
+
+## Player Controls UI Layout
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ ┌────────────────────────────────────────────────────────┐ │
+│ │ [←] Channel Name                [PiP] [Cast] [Ext]     │ │ ◄─ Top Bar
+│ │     1920x1080 • 2.5 Mbps                               │ │    (with gradient)
+│ └────────────────────────────────────────────────────────┘ │
+│                                                            │
+│                                                            │
+│                   ┌──────────────┐                         │
+│                   │              │                         │
+│                   │  Video Here  │                         │ ◄─ Video Player
+│                   │              │                         │
+│                   └──────────────┘                         │
+│                                                            │
+│                                                            │
+│ ┌────────────────────────────────────────────────────────┐ │
+│ │        [i] Tap to hide • Double-tap to play/pause     │ │ ◄─ Bottom Bar
+│ └────────────────────────────────────────────────────────┘ │    (with gradient)
+└────────────────────────────────────────────────────────────┘
+
+Legend:
+[←]   - Back button
+[PiP] - Picture-in-Picture button (NEW) ◄─ Added in this update
+[Cast]- Cast to device button
+[Ext] - Open in external player button
+```
+
+---
+
+## Build Process Flow
+
+```
+┌──────────────┐
+│ flutter run  │
+│ or           │
+│ flutter build│
+└──────────────┘
+        │
+        ▼
+┌──────────────────┐
+│ Flutter compile  │
+│ Dart → Native    │
+└──────────────────┘
+        │
+        ▼
+┌──────────────────┐
+│ Android Gradle   │
+│ build.gradle     │
+└──────────────────┘
+        │
+        ├─── Debug Build ────► APK without ProGuard
+        │
+        └─── Release Build
+                │
+                ▼
+    ┌──────────────────────┐
+    │ ProGuard/R8          │
+    │ • Code obfuscation   │
+    │ • Tree shaking       │
+    │ • Resource shrinking │
+    └──────────────────────┘
+                │
+                ▼
+    ┌──────────────────────┐
+    │ Apply ProGuard rules │
+    │ proguard-rules.pro   │
+    │                      │
+    │ • Keep Flutter       │
+    │ • Keep ExoPlayer     │
+    │ • Keep Wakelock      │
+    │ • Keep Floating      │
+    └──────────────────────┘
+                │
+                ▼
+    ┌──────────────────────┐
+    │ Sign APK             │
+    │ (if key.properties)  │
+    └──────────────────────┘
+                │
+                ▼
+    ┌──────────────────────┐
+    │ Final APK            │
+    │ Ready for release    │
+    └──────────────────────┘
+```
+
+---
+
+## Feature Detection Logic
+
+```
+┌─────────────────────────────────────────┐
+│     App Starts / Player Initializes     │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ Check Platform        │
+        │ Platform.isAndroid?   │
+        └───────────────────────┘
+                    │
+            ┌───────┴───────┐
+            │               │
+           Yes             No
+            │               │
+            ▼               ▼
+    ┌──────────────┐   ┌──────────┐
+    │ Check API    │   │ Disable  │
+    │ Level >= 26? │   │ PiP      │
+    └──────────────┘   └──────────┘
+            │
+    ┌───────┴───────┐
+    │               │
+   Yes             No
+    │               │
+    ▼               ▼
+┌─────────┐   ┌──────────┐
+│ Enable  │   │ Disable  │
+│ PiP     │   │ PiP      │
+│ Button  │   │ + Message│
+└─────────┘   └──────────┘
+```
+
+---
+
+## Error Handling Flow
+
+```
+┌──────────────────────────┐
+│   Feature Operation      │
+│   (Wake Lock or PiP)     │
+└──────────────────────────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Try Operation │
+    └───────────────┘
+            │
+     ┌──────┴──────┐
+     │             │
+  Success        Error
+     │             │
+     ▼             ▼
+┌─────────┐   ┌─────────────────┐
+│ Update  │   │ Catch Exception │
+│ UI      │   └─────────────────┘
+│ State   │           │
+└─────────┘           ▼
+                ┌──────────────┐
+                │ Log Error    │
+                │ debugPrint() │
+                └──────────────┘
+                      │
+                      ▼
+                ┌──────────────────┐
+                │ Show User Message│
+                │ SnackBar         │
+                └──────────────────┘
+                      │
+                      ▼
+                ┌──────────────────┐
+                │ Graceful Fallback│
+                │ Continue without │
+                │ feature          │
+                └──────────────────┘
+```
+
+---
+
+## Memory Management
+
+```
+Player Screen Lifecycle:
+
+initState()
+    │
+    ├─► Create VideoPlayerController
+    ├─► Enable WakeLock
+    ├─► Initialize PipService
+    └─► Add WidgetsBindingObserver
+    
+    ... User watches video ...
+    
+dispose()
+    │
+    ├─► Remove WidgetsBindingObserver
+    ├─► Disable WakeLock ──────────► Releases system resource
+    ├─► Remove VideoPlayerListener ─► Prevents memory leak
+    ├─► Dispose VideoPlayerController► Frees video memory
+    └─► (PipService persists) ──────► Singleton pattern
+```
+
+---
+
+## Performance Characteristics
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  Feature Performance                     │
+├──────────────┬──────────────┬──────────────┬───────────┤
+│  Feature     │  Memory      │  CPU         │  Battery  │
+├──────────────┼──────────────┼──────────────┼───────────┤
+│ Wake Lock    │  Negligible  │  None        │  Low*     │
+│ PiP Service  │  ~1 MB       │  Negligible  │  None     │
+│ PiP Mode     │  Same**      │  Same**      │  Low      │
+│ Video Player │  ~20-50 MB   │  Medium      │  Medium   │
+└──────────────┴──────────────┴──────────────┴───────────┘
+
+ * Battery impact from keeping screen on
+** Same as normal playback, video continues
+```
+
+---
+
+## Package Dependencies Graph
+
+```
+┌─────────────────────────────────────────────┐
+│           tv_viewer (main app)              │
+└─────────────────────────────────────────────┘
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+        ▼           ▼           ▼
+┌──────────┐  ┌──────────┐  ┌────────────┐
+│wakelock_ │  │floating  │  │video_player│
+│plus      │  │          │  │            │
+│^1.2.0    │  │^2.0.0    │  │^2.8.2      │
+└──────────┘  └──────────┘  └────────────┘
+     │             │              │
+     ▼             ▼              ▼
+┌──────────────────────────────────────┐
+│    Android Platform Channels         │
+└──────────────────────────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│    Android Native APIs               │
+│    • PowerManager (Wake Lock)        │
+│    • WindowManager (PiP)             │
+│    • ExoPlayer (Video)               │
+└──────────────────────────────────────┘
+```
+
+---
+
+**Visual Guide Version:** 1.0  
+**Created:** 2024  
+**Status:** Complete

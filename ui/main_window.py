@@ -1,3 +1,4 @@
+"""Main application window with Windows 11 Fluent Design UI using CustomTkinter."""
 
 import customtkinter as ctk
 from tkinter import ttk, messagebox

@@ -1,0 +1,7 @@
+# IMPORTANT: DO NOT COMMIT THIS FILE TO VERSION CONTROL
+# Add this file to .gitignore immediately
+
+storePassword=YOUR_KEYSTORE_PASSWORD_HERE
+keyPassword=YOUR_KEY_PASSWORD_HERE
+keyAlias=upload
+storeFile=C:/path/to/your/upload-keystore.jks

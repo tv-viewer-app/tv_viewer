@@ -1,0 +1,340 @@
+Test ID,Category,Priority,Test Case,Preconditions,Steps,Expected Result,Status,Actual Result,Bug ID,Tester,Date
+FC-1.1,Channel List,High,Display all channels on app launch,App installed,"1. Launch app
+2. Observe channel list",All channels displayed with name/logo/category/resolution/bitrate/country,Not Tested,,,
+FC-1.2,Channel List,High,Display working status icon,Validation completed,"1. Launch app
+2. Check validated channels",Green checkmark for working channels / red X for failed channels,Not Tested,,,
+FC-1.3,Channel List,Medium,Display channel logos,App launched,"1. Scroll through channel list
+2. Observe logos",Channel logos load correctly / fallback to TV/Radio icon if missing,Not Tested,,,
+FC-1.4,Channel List,Medium,Display channel metadata,App launched,"1. View channel subtitle
+2. Verify format","Shows: Category + Resolution + Bitrate + Country (e.g. ""News - 720p - 2.5 Mbps - US"")",Not Tested,,,
+FC-1.5,Channel List,High,Tap channel to play,App launched,"1. Tap any channel
+2. Observe navigation",Navigates to PlayerScreen with video playing,Not Tested,,,
+FC-1.6,Channel List,High,Efficient scrolling,1000+ channels loaded,"1. Scroll rapidly through channels",Smooth scrolling without lag or stuttering,Not Tested,,,
+FC-2.1,Media Type Filter,High,Default All filter,App launched,"1. Launch app
+2. Observe filter state","Media type shows ""All"" / displays both TV and Radio channels",Not Tested,,,
+FC-2.2,Media Type Filter,High,Filter TV channels,App launched,"1. Tap TV filter button
+2. Observe list",Only TV channels displayed / Radio channels hidden,Not Tested,,,
+FC-2.3,Media Type Filter,High,Filter Radio channels,App launched,"1. Tap Radio filter button
+2. Observe list",Only Radio channels displayed / TV channels hidden,Not Tested,,,
+FC-2.4,Media Type Filter,High,Toggle back to All,Filter applied,"1. Select TV or Radio
+2. Tap All button
+3. Observe list",All channels displayed again,Not Tested,,,
+FC-2.5,Media Type Filter,Medium,Visual indication of active filter,App launched,"1. Select TV/Radio
+2. Check button style",Active filter button shows selected state (filled style),Not Tested,,,
+FC-3.1,Category Filter,High,Display category dropdown,App launched,"1. Tap category dropdown
+2. Observe options","Shows ""All Categories"" + list of unique categories from channels",Not Tested,,,
+FC-3.2,Category Filter,High,Default category selection,App launched,"1. Launch app
+2. Check category dropdown","Default shows ""All Categories"" / no filtering applied",Not Tested,,,
+FC-3.3,Category Filter,High,Select specific category,App launched,"1. Open category dropdown
+2. Select a category (e.g. ""News"")
+3. Observe list",Only channels with selected category displayed,Not Tested,,,
+FC-3.4,Category Filter,Medium,Category normalization,Channels with semicolons loaded,"1. Check categories with semicolons (e.g. ""News;Sports"")
+2. Verify dropdown","Only first part ""News"" appears / properly capitalized",Not Tested,,,
+FC-3.5,Category Filter,High,Reset category filter,Category selected,"1. Select a category
+2. Select ""All Categories""
+3. Observe list",All channels displayed again,Not Tested,,,
+FC-4.1,Country Filter,High,Display country dropdown,App launched,"1. Tap country dropdown
+2. Observe options","Shows ""All Countries"" + alphabetically sorted list of countries",Not Tested,,,
+FC-4.2,Country Filter,High,Default country selection,App launched,"1. Launch app
+2. Check country dropdown","Default shows ""All Countries"" / no filtering applied",Not Tested,,,
+FC-4.3,Country Filter,High,Select specific country,App launched,"1. Open country dropdown
+2. Select a country (e.g. ""US"")
+3. Observe list",Only channels from selected country displayed,Not Tested,,,
+FC-4.4,Country Filter,Medium,Country alphabetical sorting,App launched,"1. Open country dropdown
+2. Verify order",Countries listed alphabetically,Not Tested,,,
+FC-4.5,Country Filter,High,Reset country filter,Country selected,"1. Select a country
+2. Select ""All Countries""
+3. Observe list",All channels displayed again,Not Tested,,,
+FC-5.1,Search,High,Display search bar,App launched,"1. Launch app
+2. Locate search bar",Search bar visible at top with hint text,Not Tested,,,
+FC-5.2,Search,High,Search by channel name,App launched,"1. Type ""CNN"" in search
+2. Observe results","Only channels with ""CNN"" in name displayed",Not Tested,,,
+FC-5.3,Search,High,Case-insensitive search,App launched,"1. Type ""cnn"" (lowercase)
+2. Observe results","Same results as ""CNN"" or ""Cnn""",Not Tested,,,
+FC-5.4,Search,Medium,Real-time search,App launched,"1. Type characters one by one
+2. Observe list updates",List filters after each character typed,Not Tested,,,
+FC-5.5,Search,High,Clear search,Search text entered,"1. Enter search text
+2. Tap clear button (X)
+3. Observe list",Search cleared / all channels displayed,Not Tested,,,
+FC-5.6,Search,Medium,Search with no results,App launched,"1. Type gibberish text
+2. Observe result","Shows empty state or ""No channels found"" message",Not Tested,,,
+FC-5.7,Search,High,Partial match search,App launched,"1. Type ""news""
+2. Observe results","Matches ""News"" ""CNN News"" ""BBC World News"" etc.",Not Tested,,,
+FC-6.1,Combined Filters,High,Media type + Category,App launched,"1. Select TV
+2. Select ""News"" category
+3. Observe results",Only TV channels in News category,Not Tested,,,
+FC-6.2,Combined Filters,High,Media type + Country,App launched,"1. Select Radio
+2. Select ""US"" country
+3. Observe results",Only Radio channels from US,Not Tested,,,
+FC-6.3,Combined Filters,High,Category + Country,App launched,"1. Select ""Sports"" category
+2. Select ""UK"" country
+3. Observe results",Only Sports channels from UK,Not Tested,,,
+FC-6.4,Combined Filters,High,All three filters,App launched,"1. Select TV
+2. Select ""News""
+3. Select ""US""
+4. Observe results",Only US TV News channels,Not Tested,,,
+FC-6.5,Combined Filters,High,Filters + Search,App launched,"1. Select TV
+2. Select ""News""
+3. Type ""CNN""
+4. Observe results","Only TV News channels with ""CNN"" in name",Not Tested,,,
+FC-6.6,Combined Filters,Medium,Clear all filters,Multiple filters applied,"1. Apply multiple filters
+2. Reset each to default
+3. Observe results",All channels displayed,Not Tested,,,
+FC-7.1,Video Playback,High,Play channel,Working channel available,"1. Tap a working channel
+2. Observe playback",Video starts playing automatically in landscape mode,Not Tested,,,
+FC-7.2,Video Playback,High,Auto-landscape orientation,Video playing,"1. Open player
+2. Check orientation",Forces landscape orientation,Not Tested,,,
+FC-7.3,Video Playback,High,Fullscreen immersive mode,Video playing,"1. Play video
+2. Check UI",Status/navigation bars hidden / fullscreen video,Not Tested,,,
+FC-7.4,Video Playback,Medium,Display video metadata,Video playing,"1. Play video
+2. Check top bar","Shows channel name, resolution, bitrate",Not Tested,,,
+FC-7.5,Video Playback,High,Play/Pause button,Video playing,"1. Tap play/pause button
+2. Verify state",Video pauses/resumes correctly,Not Tested,,,
+FC-7.6,Video Playback,Medium,Double-tap to play/pause,Video playing,"1. Double-tap anywhere on video
+2. Verify state",Video pauses/resumes,Not Tested,,,
+FC-7.7,Video Playback,Medium,Single tap to toggle controls,Video playing,"1. Tap once on video
+2. Observe controls",Controls show/hide,Not Tested,,,
+FC-7.8,Video Playback,Low,Auto-hide controls,Controls visible,"1. Show controls
+2. Wait 3 seconds
+3. Observe",Controls automatically hide,Not Tested,,,
+FC-7.9,Video Playback,High,Back button,Video playing,"1. Play video
+2. Tap back button
+3. Verify navigation",Returns to channel list in portrait mode,Not Tested,,,
+FC-7.10,Video Playback,High,System back button,Video playing,"1. Play video
+2. Press Android back button
+3. Verify navigation",Returns to channel list in portrait mode,Not Tested,,,
+FC-8.1,External Player,High,Open in VLC,VLC installed,"1. Play channel
+2. Tap external player button
+3. Select VLC",Opens VLC app with stream URL,Not Tested,,,
+FC-8.2,External Player,High,Open in MX Player,MX Player installed,"1. Play channel
+2. Tap external player button
+3. Select MX Player",Opens MX Player app with stream URL,Not Tested,,,
+FC-8.3,External Player,Medium,VLC not installed fallback,VLC not installed,"1. Uninstall VLC
+2. Tap external player button
+3. Observe behavior",Tries MX Player or shows error dialog,Not Tested,,,
+FC-8.4,External Player,Medium,No external player installed,No players installed,"1. Ensure no players installed
+2. Tap external player button
+3. Observe behavior",Shows error with option to copy URL to clipboard,Not Tested,,,
+FC-8.5,External Player,Medium,External player button visibility,Video playing,"1. Play any channel
+2. Check player controls",External player button visible and accessible,Not Tested,,,
+FC-9.1,Cast Button,High,Cast button display,Video playing,"1. Play any channel
+2. Check controls",Cast button visible in player controls,Not Tested,,,
+FC-9.2,Cast Button,High,Tap cast button,Video playing,"1. Tap cast button
+2. Observe behavior",Shows informational dialog about casting,Not Tested,,,
+FC-9.3,Cast Button,Medium,Cast dialog content,Cast dialog open,"1. Open cast dialog
+2. Read content","Explains casting requires external apps, provides instructions",Not Tested,,,
+FC-10.1,Resolution/Bitrate,High,Display in channel list,App launched,"1. View channel list
+2. Check subtitle","Shows resolution (e.g. ""720p"") and bitrate (e.g. ""2.5 Mbps"")",Not Tested,,,
+FC-10.2,Resolution/Bitrate,High,Display in player,Video playing,"1. Play channel
+2. Check top bar",Shows resolution and bitrate in player metadata,Not Tested,,,
+FC-10.3,Resolution/Bitrate,Medium,Resolution extraction,Channel with (720p) in name,"1. Play channel with ""(720p)"" in name
+2. Verify display","Correctly extracts and displays ""720p""",Not Tested,,,
+FC-10.4,Resolution/Bitrate,Medium,Bitrate formatting,Various bitrates available,"1. Check channels with various bitrates
+2. Verify format","Formats as Mbps (e.g. ""2.5 Mbps"") or Kbps (e.g. ""500 Kbps"")",Not Tested,,,
+FC-11.1,Validation Scan,High,Start validation scan,App launched,"1. Tap refresh button
+2. Observe behavior",Validation scan starts / progress bar appears,Not Tested,,,
+FC-11.2,Validation Scan,High,Display scan progress,Scan running,"1. Start scan
+2. Observe progress bar","Shows ""X/Y channels scanned"" with live updates",Not Tested,,,
+FC-11.3,Validation Scan,High,Display working count,Scan running,"1. During scan
+2. Check working count",Shows incrementing count of working channels,Not Tested,,,
+FC-11.4,Validation Scan,High,Display failed count,Scan running,"1. During scan
+2. Check failed count",Shows incrementing count of failed channels,Not Tested,,,
+FC-11.5,Validation Scan,Medium,Batch processing,Scan running,"1. Start scan
+2. Monitor network requests",Processes 5 channels concurrently with 50ms delays,Not Tested,,,
+FC-11.6,Validation Scan,High,Update channel status,Scan completed,"1. Complete scan
+2. Check channel icons",Working channels show green check / failed show red X,Not Tested,,,
+FC-11.7,Validation Scan,High,Stop validation,Scan running,"1. Start scan
+2. Tap stop button
+3. Verify behavior",Scan stops immediately / partial results saved,Not Tested,,,
+FC-11.8,Validation Scan,Medium,Scan timeout,Slow network,"1. Start scan on slow network
+2. Observe behavior",Each channel times out after 5 seconds,Not Tested,,,
+FC-11.10,Validation Scan,High,Cache validation results,Scan completed,"1. Complete scan
+2. Restart app
+3. Check status",Validation results persist across app restarts,Not Tested,,,
+FC-12.1,Caching,High,First launch load,Fresh install,"1. Fresh install
+2. Launch app
+3. Observe loading",Shows loading indicator / fetches channels from network,Not Tested,,,
+FC-12.2,Caching,High,Cached launch load,Cache exists,"1. Launch app after first use
+2. Observe loading",Loads cached channels instantly / background sync updates,Not Tested,,,
+FC-12.3,Caching,Medium,Background channel update,Cache exists,"1. Launch with cache
+2. Wait for background sync
+3. Check channels",New channels added / old channels updated,Not Tested,,,
+FC-12.4,Caching,High,Offline mode,Cache exists,"1. Enable airplane mode
+2. Launch app
+3. Observe behavior",Shows cached channels / displays offline message,Not Tested,,,
+EC-1.1,Data Edge Cases,High,Empty channel list,Empty M3U,"1. Mock empty M3U response
+2. Launch app
+3. Observe UI",Shows empty state with refresh option,Not Tested,,,
+EC-1.2,Data Edge Cases,Low,Single channel,1 channel M3U,"1. Mock M3U with 1 channel
+2. Apply filters
+3. Verify behavior","Handles single channel correctly, filters work",Not Tested,,,
+EC-1.3,Data Edge Cases,Medium,Very long channel name,Long name channel,"1. Load channel with 200+ char name
+2. Observe display","Text truncates with ellipsis, no overflow",Not Tested,,,
+EC-1.5,Data Edge Cases,Medium,Missing logo URL,No logo channel,"1. Load channel without logo
+2. Observe display",Shows TV/Radio fallback icon,Not Tested,,,
+EC-1.6,Data Edge Cases,Medium,Invalid logo URL,Broken logo URL,"1. Load channel with broken logo URL
+2. Observe display",Shows fallback icon after load failure,Not Tested,,,
+EC-1.9,Data Edge Cases,Medium,Duplicate channels,Duplicate URLs in M3U,"1. Load M3U with duplicate URLs
+2. Verify list","Deduplicates by URL, shows only once",Not Tested,,,
+EC-1.10,Data Edge Cases,High,10000+ channels,Very large M3U,"1. Load very large M3U
+2. Test scrolling and filtering",Handles efficiently without performance issues,Not Tested,,,
+EC-2.1,Filter Edge Cases,High,Filter with zero results,Obscure filters,"1. Select obscure category
+2. Add country filter
+3. Add search term
+4. Observe","Shows ""No channels found"" message",Not Tested,,,
+EC-2.5,Filter Edge Cases,Medium,Rapid filter changes,App launched,"1. Quickly toggle filters
+2. Observe performance",Updates smoothly without lag or crashes,Not Tested,,,
+EC-3.1,Playback Edge Cases,High,Play unavailable stream,Offline channel,"1. Play channel that's offline
+2. Observe behavior",Shows error with retry and external player options,Not Tested,,,
+EC-3.3,Playback Edge Cases,Medium,Play very slow stream,Slow stream available,"1. Play low-bandwidth stream on WiFi
+2. Observe buffering","Shows loading indicator, plays when buffered",Not Tested,,,
+EC-3.4,Playback Edge Cases,High,Switch channels rapidly,Multiple channels,"1. Play channel A
+2. Immediately back and play B
+3. Repeat 5 times
+4. Verify",Handles rapid switches without crash or memory leak,Not Tested,,,
+EC-3.5,Playback Edge Cases,Medium,Minimize app during playback,Video playing,"1. Play video
+2. Press home button
+3. Return to app",Video pauses or continues based on implementation,Not Tested,,,
+EC-3.7,Playback Edge Cases,Medium,Very long playback session,Video playing,"1. Play channel
+2. Let run for 1+ hour
+3. Monitor",Plays continuously without crashes or leaks,Not Tested,,,
+EC-3.8,Playback Edge Cases,High,Network drop during playback,Video playing,"1. Play video
+2. Disable WiFi/data mid-stream
+3. Observe","Shows error, offers retry when reconnected",Not Tested,,,
+EC-4.1,Validation Edge Cases,High,Validate with offline network,Airplane mode,"1. Enable airplane mode
+2. Start validation scan
+3. Observe","Shows network error, scan fails gracefully",Not Tested,,,
+EC-4.3,Validation Edge Cases,High,Validate 10000 channels,Large channel list,"1. Load large list
+2. Start scan
+3. Monitor progress","Completes without crash, shows accurate progress",Not Tested,,,
+EC-4.5,Validation Edge Cases,Medium,Network drops during scan,Scan running,"1. Start scan
+2. Disable network midway
+3. Observe","Marks remaining as failed, shows error",Not Tested,,,
+ES-1.1,Network Errors,High,No internet on first launch,Fresh install + no network,"1. Fresh install
+2. Disable network
+3. Launch app","Shows ""No internet"" error with retry button",Not Tested,,,
+ES-1.2,Network Errors,High,Network timeout,Very slow network,"1. Simulate very slow network
+2. Launch app
+3. Wait for timeout",Shows timeout error after 30 seconds,Not Tested,,,
+ES-1.3,Network Errors,High,M3U URL unreachable,404 from server,"1. Mock 404 response from M3U URL
+2. Fetch channels
+3. Observe","Shows error message, tries fallback repository",Not Tested,,,
+ES-1.7,Network Errors,High,Network drops during load,Network interruption,"1. Start loading channels
+2. Disable network midway
+3. Observe","Shows error, displays cached channels if available",Not Tested,,,
+ES-2.1,Playback Errors,High,Stream URL 404,Dead URL,"1. Play channel with dead URL
+2. Observe error",Shows error dialog with retry and external player options,Not Tested,,,
+ES-2.2,Playback Errors,High,Stream URL 403,Forbidden stream,"1. Play forbidden stream
+2. Observe error","Shows ""Access denied"" error with options",Not Tested,,,
+ES-2.3,Playback Errors,Medium,Unsupported video codec,Unsupported codec,"1. Play stream with unsupported codec
+2. Observe","Shows codec error, suggests external player",Not Tested,,,
+ES-2.5,Playback Errors,High,Infinite buffering,Very slow stream,"1. Play very slow stream
+2. Wait 60+ seconds
+3. Observe","Shows timeout or buffering error, offers options",Not Tested,,,
+ES-2.6,Playback Errors,Medium,Stream stops mid-playback,Stream ends,"1. Play working stream
+2. Stream ends unexpectedly
+3. Observe","Detects end, shows error with retry",Not Tested,,,
+ES-4.1,External App Errors,High,VLC not installed,VLC not installed,"1. Tap external player
+2. Select VLC
+3. Observe","Shows ""VLC not installed"" error, offers MX Player",Not Tested,,,
+ES-4.2,External App Errors,High,MX Player not installed,MX not installed,"1. VLC fails
+2. Try MX Player
+3. Observe","Shows ""MX Player not installed"" error",Not Tested,,,
+ES-4.3,External App Errors,High,No external player installed,No players,"1. Tap external player
+2. Both players fail
+3. Observe","Shows dialog with ""Copy URL"" option",Not Tested,,,
+ES-5.1,Storage Errors,High,Full storage,Device storage full,"1. Fill device storage to 100%
+2. Try to cache channels
+3. Observe","Shows storage error, functions with network only",Not Tested,,,
+UX-1.1,Visual Design,High,Color scheme consistency,App launched,"1. Navigate all screens
+2. Check colors",Consistent blue (#0078D4) accent color throughout,Not Tested,,,
+UX-1.3,Visual Design,High,Dark theme contrast,Dark theme enabled,"1. Enable dark theme
+2. Check readability","Sufficient contrast, text easily readable",Not Tested,,,
+UX-1.4,Visual Design,High,Light theme contrast,Light theme enabled,"1. Enable light theme
+2. Check readability","Sufficient contrast, no glare issues",Not Tested,,,
+UX-2.1,Interaction,High,Button press feedback,App launched,"1. Tap any button
+2. Observe feedback",Shows visual feedback (ripple effect),Not Tested,,,
+UX-2.2,Interaction,High,Loading indicators,App launched,"1. Trigger loading states
+2. Observe indicators",Shows clear loading spinner or progress bar,Not Tested,,,
+UX-2.4,Interaction,High,Empty state messages,Zero results,"1. Filter to zero results
+2. Read message",Shows helpful message with action suggestion,Not Tested,,,
+UX-2.5,Interaction,High,Error message clarity,Error triggered,"1. Trigger various errors
+2. Read messages",Error messages clear and actionable,Not Tested,,,
+UX-2.7,Interaction,High,Tap target size,App launched,"1. Tap all interactive elements
+2. Verify size",Minimum 48x48dp touch targets,Not Tested,,,
+UX-3.1,Navigation,High,Logical navigation,App launched,"1. Navigate through app
+2. Check flow",Navigation follows expected patterns,Not Tested,,,
+UX-3.2,Navigation,High,Back button behavior,App in use,"1. Navigate screens
+2. Press back repeatedly
+3. Verify",Returns to previous screen logically,Not Tested,,,
+UX-4.1,Information,High,Channel info hierarchy,App launched,"1. View channel list
+2. Check info display","Name prominent, metadata secondary but visible",Not Tested,,,
+UX-4.2,Information,High,Filter organization,App launched,"1. Check filter layout
+2. Verify grouping",Filters logically grouped and labeled,Not Tested,,,
+UX-4.3,Information,High,Search placement,App launched,"1. Locate search bar
+2. Verify position",Search easily accessible at top,Not Tested,,,
+UX-5.1,Accessibility,High,Screen reader support,TalkBack enabled,"1. Enable TalkBack
+2. Navigate app
+3. Verify",All elements have meaningful labels,Not Tested,,,
+UX-5.2,Accessibility,High,Semantic labels,App launched,"1. Check button labels
+2. Verify descriptions",Buttons have descriptive contentDescription,Not Tested,,,
+UX-5.4,Accessibility,High,Color contrast (WCAG),App launched,"1. Check text/background contrast
+2. Verify ratio",Meets WCAG AA (4.5:1 for text),Not Tested,,,
+UX-5.5,Accessibility,High,Text scaling,Large font size,"1. Increase system font size
+2. Verify app layout","Text scales, layout doesn't break",Not Tested,,,
+UX-5.6,Accessibility,High,Icon-only buttons,App launched,"1. Check buttons without text
+2. Verify labels",All icon buttons have accessibility labels,Not Tested,,,
+UX-6.1,Performance,High,Initial load time,App not in memory,"1. Launch app
+2. Measure time to usable",Shows cached data within 1 second,Not Tested,,,
+UX-6.2,Performance,High,Filter response time,App launched,"1. Change filter
+2. Measure update time",Updates within 100ms,Not Tested,,,
+UX-6.3,Performance,High,Search responsiveness,App launched,"1. Type in search
+2. Measure lag",Updates within 200ms per keystroke,Not Tested,,,
+UX-6.4,Performance,High,Scroll smoothness,1000+ channels,"1. Scroll quickly
+2. Observe fluidity","Maintains 60fps, no janking",Not Tested,,,
+UX-7.1,Usability,High,First-time user experience,Fresh install,"1. Fresh install
+2. Launch app
+3. Use features","Intuitive, no tutorial needed for basic use",Not Tested,,,
+UX-7.2,Usability,High,Filter discoverability,New user,"1. New user
+2. Find filters
+3. Verify ease",Filters easily discoverable and understandable,Not Tested,,,
+UX-7.3,Usability,High,Search discoverability,New user,"1. New user
+2. Locate search
+3. Verify ease",Search bar prominent and obvious,Not Tested,,,
+UX-7.4,Usability,High,Action clarity,App launched,"1. View all buttons
+2. Understand purpose",All actions clearly labeled or iconically obvious,Not Tested,,,
+UX-7.5,Usability,High,Error recovery,Error occurred,"1. Trigger error
+2. Follow recovery steps
+3. Verify",Clear path to recover from errors,Not Tested,,,
+PT-1.1,Load Performance,High,Cold start time,App force closed,"1. Force stop app
+2. Clear from memory
+3. Launch
+4. Measure to usable",Loads within 2 seconds (cached) or 5 seconds (network),Not Tested,,,
+PT-1.3,Load Performance,High,Channel list render time,5000 channels,"1. Load 5000 channels
+2. Measure render time",Renders within 1 second,Not Tested,,,
+PT-1.4,Load Performance,High,Filter application time,Complex filter,"1. Apply complex filter
+2. Measure update time",Updates within 200ms,Not Tested,,,
+PT-1.5,Load Performance,High,Search performance,5000 channels,"1. Type search on 5000 channels
+2. Measure per-keystroke time",Updates within 100ms per keystroke,Not Tested,,,
+PT-2.3,Memory Performance,High,Video playback memory,10 min playback,"1. Play video for 10 minutes
+2. Monitor memory","Memory stable, no leaks",Not Tested,,,
+PT-2.4,Memory Performance,High,Memory after 50 channel switches,50 switches,"1. Play 50 channels
+2. Measure memory","Memory returns to baseline, no accumulation",Not Tested,,,
+PT-5.1,Rendering Performance,High,Scroll frame rate,5000 channels,"1. Scroll through 5000 channels
+2. Measure fps",Maintains 60fps consistently,Not Tested,,,
+PT-5.3,Rendering Performance,High,Video playback frame rate,Various streams,"1. Play various streams
+2. Monitor fps",Maintains source frame rate (30/60fps),Not Tested,,,
+SEC-1.1,Data Security,High,HTTPS for M3U fetching,App launched,"1. Monitor network requests
+2. Verify protocol",Uses HTTPS for M3U repository URLs,Not Tested,,,
+SEC-1.4,Data Security,High,URL injection prevention,Malicious URL,"1. Try malicious URL in stream
+2. Verify handling","Validates/sanitizes URLs, prevents injection",Not Tested,,,
+SEC-2.1,Permission Security,High,Minimum permissions,App installed,"1. Check AndroidManifest.xml
+2. Verify permissions",Only requests necessary permissions (Internet),Not Tested,,,
+REG-1.1,Regression,High,Channel list loading,After update,"Verify channels load after updates",Channels load successfully,Not Tested,,,
+REG-1.2,Regression,High,TV/Radio filtering,After update,Apply media type filters,Filters work correctly,Not Tested,,,
+REG-1.3,Regression,High,Category filtering,After update,Apply category filter,Filters work correctly,Not Tested,,,
+REG-1.4,Regression,High,Country filtering,After update,Apply country filter,Filters work correctly,Not Tested,,,
+REG-1.5,Regression,High,Search functionality,After update,Search for channels,Search works correctly,Not Tested,,,
+REG-1.6,Regression,High,Video playback,After update,Play various channels,Videos play successfully,Not Tested,,,
+REG-1.7,Regression,High,External player,After update,Open in VLC/MX Player,External players launch correctly,Not Tested,,,
+REG-1.8,Regression,High,Validation scanning,After update,Complete full scan,"Scan completes, statuses update",Not Tested,,,
