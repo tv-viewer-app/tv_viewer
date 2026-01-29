@@ -1,0 +1,10 @@
+# TV Viewer Project Dependencies
+python-vlc>=3.0.18122
+requests>=2.31.0
+aiohttp>=3.9.0
+pychromecast>=13.0.0  # Google Cast support (optional)
+customtkinter>=5.2.0  # Modern Material Design UI
+Pillow>=10.0.0  # Image processing for thumbnails
+
+# Build dependencies (for packaging)
+pyinstaller>=6.0.0  # For creating standalone executables
