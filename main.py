@@ -32,6 +32,47 @@ else:
 sys.path.insert(0, BASE_DIR)
 os.chdir(BASE_DIR)  # Set working directory
 
+# Configure VLC for PyInstaller executables (Issue #35)
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller executable - ensure VLC can find system libraries
+    import ctypes.util
+    
+    # Add common VLC library paths to LD_LIBRARY_PATH
+    vlc_lib_paths = [
+        '/usr/lib/x86_64-linux-gnu',
+        '/usr/lib64',
+        '/usr/lib',
+        '/usr/local/lib',
+    ]
+    
+    # Set VLC plugin path to system location
+    vlc_plugin_paths = [
+        '/usr/lib/x86_64-linux-gnu/vlc/plugins',
+        '/usr/lib64/vlc/plugins',
+        '/usr/lib/vlc/plugins',
+        '/usr/local/lib/vlc/plugins',
+    ]
+    
+    # Find and set VLC_PLUGIN_PATH
+    for plugin_path in vlc_plugin_paths:
+        if os.path.exists(plugin_path):
+            os.environ['VLC_PLUGIN_PATH'] = plugin_path
+            print(f"VLC plugin path set to: {plugin_path}")
+            break
+    
+    # Ensure LD_LIBRARY_PATH includes VLC libraries
+    ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+    for lib_path in vlc_lib_paths:
+        if os.path.exists(lib_path) and lib_path not in ld_path:
+            if ld_path:
+                ld_path = f"{lib_path}:{ld_path}"
+            else:
+                ld_path = lib_path
+    
+    if ld_path:
+        os.environ['LD_LIBRARY_PATH'] = ld_path
+        print(f"LD_LIBRARY_PATH configured for VLC")
+
 
 # Required packages with minimum versions
 REQUIRED_PACKAGES = {

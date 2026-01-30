@@ -58,40 +58,42 @@ from ui.tooltip import add_tooltip
 
 
 def get_vlc_hardware_acceleration_args() -> list:
-    """Get VLC arguments for hardware-accelerated video decoding.
+    """Get VLC arguments optimized for IPTV streaming.
     
-    Returns platform-specific arguments to enable GPU video decoding,
-    which significantly reduces CPU usage during playback.
+    Hardware acceleration is disabled by default as it causes compatibility issues.
+    The args focus on stability and low latency for IPTV streams.
     
     Returns:
         List of VLC command-line arguments
     """
+    # Base args optimized for IPTV streaming (Issue #35)
     base_args = [
         '--no-xlib',           # Disable X11 threading (Linux)
         '--quiet',             # Reduce logging
         '--no-lua',            # Disable Lua scripting (security/performance)
         '--no-video-title-show',  # Don't show title on video
-        '--network-caching=1000',  # 1 second network buffer (reduces latency)
+        '--network-caching=1000',  # 1 second network buffer
         '--live-caching=1000',     # 1 second live stream buffer
+        '--clock-jitter=0',        # Disable jitter compensation (smoother)
+        '--clock-synchro=0',       # Disable clock synchronization
     ]
     
+    # Platform-specific adjustments (no hardware acceleration to avoid failures)
     if sys.platform == 'win32':
-        # Windows: Use Direct3D11 hardware acceleration
+        # Windows: Simple, stable settings
         return base_args + [
-            '--avcodec-hw=d3d11va',  # Direct3D 11 Video Acceleration
-            '--directx-use-sysmem',   # Fallback to system memory if needed
+            '--no-plugins-cache',  # Don't cache plugins
         ]
     elif sys.platform == 'darwin':
-        # macOS: Use VideoToolbox hardware acceleration
+        # macOS: Simple, stable settings
         return base_args + [
-            '--avcodec-hw=videotoolbox',  # Apple VideoToolbox
-            '--videotoolbox-temporal-deinterlacing',
+            '--no-plugins-cache',
         ]
     else:
-        # Linux: Try VAAPI first, fallback to VDPAU
+        # Linux: Simple, stable settings (no VAAPI/VDPAU)
         return base_args + [
-            '--avcodec-hw=vaapi',  # Video Acceleration API (Intel/AMD)
-            # '--avcodec-hw=vdpau',  # VDPAU fallback (NVIDIA)
+            '--no-plugins-cache',
+            '--no-sub-autodetect-file',  # Don't scan for subtitles
         ]
 
 
@@ -355,34 +357,36 @@ class PlayerWindow(ctk.CTkToplevel):
         self.video_canvas.bind('<Double-Button-1>', lambda e: self._toggle_fullscreen())
     
     def _init_vlc(self):
-        """Initialize VLC player with hardware acceleration and error handling.
+        """Initialize VLC player with fallback to minimal settings (Issue #35).
         
-        This method creates a VLC instance with platform-specific hardware
-        acceleration enabled. Hardware decoding significantly reduces CPU usage
-        by offloading video decoding to the GPU.
-        
-        Hardware Acceleration Priority:
-        - Windows: D3D11VA (Direct3D 11 Video Acceleration)
-        - macOS: VideoToolbox
-        - Linux: VAAPI (Intel/AMD) or VDPAU (NVIDIA)
+        Tries optimized settings first, falls back to minimal settings if needed.
         """
         try:
-            # Get platform-specific hardware acceleration arguments
+            # Try with optimized arguments first
             vlc_args = get_vlc_hardware_acceleration_args()
+            logger.info(f"Initializing VLC with args: {vlc_args}")
             
-            # Create VLC instance with hardware acceleration
             self.instance = vlc.Instance(*vlc_args)
             if not self.instance:
-                # Fallback: try without hardware acceleration
-                print("Hardware acceleration failed, trying software decoding...")
-                self.instance = vlc.Instance('--no-xlib', '--quiet', '--no-lua')
+                # Fallback: try with absolute minimal settings
+                logger.warning("Optimized VLC init failed, trying minimal settings...")
+                self.instance = vlc.Instance('--quiet', '--no-xlib')
             
             if not self.instance:
-                raise RuntimeError("Failed to create VLC instance")
+                # Last resort: no arguments at all
+                logger.warning("Minimal VLC init failed, trying no arguments...")
+                self.instance = vlc.Instance()
+            
+            if not self.instance:
+                raise RuntimeError("Failed to create VLC instance with all fallbacks")
+            
+            logger.info(f"✅ VLC Instance created successfully")
             
             self.player = self.instance.media_player_new()
             if not self.player:
                 raise RuntimeError("Failed to create media player")
+            
+            logger.info(f"✅ Media Player created successfully")
             
             # Set video output to our canvas window
             # This is platform-specific for proper video embedding
@@ -396,8 +400,12 @@ class PlayerWindow(ctk.CTkToplevel):
             # Set initial volume
             self.player.audio_set_volume(self.volume_var.get())
             
+            logger.info(f"✅ VLC initialization complete")
+            
         except Exception as e:
-            logger.error(f"Error initializing VLC: {e}")
+            logger.error(f"❌ Error initializing VLC: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             self.player = None
             self.instance = None
             self._show_vlc_error()

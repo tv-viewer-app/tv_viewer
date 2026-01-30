@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-01-30
+
+### Fixed (P1-High)
+- **VLC Playback Failure** ([#35](https://github.com/arielsaghiv/tv_viewer/issues/35))
+  - Root cause: Hardware acceleration flag `--avcodec-hw=vaapi` not supported in many environments
+  - Solution: Removed hardware acceleration flags, use software decoding (stable and compatible)
+  - Added VLC environment configuration for PyInstaller executables
+  - Multiple fallback attempts for VLC initialization
+  - Enhanced logging to diagnose VLC initialization issues
+  
+### Changed
+- VLC arguments simplified to prioritize stability over hardware acceleration
+- VLC initialization now tries 3 fallback methods before failing
+- Better error messages with full stack traces for VLC issues
+- PyInstaller executable now sets VLC_PLUGIN_PATH and LD_LIBRARY_PATH for system VLC
+
+### Closed Issues
+- #32: Segmentation fault when scanning channels (fixed in v1.8.1)
+- #33: VLC detection error messages (fixed in v1.8.1)
+- #34: Scanning animation layout problems (fixed in v1.8.1)
+
 ## [1.8.1] - 2026-01-30
 
 ### Fixed (P0-Critical)
