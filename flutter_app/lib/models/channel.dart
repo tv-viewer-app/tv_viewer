@@ -53,6 +53,101 @@ class Channel {
     final match = RegExp(r'\((\d{3,4}p)\)').firstMatch(name);
     return match?.group(1);
   }
+  
+  /// Infer country from language if country is missing (Issue #28)
+  static String? inferCountryFromLanguage(String? language) {
+    if (language == null || language.isEmpty) return null;
+    
+    final lang = language.toLowerCase();
+    
+    // Language to country mapping
+    if (lang.contains('hebrew') || lang == 'he' || lang == 'heb') {
+      return 'Israel';
+    }
+    if (lang.contains('arabic') || lang == 'ar' || lang == 'ara') {
+      return 'Arab World';
+    }
+    if (lang.contains('spanish') || lang == 'es' || lang == 'spa') {
+      return 'Spain';
+    }
+    if (lang.contains('french') || lang == 'fr' || lang == 'fra') {
+      return 'France';
+    }
+    if (lang.contains('german') || lang == 'de' || lang == 'deu') {
+      return 'Germany';
+    }
+    if (lang.contains('italian') || lang == 'it' || lang == 'ita') {
+      return 'Italy';
+    }
+    if (lang.contains('portuguese') || lang == 'pt' || lang == 'por') {
+      return 'Portugal';
+    }
+    if (lang.contains('russian') || lang == 'ru' || lang == 'rus') {
+      return 'Russia';
+    }
+    if (lang.contains('turkish') || lang == 'tr' || lang == 'tur') {
+      return 'Turkey';
+    }
+    if (lang.contains('polish') || lang == 'pl' || lang == 'pol') {
+      return 'Poland';
+    }
+    
+    return null;
+  }
+  
+  /// Detect Israeli channels from name patterns (Issue #28)
+  static bool isIsraeliChannel(String name) {
+    final lowerName = name.toLowerCase();
+    
+    // Known Israeli channel patterns
+    final israeliPatterns = [
+      'kan 11', 'kan11',
+      'now 14', 'now14',
+      'channel 12', 'channel12',
+      'channel 13', 'channel13',
+      'reshet 13', 'reshet13',
+      'keshet 12', 'keshet12',
+      'sport 5', 'sport5',
+      'walla news', 'walla',
+      'i24news he',
+      'knesset channel',
+      'makan 33',
+    ];
+    
+    return israeliPatterns.any((pattern) => lowerName.contains(pattern));
+  }
+  
+  /// Normalize country name (clean up, standardize)
+  static String? normalizeCountry(String? country, String? language, String name) {
+    if (country != null && country.isNotEmpty && country != 'Unknown') {
+      // Clean up country name
+      String normalized = country.trim();
+      
+      // Standardize common variations
+      if (normalized.toLowerCase() == 'il' || normalized.toLowerCase() == 'isr') {
+        return 'Israel';
+      }
+      if (normalized.toLowerCase() == 'us' || normalized.toLowerCase() == 'usa') {
+        return 'United States';
+      }
+      if (normalized.toLowerCase() == 'uk' || normalized.toLowerCase() == 'gb') {
+        return 'United Kingdom';
+      }
+      
+      return normalized;
+    }
+    
+    // If no country, try to infer from language
+    final inferred = inferCountryFromLanguage(language);
+    if (inferred != null) return inferred;
+    
+    // Last resort: check if channel name matches known Israeli patterns
+    if (isIsraeliChannel(name)) {
+      return 'Israel';
+    }
+    
+    return null;
+  }
 
   factory Channel.fromM3ULine(String info, String url) {
     String name = 'Unknown';
@@ -79,8 +174,9 @@ class Channel {
     }
 
     final countryMatch = RegExp(r'tvg-country="([^"]*)"').firstMatch(info);
+    String? rawCountry;
     if (countryMatch != null) {
-      country = countryMatch.group(1);
+      rawCountry = countryMatch.group(1);
     }
 
     final langMatch = RegExp(r'tvg-language="([^"]*)"').firstMatch(info);
@@ -100,6 +196,9 @@ class Channel {
     
     // Extract resolution from name
     final resolution = extractResolution(name);
+    
+    // Normalize/infer country (Issue #27, #28)
+    country = normalizeCountry(rawCountry, language, name);
 
     return Channel(
       name: name,

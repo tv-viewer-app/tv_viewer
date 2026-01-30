@@ -227,65 +227,70 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
 
   void _openInExternalPlayer() async {
     final streamUrl = widget.channel.url;
+    logger.info('Opening ${widget.channel.name} in external player');
     
-    // Try various external player intents
+    // Try various external player intents directly (Issue #26)
+    // Don't wait for canLaunchUrl - just try to launch
     final players = [
-      // VLC
-      Uri.parse('vlc://$streamUrl'),
-      // MX Player
-      Uri.parse('intent:$streamUrl#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end'),
-      // Generic video intent
-      Uri.parse(streamUrl),
+      // VLC - try custom scheme first
+      {'uri': 'vlc://$streamUrl', 'name': 'VLC (custom scheme)'},
+      // MX Player - use intent scheme
+      {'uri': 'intent:$streamUrl#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end', 'name': 'MX Player'},
+      // VLC package intent
+      {'uri': 'intent:$streamUrl#Intent;package=org.videolan.vlc;type=video/*;end', 'name': 'VLC (intent)'},
+      // Generic - let Android choose
+      {'uri': streamUrl, 'name': 'System default'},
     ];
     
-    for (final playerUri in players) {
-      try {
-        if (await canLaunchUrl(playerUri)) {
-          await launchUrl(
-            playerUri,
-            mode: LaunchMode.externalApplication,
-          );
-          return;
-        }
-      } catch (e) {
-        logger.debug('Failed to launch $playerUri: $e');
-      }
-    }
+    bool launched = false;
     
-    // Final fallback - try to launch with external non-browser app
-    try {
-      final uri = Uri.parse(streamUrl);
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalNonBrowserApplication,
-      );
-      
-      if (!launched) {
-        // Try external application mode
+    for (final player in players) {
+      try {
+        final uri = Uri.parse(player['uri'] as String);
+        logger.debug('Trying ${player['name']}: ${player['uri']}');
+        
         await launchUrl(
           uri,
           mode: LaunchMode.externalApplication,
         );
-      }
-      logger.info('Opened ${widget.channel.name} in external player');
-    } catch (e, stackTrace) {
-      logger.warning('Failed to open external player', e);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not open external player. Install VLC or MX Player.'),
-            action: SnackBarAction(
-              label: 'Copy URL',
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: streamUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('URL copied to clipboard')),
-                );
-              },
+        
+        launched = true;
+        logger.info('Successfully opened with ${player['name']}');
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Opening in ${player['name']}'),
+              duration: const Duration(seconds: 1),
             ),
-          ),
-        );
+          );
+        }
+        return;
+      } catch (e) {
+        logger.debug('Failed to launch with ${player['name']}: $e');
+        // Continue to next player
       }
+    }
+    
+    // If all failed, show error with URL copy option
+    if (!launched && mounted) {
+      logger.warning('All external player attempts failed');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Could not open external player. Install VLC or MX Player.'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Copy URL',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: streamUrl));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('URL copied to clipboard')),
+              );
+            },
+          ),
+        ),
+      );
     }
   }
   

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-01-29
+
+### Added
+- **Linux Executable Build** - PyInstaller-based single-file distribution for Ubuntu/Debian
+- **Country Inference System** - Automatically detects country from language when missing (Android) ([#28](https://github.com/arielsaghiv/tv_viewer/issues/28))
+- **Israeli Channel Detection** - Pattern-based detection for known Israeli channels (Android) ([#28](https://github.com/arielsaghiv/tv_viewer/issues/28))
+- **Country Normalization** - Standardizes country codes (IL→Israel, US→United States, etc.) (Android) ([#27](https://github.com/arielsaghiv/tv_viewer/issues/27))
+
+### Fixed
+- **External Player Launch** - Removed canLaunchUrl check that was blocking launches (Android) ([#26](https://github.com/arielsaghiv/tv_viewer/issues/26))
+- **Cast Button** - Now successfully opens external players for casting (Android) ([#26](https://github.com/arielsaghiv/tv_viewer/issues/26))
+- **Countries Dropdown** - Now properly populated from channel metadata with inference (Android) ([#27](https://github.com/arielsaghiv/tv_viewer/issues/27))
+
+### Changed
+- **Scan Animation Performance** - Reduced frame rate from 200ms to 400ms (50% fewer redraws) (Python)
+- **Channel List Font Size** - Increased from 11 to 12 for better readability (Python)
+- **Channel List Row Height** - Increased from 36 to 40 pixels for better spacing (Python)
+
+### Performance
+- Scan animation CPU usage reduced by ~50% (fewer redraws)
+- UI rendering optimized with larger font/spacing preventing cramped appearance
+
 ## [1.7.0] - 2026-01-28
 
 ### Added (Flutter Android App)

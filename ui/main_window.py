@@ -491,8 +491,8 @@ class MainWindow:
             foreground=FluentColors.TEXT_PRIMARY,
             fieldbackground=FluentColors.BG_CARD,
             borderwidth=0,
-            font=('Segoe UI', 11),
-            rowheight=36
+            font=('Segoe UI', 12),  # Increased from 11 for better readability
+            rowheight=40  # Increased from 36 for better spacing
         )
         style.configure(
             "Material.Treeview.Heading",
