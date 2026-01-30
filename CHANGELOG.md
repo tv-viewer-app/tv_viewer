@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-01-30
+
+### Fixed (P0-Critical)
+- **Segmentation Fault on Scan** (Linux) ([#32](https://github.com/arielsaghiv/tv_viewer/issues/32))
+  - Root cause: Background thread directly modifying tkinter UI state
+  - Solution: All UI updates now scheduled on main thread using `root.after(0, ...)`
+  - Prevents cross-thread tkinter access that caused crashes
+  
+- **VLC Detection Issue** ([#33](https://github.com/arielsaghiv/tv_viewer/issues/33))
+  - Enhanced error detection to distinguish VLC binary vs python-vlc package
+  - Shows specific installation commands based on what's missing
+  - Error messages now identify exact component missing
+
+- **Scanning Animation Layout** ([#34](https://github.com/arielsaghiv/tv_viewer/issues/34))
+  - Fixed: 0% text no longer overlaps Earth graphic (moved to top-right)
+  - Fixed: Shows "Stopped" when scan is stopped (not "Scanning...")
+  - Improved visual hierarchy (percentage 14pt, stats 10pt, status 8pt)
+  - Better text positioning following UX design consultation
+
+### Changed
+- Percentage display: Moved from center-bottom to top-right (155, 12)
+- Stats display: Moved to bottom (90, 72) - more prominent
+- Status text: Moved above stats (90, 58) - less prominent, italic
+- Font sizes optimized for readability hierarchy
+
 ## [1.8.0] - 2026-01-29
 
 ### Added

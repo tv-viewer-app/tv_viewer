@@ -1024,39 +1024,49 @@ class MainWindow:
         self.root.after(0, lambda: self._set_status(f"Loaded {count} channels, validating..."))
     
     def _on_channel_validated(self, channel: Dict[str, Any], current: int, total: int):
-        """Callback when channel validated - optimized for minimal UI updates."""
-        if channel.get('is_working'):
-            self.scan_working_count += 1
-        else:
-            self.scan_failed_count += 1
-        self.scan_total_count = total
+        """Callback when channel validated - MUST schedule on main thread.
         
-        # Very aggressive throttling - UI updates are expensive
-        # Only update UI every 100-500 channels depending on total
-        if total > 10000:
-            update_interval = 500
-        elif total > 5000:
-            update_interval = 200
-        else:
-            update_interval = 100
+        CRITICAL FIX (Issue #32): This callback is invoked from background thread.
+        All state modifications and UI updates MUST use root.after() to avoid
+        segmentation faults from cross-thread tkinter access.
+        """
+        # Schedule state update AND UI update on main thread atomically
+        def _safe_update():
+            # Update state on main thread
+            if channel.get('is_working'):
+                self.scan_working_count += 1
+            else:
+                self.scan_failed_count += 1
+            self.scan_total_count = total
+            
+            # Very aggressive throttling - UI updates are expensive
+            # Only update UI every 100-500 channels depending on total
+            if total > 10000:
+                update_interval = 500
+            elif total > 5000:
+                update_interval = 200
+            else:
+                update_interval = 100
+            
+            # Minimal update conditions
+            should_update = (
+                (current % update_interval == 0) or 
+                (current == total) or 
+                (current == 1)  # First channel only
+            )
+            
+            if should_update:
+                progress = current / total
+                self._batch_ui_update(progress, current, total)
+            
+            # Refresh channel list even less frequently
+            if current == total or (current % 1000 == 0 and current > 0):
+                if self._pending_group_update:
+                    self.root.after_cancel(self._pending_group_update)
+                self._pending_group_update = self.root.after(500, self._debounced_refresh)
         
-        # Minimal update conditions
-        should_update = (
-            (current % update_interval == 0) or 
-            (current == total) or 
-            (current == 1)  # First channel only
-        )
-        
-        if should_update:
-            progress = current / total
-            # Schedule update on main thread, but don't force immediate processing
-            self.root.after(0, lambda p=progress, c=current, t=total: self._batch_ui_update(p, c, t))
-        
-        # Refresh channel list even less frequently
-        if current == total or (current % 1000 == 0 and current > 0):
-            if self._pending_group_update:
-                self.root.after_cancel(self._pending_group_update)
-            self._pending_group_update = self.root.after(500, self._debounced_refresh)
+        # CRITICAL: Schedule on main thread to avoid seg fault
+        self.root.after(0, _safe_update)
     
     def _batch_ui_update(self, progress: float, current: int, total: int):
         """Perform batched UI updates - minimal work only."""
@@ -1119,6 +1129,8 @@ class MainWindow:
             self.scan_btn.configure(text="▶ Start Scan")
             self._set_status("Scan stopped")
             self.scan_label.configure(text="Stopped")
+            # Mark animation as stopped (Issue #34)
+            self.scan_animation.set_stopped()
         else:
             self._scan_running = True
             self.scan_btn.configure(text="⏹ Stop Scan")

@@ -403,43 +403,75 @@ class PlayerWindow(ctk.CTkToplevel):
             self._show_vlc_error()
     
     def _show_vlc_error(self):
-        """Show error message when VLC is not available with recovery options."""
+        """Show error message when VLC is not available with specific diagnostics (Issue #33)."""
         import webbrowser
+        import shutil
+        
+        # Detect what's missing (Issue #33)
+        vlc_binary_exists = shutil.which('vlc') is not None
+        python_vlc_exists = VLC_AVAILABLE
+        
+        # Determine specific error
+        if not vlc_binary_exists and not python_vlc_exists:
+            title = "⚠️ VLC Not Installed"
+            message = "Both VLC media player and python-vlc are missing."
+            install_cmd = "sudo apt-get install vlc\npip3 install python-vlc"
+            show_download_btn = True
+        elif not python_vlc_exists:
+            title = "⚠️ python-vlc Not Installed"
+            message = "VLC is installed, but python-vlc package is missing."
+            install_cmd = "pip3 install python-vlc"
+            show_download_btn = False
+        else:
+            title = "⚠️ VLC Configuration Error"
+            message = "VLC installation detected but player initialization failed."
+            install_cmd = "pip3 install --force-reinstall python-vlc"
+            show_download_btn = False
         
         error_frame = ctk.CTkFrame(self.video_canvas, fg_color=FluentColors.BG_CARD)
         error_frame.place(relx=0.5, rely=0.5, anchor='center')
         
         ctk.CTkLabel(
             error_frame,
-            text="⚠️ VLC Media Player Required",
+            text=title,
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=FluentColors.WARNING
         ).pack(pady=(20, 10), padx=30)
         
         ctk.CTkLabel(
             error_frame,
-            text="VLC is required for video playback.\nPlease install it to watch streams.",
+            text=message,
             font=ctk.CTkFont(size=12),
             text_color=FluentColors.TEXT_SECONDARY,
             justify="center"
         ).pack(pady=5, padx=30)
         
+        # Installation command
+        ctk.CTkLabel(
+            error_frame,
+            text=install_cmd,
+            font=ctk.CTkFont(size=11, family="monospace"),
+            text_color=FluentColors.ACCENT,
+            justify="center"
+        ).pack(pady=(10, 20), padx=30)
+        
         # Buttons frame
         btn_frame = ctk.CTkFrame(error_frame, fg_color="transparent")
         btn_frame.pack(pady=(15, 20))
         
-        # Download VLC button
-        def open_vlc_download():
-            webbrowser.open("https://www.videolan.org/vlc/")
-        
-        ctk.CTkButton(
-            btn_frame,
-            text="Download VLC",
-            width=120,
-            fg_color=FluentColors.ACCENT,
-            hover_color=FluentColors.ACCENT_DARK,
-            command=open_vlc_download
-        ).pack(side=tk.LEFT, padx=5)
+        # Download VLC button (only if VLC binary missing)
+        if show_download_btn:
+            def open_vlc_download():
+                webbrowser.open("https://www.videolan.org/vlc/")
+            
+            ctk.CTkButton(
+                btn_frame,
+                text="Download VLC",
+                width=120,
+                fg_color=FluentColors.ACCENT,
+                hover_color=FluentColors.ACCENT_DARK,
+                command=open_vlc_download
+            ).pack(side=tk.LEFT, padx=5)
         
         # Retry button
         ctk.CTkButton(
@@ -450,14 +482,6 @@ class PlayerWindow(ctk.CTkToplevel):
             hover_color=FluentColors.CONTROL_HOVER,
             command=lambda: [error_frame.destroy(), self._init_vlc(), self.play() if self.player else None]
         ).pack(side=tk.LEFT, padx=5)
-        
-        # Help text
-        ctk.CTkLabel(
-            error_frame,
-            text="After installing VLC, also run: pip install python-vlc",
-            font=ctk.CTkFont(size=10),
-            text_color=FluentColors.TEXT_DISABLED
-        ).pack(pady=(0, 15))
     
     def play(self):
         """Start playing the stream."""

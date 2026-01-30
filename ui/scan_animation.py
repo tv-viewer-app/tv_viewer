@@ -75,6 +75,10 @@ class ScanAnimationWidget(tk.Canvas):
         self.total_count = total
         self.is_scanning = progress < 1.0 and total > 0
     
+    def set_stopped(self):
+        """Mark scan as stopped (Issue #34)."""
+        self.is_scanning = False
+    
     def _draw_earth(self, offset_x: int, offset_y: int):
         """Draw the pixel art Earth."""
         earth = self.EARTH_PIXELS[0]
@@ -188,26 +192,27 @@ class ScanAnimationWidget(tk.Canvas):
                 )
     
     def _draw_stats(self):
-        """Draw scan statistics."""
+        """Draw scan statistics and percentage - FIXED layout (Issue #34)."""
         if self.total_count > 0:
-            # Stats text (dark for light theme)
+            # Stats text at bottom (most important data)
             stats_text = f"{self.working_count} ok • {self.failed_count} fail"
             self.create_text(
-                self.width // 2, 8,
+                self.width // 2, self.height - 8,
                 text=stats_text, fill='#333333',
-                font=('Segoe UI', 8)
+                font=('Segoe UI', 10)  # Slightly larger
             )
         
-        # Percentage
+        # Percentage at TOP-RIGHT to avoid Earth overlap (Issue #34)
         pct = int(self.progress * 100)
         self.create_text(
-            self.width // 2, self.height - 20,
-            text=f"{pct}%", fill='#107C10' if pct == 100 else '#0078D4',
-            font=('Segoe UI', 8, 'bold')
+            self.width - 25, 12,  # Top-right, clear of Earth
+            text=f"{pct}%", 
+            fill='#107C10' if pct == 100 else '#0078D4',
+            font=('Segoe UI', 14, 'bold')  # Larger, more prominent
         )
     
     def _draw_scanning_text(self):
-        """Draw 'SCANNING' text with animation."""
+        """Draw status text with proper 'Stopped' state (Issue #34)."""
         if self.is_scanning:
             dots = '.' * ((self.animation_frame // 5) % 4)
             text = f"Scanning{dots}"
@@ -215,15 +220,21 @@ class ScanAnimationWidget(tk.Canvas):
         elif self.progress >= 1.0:
             text = "Complete!"
             color = '#107C10'
+        elif self.progress > 0:
+            # FIXED: Show "Stopped" when scan was stopped mid-way (Issue #34)
+            text = "Stopped"
+            color = '#FF6B6B'  # Red-ish to indicate interruption
         else:
-            text = "Ready"
+            # Idle state - hide text to reduce clutter
+            text = ""
             color = '#666666'
         
-        self.create_text(
-            self.width // 2, self.height // 2 + 15,
-            text=text, fill=color,
-            font=('Segoe UI', 9, 'bold')
-        )
+        if text:  # Only draw if not empty
+            self.create_text(
+                self.width // 2, self.height - 22,  # Above stats, below percentage
+                text=text, fill=color,
+                font=('Segoe UI', 8, 'italic')  # Smaller, subtle
+            )
     
     def _animate(self):
         """Animation loop."""
@@ -276,6 +287,10 @@ class ScanProgressFrame(ttk.Frame):
     def set_complete(self, working: int, total: int):
         """Set scan as complete."""
         self.animation.set_progress(1.0, working, total - working, total)
+    
+    def set_stopped(self):
+        """Mark scan as stopped (Issue #34)."""
+        self.animation.set_stopped()
     
     def destroy(self):
         """Clean up."""
