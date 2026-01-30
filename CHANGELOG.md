@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Linux iconbitmap() Syntax** ([#34](https://github.com/arielsaghiv/tv_viewer/issues/34))
+  - Fixed platform-specific iconbitmap() call syntax
+  - Added platform detection for Windows vs Linux
+  - Maintains fallback to iconphoto() with PIL
+  - Resolves "wrong # args" warning on Linux startup
+
 ## [1.8.2] - 2026-01-30
 
 ### Fixed (P1-High)
