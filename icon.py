@@ -108,8 +108,13 @@ def set_window_icon(window):
         print(f"Setting icon from: {icon_path}")
         
         # On Windows, iconbitmap works with .ico files
+        # Linux requires different syntax
+        import platform
         try:
-            window.iconbitmap(default=icon_path)
+            if platform.system() == 'Windows':
+                window.iconbitmap(default=icon_path)
+            else:
+                window.iconbitmap(icon_path)
             print("Icon set successfully with iconbitmap")
             return
         except Exception as e:
