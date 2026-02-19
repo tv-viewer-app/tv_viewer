@@ -93,7 +93,11 @@ class StreamChecker:
         session: aiohttp.ClientSession
     ) -> Dict[str, Any]:
         """
-        Check if a single stream is accessible - optimized for minimal CPU.
+        Check if a single stream is accessible — uses GET with Range for IPTV reliability.
+        
+        HEAD requests often fail or return misleading results for IPTV streams.
+        GET with Range header is more reliable: it verifies the server can actually
+        serve stream data and lets us sniff the content-type.
         
         Args:
             channel: Channel dictionary with 'url' key
@@ -118,22 +122,38 @@ class StreamChecker:
         if url.startswith(('file://', 'javascript:', 'data:')):
             return channel
         
+        # Non-HTTP streams (rtmp/rtsp) can't be checked via HTTP — assume working
+        if url.startswith(('rtmp://', 'rtsp://')):
+            channel['is_working'] = True
+            return channel
+        
+        # Content types that indicate a valid stream (not an error page)
+        _STREAM_CONTENT_TYPES = frozenset({
+            'video/', 'audio/', 'application/octet-stream',
+            'application/vnd.apple.mpegurl', 'application/x-mpegurl',
+            'application/dash+xml', 'application/x-mpegts',
+        })
+        
         try:
             async with self._semaphore:
-                # Just check if we can connect and get headers - fastest method
-                async with session.head(url, allow_redirects=True) as response:
-                    if response.status == 200:
-                        channel['is_working'] = True
-                    elif response.status == 405:
-                        # HEAD not allowed, try GET with minimal range
-                        async with session.get(
-                            url, 
-                            headers={'Range': 'bytes=0-512'},
-                            allow_redirects=True
-                        ) as get_response:
-                            channel['is_working'] = get_response.status in (200, 206)
+                # Use GET with Range header — most reliable for IPTV streams
+                async with session.get(
+                    url,
+                    headers={'Range': 'bytes=0-1024'},
+                    allow_redirects=True
+                ) as response:
+                    if response.status in (200, 206):
+                        # Verify content-type is stream data, not HTML error page
+                        content_type = (response.content_type or '').lower()
+                        if any(ct in content_type for ct in _STREAM_CONTENT_TYPES):
+                            channel['is_working'] = True
+                        elif 'text/html' in content_type:
+                            # HTML response = likely error page, not a stream
+                            channel['is_working'] = False
+                        else:
+                            # Unknown content type but server responded — give benefit of doubt
+                            channel['is_working'] = True
                     elif response.status in (301, 302, 303, 307, 308):
-                        # Redirect - consider as potentially working
                         channel['is_working'] = True
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass  # Timeout or cancelled - expected for unreachable streams

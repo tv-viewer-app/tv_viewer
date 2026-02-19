@@ -33,8 +33,8 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-# Set CustomTkinter appearance for Windows 11 Light theme
-ctk.set_appearance_mode("light")
+# Set CustomTkinter appearance for VLC-like dark theme
+ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 
@@ -69,10 +69,10 @@ class MainWindow:
         
         # Filter options
         self.hide_checking = False
-        self.hide_failed = False
+        self.hide_failed = True  # Hide dead channels by default
         
-        # Sort options
-        self._sort_column = 'name'
+        # Sort options — working channels first
+        self._sort_column = 'status'
         self._sort_reverse = False
         
         # Scan tracking
@@ -303,7 +303,7 @@ class MainWindow:
         )
         self.hide_checking_switch.pack(side="left")
         
-        self.hide_failed_var = ctk.BooleanVar(value=False)
+        self.hide_failed_var = ctk.BooleanVar(value=True)
         self.hide_failed_switch = ctk.CTkSwitch(
             row1,
             text="Hide failed",
@@ -491,8 +491,8 @@ class MainWindow:
             foreground=FluentColors.TEXT_PRIMARY,
             fieldbackground=FluentColors.BG_CARD,
             borderwidth=0,
-            font=('Segoe UI', 12),  # Increased from 11 for better readability
-            rowheight=40  # Increased from 36 for better spacing
+            font=('Segoe UI', 13),
+            rowheight=48
         )
         style.configure(
             "Material.Treeview.Heading",
@@ -541,14 +541,14 @@ class MainWindow:
         self.channel_tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.channel_scrollbar.config(command=self.channel_tree.yview)
         
-        # Configure columns
+        # Configure columns with wider spacing
         columns_config = {
-            'name': ('Channel Name', 250),
-            'category': ('Category', 100),
-            'status': ('Status', 90),
-            'last_checked': ('Checked', 70),
-            'age': ('Age', 50),
-            'country': ('Country', 80)
+            'name': ('Channel Name', 300),
+            'category': ('Category', 110),
+            'status': ('Status', 100),
+            'last_checked': ('Checked', 75),
+            'age': ('Age', 55),
+            'country': ('Country', 90)
         }
         
         for col, (title, width) in columns_config.items():
@@ -1012,11 +1012,20 @@ class MainWindow:
             self._play_channel(channel)
     
     def _play_channel(self, channel: Dict[str, Any]):
-        """Open player for channel."""
+        """Open player for channel. If playback succeeds on a 'dead' channel, mark it healthy."""
         if self.player_window and self.player_window.winfo_exists():
             self.player_window.set_channel(channel)
         else:
             self.player_window = PlayerWindow(self.root, channel)
+        
+        # If channel was marked offline or unchecked, optimistically mark as working
+        if not channel.get('is_working'):
+            channel['is_working'] = True
+            channel['scan_status'] = 'scanned'
+            self.channel_manager.save_channels()
+            # Refresh the list to update status display
+            if self.current_group:
+                self.root.after(500, lambda: self._select_group(self.current_group))
     
     def _on_channels_loaded(self, count: int):
         """Callback when channels loaded."""

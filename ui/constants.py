@@ -1,59 +1,59 @@
-"""Shared UI constants for TV Viewer - Windows 11 Fluent Design (Light Theme)."""
+"""Shared UI constants for TV Viewer - VLC-inspired Dark Theme."""
 
 
 class FluentColors:
-    """Windows 11 Fluent Design LIGHT color palette."""
-    # Primary accent colors (Windows 11 default blue)
-    ACCENT = "#0078D4"
-    ACCENT_DARK = "#106EBE"
-    ACCENT_LIGHT = "#60CDFF"
+    """VLC-inspired dark color palette with orange accent."""
+    # Primary accent colors (VLC orange)
+    ACCENT = "#FF8800"
+    ACCENT_DARK = "#E07700"
+    ACCENT_LIGHT = "#FFB347"
     
-    # Background colors (Windows 11 LIGHT theme)
-    BG_SOLID = "#F3F3F3"          # Solid background (was #202020)
-    BG_MICA = "#F9F9F9"           # Mica-like background (was #1F1F1F)
-    BG_ACRYLIC = "#FCFCFC"        # Acrylic-like elevated surface (was #2C2C2C)
-    BG_CARD = "#FFFFFF"           # Card/container background (was #2D2D2D)
-    BG_LAYER = "#F5F5F5"          # Layered element background (was #383838)
+    # Background colors (VLC dark theme)
+    BG_SOLID = "#1E1E1E"          # Solid background
+    BG_MICA = "#181818"           # Deepest background
+    BG_ACRYLIC = "#252525"        # Elevated surface (sidebar, panels)
+    BG_CARD = "#2D2D2D"           # Card/container background
+    BG_LAYER = "#383838"          # Layered element background
     
     # Surface colors
-    SURFACE = "#FFFFFF"           # (was #2D2D2D)
-    SURFACE_VARIANT = "#E8E8E8"   # (was #383838)
-    SURFACE_STROKE = "#E0E0E0"    # Border/divider color (was #3D3D3D)
+    SURFACE = "#2D2D2D"
+    SURFACE_VARIANT = "#3A3A3A"
+    SURFACE_STROKE = "#484848"    # Border/divider color
     
     # Background aliases for backwards compatibility
-    BG_DARK = "#F3F3F3"           # (was #202020)
-    BG_ELEVATED = "#FFFFFF"       # (was #383838)
+    BG_DARK = "#1E1E1E"
+    BG_ELEVATED = "#383838"
     
     # Primary color aliases for backwards compatibility
-    PRIMARY = "#0078D4"
-    PRIMARY_DARK = "#106EBE"
-    PRIMARY_LIGHT = "#60CDFF"
+    PRIMARY = "#FF8800"
+    PRIMARY_DARK = "#E07700"
+    PRIMARY_LIGHT = "#FFB347"
     
-    # Text colors (Windows 11 LIGHT theme)
-    TEXT_PRIMARY = "#1A1A1A"      # Dark text (was #FFFFFF)
-    TEXT_SECONDARY = "#5C5C5C"    # Gray text (was #9D9D9D)
-    TEXT_DISABLED = "#A0A0A0"     # Disabled text (was #5C5C5C)
-    TEXT_ACCENT = "#0078D4"       # Accent text (was #60CDFF)
+    # Text colors (light on dark)
+    TEXT_PRIMARY = "#F0F0F0"
+    TEXT_SECONDARY = "#A0A0A0"
+    TEXT_DISABLED = "#5C5C5C"
+    TEXT_ACCENT = "#FFB347"
     
-    # Status colors (Windows 11 style - slightly darker for light bg)
-    SUCCESS = "#107C10"           # Green (was #6CCB5F)
-    ERROR = "#C42B1C"             # Red (was #FF6B6B)
-    WARNING = "#9D5D00"           # Orange/amber (was #FCE100)
-    INFO = "#0078D4"              # Blue (was #60CDFF)
+    # Status colors (vibrant on dark)
+    SUCCESS = "#6CCB5F"           # Bright green
+    ERROR = "#FF5555"             # Bright red
+    WARNING = "#FFB347"           # Amber/orange
+    INFO = "#60CDFF"              # Bright blue
     
-    # Control colors (light theme)
-    CONTROL_DEFAULT = "#FFFFFF"   # Button default (was #454545)
-    CONTROL_HOVER = "#F5F5F5"     # Button hover (was #505050)
-    CONTROL_PRESSED = "#E8E8E8"   # Button pressed (was #3A3A3A)
-    CONTROL_DISABLED = "#F0F0F0"  # Button disabled (was #2D2D2D)
+    # Control colors (dark theme)
+    CONTROL_DEFAULT = "#3A3A3A"
+    CONTROL_HOVER = "#484848"
+    CONTROL_PRESSED = "#2D2D2D"
+    CONTROL_DISABLED = "#2D2D2D"
     
-    # Border for controls (needed in light theme)
-    CONTROL_BORDER = "#D1D1D1"
-    CONTROL_BORDER_HOVER = "#0078D4"
+    # Border for controls
+    CONTROL_BORDER = "#484848"
+    CONTROL_BORDER_HOVER = "#FF8800"
     
     # Subtle colors for hover states
-    SUBTLE_HOVER = "rgba(0, 0, 0, 0.04)"
-    SUBTLE_PRESSED = "rgba(0, 0, 0, 0.08)"
+    SUBTLE_HOVER = "#3A3A3A"
+    SUBTLE_PRESSED = "#484848"
 
 
 # Alias for backwards compatibility
