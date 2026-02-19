@@ -76,7 +76,7 @@ if getattr(sys, 'frozen', False):
 
 # Required packages with minimum versions
 REQUIRED_PACKAGES = {
-    'customtkinter': ('customtkinter', '5.2.0'),
+    'ttkbootstrap': ('ttkbootstrap', '1.10.0'),
     'PIL': ('Pillow', '10.0.0'),
     'aiohttp': ('aiohttp', '3.9.0'),
     'requests': ('requests', '2.31.0'),

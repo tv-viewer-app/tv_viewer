@@ -1,6 +1,8 @@
-"""Main application window with Windows 11 Fluent Design UI using CustomTkinter."""
+"""Main application window with Windows 11 Fluent Design UI using ttkbootstrap."""
 
-import customtkinter as ctk
+import ttkbootstrap as ttk_bs
+from ttkbootstrap.constants import *
+from ttkbootstrap.widgets.scrolled import ScrolledFrame
 from tkinter import ttk, messagebox
 import tkinter as tk
 from typing import Optional, Dict, Any, List
@@ -33,17 +35,13 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-# Set CustomTkinter appearance for VLC-like dark theme
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
-
 
 class MainWindow:
     """Main application window with Windows 11 Fluent Design."""
     
     def __init__(self):
-        # Initialize CustomTkinter window
-        self.root = ctk.CTk()
+        # Initialize ttkbootstrap window with dark theme
+        self.root = ttk_bs.Window(themename="darkly")
         self.root.title(f"{config.APP_NAME} v{config.APP_VERSION}")
         self.root.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
         self.root.minsize(800, 500)
@@ -55,6 +53,12 @@ class MainWindow:
         # Set window icon
         if set_window_icon:
             set_window_icon(self.root)
+        
+        # Configure custom styles
+        self.style = ttk_bs.Style()
+        self.style.configure("TButton", font=("Segoe UI", 11))
+        self.style.configure("TLabel", font=("Segoe UI", 11))
+        self.style.configure("TCheckbutton", font=("Segoe UI", 10))
         
         # Channel manager
         self.channel_manager = ChannelManager()
@@ -122,34 +126,29 @@ class MainWindow:
     def _create_sidebar(self):
         """Create the left sidebar with Windows 11 Fluent Design."""
         # Sidebar frame
-        self.sidebar = ctk.CTkFrame(
-            self.root,
-            width=300,
-            corner_radius=0,
-            fg_color=FluentColors.BG_ACRYLIC
-        )
+        self.sidebar = ttk.Frame(self.root, width=300)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         # Row 5 = category list (scrollable, expands)
         self.sidebar.grid_rowconfigure(5, weight=1)
         self.sidebar.grid_propagate(False)
         
         # App title with version on same line
-        title_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        title_frame = ttk.Frame(self.sidebar)
         title_frame.grid(row=0, column=0, padx=12, pady=(10, 5), sticky="ew")
         
-        self.title_label = ctk.CTkLabel(
+        self.title_label = ttk.Label(
             title_frame,
             text=f"📺 {config.APP_NAME}",
-            font=ctk.CTkFont(size=18, weight="bold"),
-            text_color=FluentColors.ACCENT
+            font=("Segoe UI", 18, "bold"),
+            foreground=FluentColors.ACCENT
         )
         self.title_label.pack(side="left")
         
-        self.version_label = ctk.CTkLabel(
+        self.version_label = ttk.Label(
             title_frame,
             text=f"v{config.APP_VERSION}",
-            font=ctk.CTkFont(size=10),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 10),
+            foreground=FluentColors.TEXT_SECONDARY
         )
         self.version_label.pack(side="right", padx=5)
         
@@ -174,11 +173,7 @@ class MainWindow:
     def _create_scan_indicator(self):
         """Create scan progress indicator with animation."""
         # Container frame
-        self.scan_frame = ctk.CTkFrame(
-            self.sidebar,
-            fg_color=FluentColors.BG_CARD,
-            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-        )
+        self.scan_frame = ttk.Frame(self.sidebar)
         self.scan_frame.grid(row=6, column=0, padx=10, pady=5, sticky="ew")
         
         # Scan animation widget (pixel art)
@@ -186,174 +181,185 @@ class MainWindow:
         self.scan_animation.pack(padx=5, pady=5)
         
         # Simple text labels below animation
-        self.scan_label = ctk.CTkLabel(
+        self.scan_label = ttk.Label(
             self.scan_frame,
             text="Ready",
-            font=ctk.CTkFont(size=10),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 10),
+            foreground=FluentColors.TEXT_SECONDARY
         )
         self.scan_label.pack(padx=10, pady=(0, 2))
         
         # Progress bar (backup visual)
-        self.progress_var = ctk.DoubleVar(value=0)
-        self.progress_bar = ctk.CTkProgressBar(
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress_bar = ttk.Progressbar(
             self.scan_frame,
             variable=self.progress_var,
-            progress_color=FluentColors.ACCENT,
-            fg_color=FluentColors.SURFACE_VARIANT,
-            height=4
+            mode='determinate',
+            bootstyle="info",
+            length=280
         )
         self.progress_bar.pack(padx=10, pady=(0, 5), fill="x")
         
         # Stats label
-        self.stats_label = ctk.CTkLabel(
+        self.stats_label = ttk.Label(
             self.scan_frame,
             text="",
-            font=ctk.CTkFont(size=9),
-            text_color=FluentColors.TEXT_DISABLED
+            font=("Segoe UI", 9),
+            foreground=FluentColors.TEXT_DISABLED
         )
         self.stats_label.pack(padx=10, pady=(0, 5))
     
     def _create_search_box(self):
         """Create search box."""
-        self.search_var = ctk.StringVar()
-        self.search_entry = ctk.CTkEntry(
+        self.search_var = tk.StringVar()
+        self.search_entry = ttk.Entry(
             self.sidebar,
-            placeholder_text="🔍 Search channels...",
             textvariable=self.search_var,
-            height=36,
-            corner_radius=18,
-            border_width=1,
-            border_color=FluentColors.SURFACE_STROKE,
-            fg_color=FluentColors.SURFACE
+            font=("Segoe UI", 11)
         )
         self.search_entry.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
+        
+        # Add placeholder text using a trace (ttk doesn't have native placeholder support)
+        self._search_placeholder = "🔍 Search channels..."
+        self._search_has_focus = False
+        
+        def on_search_focus_in(event):
+            if self.search_var.get() == self._search_placeholder:
+                self.search_var.set("")
+            self._search_has_focus = True
+        
+        def on_search_focus_out(event):
+            if not self.search_var.get():
+                self.search_var.set(self._search_placeholder)
+            self._search_has_focus = False
+        
+        self.search_entry.bind("<FocusIn>", on_search_focus_in)
+        self.search_entry.bind("<FocusOut>", on_search_focus_out)
+        self.search_var.set(self._search_placeholder)
+        
         self.search_var.trace('w', self._on_search)
     
     def _create_compact_selectors(self):
         """Create group by and media type selectors."""
         # Group by selector
-        group_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        group_frame = ttk.Frame(self.sidebar)
         group_frame.grid(row=2, column=0, padx=15, pady=3, sticky="ew")
         
-        ctk.CTkLabel(
+        ttk.Label(
             group_frame,
             text="Group:",
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11),
+            foreground=FluentColors.TEXT_SECONDARY
         ).pack(side="left")
         
-        self.group_segmented = ctk.CTkSegmentedButton(
-            group_frame,
-            values=["Category", "Country"],
-            command=self._on_group_by_change,
-            font=ctk.CTkFont(size=10),
-            selected_color=FluentColors.PRIMARY,
-            selected_hover_color=FluentColors.PRIMARY_DARK,
-            height=28
-        )
-        self.group_segmented.set("Category")
-        self.group_segmented.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        # Create segmented button replacement with radiobuttons
+        self.group_by_var = tk.StringVar(value="Category")
+        seg_frame = ttk.Frame(group_frame)
+        seg_frame.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        
+        ttk.Radiobutton(
+            seg_frame,
+            text="Category",
+            variable=self.group_by_var,
+            value="Category",
+            command=lambda: self._on_group_by_change("Category"),
+            bootstyle="primary-toolbutton"
+        ).pack(side="left", expand=True, fill="x")
+        
+        ttk.Radiobutton(
+            seg_frame,
+            text="Country",
+            variable=self.group_by_var,
+            value="Country",
+            command=lambda: self._on_group_by_change("Country"),
+            bootstyle="primary-toolbutton"
+        ).pack(side="left", expand=True, fill="x")
         
         # Media type selector
-        media_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        media_frame = ttk.Frame(self.sidebar)
         media_frame.grid(row=3, column=0, padx=15, pady=3, sticky="ew")
         
-        ctk.CTkLabel(
+        ttk.Label(
             media_frame,
             text="Type:",
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11),
+            foreground=FluentColors.TEXT_SECONDARY
         ).pack(side="left")
         
-        self.media_type_var = ctk.StringVar(value="All")
-        self.media_segmented = ctk.CTkSegmentedButton(
-            media_frame,
-            values=["All", "TV", "Radio"],
-            command=self._on_media_type_change,
-            variable=self.media_type_var,
-            font=ctk.CTkFont(size=10),
-            selected_color=FluentColors.PRIMARY,
-            selected_hover_color=FluentColors.PRIMARY_DARK,
-            height=28
-        )
-        self.media_segmented.set("All")
-        self.media_segmented.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        self.media_type_var = tk.StringVar(value="All")
+        media_seg_frame = ttk.Frame(media_frame)
+        media_seg_frame.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        
+        for media_type in ["All", "TV", "Radio"]:
+            ttk.Radiobutton(
+                media_seg_frame,
+                text=media_type,
+                variable=self.media_type_var,
+                value=media_type,
+                command=lambda mt=media_type: self._on_media_type_change(mt),
+                bootstyle="primary-toolbutton"
+            ).pack(side="left", expand=True, fill="x")
     
     def _create_filter_toggles(self):
         """Create filter toggle switches - compact layout."""
         # Filter options in a compact frame
-        filter_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        filter_frame = ttk.Frame(self.sidebar)
         filter_frame.grid(row=4, column=0, padx=15, pady=3, sticky="ew")
         
         # Row 1: Hide checking + Hide failed
-        row1 = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        row1 = ttk.Frame(filter_frame)
         row1.pack(fill="x", pady=1)
         
-        self.hide_checking_var = ctk.BooleanVar(value=False)
-        self.hide_checking_switch = ctk.CTkSwitch(
+        self.hide_checking_var = tk.BooleanVar(value=False)
+        self.hide_checking_switch = ttk.Checkbutton(
             row1,
             text="Hide checking",
             variable=self.hide_checking_var,
             command=self._apply_filters,
-            font=ctk.CTkFont(size=10),
-            width=32,
-            height=18,
-            progress_color=FluentColors.PRIMARY
+            bootstyle="round-toggle"
         )
         self.hide_checking_switch.pack(side="left")
         
-        self.hide_failed_var = ctk.BooleanVar(value=True)
-        self.hide_failed_switch = ctk.CTkSwitch(
+        self.hide_failed_var = tk.BooleanVar(value=True)
+        self.hide_failed_switch = ttk.Checkbutton(
             row1,
             text="Hide failed",
             variable=self.hide_failed_var,
             command=self._apply_filters,
-            font=ctk.CTkFont(size=10),
-            width=32,
-            height=18,
-            progress_color=FluentColors.PRIMARY
+            bootstyle="round-toggle"
         )
         self.hide_failed_switch.pack(side="right")
         
         # Row 2: Share toggle
         from utils.privatebin import is_enabled, set_enabled
         
-        row2 = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        row2 = ttk.Frame(filter_frame)
         row2.pack(fill="x", pady=1)
         
-        self.privatebin_var = ctk.BooleanVar(value=is_enabled())
-        self.privatebin_switch = ctk.CTkSwitch(
+        self.privatebin_var = tk.BooleanVar(value=is_enabled())
+        self.privatebin_switch = ttk.Checkbutton(
             row2,
             text="Share scan results",
             variable=self.privatebin_var,
             command=lambda: set_enabled(self.privatebin_var.get()),
-            font=ctk.CTkFont(size=10),
-            width=32,
-            height=18,
-            progress_color=FluentColors.PRIMARY
+            bootstyle="round-toggle"
         )
         self.privatebin_switch.pack(side="left")
     
     def _create_category_list(self):
         """Create the category/country scrollable list."""
         # Header
-        self.group_header = ctk.CTkLabel(
+        self.group_header = ttk.Label(
             self.sidebar,
             text="📂 Categories",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY,
+            font=("Segoe UI", 13, "bold"),
+            foreground=FluentColors.TEXT_PRIMARY,
             anchor="w"
         )
         self.group_header.grid(row=5, column=0, padx=15, pady=(8, 3), sticky="w")
         
         # Scrollable frame for categories (this is the expandable row)
-        self.category_scroll = ctk.CTkScrollableFrame(
-            self.sidebar,
-            fg_color="transparent",
-            scrollbar_button_color=FluentColors.SURFACE_VARIANT,
-            scrollbar_button_hover_color=FluentColors.PRIMARY
-        )
+        self.category_scroll = ScrolledFrame(self.sidebar, autohide=True)
         # Row 5 is set as weight=1 in _create_sidebar, so use row index that matches
         self.category_scroll.grid(row=5, column=0, padx=10, pady=3, sticky="nsew")
         
@@ -362,70 +368,49 @@ class MainWindow:
     
     def _create_action_buttons(self):
         """Create action buttons at bottom of sidebar."""
-        button_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        button_frame = ttk.Frame(self.sidebar)
         button_frame.grid(row=7, column=0, padx=10, pady=10, sticky="ew")
         
         # Scan toggle button
-        self.scan_btn = ctk.CTkButton(
+        self.scan_btn = ttk.Button(
             button_frame,
             text="▶ Start Scan",
             command=self._toggle_scan,
-            height=36,
-            corner_radius=18,
-            fg_color=FluentColors.PRIMARY,
-            hover_color=FluentColors.PRIMARY_DARK
+            bootstyle="primary"
         )
         self.scan_btn.pack(fill="x", pady=(0, 8))
         
         # Export M3U button
-        self.export_btn = ctk.CTkButton(
+        self.export_btn = ttk.Button(
             button_frame,
             text="📥 Export M3U",
             command=self._export_m3u,
-            height=36,
-            corner_radius=18,
-            fg_color=FluentColors.SURFACE_VARIANT,
-            hover_color=FluentColors.BG_ELEVATED,
-            text_color=FluentColors.TEXT_PRIMARY
+            bootstyle="secondary"
         )
         self.export_btn.pack(fill="x", pady=(0, 8))
         
         # Settings button
-        self.settings_btn = ctk.CTkButton(
+        self.settings_btn = ttk.Button(
             button_frame,
             text="⚙️ Edit Config",
             command=self._edit_channel_config,
-            height=36,
-            corner_radius=18,
-            fg_color=FluentColors.SURFACE_VARIANT,
-            hover_color=FluentColors.BG_ELEVATED,
-            text_color=FluentColors.TEXT_PRIMARY
+            bootstyle="secondary"
         )
         self.settings_btn.pack(fill="x", pady=(0, 8))
         
         # About button
-        self.about_btn = ctk.CTkButton(
+        self.about_btn = ttk.Button(
             button_frame,
             text="ℹ️ About",
             command=self._show_about,
-            height=36,
-            corner_radius=18,
-            fg_color="transparent",
-            hover_color=FluentColors.SURFACE_VARIANT,
-            text_color=FluentColors.TEXT_SECONDARY,
-            border_width=1,
-            border_color=FluentColors.SURFACE_VARIANT
+            bootstyle="info-outline"
         )
         self.about_btn.pack(fill="x")
     
     def _create_main_content(self):
         """Create the main content area with channel list."""
         # Main content frame
-        self.main_frame = ctk.CTkFrame(
-            self.root,
-            fg_color=FluentColors.BG_DARK,
-            corner_radius=0
-        )
+        self.main_frame = ttk.Frame(self.root)
         self.main_frame.grid(row=0, column=1, sticky="nsew")
         self.main_frame.grid_rowconfigure(1, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
@@ -441,50 +426,39 @@ class MainWindow:
     
     def _create_content_header(self):
         """Create the content header."""
-        header_frame = ctk.CTkFrame(
-            self.main_frame,
-            fg_color=FluentColors.BG_CARD,
-            corner_radius=0,
-            height=60
-        )
+        header_frame = ttk.Frame(self.main_frame)
         header_frame.grid(row=0, column=0, sticky="ew")
-        header_frame.grid_propagate(False)
         
         # Title
-        self.channel_header = ctk.CTkLabel(
+        self.channel_header = ttk.Label(
             header_frame,
             text="Select a category",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY
+            font=("Segoe UI", 20, "bold"),
+            foreground=FluentColors.TEXT_PRIMARY
         )
         self.channel_header.pack(side="left", padx=20, pady=15)
         
         # Count label
-        self.channel_count_label = ctk.CTkLabel(
+        self.channel_count_label = ttk.Label(
             header_frame,
             text="",
-            font=ctk.CTkFont(size=12),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 12),
+            foreground=FluentColors.TEXT_SECONDARY
         )
         self.channel_count_label.pack(side="right", padx=20, pady=15)
     
     def _create_channel_list(self):
         """Create the channel list with custom styling."""
         # Container frame
-        list_container = ctk.CTkFrame(
-            self.main_frame,
-            fg_color=FluentColors.BG_DARK,
-            corner_radius=0
-        )
+        list_container = ttk.Frame(self.main_frame)
         list_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         list_container.grid_rowconfigure(0, weight=1)
         list_container.grid_columnconfigure(0, weight=1)
         
-        # Style the Treeview for Material Design
+        # Style the Treeview for dark theme
         style = ttk.Style()
-        style.theme_use('clam')
         
-        # Configure Treeview colors
+        # Configure Treeview colors for dark theme
         style.configure(
             "Material.Treeview",
             background=FluentColors.BG_CARD,
@@ -522,7 +496,7 @@ class MainWindow:
         )
         
         # Create Treeview
-        tree_frame = ctk.CTkFrame(list_container, fg_color=FluentColors.BG_CARD, corner_radius=10)
+        tree_frame = ttk.Frame(list_container)
         tree_frame.grid(row=0, column=0, sticky="nsew")
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
@@ -567,94 +541,72 @@ class MainWindow:
     
     def _create_preview_panel(self):
         """Create the preview panel."""
-        preview_frame = ctk.CTkFrame(
-            self.main_frame,
-            fg_color=FluentColors.BG_CARD,
-            corner_radius=10,
-            height=100
-        )
+        preview_frame = ttk.Frame(self.main_frame)
         preview_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 10))
-        preview_frame.grid_propagate(False)
         
         # Thumbnail container
-        thumb_container = ctk.CTkFrame(
-            preview_frame,
-            fg_color=FluentColors.BG_DARK,
-            corner_radius=8,
-            width=128,
-            height=72
-        )
+        thumb_container = ttk.Frame(preview_frame, width=128, height=72)
         thumb_container.pack(side="left", padx=15, pady=14)
         thumb_container.pack_propagate(False)
         
-        self.thumbnail_label = ctk.CTkLabel(
+        self.thumbnail_label = ttk.Label(
             thumb_container,
             text="No preview",
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_DISABLED
+            font=("Segoe UI", 11),
+            foreground=FluentColors.TEXT_DISABLED
         )
         self.thumbnail_label.pack(expand=True)
         
         # Info container
-        info_frame = ctk.CTkFrame(preview_frame, fg_color="transparent")
+        info_frame = ttk.Frame(preview_frame)
         info_frame.pack(side="left", fill="both", expand=True, padx=10, pady=14)
         
-        self.preview_name_label = ctk.CTkLabel(
+        self.preview_name_label = ttk.Label(
             info_frame,
             text="Select a channel",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY,
+            font=("Segoe UI", 14, "bold"),
+            foreground=FluentColors.TEXT_PRIMARY,
             anchor="w"
         )
         self.preview_name_label.pack(anchor="w")
         
-        self.preview_url_label = ctk.CTkLabel(
+        self.preview_url_label = ttk.Label(
             info_frame,
             text="",
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_SECONDARY,
+            font=("Segoe UI", 11),
+            foreground=FluentColors.TEXT_SECONDARY,
             anchor="w"
         )
         self.preview_url_label.pack(anchor="w", pady=(2, 0))
         
-        self.preview_status_label = ctk.CTkLabel(
+        self.preview_status_label = ttk.Label(
             info_frame,
             text="",
-            font=ctk.CTkFont(size=11),
+            font=("Segoe UI", 11),
             anchor="w"
         )
         self.preview_status_label.pack(anchor="w", pady=(2, 0))
         
         # Play button
-        self.play_btn = ctk.CTkButton(
+        self.play_btn = ttk.Button(
             preview_frame,
             text="▶ Play",
             command=self._play_selected_channel,
-            width=100,
-            height=40,
-            corner_radius=20,
-            fg_color=FluentColors.ACCENT,
-            hover_color=FluentColors.ACCENT_DARK,
-            font=ctk.CTkFont(size=14, weight="bold")
+            bootstyle="success",
+            width=15
         )
         self.play_btn.pack(side="right", padx=20)
     
     def _create_status_bar(self):
         """Create the status bar."""
-        self.status_frame = ctk.CTkFrame(
-            self.root,
-            fg_color=FluentColors.SURFACE,
-            corner_radius=0,
-            height=30
-        )
+        self.status_frame = ttk.Frame(self.root)
         self.status_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
-        self.status_frame.grid_propagate(False)
         
-        self.status_label = ctk.CTkLabel(
+        self.status_label = ttk.Label(
             self.status_frame,
             text="Starting...",
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11),
+            foreground=FluentColors.TEXT_SECONDARY
         )
         self.status_label.pack(side="left", padx=15, pady=5)
     
@@ -673,22 +625,17 @@ class MainWindow:
         all_working = sum(1 for c in all_channels if c.get('is_working', False))
         
         # Add "All Channels" button
-        all_btn = ctk.CTkButton(
+        all_btn = ttk.Button(
             self.category_scroll,
             text=f"📺 All Channels  ({all_working}/{len(all_channels)})",
             command=lambda: self._select_group('__all__'),
-            fg_color="transparent",
-            hover_color=FluentColors.SURFACE_VARIANT,
-            text_color=FluentColors.TEXT_PRIMARY,
-            anchor="w",
-            height=36,
-            corner_radius=8
+            bootstyle="link"
         )
         all_btn.pack(fill="x", pady=2)
         self.category_buttons.append(all_btn)
         
         # Separator
-        sep = ctk.CTkFrame(self.category_scroll, height=1, fg_color=FluentColors.SURFACE_VARIANT)
+        sep = ttk.Separator(self.category_scroll, orient='horizontal')
         sep.pack(fill="x", pady=8)
         self.category_buttons.append(sep)
         
@@ -703,16 +650,11 @@ class MainWindow:
             # Choose icon based on group name
             icon = self._get_group_icon(group)
             
-            btn = ctk.CTkButton(
+            btn = ttk.Button(
                 self.category_scroll,
                 text=f"{icon} {group}  ({working}/{len(channels)})",
                 command=lambda g=group: self._select_group(g),
-                fg_color="transparent",
-                hover_color=FluentColors.SURFACE_VARIANT,
-                text_color=FluentColors.TEXT_PRIMARY,
-                anchor="w",
-                height=32,
-                corner_radius=8
+                bootstyle="link"
             )
             btn.pack(fill="x", pady=1)
             self.category_buttons.append(btn)
@@ -902,7 +844,8 @@ class MainWindow:
     def _on_search(self, *args):
         """Handle search."""
         query = self.search_var.get()
-        if query:
+        # Ignore placeholder text
+        if query and query != self._search_placeholder:
             channels = self.channel_manager.search_channels(query)
             self.channel_header.configure(text=f"Search: {query}")
             self._update_channel_list(channels)
@@ -929,11 +872,11 @@ class MainWindow:
         
         is_working = channel.get('is_working')
         if is_working is True:
-            self.preview_status_label.configure(text='✓ Working', text_color=FluentColors.SUCCESS)
+            self.preview_status_label.configure(text='✓ Working', foreground=FluentColors.SUCCESS)
         elif is_working is False:
-            self.preview_status_label.configure(text='✗ Offline', text_color=FluentColors.ERROR)
+            self.preview_status_label.configure(text='✗ Offline', foreground=FluentColors.ERROR)
         else:
-            self.preview_status_label.configure(text='◌ Checking...', text_color=FluentColors.WARNING)
+            self.preview_status_label.configure(text='◌ Checking...', foreground=FluentColors.WARNING)
         
         # Show thumbnail
         self._show_channel_thumbnail(channel)
@@ -972,7 +915,7 @@ class MainWindow:
             try:
                 img = Image.open(get_thumbnail_path(url))
                 img = img.resize((128, 72), Image.Resampling.LANCZOS)
-                photo = ctk.CTkImage(light_image=img, dark_image=img, size=(128, 72))
+                photo = ImageTk.PhotoImage(img)
                 self._current_thumbnail = photo
                 self.thumbnail_label.configure(image=photo, text='')
             except (IOError, OSError) as e:
@@ -1082,7 +1025,8 @@ class MainWindow:
     def _batch_ui_update(self, progress: float, current: int, total: int):
         """Perform batched UI updates - minimal work only."""
         try:
-            self.progress_var.set(progress)
+            # ttkbootstrap progressbar expects 0-100 value
+            self.progress_var.set(progress * 100)
             self.scan_label.configure(text=f"Scanning {current}/{total}")
             self.stats_label.configure(
                 text=f"{self.scan_working_count} ok • {self.scan_failed_count} fail"
@@ -1101,7 +1045,7 @@ class MainWindow:
     
     def _on_validation_complete(self):
         """Callback when validation complete."""
-        self.root.after(0, lambda: self.progress_var.set(1.0))
+        self.root.after(0, lambda: self.progress_var.set(100))
         working = len(self.channel_manager.get_working_channels())
         total = len(self.channel_manager.channels)
         self.root.after(0, lambda: self._set_status(f"Ready - {working}/{total} channels working"))
@@ -1246,7 +1190,7 @@ class MainWindow:
     
     def _show_about(self):
         """Show about dialog with IPTV information."""
-        dialog = ctk.CTkToplevel(self.root)
+        dialog = tk.Toplevel(self.root)
         dialog.title("About")
         dialog.geometry("550x520")
         dialog.transient(self.root)
@@ -1259,30 +1203,30 @@ class MainWindow:
         dialog.geometry(f"+{x}+{y}")
         
         # Scrollable content
-        scroll_frame = ctk.CTkScrollableFrame(dialog, fg_color="transparent")
+        scroll_frame = ScrolledFrame(dialog, autohide=True)
         scroll_frame.pack(fill="both", expand=True, padx=20, pady=20)
         
         # App title
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text=f"📺 {config.APP_NAME}",
-            font=ctk.CTkFont(size=24, weight="bold"),
-            text_color=FluentColors.PRIMARY
+            font=("Segoe UI", 24, "bold"),
+            foreground=FluentColors.PRIMARY
         ).pack(pady=(10, 5))
         
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text=f"Version {config.APP_VERSION}",
-            font=ctk.CTkFont(size=14),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 14),
+            foreground=FluentColors.TEXT_SECONDARY
         ).pack(pady=(0, 15))
         
         # What is IPTV section
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text="📡 What is IPTV?",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY,
+            font=("Segoe UI", 16, "bold"),
+            foreground=FluentColors.TEXT_PRIMARY,
             anchor="w"
         ).pack(fill="x", pady=(10, 5))
         
@@ -1293,21 +1237,21 @@ class MainWindow:
             "allowing you to watch TV channels from around the world on "
             "any internet-connected device."
         )
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text=iptv_text,
-            font=ctk.CTkFont(size=12),
-            text_color=FluentColors.TEXT_SECONDARY,
+            font=("Segoe UI", 12),
+            foreground=FluentColors.TEXT_SECONDARY,
             wraplength=480,
             justify="left"
         ).pack(fill="x", pady=(0, 10))
         
         # How it works section
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text="🔧 How It Works",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY,
+            font=("Segoe UI", 16, "bold"),
+            foreground=FluentColors.TEXT_PRIMARY,
             anchor="w"
         ).pack(fill="x", pady=(10, 5))
         
@@ -1317,21 +1261,21 @@ class MainWindow:
             "the background, showing you which channels are currently online. "
             "Streams use M3U/M3U8 playlists - a standard format for multimedia playlists."
         )
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text=how_text,
-            font=ctk.CTkFont(size=12),
-            text_color=FluentColors.TEXT_SECONDARY,
+            font=("Segoe UI", 12),
+            foreground=FluentColors.TEXT_SECONDARY,
             wraplength=480,
             justify="left"
         ).pack(fill="x", pady=(0, 10))
         
         # Features section
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text="✨ Features",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY,
+            font=("Segoe UI", 16, "bold"),
+            foreground=FluentColors.TEXT_PRIMARY,
             anchor="w"
         ).pack(fill="x", pady=(10, 5))
         
@@ -1348,20 +1292,20 @@ class MainWindow:
         ]
         
         for feature in features:
-            ctk.CTkLabel(
+            ttk.Label(
                 scroll_frame,
                 text=feature,
-                font=ctk.CTkFont(size=12),
-                text_color=FluentColors.TEXT_PRIMARY,
+                font=("Segoe UI", 12),
+                foreground=FluentColors.TEXT_PRIMARY,
                 anchor="w"
             ).pack(fill="x", padx=10)
         
         # Disclaimer
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text="⚠️ Disclaimer",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=FluentColors.ACCENT,
+            font=("Segoe UI", 14, "bold"),
+            foreground=FluentColors.ACCENT,
             anchor="w"
         ).pack(fill="x", pady=(15, 5))
         
@@ -1370,23 +1314,22 @@ class MainWindow:
             "We do not host any content. Stream availability and "
             "quality depend on third-party sources."
         )
-        ctk.CTkLabel(
+        ttk.Label(
             scroll_frame,
             text=disclaimer_text,
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_SECONDARY,
+            font=("Segoe UI", 11),
+            foreground=FluentColors.TEXT_SECONDARY,
             wraplength=480,
             justify="left"
         ).pack(fill="x", pady=(0, 15))
         
         # Close button
-        ctk.CTkButton(
+        ttk.Button(
             dialog,
             text="Close",
             command=dialog.destroy,
-            width=100,
-            fg_color=FluentColors.PRIMARY,
-            hover_color=FluentColors.PRIMARY_DARK
+            bootstyle="primary",
+            width=15
         ).pack(pady=15)
     
     def _initialize(self):

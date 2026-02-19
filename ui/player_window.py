@@ -21,7 +21,6 @@ Threading:
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-import customtkinter as ctk
 import sys
 import os
 import subprocess
@@ -97,7 +96,7 @@ def get_vlc_hardware_acceleration_args() -> list:
         ]
 
 
-class PlayerWindow(ctk.CTkToplevel):
+class PlayerWindow(tk.Toplevel):
     """Separate window for video playback with controls."""
     
     def __init__(self, parent, channel: Dict[str, Any]):
@@ -146,16 +145,16 @@ class PlayerWindow(ctk.CTkToplevel):
     def _create_widgets(self):
         """Create the player UI components with Windows 11 Fluent Design."""
         # Configure window background
-        self.configure(fg_color=FluentColors.BG_MICA)
+        self.configure(bg="#1E1E1E")
         
         # Main container
-        self.main_frame = ctk.CTkFrame(self, fg_color=FluentColors.BG_MICA, corner_radius=0)
+        self.main_frame = ttk.Frame(self)
         self.main_frame.grid(row=0, column=0, sticky="nsew")
         self.main_frame.rowconfigure(0, weight=1)
         self.main_frame.columnconfigure(0, weight=1)
         
         # Video frame (where VLC will render)
-        self.video_frame = ctk.CTkFrame(self.main_frame, fg_color="black", corner_radius=0)
+        self.video_frame = ttk.Frame(self.main_frame)
         self.video_frame.grid(row=0, column=0, sticky="nsew")
         
         # Create a canvas for video (needed for VLC on some platforms)
@@ -167,187 +166,138 @@ class PlayerWindow(ctk.CTkToplevel):
         self.video_canvas.pack(fill=tk.BOTH, expand=True)
         
         # Controls frame with Fluent Design
-        self.controls_frame = ctk.CTkFrame(
+        self.controls_frame = ttk.Frame(
             self.main_frame,
-            fg_color=FluentColors.BG_ACRYLIC,
-            corner_radius=0,
             height=60
         )
         self.controls_frame.grid(row=1, column=0, sticky="ew")
         self.controls_frame.grid_propagate(False)
         
         # Play/Pause button - Windows 11 style
-        self.play_btn = ctk.CTkButton(
+        self.play_btn = ttk.Button(
             self.controls_frame,
             text="⏸",
-            width=44,
-            height=44,
-            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-            fg_color=FluentColors.ACCENT,
-            hover_color=FluentColors.ACCENT_DARK,
+            width=4,
             command=self._toggle_play,
-            font=ctk.CTkFont(size=16)
+            bootstyle="primary"
         )
         self.play_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE, pady=8)
         add_tooltip(self.play_btn, "Play/Pause (Space)")
         
         # Stop button
-        self.stop_btn = ctk.CTkButton(
+        self.stop_btn = ttk.Button(
             self.controls_frame,
             text="⏹",
-            width=44,
-            height=44,
-            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-            fg_color=FluentColors.CONTROL_DEFAULT,
-            hover_color=FluentColors.CONTROL_HOVER,
-            text_color=FluentColors.TEXT_PRIMARY,
-            border_width=1,
-            border_color=FluentColors.CONTROL_BORDER,
+            width=4,
             command=self.stop,
-            font=ctk.CTkFont(size=16)
+            bootstyle="secondary"
         )
         self.stop_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.stop_btn, "Stop playback")
         
         # Time label
-        self.time_label = ctk.CTkLabel(
+        self.time_label = ttk.Label(
             self.controls_frame,
             text="00:00",
-            width=80,
-            font=ctk.CTkFont(size=14),
-            text_color=FluentColors.TEXT_PRIMARY
+            width=8,
+            font=("Segoe UI", 14)
         )
         self.time_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE)
         
         # Volume controls
-        volume_frame = ctk.CTkFrame(self.controls_frame, fg_color="transparent")
+        volume_frame = ttk.Frame(self.controls_frame)
         volume_frame.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_LARGE)
         
-        ctk.CTkLabel(volume_frame, text="🔊", font=ctk.CTkFont(size=14)).pack(side=tk.LEFT)
+        ttk.Label(volume_frame, text="🔊", font=("Segoe UI", 14)).pack(side=tk.LEFT)
         
         self.volume_var = tk.IntVar(value=80)
-        self.volume_slider = ctk.CTkSlider(
+        self.volume_slider = ttk.Scale(
             volume_frame,
             from_=0,
             to=100,
             variable=self.volume_var,
             command=self._on_volume_change,
-            width=120,
-            progress_color=FluentColors.ACCENT,
-            button_color=FluentColors.ACCENT,
-            button_hover_color=FluentColors.ACCENT_LIGHT
+            orient="horizontal",
+            length=120
         )
         self.volume_slider.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_MEDIUM)
         add_tooltip(self.volume_slider, "Adjust volume")
         
         # Volume percentage label
-        self.volume_label = ctk.CTkLabel(
+        self.volume_label = ttk.Label(
             volume_frame,
             text="80%",
-            width=40,
-            font=ctk.CTkFont(size=12),
-            text_color=FluentColors.TEXT_SECONDARY
+            width=4,
+            font=("Segoe UI", 12)
         )
         self.volume_label.pack(side=tk.LEFT, padx=2)
         
         # Mute button
-        self.mute_btn = ctk.CTkButton(
+        self.mute_btn = ttk.Button(
             volume_frame,
             text="🔇",
-            width=36,
-            height=36,
-            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-            fg_color=FluentColors.CONTROL_DEFAULT,
-            hover_color=FluentColors.CONTROL_HOVER,
-            text_color=FluentColors.TEXT_PRIMARY,
-            border_width=1,
-            border_color=FluentColors.CONTROL_BORDER,
+            width=3,
             command=self._toggle_mute,
-            font=ctk.CTkFont(size=14)
+            bootstyle="secondary"
         )
         self.mute_btn.pack(side=tk.LEFT)
         add_tooltip(self.mute_btn, "Mute/Unmute (M)")
         
         # Fullscreen button
-        self.fullscreen_btn = ctk.CTkButton(
+        self.fullscreen_btn = ttk.Button(
             self.controls_frame,
             text="⛶",
-            width=36,
-            height=36,
-            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-            fg_color=FluentColors.CONTROL_DEFAULT,
-            hover_color=FluentColors.CONTROL_HOVER,
-            text_color=FluentColors.TEXT_PRIMARY,
-            border_width=1,
-            border_color=FluentColors.CONTROL_BORDER,
+            width=3,
             command=self._toggle_fullscreen,
-            font=ctk.CTkFont(size=14)
+            bootstyle="secondary"
         )
         self.fullscreen_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.fullscreen_btn, "Fullscreen (F) - Press ESC to exit")
         
         # Open in VLC button
-        self.vlc_btn = ctk.CTkButton(
+        self.vlc_btn = ttk.Button(
             self.controls_frame,
             text="VLC",
-            width=48,
-            height=36,
-            corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-            fg_color=FluentColors.CONTROL_DEFAULT,
-            hover_color=FluentColors.CONTROL_HOVER,
-            text_color=FluentColors.TEXT_PRIMARY,
-            border_width=1,
-            border_color=FluentColors.CONTROL_BORDER,
+            width=4,
             command=self._open_in_external_vlc,
-            font=ctk.CTkFont(size=12)
+            bootstyle="secondary"
         )
         self.vlc_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.vlc_btn, "Open in external VLC player")
         
         # Cast button (if available)
         if CAST_AVAILABLE:
-            self.cast_btn = ctk.CTkButton(
+            self.cast_btn = ttk.Button(
                 self.controls_frame,
                 text="📺",
-                width=36,
-                height=36,
-                corner_radius=FluentSpacing.CORNER_RADIUS_SMALL,
-                fg_color=FluentColors.CONTROL_DEFAULT,
-                hover_color=FluentColors.CONTROL_HOVER,
-                text_color=FluentColors.TEXT_PRIMARY,
-                border_width=1,
-                border_color=FluentColors.CONTROL_BORDER,
+                width=3,
                 command=self._show_cast_menu,
-                font=ctk.CTkFont(size=14)
+                bootstyle="secondary"
             )
             self.cast_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
             add_tooltip(self.cast_btn, "Cast to TV/Chromecast")
         
         # Channel info
         channel_name = self.channel.get('name', 'Unknown')
-        self.channel_label = ctk.CTkLabel(
+        self.channel_label = ttk.Label(
             self.controls_frame,
             text=channel_name,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=FluentColors.TEXT_PRIMARY
+            font=("Segoe UI", 13, "bold")
         )
         self.channel_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_XLARGE)
         
         # Quality info frame (below controls)
-        self.quality_frame = ctk.CTkFrame(
+        self.quality_frame = ttk.Frame(
             self.main_frame,
-            fg_color=FluentColors.BG_CARD,
-            corner_radius=0,
             height=28
         )
         self.quality_frame.grid(row=2, column=0, sticky="ew")
         self.quality_frame.grid_propagate(False)
         
-        self.quality_label = ctk.CTkLabel(
+        self.quality_label = ttk.Label(
             self.quality_frame,
             text="Quality: --",
-            font=ctk.CTkFont(size=11),
-            text_color=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11)
         )
         self.quality_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE, pady=4)
         
@@ -440,35 +390,32 @@ class PlayerWindow(ctk.CTkToplevel):
             install_cmd = "pip3 install --force-reinstall python-vlc"
             show_download_btn = False
         
-        error_frame = ctk.CTkFrame(self.video_canvas, fg_color=FluentColors.BG_CARD)
+        error_frame = ttk.Frame(self.video_canvas)
         error_frame.place(relx=0.5, rely=0.5, anchor='center')
         
-        ctk.CTkLabel(
+        ttk.Label(
             error_frame,
             text=title,
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=FluentColors.WARNING
+            font=("Segoe UI", 16, "bold")
         ).pack(pady=(20, 10), padx=30)
         
-        ctk.CTkLabel(
+        ttk.Label(
             error_frame,
             text=message,
-            font=ctk.CTkFont(size=12),
-            text_color=FluentColors.TEXT_SECONDARY,
+            font=("Segoe UI", 12),
             justify="center"
         ).pack(pady=5, padx=30)
         
         # Installation command
-        ctk.CTkLabel(
+        ttk.Label(
             error_frame,
             text=install_cmd,
-            font=ctk.CTkFont(size=11, family="monospace"),
-            text_color=FluentColors.ACCENT,
+            font=("Courier New", 11),
             justify="center"
         ).pack(pady=(10, 20), padx=30)
         
         # Buttons frame
-        btn_frame = ctk.CTkFrame(error_frame, fg_color="transparent")
+        btn_frame = ttk.Frame(error_frame)
         btn_frame.pack(pady=(15, 20))
         
         # Download VLC button (only if VLC binary missing)
@@ -476,23 +423,21 @@ class PlayerWindow(ctk.CTkToplevel):
             def open_vlc_download():
                 webbrowser.open("https://www.videolan.org/vlc/")
             
-            ctk.CTkButton(
+            ttk.Button(
                 btn_frame,
                 text="Download VLC",
-                width=120,
-                fg_color=FluentColors.ACCENT,
-                hover_color=FluentColors.ACCENT_DARK,
-                command=open_vlc_download
+                width=15,
+                command=open_vlc_download,
+                bootstyle="primary"
             ).pack(side=tk.LEFT, padx=5)
         
         # Retry button
-        ctk.CTkButton(
+        ttk.Button(
             btn_frame,
             text="Retry",
-            width=80,
-            fg_color=FluentColors.CONTROL_DEFAULT,
-            hover_color=FluentColors.CONTROL_HOVER,
-            command=lambda: [error_frame.destroy(), self._init_vlc(), self.play() if self.player else None]
+            width=10,
+            command=lambda: [error_frame.destroy(), self._init_vlc(), self.play() if self.player else None],
+            bootstyle="secondary"
         ).pack(side=tk.LEFT, padx=5)
     
     def play(self):
