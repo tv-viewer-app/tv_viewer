@@ -28,7 +28,7 @@ import subprocess
 import threading
 import gc
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable
 
 from utils.logger import get_logger
 
@@ -110,6 +110,10 @@ class PlayerWindow(ctk.CTkToplevel):
         self.is_playing = False
         self._update_job = None
         self._quality_update_job = None
+        self._playback_confirmed = False  # True once VLC confirms video data received
+        
+        # Callback fired once when VLC confirms playback is working
+        self.on_playback_confirmed: Optional[Callable[[Dict[str, Any]], None]] = None
         
         # Cast-related
         self.cast_devices: List[Any] = []
@@ -593,13 +597,19 @@ class PlayerWindow(ctk.CTkToplevel):
         self.controls_frame.grid()
     
     def _update_time(self):
-        """Update the time display."""
+        """Update the time display and detect confirmed playback."""
         if self.player and self.is_playing:
             try:
                 time_ms = self.player.get_time()
                 if time_ms > 0:
                     time_sec = time_ms // 1000
                     self.time_label.configure(text=format_duration(time_sec))
+                    
+                    # Confirm playback once we have actual video data
+                    if not self._playback_confirmed and time_ms > 500:
+                        self._playback_confirmed = True
+                        if self.on_playback_confirmed and self.channel:
+                            self.on_playback_confirmed(self.channel)
             except (AttributeError, OSError):
                 pass  # VLC instance may be closed
         
@@ -909,6 +919,7 @@ class PlayerWindow(ctk.CTkToplevel):
             channel: New channel dictionary
         """
         self.stop()
+        self._playback_confirmed = False
         self.channel = channel
         self.title(f"{config.APP_NAME} - {channel.get('name', 'Unknown')}")
         self.channel_label.configure(text=channel.get('name', 'Unknown'))

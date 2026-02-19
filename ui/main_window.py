@@ -1012,20 +1012,22 @@ class MainWindow:
             self._play_channel(channel)
     
     def _play_channel(self, channel: Dict[str, Any]):
-        """Open player for channel. If playback succeeds on a 'dead' channel, mark it healthy."""
+        """Open player for channel. Health status updated only after confirmed playback."""
+        def _on_playback_confirmed(ch: Dict[str, Any]):
+            """Called by PlayerWindow when VLC confirms video is playing."""
+            if not ch.get('is_working'):
+                ch['is_working'] = True
+                ch['scan_status'] = 'scanned'
+                self.channel_manager.save_channels()
+                if self.current_group:
+                    self.root.after(500, lambda: self._select_group(self.current_group))
+        
         if self.player_window and self.player_window.winfo_exists():
+            self.player_window.on_playback_confirmed = _on_playback_confirmed
             self.player_window.set_channel(channel)
         else:
             self.player_window = PlayerWindow(self.root, channel)
-        
-        # If channel was marked offline or unchecked, optimistically mark as working
-        if not channel.get('is_working'):
-            channel['is_working'] = True
-            channel['scan_status'] = 'scanned'
-            self.channel_manager.save_channels()
-            # Refresh the list to update status display
-            if self.current_group:
-                self.root.after(500, lambda: self._select_group(self.current_group))
+            self.player_window.on_playback_confirmed = _on_playback_confirmed
     
     def _on_channels_loaded(self, count: int):
         """Callback when channels loaded."""
