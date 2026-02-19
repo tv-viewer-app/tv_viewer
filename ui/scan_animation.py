@@ -250,9 +250,8 @@ class ScanAnimationWidget(tk.Canvas):
         
         self.animation_frame += 1
         
-        # Schedule next frame (400ms for better performance - Issue #30)
-        # Reduced from 200ms to save CPU during scans
-        self._animation_job = self.after(400, self._animate)
+        # Schedule next frame (800ms — lighter on CPU during resize)
+        self._animation_job = self.after(800, self._animate)
     
     def stop_animation(self):
         """Stop the animation loop."""

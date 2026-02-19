@@ -46,6 +46,10 @@ class MainWindow:
         self.root.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
         self.root.minsize(800, 500)
         
+        # Windows: debounce resize to prevent lag during drag
+        self._resize_timer = None
+        self.root.bind('<Configure>', self._on_resize)
+        
         # Configure grid
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(1, weight=1)
@@ -122,6 +126,19 @@ class MainWindow:
         self.channel_manager.on_channel_validated = self._on_channel_validated
         self.channel_manager.on_validation_complete = self._on_validation_complete
         self.channel_manager.on_fetch_progress = self._on_fetch_progress
+    
+    def _on_resize(self, event):
+        """Debounce resize events to prevent lag during window drag."""
+        # Only handle root window resize, not child widgets
+        if event.widget is not self.root:
+            return
+        if self._resize_timer:
+            self.root.after_cancel(self._resize_timer)
+        self._resize_timer = self.root.after(150, self._do_resize)
+    
+    def _do_resize(self):
+        """Actual resize handler — runs after drag stops."""
+        self._resize_timer = None
     
     def _create_sidebar(self):
         """Create the left sidebar with Windows 11 Fluent Design."""
@@ -617,9 +634,6 @@ class MainWindow:
             btn.destroy()
         self.category_buttons.clear()
         
-        # Allow UI to process
-        self.root.update_idletasks()
-        
         # Get all channels - use cached reference
         all_channels = self.channel_manager.channels
         all_working = sum(1 for c in all_channels if c.get('is_working', False))
@@ -658,10 +672,6 @@ class MainWindow:
             )
             btn.pack(fill="x", pady=1)
             self.category_buttons.append(btn)
-            
-            # Process UI events every 20 buttons to stay responsive
-            if i % 20 == 0:
-                self.root.update_idletasks()
     
     def _get_group_icon(self, group: str) -> str:
         """Get an icon for a group."""
@@ -690,14 +700,14 @@ class MainWindow:
         self._update_channel_list(channels)
     
     def _update_channel_list(self, channels: List[Dict[str, Any]]):
-        """Update the channel treeview."""
+        """Update the channel treeview — capped at 500 items for fast rendering."""
         # Apply filters
         filtered_channels = self._filter_channels(channels)
         
         # Sort channels
         filtered_channels = self._sort_channels(filtered_channels)
         
-        # Store displayed channels for click handling with name index
+        # Store ALL filtered channels for click handling
         self._displayed_channels = filtered_channels
         self._displayed_channel_names = {ch.get('name', ''): ch for ch in filtered_channels}
         
@@ -715,8 +725,12 @@ class MainWindow:
             )
             return
         
+        # Cap visible items for fast rendering — Treeview bogs down past ~500 rows
+        MAX_VISIBLE = 500
+        visible_channels = filtered_channels[:MAX_VISIBLE]
+        
         # Add channels
-        for channel in filtered_channels:
+        for channel in visible_channels:
             name = channel.get('name', 'Unknown')
             category = channel.get('category', 'Other')
             country = channel.get('country', '')
@@ -741,11 +755,16 @@ class MainWindow:
                 values=(name, category, status, last_checked, age_rating, country),
                 tags=(tag,))
         
-        # Update count
+        # Update count — show cap notice if truncated
         working = sum(1 for c in channels if c.get('is_working', False))
-        self.channel_count_label.configure(
-            text=f"{working} working / {len(filtered_channels)} shown / {len(channels)} total"
-        )
+        if len(filtered_channels) > MAX_VISIBLE:
+            self.channel_count_label.configure(
+                text=f"{working} working / showing {MAX_VISIBLE} of {len(filtered_channels)} / {len(channels)} total — use search to narrow"
+            )
+        else:
+            self.channel_count_label.configure(
+                text=f"{working} working / {len(filtered_channels)} shown / {len(channels)} total"
+            )
     
     def _filter_channels(self, channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Filter channels based on current filter settings."""
