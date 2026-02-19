@@ -48,8 +48,8 @@ STREAM_CHECK_TIMEOUT = 5
 
 # Maximum concurrent stream checks
 # Lower = less CPU/bandwidth, higher = faster but more resource usage
-# Recommended: 5-10 for normal use, 3 for low-end systems
-MAX_CONCURRENT_CHECKS = 5
+# Recommended: 15-25 for normal use, 5 for low-end systems
+MAX_CONCURRENT_CHECKS = 20
 
 # Batch size for stream checking (memory optimization)
 # Lower = less memory per batch, but more GC cycles

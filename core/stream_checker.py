@@ -93,11 +93,11 @@ class StreamChecker:
         session: aiohttp.ClientSession
     ) -> Dict[str, Any]:
         """
-        Check if a single stream is accessible — uses GET with Range for IPTV reliability.
+        Check if a single stream is accessible — HEAD first, GET fallback.
         
-        HEAD requests often fail or return misleading results for IPTV streams.
-        GET with Range header is more reliable: it verifies the server can actually
-        serve stream data and lets us sniff the content-type.
+        Uses HEAD for speed (no body download), with content-type sniffing
+        to catch HTML error pages. Falls back to GET+Range only when HEAD
+        returns 405 (Method Not Allowed).
         
         Args:
             channel: Channel dictionary with 'url' key
@@ -107,64 +107,53 @@ class StreamChecker:
             Channel dict with 'is_working' and 'last_scanned' keys updated in-place
         """
         url = channel.get('url', '')
-        # Update in-place to reduce memory allocation
         channel['is_working'] = False
         channel['last_scanned'] = datetime.now().isoformat()
         
         if not url:
             return channel
         
-        # Security: Validate URL scheme
         if not url.startswith(('http://', 'https://', 'rtmp://', 'rtsp://')):
             return channel
         
-        # Security: Skip file:// and other dangerous schemes
         if url.startswith(('file://', 'javascript:', 'data:')):
             return channel
         
-        # Non-HTTP streams (rtmp/rtsp) can't be checked via HTTP — assume working
+        # Non-HTTP streams can't be checked via HTTP — assume working
         if url.startswith(('rtmp://', 'rtsp://')):
             channel['is_working'] = True
             return channel
         
-        # Content types that indicate a valid stream (not an error page)
-        _STREAM_CONTENT_TYPES = frozenset({
-            'video/', 'audio/', 'application/octet-stream',
-            'application/vnd.apple.mpegurl', 'application/x-mpegurl',
-            'application/dash+xml', 'application/x-mpegts',
-        })
-        
         try:
             async with self._semaphore:
-                # Use GET with Range header — most reliable for IPTV streams
-                async with session.get(
-                    url,
-                    headers={'Range': 'bytes=0-1024'},
-                    allow_redirects=True
-                ) as response:
-                    if response.status in (200, 206):
-                        # Verify content-type is stream data, not HTML error page
-                        content_type = (response.content_type or '').lower()
-                        if any(ct in content_type for ct in _STREAM_CONTENT_TYPES):
-                            channel['is_working'] = True
-                        elif 'text/html' in content_type:
-                            # HTML response = likely error page, not a stream
-                            channel['is_working'] = False
-                        else:
-                            # Unknown content type but server responded — give benefit of doubt
-                            channel['is_working'] = True
+                # HEAD first — fast, no body download
+                async with session.head(url, allow_redirects=True) as response:
+                    if response.status == 200:
+                        ct = (response.content_type or '').lower()
+                        # HTML response = error page, not a stream
+                        channel['is_working'] = 'text/html' not in ct
+                    elif response.status == 405:
+                        # HEAD rejected, try GET with Range (read only headers)
+                        async with session.get(
+                            url,
+                            headers={'Range': 'bytes=0-512'},
+                            allow_redirects=True
+                        ) as get_resp:
+                            if get_resp.status in (200, 206):
+                                ct = (get_resp.content_type or '').lower()
+                                channel['is_working'] = 'text/html' not in ct
                     elif response.status in (301, 302, 303, 307, 308):
                         channel['is_working'] = True
         except (asyncio.TimeoutError, asyncio.CancelledError):
-            pass  # Timeout or cancelled - expected for unreachable streams
+            pass
         except aiohttp.ClientConnectorError:
-            pass  # Connection error - stream unreachable
+            pass
         except aiohttp.ClientError:
-            pass  # Other client errors - stream issues
+            pass
         except ssl.SSLError as e:
             logger.debug(f"SSL error for {url[:40]}: {type(e).__name__}")
         except Exception:
-            pass  # Silently handle other errors in background scan
+            pass
         
         return channel
     
