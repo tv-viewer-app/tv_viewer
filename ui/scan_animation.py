@@ -201,15 +201,15 @@ class ScanAnimationWidget(tk.Canvas):
                 text=stats_text, fill='#333333',
                 font=('Segoe UI', 10)  # Slightly larger
             )
-        
-        # Percentage at TOP-RIGHT to avoid Earth overlap (Issue #34)
-        pct = int(self.progress * 100)
-        self.create_text(
-            self.width - 25, 12,  # Top-right, clear of Earth
-            text=f"{pct}%", 
-            fill='#107C10' if pct == 100 else '#0078D4',
-            font=('Segoe UI', 14, 'bold')  # Larger, more prominent
-        )
+            
+            # Only show percentage when scan is active (Issue #30)
+            pct = int(self.progress * 100)
+            self.create_text(
+                self.width - 25, 12,
+                text=f"{pct}%", 
+                fill='#107C10' if pct == 100 else '#0078D4',
+                font=('Segoe UI', 14, 'bold')
+            )
     
     def _draw_scanning_text(self):
         """Draw status text with proper 'Stopped' state (Issue #34)."""

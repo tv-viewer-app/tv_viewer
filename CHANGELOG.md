@@ -7,12 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **Linux iconbitmap() Syntax** ([#34](https://github.com/arielsaghiv/tv_viewer/issues/34))
-  - Fixed platform-specific iconbitmap() call syntax
-  - Added platform detection for Windows vs Linux
-  - Maintains fallback to iconphoto() with PIL
-  - Resolves "wrong # args" warning on Linux startup
+## [1.9.0] - 2026-02-24
+
+### Fixed (P0-Critical)
+- **Segfault crash on startup** — Removed `update_idletasks()` from bulk widget creation loop
+  in `_update_groups()`. Buttons now created in batches of 30 via `after()` callbacks to avoid
+  tkinter C-level reentrancy crash.
+
+### Fixed (P2-Medium)
+- **Scan animation 0% overlay** ([#30](https://github.com/arielsaghiv/tv_viewer/issues/30))
+  - Percentage text only shown when scan is active (total > 0), no longer overlays Earth animation
+- **Channel deduplication on cache load** ([#29](https://github.com/arielsaghiv/tv_viewer/issues/29))
+  - Added URL-based deduplication when loading cached channels from channels.json
+  - Logs count of removed duplicates
+
+### Added
+- **Full CI/CD Pipeline** — 11 GitHub Actions workflows:
+  - `test.yml` — Multi-platform test matrix (Ubuntu 22.04/24.04 × Python 3.10/3.11/3.12)
+  - `pr-validation.yml` — Blocking PR gate (flake8, bandit, tests)
+  - `security-gate.yml` — Security gate (bandit HIGH blocks, pip-audit, secrets scan)
+  - `cve-scanner.yml` — Daily CVE scanning with auto-issue creation
+  - `build-ubuntu.yml` / `build-windows.yml` — Platform binary builds
+  - `release-gate.yml` — 5-stage release gate
+  - `build-release.yml` — Automated GitHub Release creation
+- **New UX components** (not yet integrated into MainWindow):
+  - `ui/nav_rail.py` — Collapsible navigation rail (56px/200px)
+  - `ui/channel_card.py` — Visual channel card with logo, status, favorites
+  - `ui/channel_grid.py` — Responsive card grid with lazy loading (50/batch)
+  - `ui/top_bar.py` — Search + filters + view toggle
+  - `ui/status_bar.py` — Minimal status bar with scan progress
+  - `utils/favorites.py` — Favorites and recently watched manager
+- **UX Design Specification** — `docs/UX_SPECIFICATION_v1.9.0.md`
+- **FluentColorsDark** theme and Ubuntu font detection in `ui/constants.py`
+
+### Changed
+- Version bumped to 1.9.0
+- CI extracts version via grep instead of exec() (fixes `__file__` issue in CI)
+
+### Closed Issues
+- #33, #35, #36, #37 — All verified fixed in code and closed
 
 ## [1.8.2] - 2026-01-30
 
