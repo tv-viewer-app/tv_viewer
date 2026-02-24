@@ -4,13 +4,13 @@ on:
   push:
     branches: [ master ]
     paths:
-      - '**.py'
-      - 'requirements.txt'
+      - 'core/**'
+      - 'ui/**'
+      - 'utils/**'
+      - 'main.py'
+      - 'config.py'
       - 'build.py'
-    paths-ignore:
-      - 'flutter_app/**'
-      - 'android/**'
-      - 'tests/**'
+      - 'requirements.txt'
   workflow_dispatch:
     inputs:
       version_override:
