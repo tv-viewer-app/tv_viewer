@@ -5,7 +5,14 @@ on:
     branches: [ master ]
     paths:
       - 'flutter_app/**'
+    paths-ignore:
+      - 'flutter_app/**.md'
   workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Version override (leave empty to use pubspec.yaml)'
+        required: false
+        type: string
 
 jobs:
   build-flutter-apk:
