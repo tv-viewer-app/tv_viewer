@@ -85,7 +85,7 @@ jobs:
 
     - name: Version sync check
       run: |
-        DESKTOP_VER=$(python3 -c "exec(open('config.py').read()); print(APP_VERSION)")
+        DESKTOP_VER=$(grep 'APP_VERSION' config.py | head -1 | cut -d'"' -f2)
         echo "Desktop version: $DESKTOP_VER"
         
         if [ -f flutter_app/pubspec.yaml ]; then

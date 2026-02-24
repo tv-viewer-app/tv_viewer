@@ -35,7 +35,7 @@ jobs:
         if [ -n "${{ inputs.version }}" ]; then
           echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
         else
-          VERSION=$(python3 -c "exec(open('config.py').read()); print(APP_VERSION)")
+          VERSION=$(grep 'APP_VERSION' config.py | head -1 | cut -d'"' -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         fi
 

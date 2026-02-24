@@ -18,6 +18,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: build-ubuntu-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -52,7 +56,7 @@ jobs:
         if [ -n "${{ inputs.version_override }}" ]; then
           VERSION="${{ inputs.version_override }}"
         else
-          VERSION=$(python -c "exec(open('config.py').read()); print(APP_VERSION)")
+          VERSION=$(grep 'APP_VERSION' config.py | head -1 | cut -d'"' -f2)
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         # Get OS codename
