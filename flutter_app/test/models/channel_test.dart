@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tv_viewer_project/models/channel.dart';
+import 'package:tv_viewer/models/channel.dart';
 
 /// Unit tests for Channel model
 /// Coverage: Channel parsing, normalization, resolution extraction
@@ -19,7 +19,7 @@ void main() {
         expect(channel.name, 'CNN International (720p)');
         expect(channel.url, url);
         expect(channel.logo, 'http://example.com/cnn.png');
-        expect(channel.country, 'US');
+        expect(channel.country, 'United States');
         expect(channel.language, 'English');
         expect(channel.category, 'News');
       });
@@ -106,7 +106,7 @@ void main() {
         final channel = Channel.fromM3ULine(m3uLine, url);
         
         // Should trim whitespace
-        expect(channel.category.trim(), isEmpty);
+        expect(channel.category?.trim() ?? '', isEmpty);
       });
     });
 
@@ -330,7 +330,7 @@ void main() {
         expect(channel.url, 'http://example.com/stream.m3u8');
         expect(channel.category, 'News');
         expect(channel.logo, 'http://example.com/logo.png');
-        expect(channel.country, 'US');
+        expect(channel.country, 'United States');
         expect(channel.language, 'English');
         expect(channel.bitrate, 2500000);
         expect(channel.resolution, '720p');

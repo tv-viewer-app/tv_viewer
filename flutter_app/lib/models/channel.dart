@@ -60,36 +60,46 @@ class Channel {
     
     final lang = language.toLowerCase();
     
-    // Language to country mapping
-    if (lang.contains('hebrew') || lang == 'he' || lang == 'heb') {
-      return 'Israel';
+    // Comprehensive language to country mapping (ported from Python helpers.py)
+    const languageCountryMap = {
+      'hebrew': 'Israel', 'he': 'Israel', 'heb': 'Israel',
+      'arabic': 'Middle East', 'ar': 'Middle East', 'ara': 'Middle East',
+      'spanish': 'Spain', 'es': 'Spain', 'spa': 'Spain',
+      'french': 'France', 'fr': 'France', 'fra': 'France',
+      'german': 'Germany', 'de': 'Germany', 'deu': 'Germany',
+      'italian': 'Italy', 'it': 'Italy', 'ita': 'Italy',
+      'portuguese': 'Brazil', 'pt': 'Brazil', 'por': 'Brazil',
+      'russian': 'Russia', 'ru': 'Russia', 'rus': 'Russia',
+      'turkish': 'Turkey', 'tr': 'Turkey', 'tur': 'Turkey',
+      'polish': 'Poland', 'pl': 'Poland', 'pol': 'Poland',
+      'chinese': 'China', 'zh': 'China', 'zho': 'China',
+      'japanese': 'Japan', 'ja': 'Japan', 'jpn': 'Japan',
+      'korean': 'South Korea', 'ko': 'South Korea', 'kor': 'South Korea',
+      'hindi': 'India',
+      'dutch': 'Netherlands', 'nl': 'Netherlands', 'nld': 'Netherlands',
+      'greek': 'Greece', 'el': 'Greece', 'ell': 'Greece',
+      'thai': 'Thailand', 'th': 'Thailand', 'tha': 'Thailand',
+      'vietnamese': 'Vietnam', 'vi': 'Vietnam', 'vie': 'Vietnam',
+      'indonesian': 'Indonesia', 'id': 'Indonesia', 'ind': 'Indonesia',
+      'malay': 'Malaysia', 'ms': 'Malaysia', 'msa': 'Malaysia',
+      'filipino': 'Philippines', 'tl': 'Philippines', 'fil': 'Philippines',
+      'persian': 'Iran', 'fa': 'Iran', 'fas': 'Iran', 'farsi': 'Iran',
+      'tamil': 'India', 'telugu': 'India', 'bangla': 'India',
+      'punjabi': 'India', 'gujarati': 'India', 'marathi': 'India',
+      'kannada': 'India', 'malayalam': 'India',
+      'urdu': 'Pakistan',
+      'pashto': 'Afghanistan',
+      'english': 'International',
+    };
+    
+    // Try exact match first, then substring
+    if (languageCountryMap.containsKey(lang)) {
+      return languageCountryMap[lang];
     }
-    if (lang.contains('arabic') || lang == 'ar' || lang == 'ara') {
-      return 'Arab World';
-    }
-    if (lang.contains('spanish') || lang == 'es' || lang == 'spa') {
-      return 'Spain';
-    }
-    if (lang.contains('french') || lang == 'fr' || lang == 'fra') {
-      return 'France';
-    }
-    if (lang.contains('german') || lang == 'de' || lang == 'deu') {
-      return 'Germany';
-    }
-    if (lang.contains('italian') || lang == 'it' || lang == 'ita') {
-      return 'Italy';
-    }
-    if (lang.contains('portuguese') || lang == 'pt' || lang == 'por') {
-      return 'Portugal';
-    }
-    if (lang.contains('russian') || lang == 'ru' || lang == 'rus') {
-      return 'Russia';
-    }
-    if (lang.contains('turkish') || lang == 'tr' || lang == 'tur') {
-      return 'Turkey';
-    }
-    if (lang.contains('polish') || lang == 'pl' || lang == 'pol') {
-      return 'Poland';
+    for (final entry in languageCountryMap.entries) {
+      if (lang.contains(entry.key)) {
+        return entry.value;
+      }
     }
     
     return null;
@@ -118,35 +128,156 @@ class Channel {
   }
   
   /// Normalize country name (clean up, standardize)
-  static String? normalizeCountry(String? country, String? language, String name) {
+  /// Enhanced for Issue #27: comprehensive country inference from URL + name patterns
+  static String? normalizeCountry(String? country, String? language, String name, {String? url}) {
     if (country != null && country.isNotEmpty && country != 'Unknown') {
       // Clean up country name
       String normalized = country.trim();
       
       // Standardize common variations
-      if (normalized.toLowerCase() == 'il' || normalized.toLowerCase() == 'isr') {
-        return 'Israel';
-      }
-      if (normalized.toLowerCase() == 'us' || normalized.toLowerCase() == 'usa') {
-        return 'United States';
-      }
-      if (normalized.toLowerCase() == 'uk' || normalized.toLowerCase() == 'gb') {
-        return 'United Kingdom';
-      }
+      final lower = normalized.toLowerCase();
+      if (lower == 'il' || lower == 'isr') return 'Israel';
+      if (lower == 'us' || lower == 'usa') return 'United States';
+      if (lower == 'uk' || lower == 'gb') return 'United Kingdom';
+      if (lower == 'de' || lower == 'deu') return 'Germany';
+      if (lower == 'fr' || lower == 'fra') return 'France';
+      if (lower == 'es' || lower == 'esp') return 'Spain';
+      if (lower == 'it' || lower == 'ita') return 'Italy';
+      if (lower == 'ru' || lower == 'rus') return 'Russia';
+      if (lower == 'br' || lower == 'bra') return 'Brazil';
+      if (lower == 'jp' || lower == 'jpn') return 'Japan';
+      if (lower == 'kr' || lower == 'kor') return 'South Korea';
+      if (lower == 'cn' || lower == 'chn') return 'China';
+      if (lower == 'in' || lower == 'ind') return 'India';
+      if (lower == 'au' || lower == 'aus') return 'Australia';
+      if (lower == 'ca' || lower == 'can') return 'Canada';
+      if (lower == 'tr' || lower == 'tur') return 'Turkey';
       
       return normalized;
     }
     
     // If no country, try to infer from language
     final inferred = inferCountryFromLanguage(language);
-    if (inferred != null) return inferred;
+    if (inferred != null && inferred != 'International') return inferred;
     
-    // Last resort: check if channel name matches known Israeli patterns
-    if (isIsraeliChannel(name)) {
-      return 'Israel';
+    // Check if channel name matches known Israeli patterns
+    if (isIsraeliChannel(name)) return 'Israel';
+    
+    // High-confidence broadcaster name patterns (Issue #27)
+    final nameLower = name.toLowerCase();
+    final urlLower = (url ?? '').toLowerCase();
+    final combined = '$nameLower $urlLower';
+    
+    final broadcasterPatterns = <String, List<RegExp>>{
+      'United States': [
+        RegExp(r'\b(cnn|msnbc|fox news|abc news|nbc news|cbs news)\b', caseSensitive: false),
+        RegExp(r'\b(espn|nfl network|mlb network|nba tv)\b', caseSensitive: false),
+        RegExp(r'\b(hbo|showtime|starz|cinemax|amc|tnt|tbs)\b', caseSensitive: false),
+        RegExp(r'\b(cartoon network|nickelodeon|disney channel)\b', caseSensitive: false),
+        RegExp(r'\b(discovery|history channel|nat geo|animal planet)\b', caseSensitive: false),
+        RegExp(r'\b(pluto tv|filmrise|3abn|daystar|tbn)\b', caseSensitive: false),
+      ],
+      'United Kingdom': [
+        RegExp(r'\b(bbc one|bbc two|bbc three|bbc four|bbc news)\b', caseSensitive: false),
+        RegExp(r'\b(itv[1-4]?|channel 4|channel 5|sky)\b', caseSensitive: false),
+      ],
+      'Germany': [
+        RegExp(r'\b(ard|zdf|rtl|sat\.?1|pro ?7|3sat)\b', caseSensitive: false),
+      ],
+      'France': [
+        RegExp(r'\b(tf1|france ?[2-5]|canal\+?|bfm)\b', caseSensitive: false),
+      ],
+      'Spain': [
+        RegExp(r'\b(tve|la ?[12]|antena ?3|telecinco|3cat)\b', caseSensitive: false),
+      ],
+      'Italy': [
+        RegExp(r'\b(rai ?[1-5]|canale ?5|italia ?1|la ?7)\b', caseSensitive: false),
+      ],
+      'Russia': [
+        RegExp(r'\b(russia ?[124])\b', caseSensitive: false),
+      ],
+      'Japan': [
+        RegExp(r'\b(nhk|fuji|tv ?asahi|tbs japan)\b', caseSensitive: false),
+      ],
+      'South Korea': [
+        RegExp(r'\b(kbs|mbc|sbs|tvn|jtbc)\b', caseSensitive: false),
+      ],
+      'China': [
+        RegExp(r'\b(cctv|cgtn)\b', caseSensitive: false),
+      ],
+      'India': [
+        RegExp(r'\b(zee|star ?plus|colors ?tv|sony ?tv|ndtv|dd ?national)\b', caseSensitive: false),
+      ],
+      'Australia': [
+        RegExp(r'\b(abc ?australia|9gem|9go|9life)\b', caseSensitive: false),
+      ],
+      'Greece': [
+        RegExp(r'\b(cosmote|ert ?[123]?|ant1|alpha|skai)\b', caseSensitive: false),
+      ],
+    };
+    
+    for (final entry in broadcasterPatterns.entries) {
+      for (final pattern in entry.value) {
+        if (pattern.hasMatch(combined)) {
+          return entry.key;
+        }
+      }
     }
     
-    return null;
+    // TLD-based detection from URL (Issue #27)
+    if (url != null && url.isNotEmpty) {
+      final tldMatch = RegExp(r'https?://[^/]*\.([a-z]{2})[:/]').firstMatch(urlLower);
+      if (tldMatch != null) {
+        final tld = tldMatch.group(1);
+        const tldCountries = {
+          'us': 'United States', 'uk': 'United Kingdom', 'de': 'Germany',
+          'fr': 'France', 'es': 'Spain', 'it': 'Italy', 'ru': 'Russia',
+          'jp': 'Japan', 'kr': 'South Korea', 'cn': 'China', 'in': 'India',
+          'br': 'Brazil', 'mx': 'Mexico', 'ca': 'Canada', 'au': 'Australia',
+          'tr': 'Turkey', 'nl': 'Netherlands', 'pl': 'Poland', 'il': 'Israel',
+          'ae': 'UAE', 'sa': 'Saudi Arabia', 'eg': 'Egypt', 'ar': 'Argentina',
+          'cl': 'Chile', 'gr': 'Greece', 'ua': 'Ukraine', 'ro': 'Romania',
+          'hu': 'Hungary', 'cz': 'Czech Republic', 'th': 'Thailand',
+          'vn': 'Vietnam',
+        };
+        if (tldCountries.containsKey(tld)) {
+          return tldCountries[tld];
+        }
+      }
+    }
+    
+    // Lower confidence name patterns
+    const nameCountryPatterns = {
+      'United States': ['usa', 'america', 'american'],
+      'United Kingdom': ['british', 'britain'],
+      'Germany': ['german', 'deutsch'],
+      'France': ['french'],
+      'Spain': ['spanish', 'spain'],
+      'Italy': ['italian', 'italia'],
+      'Russia': ['russian'],
+      'Japan': ['japan', 'japanese'],
+      'South Korea': ['korea', 'korean'],
+      'China': ['china', 'chinese'],
+      'India': ['india', 'indian', 'hindi', 'tamil', 'telugu'],
+      'Brazil': ['brazil', 'brasil'],
+      'Mexico': ['mexico', 'mexican'],
+      'Turkey': ['turkey', 'turkish'],
+      'UAE': ['dubai', 'abu dhabi', 'uae', 'emirates'],
+      'Saudi Arabia': ['saudi'],
+      'Qatar': ['qatar', 'al jazeera'],
+      'Australia': ['australia', 'australian'],
+      'Canada': ['canada', 'canadian'],
+    };
+    
+    for (final entry in nameCountryPatterns.entries) {
+      for (final pattern in entry.value) {
+        if (nameLower.contains(pattern)) {
+          return entry.key;
+        }
+      }
+    }
+    
+    return inferred; // May return 'International' or null
   }
 
   factory Channel.fromM3ULine(String info, String url) {
@@ -198,7 +329,7 @@ class Channel {
     final resolution = extractResolution(name);
     
     // Normalize/infer country (Issue #27, #28)
-    country = normalizeCountry(rawCountry, language, name);
+    country = normalizeCountry(rawCountry, language, name, url: url);
 
     return Channel(
       name: name,
@@ -226,21 +357,29 @@ class Channel {
         'bitrate': bitrate,
       };
 
-  factory Channel.fromJson(Map<String, dynamic> json) => Channel(
-        name: json['name'] ?? 'Unknown',
-        url: json['url'] ?? '',
-        category: normalizeCategory(json['category']),
-        logo: json['logo'],
-        country: json['country'],
-        language: json['language'],
-        mediaType: json['media_type'] ?? json['mediaType'] ?? 'TV',
-        isWorking: json['is_working'] ?? json['isWorking'] ?? true,
-        lastChecked: json['lastChecked'] != null
-            ? DateTime.parse(json['lastChecked'])
-            : null,
-        resolution: json['resolution'],
-        bitrate: json['bitrate'],
-      );
+  factory Channel.fromJson(Map<String, dynamic> json) {
+        final name = json['name'] ?? 'Unknown';
+        final url = json['url'] ?? '';
+        final language = json['language'] as String?;
+        // Always normalize country for consistency (Issue #27)
+        final rawCountry = json['country'] as String?;
+        final country = normalizeCountry(rawCountry, language, name, url: url);
+        return Channel(
+          name: name,
+          url: url,
+          category: normalizeCategory(json['category']),
+          logo: json['logo'],
+          country: country,
+          language: language,
+          mediaType: json['media_type'] ?? json['mediaType'] ?? 'TV',
+          isWorking: json['is_working'] ?? json['isWorking'] ?? true,
+          lastChecked: json['lastChecked'] != null
+              ? DateTime.parse(json['lastChecked'])
+              : null,
+          resolution: json['resolution'],
+          bitrate: json['bitrate'],
+        );
+      }
       
   /// Get formatted bitrate string
   String? get formattedBitrate {
