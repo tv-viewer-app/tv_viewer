@@ -653,25 +653,40 @@ class MainWindow:
         sep.pack(fill="x", pady=8)
         self.category_buttons.append(sep)
         
-        # Get groups and create buttons
+        # Get groups and create buttons in batches via after() to avoid segfault
         groups = self.channel_manager.get_groups()
-        for i, group in enumerate(groups):
-            channels = self.channel_manager.get_channels_by_group(group)
-            if len(channels) == 0:
-                continue
-            working = sum(1 for c in channels if c.get('is_working', False))
-            
-            # Choose icon based on group name
-            icon = self._get_group_icon(group)
-            
-            btn = ttk.Button(
-                self.category_scroll,
-                text=f"{icon} {group}  ({working}/{len(channels)})",
-                command=lambda g=group: self._select_group(g),
-                bootstyle="link"
-            )
-            btn.pack(fill="x", pady=1)
-            self.category_buttons.append(btn)
+        self._pending_groups = list(groups)
+        self._create_group_buttons_batch(0)
+
+    def _create_group_buttons_batch(self, start_idx):
+        """Create group buttons in batches to avoid tkinter segfault."""
+        BATCH = 30
+        groups = self._pending_groups
+        end_idx = min(start_idx + BATCH, len(groups))
+
+        for i in range(start_idx, end_idx):
+            group = groups[i]
+            try:
+                channels = self.channel_manager.get_channels_by_group(group)
+                if len(channels) == 0:
+                    continue
+                working = sum(1 for c in channels if c.get('is_working', False))
+                icon = self._get_group_icon(group)
+
+                btn = ttk.Button(
+                    self.category_scroll,
+                    text=f"{icon} {group}  ({working}/{len(channels)})",
+                    command=lambda g=group: self._select_group(g),
+                    bootstyle="link"
+                )
+                btn.pack(fill="x", pady=1)
+                self.category_buttons.append(btn)
+            except Exception as e:
+                logger.debug(f"Error creating button for {group}: {e}")
+
+        # Schedule next batch if more remain
+        if end_idx < len(groups):
+            self.root.after(10, lambda: self._create_group_buttons_batch(end_idx))
     
     def _get_group_icon(self, group: str) -> str:
         """Get an icon for a group."""

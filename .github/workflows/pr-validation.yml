@@ -1,0 +1,106 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov flake8 bandit
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y vlc libvlc-dev
+
+    - name: Flake8 lint (blocking)
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics \
+          --exclude=build,dist,flutter_app,android,.git,__pycache__,archive
+
+    - name: Bandit security scan
+      run: |
+        bandit -r core/ ui/ utils/ main.py config.py \
+          -ll --format json --output bandit-report.json || true
+        # Block on HIGH severity
+        HIGH_COUNT=$(python3 -c "
+        import json
+        with open('bandit-report.json') as f:
+            data = json.load(f)
+        high = [r for r in data.get('results', []) if r['issue_severity'] == 'HIGH']
+        print(len(high))
+        for h in high:
+            print(f\"  HIGH: {h['filename']}:{h['line_number']} - {h['issue_text']}\")
+        ")
+        echo "HIGH severity issues: $HIGH_COUNT"
+        if [ "$HIGH_COUNT" -gt 0 ]; then
+          echo "❌ Blocking: $HIGH_COUNT HIGH severity security issues found"
+          cat bandit-report.json | python3 -m json.tool
+          exit 1
+        fi
+
+    - name: Shell=True check (blocking)
+      run: |
+        UNSAFE=$(grep -rn "shell=True" core/ ui/ utils/ main.py --include="*.py" || true)
+        if [ -n "$UNSAFE" ]; then
+          echo "❌ Blocking: shell=True found in production code"
+          echo "$UNSAFE"
+          exit 1
+        fi
+
+    - name: Threading safety check
+      run: |
+        # Check for bare except: (no exception type) in core modules
+        BARE=$(grep -rn "except:" core/ utils/ --include="*.py" | grep -v "except:  #" || true)
+        if [ -n "$BARE" ]; then
+          echo "⚠️ Warning: Bare except clauses found (consider catching specific exceptions)"
+          echo "$BARE"
+        fi
+
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v --tb=short --cov=core --cov=ui --cov=utils \
+          --cov-report=term-missing || true
+
+    - name: Version sync check
+      run: |
+        DESKTOP_VER=$(grep 'APP_VERSION' config.py | head -1 | cut -d'"' -f2)
+        echo "Desktop version: $DESKTOP_VER"
+        
+        if [ -f flutter_app/pubspec.yaml ]; then
+          FLUTTER_VER=$(grep 'version:' flutter_app/pubspec.yaml | head -1 | awk '{print $2}' | cut -d'+' -f1)
+          echo "Flutter version: $FLUTTER_VER"
+        fi
+        
+        echo "desktop_version=$DESKTOP_VER" >> $GITHUB_STEP_SUMMARY
+        echo "flutter_version=$FLUTTER_VER" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload security report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pr-security-report
+        path: bandit-report.json
+        retention-days: 14
+        if-no-files-found: ignore

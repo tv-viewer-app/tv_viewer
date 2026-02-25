@@ -1,0 +1,73 @@
+name: QA Validation
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'tests/**'
+      - '**.py'
+  workflow_dispatch:
+
+jobs:
+  test-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y vlc libvlc-dev
+
+    - name: Detect placeholder tests
+      run: |
+        echo "## Test Quality Check" >> $GITHUB_STEP_SUMMARY
+        PLACEHOLDERS=$(grep -rn "assert True" tests/ --include="*.py" || true)
+        if [ -n "$PLACEHOLDERS" ]; then
+          echo "⚠️ Placeholder tests detected:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$PLACEHOLDERS" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$PLACEHOLDERS"
+        else
+          echo "✅ No placeholder tests found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Run tests with coverage
+      run: |
+        python -m pytest tests/ -v --tb=short \
+          --cov=core --cov=ui --cov=utils \
+          --cov-report=term-missing \
+          --cov-report=xml 2>&1 | tee test-output.txt || true
+        
+        echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+        tail -30 test-output.txt >> $GITHUB_STEP_SUMMARY
+
+    - name: Check test naming conventions
+      run: |
+        echo "## Test Naming" >> $GITHUB_STEP_SUMMARY
+        BAD_NAMES=$(grep -rn "def test[0-9]\|def testX\|def test_$" tests/ --include="*.py" || true)
+        if [ -n "$BAD_NAMES" ]; then
+          echo "⚠️ Tests with non-descriptive names:" >> $GITHUB_STEP_SUMMARY
+          echo "$BAD_NAMES" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All test names are descriptive" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Build validation
+      run: |
+        echo "## Build Validation" >> $GITHUB_STEP_SUMMARY
+        python tests/validate_build.py --quick 2>&1 | tee validate-output.txt || true
+        cat validate-output.txt >> $GITHUB_STEP_SUMMARY

@@ -721,8 +721,9 @@ class PlayerWindow(tk.Toplevel):
             
         except Exception as e:
             logger.error(f"Error discovering cast devices: {e}")
+            err_msg = str(e)
             self.after(0, lambda: messagebox.showerror("Cast Error", 
-                f"Error discovering devices:\n{e}"))
+                f"Error discovering devices:\n{err_msg}"))
     
     def _show_cast_devices_menu(self):
         """Show menu with discovered Cast devices."""
@@ -803,7 +804,9 @@ class PlayerWindow(tk.Toplevel):
                 logger.debug(f"Error stopping cast: {e}")
     
     def _on_close(self):
-        """Handle window close with proper resource cleanup."""
+        """Handle window close with proper resource cleanup and timeout protection."""
+        logger.info("Starting player window cleanup...")
+        
         # Cancel update jobs
         if self._update_job:
             self.after_cancel(self._update_job)
@@ -831,21 +834,8 @@ class PlayerWindow(tk.Toplevel):
         # Clear cast devices list
         self.cast_devices.clear()
         
-        # Stop and release player
-        if self.player:
-            try:
-                self.player.stop()
-                self.player.release()
-            except (AttributeError, OSError):
-                pass  # Player may be released
-            self.player = None
-        
-        if self.instance:
-            try:
-                self.instance.release()
-            except (AttributeError, OSError):
-                pass  # Instance may be released
-            self.instance = None
+        # Two-stage VLC cleanup with timeout protection (Issue #36)
+        self._cleanup_vlc_with_timeout()
         
         # Clear references
         self.channel = None
@@ -854,7 +844,90 @@ class PlayerWindow(tk.Toplevel):
         # Force garbage collection
         gc.collect()
         
+        logger.info("Player window cleanup completed successfully")
         self.destroy()
+    
+    def _cleanup_vlc_with_timeout(self):
+        """Cleanup VLC resources with timeout protection to prevent freezes.
+        
+        Implements two-stage shutdown:
+        - Stage 1: Graceful cleanup (2 seconds timeout)
+        - Stage 2: Force cleanup if graceful fails
+        
+        Total maximum time: 5 seconds
+        """
+        if not self.player and not self.instance:
+            return
+        
+        # Flag to track if cleanup completed
+        cleanup_completed = threading.Event()
+        force_cleanup_executed = threading.Event()
+        
+        def graceful_cleanup():
+            """Stage 1: Graceful VLC cleanup."""
+            try:
+                logger.info("Stage 1: Starting graceful VLC cleanup...")
+                if self.player:
+                    self.player.stop()
+                    self.player.release()
+                    self.player = None
+                    logger.info("Player stopped and released")
+                
+                if self.instance:
+                    self.instance.release()
+                    self.instance = None
+                    logger.info("VLC instance released")
+                
+                cleanup_completed.set()
+                logger.info("Stage 1: Graceful cleanup completed")
+            except Exception as e:
+                logger.warning(f"Stage 1: Graceful cleanup failed: {e}")
+                cleanup_completed.set()
+        
+        def force_cleanup():
+            """Stage 2: Force cleanup if graceful cleanup times out."""
+            if not force_cleanup_executed.is_set():
+                force_cleanup_executed.set()
+                logger.warning("Stage 2: Force cleanup triggered (graceful cleanup timed out)")
+                try:
+                    # Forcefully clear references
+                    if self.player:
+                        self.player = None
+                        logger.info("Player reference forcefully cleared")
+                    if self.instance:
+                        self.instance = None
+                        logger.info("VLC instance reference forcefully cleared")
+                    
+                    # Force garbage collection
+                    gc.collect()
+                    logger.info("Stage 2: Force cleanup completed")
+                except Exception as e:
+                    logger.error(f"Stage 2: Force cleanup error: {e}")
+                finally:
+                    cleanup_completed.set()
+        
+        # Start graceful cleanup in thread
+        cleanup_thread = threading.Thread(target=graceful_cleanup, daemon=True)
+        cleanup_thread.start()
+        
+        # Set up watchdog timer for force cleanup (2 seconds for graceful)
+        watchdog = threading.Timer(2.0, force_cleanup)
+        watchdog.daemon = True
+        watchdog.start()
+        
+        # Wait for cleanup with total timeout of 5 seconds
+        if not cleanup_completed.wait(timeout=5.0):
+            logger.error("VLC cleanup exceeded 5 second timeout - forcing completion")
+            if self.player:
+                self.player = None
+            if self.instance:
+                self.instance = None
+            gc.collect()
+        else:
+            # Cancel watchdog if cleanup completed before timeout
+            watchdog.cancel()
+        
+        logger.info("VLC cleanup process finished")
     
     def set_channel(self, channel: Dict[str, Any]):
         """

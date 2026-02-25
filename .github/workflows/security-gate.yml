@@ -1,0 +1,122 @@
+name: Security Gate
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install bandit pip-audit safety
+
+    - name: Bandit static analysis
+      run: |
+        echo "## Bandit Security Scan" >> $GITHUB_STEP_SUMMARY
+        bandit -r core/ ui/ utils/ main.py config.py \
+          -ll --format json --output bandit-results.json 2>&1 || true
+        
+        # Parse results
+        python3 << 'EOF'
+        import json, sys
+        with open('bandit-results.json') as f:
+            data = json.load(f)
+        results = data.get('results', [])
+        high = [r for r in results if r['issue_severity'] == 'HIGH']
+        medium = [r for r in results if r['issue_severity'] == 'MEDIUM']
+        low = [r for r in results if r['issue_severity'] == 'LOW']
+        
+        print(f"HIGH: {len(high)}, MEDIUM: {len(medium)}, LOW: {len(low)}")
+        for r in high:
+            print(f"  ❌ HIGH [{r['test_id']}] {r['filename']}:{r['line_number']} - {r['issue_text']}")
+        for r in medium:
+            print(f"  ⚠️ MEDIUM [{r['test_id']}] {r['filename']}:{r['line_number']} - {r['issue_text']}")
+        
+        if high:
+            print("\n❌ SECURITY GATE FAILED: HIGH severity issues must be resolved")
+            sys.exit(1)
+        print("\n✅ Security gate passed")
+        EOF
+
+    - name: pip-audit dependency scan
+      run: |
+        echo "## Dependency Audit" >> $GITHUB_STEP_SUMMARY
+        pip-audit --format=columns 2>&1 | tee pip-audit.txt || true
+        cat pip-audit.txt >> $GITHUB_STEP_SUMMARY
+
+    - name: Secret detection
+      run: |
+        echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
+        # Check for hardcoded secrets
+        SECRETS=$(grep -rn \
+          -e "password\s*=" \
+          -e "api_key\s*=" \
+          -e "secret\s*=" \
+          -e "token\s*=" \
+          -e "BEGIN.*PRIVATE KEY" \
+          core/ ui/ utils/ main.py config.py \
+          --include="*.py" || true)
+        
+        if [ -n "$SECRETS" ]; then
+          echo "⚠️ Potential secrets detected (review manually):" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$SECRETS" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$SECRETS"
+        else
+          echo "✅ No hardcoded secrets detected" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: shell=True prohibition
+      run: |
+        UNSAFE=$(grep -rn "shell=True" core/ ui/ utils/ main.py --include="*.py" || true)
+        if [ -n "$UNSAFE" ]; then
+          echo "❌ shell=True found in production code — BLOCKED" >> $GITHUB_STEP_SUMMARY
+          echo "$UNSAFE" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+        echo "✅ No shell=True in production code" >> $GITHUB_STEP_SUMMARY
+
+    - name: Threading safety audit
+      run: |
+        echo "## Threading Safety" >> $GITHUB_STEP_SUMMARY
+        # Ensure UI updates in core/ use root.after pattern
+        DIRECT_UI=$(grep -rn "\.configure\|\.pack\|\.grid\|\.place" core/ utils/ --include="*.py" || true)
+        if [ -n "$DIRECT_UI" ]; then
+          echo "⚠️ Potential direct UI access from core/utils (should use root.after):" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$DIRECT_UI" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No direct UI access from core/utils modules" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-gate-reports
+        path: |
+          bandit-results.json
+          pip-audit.txt
+        retention-days: 30
+        if-no-files-found: ignore

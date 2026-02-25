@@ -122,7 +122,22 @@ class ChannelManager:
         data = load_json_file(config.CHANNELS_FILE)
         if data and 'channels' in data:
             with self._lock:
-                self.channels = data['channels']
+                # Deduplicate by URL (Issue #29)
+                seen_urls = set()
+                unique_channels = []
+                for ch in data['channels']:
+                    url = ch.get('url', '')
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        unique_channels.append(ch)
+                    elif not url:
+                        unique_channels.append(ch)
+                
+                deduped = len(data['channels']) - len(unique_channels)
+                if deduped > 0:
+                    logger.info(f"Removed {deduped} duplicate channels from cache")
+                
+                self.channels = unique_channels
                 # Ensure all channels have scan_status field
                 for ch in self.channels:
                     if 'scan_status' not in ch:
@@ -296,6 +311,30 @@ class ChannelManager:
         
         if total > 0:
             logger.debug(f"Organizing channels: {total}/{total} done.")
+    
+    def _process_queued_updates(self):
+        """Process all queued channel updates in a thread-safe manner."""
+        if not hasattr(self.stream_checker, '_update_queue'):
+            return
+        
+        updates = self.stream_checker._update_queue.get_all_updates()
+        if not updates:
+            return
+        
+        with self._lock:
+            for channel in updates:
+                url = channel.get('url')
+                if not url:
+                    continue
+                
+                # Use URL index for O(1) lookup
+                idx = self._url_to_index.get(url)
+                if idx is not None and idx < len(self.channels):
+                    ch = self.channels[idx]
+                    # Update in place - the same object is in categories/countries dicts
+                    ch['is_working'] = channel.get('is_working', False)
+                    ch['scan_status'] = 'scanned'
+                    ch['last_scanned'] = channel.get('last_scanned')
     
     def get_categories(self) -> List[str]:
         """Get list of all categories with channels (only actual content categories)."""
@@ -526,7 +565,7 @@ class ChannelManager:
         logger.info(f"Starting validation of {len(channels_to_check)} channels...")
         
         def on_checked(channel: Dict[str, Any], current: int, total: int):
-            # Update the channel in our list
+            # Queue the channel update instead of directly modifying
             is_working = channel.get('is_working', False)
             
             # Log progress every 100 channels or at start/end (reduced frequency)
@@ -534,29 +573,23 @@ class ChannelManager:
                 status = 'Working' if is_working else 'Failed'
                 logger.debug(f"[{current}/{total}] {channel.get('name', 'Unknown')[:40]} -> {status}")
             
-            url = channel.get('url')
-            if not url:
-                return
-            
-            with self._lock:
-                # Use URL index for O(1) lookup instead of O(n) scan
-                idx = self._url_to_index.get(url)
-                if idx is not None and idx < len(self.channels):
-                    ch = self.channels[idx]
-                    # Update in place - the same object is in categories/countries dicts
-                    ch['is_working'] = is_working
-                    ch['scan_status'] = 'scanned'
-                    ch['last_scanned'] = channel.get('last_scanned')
+            # Queue the update for thread-safe processing
+            if hasattr(self.stream_checker, '_update_queue'):
+                self.stream_checker._update_queue.put_update(channel)
             
             if self._on_channel_validated:
                 self._on_channel_validated(channel, current, total)
             
-            # Auto-save less frequently (every 200 channels)
+            # Process queued updates and auto-save less frequently (every 200 channels)
             if current % 200 == 0:
+                self._process_queued_updates()
                 self.save_channels()
         
         def on_complete(results: List[Dict[str, Any]]):
-            # Results are already updated in-place via on_checked callback
+            # Process any remaining queued updates
+            self._process_queued_updates()
+            
+            # Results are already updated via queued processing
             # Just re-organize to rebuild category/country dicts cleanly
             with self._lock:
                 self._organize_channels()

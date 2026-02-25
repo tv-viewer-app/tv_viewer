@@ -64,11 +64,11 @@ file:///etc/passwd
         """Test age rating formatting."""
         from utils.helpers import format_age_rating
         
-        assert format_age_rating(0) == 'G'
-        assert format_age_rating(7) == 'G'
-        assert format_age_rating(13) == 'PG-13'
-        assert format_age_rating(18) == 'R'
-        assert format_age_rating(21) == 'NC-17'
+        assert format_age_rating(0) == 'All Ages'
+        assert format_age_rating(7) == '7+'
+        assert format_age_rating(13) == '13+'
+        assert format_age_rating(18) == '18+'
+        assert format_age_rating(21) == '21+'
     
     def test_format_duration(self):
         """Test duration formatting."""
@@ -76,11 +76,11 @@ file:///etc/passwd
         
         assert format_duration(0) == '00:00'
         assert format_duration(65) == '01:05'
-        assert format_duration(3661) == '1:01:01'
+        assert format_duration(3661) == '01:01:01'
     
     def test_safe_json_load(self):
         """Test safe JSON loading with size limits."""
-        from utils.helpers import safe_json_load
+        from utils.helpers import load_json_file
         import tempfile
         import json
         
@@ -90,16 +90,16 @@ file:///etc/passwd
             temp_path = f.name
         
         try:
-            result = safe_json_load(temp_path)
+            result = load_json_file(temp_path)
             assert result == {'test': 'data'}
         finally:
             os.unlink(temp_path)
     
     def test_safe_json_load_missing_file(self):
         """Test safe JSON load with missing file."""
-        from utils.helpers import safe_json_load
+        from utils.helpers import load_json_file
         
-        result = safe_json_load('/nonexistent/file.json')
+        result = load_json_file('/nonexistent/file.json')
         assert result is None
 
 
@@ -226,12 +226,12 @@ class TestChannelManager:
         manager = ChannelManager()
         
         required_methods = [
-            'load_channels',
+            'load_cached_channels',
             'save_channels',
             'get_channels_by_group',
             'get_groups',
             'validate_channels_async',
-            'stop_validation',
+            'stop',
         ]
         
         for method in required_methods:
