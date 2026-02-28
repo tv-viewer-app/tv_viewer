@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
@@ -117,8 +118,8 @@ class ErrorHandler {
       return _handleFileSystemException(error, stackTrace);
     }
     
-    // Video player errors
-    if (error is VideoPlayerPlatformException) {
+    // Video player errors (PlatformException from video_player)
+    if (error is PlatformException) {
       return _handleVideoPlayerException(error, stackTrace);
     }
     
@@ -236,9 +237,9 @@ class ErrorHandler {
     );
   }
   
-  /// Handle VideoPlayerPlatformException
+  /// Handle video player PlatformException
   static AppError _handleVideoPlayerException(
-    VideoPlayerPlatformException error,
+    PlatformException error,
     StackTrace? stackTrace,
   ) {
     String code;

@@ -66,8 +66,8 @@ class PipService {
     }
 
     try {
-      // Enable PiP with the specified aspect ratio
-      final result = await _floating!.enable(aspectRatio);
+      // Enable PiP mode
+      final result = await _floating!.enable();
       
       if (result == PiPStatus.enabled) {
         _isPipActive = true;
@@ -88,7 +88,7 @@ class PipService {
     if (_floating == null) return;
 
     try {
-      await _floating!.dispose();
+      _floating!.dispose();
       _isPipActive = false;
       debugPrint('PiP: Disabled');
     } catch (e) {
@@ -99,7 +99,8 @@ class PipService {
   /// Listen to PiP status changes
   /// 
   /// Returns a stream of PiP status updates
-  Stream<PiPStatus>? get pipStatusStream => _floating?.pipStatus;
+  /// Get current PiP status
+  Future<PiPStatus>? get pipStatusFuture => _floating?.pipStatus;
 
   /// Toggle PiP mode
   Future<bool> togglePip({Rational aspectRatio = const Rational(16, 9)}) async {
@@ -142,7 +143,7 @@ class PipService {
 
     try {
       // Re-enable with new parameters
-      await _floating!.enable(aspectRatio);
+      await _floating!.enable();
       debugPrint('PiP: Updated aspect ratio to $aspectRatio');
     } catch (e) {
       debugPrint('PiP: Error updating params: $e');

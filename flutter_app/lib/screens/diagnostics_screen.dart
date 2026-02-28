@@ -84,8 +84,10 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   /// Check network status
   Future<void> _checkNetworkStatus() async {
     try {
-      final connectivityResult = await Connectivity().checkConnectivity();
-      _updateConnectionType(connectivityResult);
+      final connectivityResults = await Connectivity().checkConnectivity();
+      if (connectivityResults.isNotEmpty) {
+        _updateConnectionType(connectivityResults.first);
+      }
     } catch (e) {
       setState(() {
         _connectionType = 'Error: $e';

@@ -48,8 +48,8 @@ STREAM_CHECK_TIMEOUT = 5
 
 # Maximum concurrent stream checks
 # Lower = less CPU/bandwidth, higher = faster but more resource usage
-# Recommended: 15-25 for normal use, 5 for low-end systems
-MAX_CONCURRENT_CHECKS = 20
+# Recommended: 25-35 for normal use, 5 for low-end systems
+MAX_CONCURRENT_CHECKS = 30
 
 # Batch size for stream checking (memory optimization)
 # Lower = less memory per batch, but more GC cycles
@@ -57,7 +57,7 @@ SCAN_BATCH_SIZE = 200
 
 # Delay between scan requests in seconds (CPU throttling)
 # Higher = less CPU usage but slower scan
-SCAN_REQUEST_DELAY = 0.02
+SCAN_REQUEST_DELAY = 0.005
 
 # Skip re-scanning channels checked within this many minutes
 SCAN_SKIP_MINUTES = 30
