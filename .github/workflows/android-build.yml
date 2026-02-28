@@ -5,8 +5,7 @@ on:
     branches: [ master ]
     paths:
       - 'flutter_app/**'
-    paths-ignore:
-      - 'flutter_app/**.md'
+      - '!flutter_app/**.md'
   workflow_dispatch:
     inputs:
       version_override:
