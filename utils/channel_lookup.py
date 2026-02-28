@@ -308,9 +308,9 @@ KNOWN_CHANNELS: Dict[str, Tuple[str, int]] = {
     'reshet': ('Israel', 7),
     'רשת 13': ('Israel', 7),
     'רשת': ('Israel', 7),
-    'channel 13': ('Israel', 7),
+    'channel 13 israel': ('Israel', 7),
     'ערוץ 13': ('Israel', 7),
-    'channel 9': ('Israel', 7),
+    'channel 9 israel': ('Israel', 7),
     'ערוץ 9': ('Israel', 7),
     'i24': ('Israel', 13),
     'i24 news': ('Israel', 13),
@@ -322,17 +322,17 @@ KNOWN_CHANNELS: Dict[str, Tuple[str, int]] = {
     'sport 5': ('Israel', 7),
     'ספורט 5': ('Israel', 7),
     'sport5': ('Israel', 7),
-    'one': ('Israel', 13),
     'one israel': ('Israel', 13),
+    'channel one israel': ('Israel', 13),
     'ynet': ('Israel', 7),
     'ynet tv': ('Israel', 7),
     'logi': ('Israel', 7),
     'music 24': ('Israel', 7),
     'מיוזיק 24': ('Israel', 7),
-    'hot': ('Israel', 7),
+    'hot tv': ('Israel', 7),
     'hot 3': ('Israel', 7),
     'hot cinema': ('Israel', 13),
-    'yes': ('Israel', 7),
+    'yes tv': ('Israel', 7),
     'yes drama': ('Israel', 13),
     'yes action': ('Israel', 16),
     'knesset': ('Israel', 7),
@@ -341,17 +341,22 @@ KNOWN_CHANNELS: Dict[str, Tuple[str, int]] = {
     'makan': ('Israel', 7),
     'מכאן': ('Israel', 7),
     'makan 33': ('Israel', 7),
-    'hop': ('Israel', 0),
+    'hop!': ('Israel', 0),
     'hop channel': ('Israel', 0),
+    'hop! channel': ('Israel', 0),
     'הופ': ('Israel', 0),
     'luli': ('Israel', 0),
-    'junior': ('Israel', 0),
-    'baby': ('Israel', 0),
-    'zoom': ('Israel', 7),
+    'luli tv': ('Israel', 0),
+    'hop junior': ('Israel', 0),
+    'junior channel': ('Israel', 0),
+    'baby channel israel': ('Israel', 0),
+    'zoom channel': ('Israel', 7),
+    'channel zoom': ('Israel', 7),
     'n12': ('Israel', 7),
-    'news 12': ('Israel', 7),
-    'news 13': ('Israel', 7),
-    'channel 20': ('Israel', 7),
+    'news 12 israel': ('Israel', 7),
+    'news 13 israel': ('Israel', 7),
+    'reshet 13': ('Israel', 7),
+    'channel 20 israel': ('Israel', 7),
     'ערוץ 20': ('Israel', 7),
     'channel 24': ('Israel', 7),
     'ערוץ 24': ('Israel', 7),
@@ -663,8 +668,14 @@ def lookup_channel_by_name(name: str) -> Optional[Tuple[str, int]]:
     for known_name, info in KNOWN_CHANNELS.items():
         # Check if the known name is a single word and appears in channel name
         if ' ' not in known_name:
-            if known_name in name_words or known_name in name_lower:
-                return info
+            # Short single-word entries (< 5 chars) must be exact word matches
+            # to avoid false positives (e.g. 'hop' matching 'Hope Channel')
+            if len(known_name) < 5:
+                if known_name in name_words:
+                    return info
+            else:
+                if known_name in name_words or known_name in name_lower:
+                    return info
         else:
             # Multi-word known name - check if it appears as substring
             if known_name in name_lower:

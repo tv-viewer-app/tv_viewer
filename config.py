@@ -72,8 +72,8 @@ THUMBNAIL_CAPTURE_TIMEOUT = 5  # Seconds to wait for frame capture
 # =============================================================================
 # UI Settings
 # =============================================================================
-WINDOW_WIDTH = 900
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 1200
+WINDOW_HEIGHT = 700
 PLAYER_WIDTH = 800
 PLAYER_HEIGHT = 500
 

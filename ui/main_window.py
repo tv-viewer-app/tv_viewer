@@ -16,7 +16,7 @@ from utils.thumbnail import capture_thumbnail_async, get_thumbnail_path, thumbna
 from utils.logger import get_logger
 from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
-from .constants import FluentColors, FluentSpacing, FluentTypography
+from .constants import FluentColorsDark as FluentColors, FluentSpacing, FluentTypography
 import config
 
 # Get logger for this module
@@ -52,6 +52,7 @@ class MainWindow:
         
         # Configure grid
         self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, minsize=280)
         self.root.grid_columnconfigure(1, weight=1)
         
         # Set window icon
@@ -143,10 +144,11 @@ class MainWindow:
     def _create_sidebar(self):
         """Create the left sidebar with Windows 11 Fluent Design."""
         # Sidebar frame
-        self.sidebar = ttk.Frame(self.root, width=300)
+        self.sidebar = ttk.Frame(self.root, width=340)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        # Row 5 = category list (scrollable, expands)
-        self.sidebar.grid_rowconfigure(5, weight=1)
+        # Row 6 = category scroll (expandable)
+        self.sidebar.grid_rowconfigure(6, weight=1)
+        self.sidebar.grid_columnconfigure(0, weight=1)
         self.sidebar.grid_propagate(False)
         
         # App title with version on same line
@@ -156,7 +158,7 @@ class MainWindow:
         self.title_label = ttk.Label(
             title_frame,
             text=f"📺 {config.APP_NAME}",
-            font=("Segoe UI", 18, "bold"),
+            font=("Segoe UI", 16, "bold"),
             foreground=FluentColors.ACCENT
         )
         self.title_label.pack(side="left")
@@ -164,8 +166,7 @@ class MainWindow:
         self.version_label = ttk.Label(
             title_frame,
             text=f"v{config.APP_VERSION}",
-            font=("Segoe UI", 10),
-            foreground=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 10)
         )
         self.version_label.pack(side="right", padx=5)
         
@@ -191,22 +192,21 @@ class MainWindow:
         """Create scan progress indicator with animation."""
         # Container frame
         self.scan_frame = ttk.Frame(self.sidebar)
-        self.scan_frame.grid(row=6, column=0, padx=10, pady=5, sticky="ew")
+        self.scan_frame.grid(row=7, column=0, padx=10, pady=(5, 2), sticky="ew")
         
-        # Scan animation widget (pixel art)
+        # Scan animation widget (pixel art) — compact
         self.scan_animation = ScanProgressFrame(self.scan_frame)
-        self.scan_animation.pack(padx=5, pady=5)
+        self.scan_animation.pack(padx=5, pady=2)
         
-        # Simple text labels below animation
+        # Scan status label
         self.scan_label = ttk.Label(
             self.scan_frame,
             text="Ready",
-            font=("Segoe UI", 10),
-            foreground=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 10)
         )
         self.scan_label.pack(padx=10, pady=(0, 2))
         
-        # Progress bar (backup visual)
+        # Progress bar
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar = ttk.Progressbar(
             self.scan_frame,
@@ -215,16 +215,15 @@ class MainWindow:
             bootstyle="info",
             length=280
         )
-        self.progress_bar.pack(padx=10, pady=(0, 5), fill="x")
+        self.progress_bar.pack(padx=10, pady=(0, 2), fill="x")
         
         # Stats label
         self.stats_label = ttk.Label(
             self.scan_frame,
             text="",
-            font=("Segoe UI", 9),
-            foreground=FluentColors.TEXT_DISABLED
+            font=("Segoe UI", 9)
         )
-        self.stats_label.pack(padx=10, pady=(0, 5))
+        self.stats_label.pack(padx=10, pady=(0, 2))
     
     def _create_search_box(self):
         """Create search box."""
@@ -265,8 +264,7 @@ class MainWindow:
         ttk.Label(
             group_frame,
             text="Group:",
-            font=("Segoe UI", 11),
-            foreground=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11)
         ).pack(side="left")
         
         # Create segmented button replacement with radiobuttons
@@ -299,8 +297,7 @@ class MainWindow:
         ttk.Label(
             media_frame,
             text="Type:",
-            font=("Segoe UI", 11),
-            foreground=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11)
         ).pack(side="left")
         
         self.media_type_var = tk.StringVar(value="All")
@@ -369,16 +366,14 @@ class MainWindow:
         self.group_header = ttk.Label(
             self.sidebar,
             text="📂 Categories",
-            font=("Segoe UI", 13, "bold"),
-            foreground=FluentColors.TEXT_PRIMARY,
+            font=("Segoe UI", 12, "bold"),
             anchor="w"
         )
         self.group_header.grid(row=5, column=0, padx=15, pady=(8, 3), sticky="w")
         
-        # Scrollable frame for categories (this is the expandable row)
+        # Scrollable frame for categories (row 6 has weight=1, so it expands)
         self.category_scroll = ScrolledFrame(self.sidebar, autohide=True)
-        # Row 5 is set as weight=1 in _create_sidebar, so use row index that matches
-        self.category_scroll.grid(row=5, column=0, padx=10, pady=3, sticky="nsew")
+        self.category_scroll.grid(row=6, column=0, padx=10, pady=3, sticky="nsew")
         
         # Store category buttons
         self.category_buttons = []
@@ -386,43 +381,36 @@ class MainWindow:
     def _create_action_buttons(self):
         """Create action buttons at bottom of sidebar."""
         button_frame = ttk.Frame(self.sidebar)
-        button_frame.grid(row=7, column=0, padx=10, pady=10, sticky="ew")
+        button_frame.grid(row=8, column=0, padx=10, pady=(5, 10), sticky="ew")
+        button_frame.grid_columnconfigure(0, weight=1)
+        button_frame.grid_columnconfigure(1, weight=1)
         
-        # Scan toggle button
+        # Scan toggle button (full width, top)
         self.scan_btn = ttk.Button(
             button_frame,
             text="▶ Start Scan",
             command=self._toggle_scan,
             bootstyle="primary"
         )
-        self.scan_btn.pack(fill="x", pady=(0, 8))
+        self.scan_btn.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
         
         # Export M3U button
         self.export_btn = ttk.Button(
             button_frame,
-            text="📥 Export M3U",
+            text="📥 Export",
             command=self._export_m3u,
             bootstyle="secondary"
         )
-        self.export_btn.pack(fill="x", pady=(0, 8))
+        self.export_btn.grid(row=1, column=0, sticky="ew", padx=(0, 3))
         
         # Settings button
         self.settings_btn = ttk.Button(
             button_frame,
-            text="⚙️ Edit Config",
+            text="⚙️ Config",
             command=self._edit_channel_config,
             bootstyle="secondary"
         )
-        self.settings_btn.pack(fill="x", pady=(0, 8))
-        
-        # About button
-        self.about_btn = ttk.Button(
-            button_frame,
-            text="ℹ️ About",
-            command=self._show_about,
-            bootstyle="info-outline"
-        )
-        self.about_btn.pack(fill="x")
+        self.settings_btn.grid(row=1, column=1, sticky="ew", padx=(3, 0))
     
     def _create_main_content(self):
         """Create the main content area with channel list."""
@@ -450,8 +438,7 @@ class MainWindow:
         self.channel_header = ttk.Label(
             header_frame,
             text="Select a category",
-            font=("Segoe UI", 20, "bold"),
-            foreground=FluentColors.TEXT_PRIMARY
+            font=("Segoe UI", 18, "bold")
         )
         self.channel_header.pack(side="left", padx=20, pady=15)
         
@@ -459,8 +446,7 @@ class MainWindow:
         self.channel_count_label = ttk.Label(
             header_frame,
             text="",
-            font=("Segoe UI", 12),
-            foreground=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 12)
         )
         self.channel_count_label.pack(side="right", padx=20, pady=15)
     
@@ -472,42 +458,42 @@ class MainWindow:
         list_container.grid_rowconfigure(0, weight=1)
         list_container.grid_columnconfigure(0, weight=1)
         
-        # Style the Treeview for dark theme
-        style = ttk.Style()
+        # Style the Treeview for dark theme — use ttkbootstrap's native colors
+        style = self.root.style
+        colors = style.colors
         
-        # Configure Treeview colors for dark theme
         style.configure(
             "Material.Treeview",
-            background=FluentColors.BG_CARD,
-            foreground=FluentColors.TEXT_PRIMARY,
-            fieldbackground=FluentColors.BG_CARD,
+            background=colors.inputbg,
+            foreground=colors.inputfg,
+            fieldbackground=colors.inputbg,
             borderwidth=0,
-            font=('Segoe UI', 13),
-            rowheight=48
+            font=('Segoe UI', 12),
+            rowheight=40
         )
         style.configure(
             "Material.Treeview.Heading",
-            background=FluentColors.SURFACE_VARIANT,
-            foreground=FluentColors.TEXT_PRIMARY,
+            background=colors.dark,
+            foreground=colors.fg,
             borderwidth=0,
             font=('Segoe UI', 11, 'bold'),
-            padding=(10, 8)
+            padding=(10, 6)
         )
         style.map(
             "Material.Treeview",
-            background=[('selected', FluentColors.PRIMARY)],
-            foreground=[('selected', FluentColors.TEXT_PRIMARY)]
+            background=[('selected', colors.primary)],
+            foreground=[('selected', '#ffffff')]
         )
         style.map(
             "Material.Treeview.Heading",
-            background=[('active', FluentColors.BG_ELEVATED)]
+            background=[('active', colors.secondary)]
         )
         
         # Scrollbar styling
         style.configure(
             "Material.Vertical.TScrollbar",
-            background=FluentColors.SURFACE_VARIANT,
-            troughcolor=FluentColors.BG_DARK,
+            background=colors.secondary,
+            troughcolor=colors.bg,
             borderwidth=0,
             arrowsize=0
         )
@@ -547,9 +533,9 @@ class MainWindow:
             self.channel_tree.column(col, width=width, minwidth=50)
         
         # Configure tags for status colors
-        self.channel_tree.tag_configure('working', foreground=FluentColors.SUCCESS)
-        self.channel_tree.tag_configure('not_working', foreground=FluentColors.ERROR)
-        self.channel_tree.tag_configure('checking', foreground=FluentColors.WARNING)
+        self.channel_tree.tag_configure('working', foreground=colors.success)
+        self.channel_tree.tag_configure('not_working', foreground=colors.danger)
+        self.channel_tree.tag_configure('checking', foreground=colors.warning)
         
         # Bindings
         self.channel_tree.bind('<Double-1>', self._on_channel_double_click)
@@ -569,8 +555,7 @@ class MainWindow:
         self.thumbnail_label = ttk.Label(
             thumb_container,
             text="No preview",
-            font=("Segoe UI", 11),
-            foreground=FluentColors.TEXT_DISABLED
+            font=("Segoe UI", 11)
         )
         self.thumbnail_label.pack(expand=True)
         
@@ -582,7 +567,6 @@ class MainWindow:
             info_frame,
             text="Select a channel",
             font=("Segoe UI", 14, "bold"),
-            foreground=FluentColors.TEXT_PRIMARY,
             anchor="w"
         )
         self.preview_name_label.pack(anchor="w")
@@ -591,7 +575,6 @@ class MainWindow:
             info_frame,
             text="",
             font=("Segoe UI", 11),
-            foreground=FluentColors.TEXT_SECONDARY,
             anchor="w"
         )
         self.preview_url_label.pack(anchor="w", pady=(2, 0))
@@ -622,8 +605,7 @@ class MainWindow:
         self.status_label = ttk.Label(
             self.status_frame,
             text="Starting...",
-            font=("Segoe UI", 11),
-            foreground=FluentColors.TEXT_SECONDARY
+            font=("Segoe UI", 11)
         )
         self.status_label.pack(side="left", padx=15, pady=5)
     
@@ -734,7 +716,7 @@ class MainWindow:
             self.channel_tree.insert('', tk.END, 
                 values=("No channels found", "", "", "", "", ""),
                 tags=('no_results',))
-            self.channel_tree.tag_configure('no_results', foreground=FluentColors.TEXT_DISABLED)
+            self.channel_tree.tag_configure('no_results', foreground='#888888')
             self.channel_count_label.configure(
                 text=f"No channels match current filters"
             )
@@ -906,11 +888,11 @@ class MainWindow:
         
         is_working = channel.get('is_working')
         if is_working is True:
-            self.preview_status_label.configure(text='✓ Working', foreground=FluentColors.SUCCESS)
+            self.preview_status_label.configure(text='✓ Working', foreground='#00bc8c')
         elif is_working is False:
-            self.preview_status_label.configure(text='✗ Offline', foreground=FluentColors.ERROR)
+            self.preview_status_label.configure(text='✗ Offline', foreground='#e74c3c')
         else:
-            self.preview_status_label.configure(text='◌ Checking...', foreground=FluentColors.WARNING)
+            self.preview_status_label.configure(text='◌ Checking...', foreground='#f39c12')
         
         # Show thumbnail
         self._show_channel_thumbnail(channel)
