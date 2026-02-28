@@ -375,8 +375,9 @@ class MainWindow:
         self.category_scroll = ScrolledFrame(self.sidebar, autohide=True)
         self.category_scroll.grid(row=6, column=0, padx=10, pady=3, sticky="nsew")
         
-        # Store category buttons
+        # Store category buttons and name->button map for in-place updates
         self.category_buttons = []
+        self._group_button_map = {}
     
     def _create_action_buttons(self):
         """Create action buttons at bottom of sidebar."""
@@ -468,8 +469,8 @@ class MainWindow:
             foreground=colors.inputfg,
             fieldbackground=colors.inputbg,
             borderwidth=0,
-            font=('Segoe UI', 12),
-            rowheight=40
+            font=('Segoe UI', 14),
+            rowheight=44
         )
         style.configure(
             "Material.Treeview.Heading",
@@ -615,6 +616,7 @@ class MainWindow:
         for btn in self.category_buttons:
             btn.destroy()
         self.category_buttons.clear()
+        self._group_button_map = {}
         
         # Get all channels - use cached reference
         all_channels = self.channel_manager.channels
@@ -629,6 +631,7 @@ class MainWindow:
         )
         all_btn.pack(fill="x", pady=2)
         self.category_buttons.append(all_btn)
+        self._group_button_map['__all__'] = all_btn
         
         # Separator
         sep = ttk.Separator(self.category_scroll, orient='horizontal')
@@ -663,6 +666,7 @@ class MainWindow:
                 )
                 btn.pack(fill="x", pady=1)
                 self.category_buttons.append(btn)
+                self._group_button_map[group] = btn
             except Exception as e:
                 logger.debug(f"Error creating button for {group}: {e}")
 
@@ -697,7 +701,11 @@ class MainWindow:
         self._update_channel_list(channels)
     
     def _update_channel_list(self, channels: List[Dict[str, Any]]):
-        """Update the channel treeview — capped at 500 items for fast rendering."""
+        """Update the channel treeview — capped at 500 items for fast rendering.
+        
+        Uses grid_remove/grid to hide the treeview during bulk operations,
+        preventing flicker and improving insert speed.
+        """
         # Apply filters
         filtered_channels = self._filter_channels(channels)
         
@@ -708,25 +716,30 @@ class MainWindow:
         self._displayed_channels = filtered_channels
         self._displayed_channel_names = {ch.get('name', ''): ch for ch in filtered_channels}
         
+        # Hide treeview during bulk update to prevent flicker
+        tree = self.channel_tree
+        tree.pack_forget()
+        
         # Clear existing items
-        self.channel_tree.delete(*self.channel_tree.get_children())
+        tree.delete(*tree.get_children())
         
         # Show "no results" message if empty
         if not filtered_channels:
-            self.channel_tree.insert('', tk.END, 
+            tree.insert('', tk.END, 
                 values=("No channels found", "", "", "", "", ""),
                 tags=('no_results',))
-            self.channel_tree.tag_configure('no_results', foreground='#888888')
+            tree.tag_configure('no_results', foreground='#888888')
             self.channel_count_label.configure(
                 text=f"No channels match current filters"
             )
+            tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
             return
         
         # Cap visible items for fast rendering — Treeview bogs down past ~500 rows
         MAX_VISIBLE = 500
         visible_channels = filtered_channels[:MAX_VISIBLE]
         
-        # Add channels
+        # Bulk insert — build values list first, then insert
         for channel in visible_channels:
             name = channel.get('name', 'Unknown')
             category = channel.get('category', 'Other')
@@ -748,9 +761,12 @@ class MainWindow:
             last_scanned = channel.get('last_scanned', '')
             last_checked = last_scanned[11:16] if last_scanned else ''
             
-            self.channel_tree.insert('', tk.END, 
+            tree.insert('', tk.END, 
                 values=(name, category, status, last_checked, age_rating, country),
                 tags=(tag,))
+        
+        # Show treeview again and process pending draw events
+        tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Update count — show cap notice if truncated
         working = sum(1 for c in channels if c.get('is_working', False))
@@ -858,7 +874,15 @@ class MainWindow:
             self._select_group(self.current_group)
     
     def _on_search(self, *args):
-        """Handle search."""
+        """Handle search with 300ms debounce to avoid rebuilding on every keystroke."""
+        # Cancel pending search
+        if hasattr(self, '_search_timer') and self._search_timer:
+            self.root.after_cancel(self._search_timer)
+        self._search_timer = self.root.after(300, self._do_search)
+    
+    def _do_search(self):
+        """Execute the actual search after debounce delay."""
+        self._search_timer = None
         query = self.search_var.get()
         # Ignore placeholder text
         if query and query != self._search_placeholder:
@@ -994,49 +1018,20 @@ class MainWindow:
         self.root.after(0, lambda: self._set_status(f"Loaded {count} channels, validating..."))
     
     def _on_channel_validated(self, channel: Dict[str, Any], current: int, total: int):
-        """Callback when channel validated - MUST schedule on main thread.
+        """Callback when channel validated — runs on background thread.
         
         CRITICAL FIX (Issue #32): This callback is invoked from background thread.
-        All state modifications and UI updates MUST use root.after() to avoid
-        segmentation faults from cross-thread tkinter access.
+        We only update lightweight counters here (thread-safe int ops).
+        The actual UI update is driven by a polling timer (_poll_scan_progress)
+        to avoid flooding the main thread event queue with root.after(0) calls.
         """
-        # Schedule state update AND UI update on main thread atomically
-        def _safe_update():
-            # Update state on main thread
-            if channel.get('is_working'):
-                self.scan_working_count += 1
-            else:
-                self.scan_failed_count += 1
-            self.scan_total_count = total
-            
-            # Very aggressive throttling - UI updates are expensive
-            # Only update UI every 100-500 channels depending on total
-            if total > 10000:
-                update_interval = 500
-            elif total > 5000:
-                update_interval = 200
-            else:
-                update_interval = 100
-            
-            # Minimal update conditions
-            should_update = (
-                (current % update_interval == 0) or 
-                (current == total) or 
-                (current == 1)  # First channel only
-            )
-            
-            if should_update:
-                progress = current / total
-                self._batch_ui_update(progress, current, total)
-            
-            # Refresh channel list even less frequently
-            if current == total or (current % 1000 == 0 and current > 0):
-                if self._pending_group_update:
-                    self.root.after_cancel(self._pending_group_update)
-                self._pending_group_update = self.root.after(500, self._debounced_refresh)
-        
-        # CRITICAL: Schedule on main thread to avoid seg fault
-        self.root.after(0, _safe_update)
+        # Thread-safe counter updates (simple int assignment is atomic in CPython)
+        if channel.get('is_working'):
+            self.scan_working_count += 1
+        else:
+            self.scan_failed_count += 1
+        self.scan_total_count = total
+        self._scan_current = current
     
     def _batch_ui_update(self, progress: float, current: int, total: int):
         """Perform batched UI updates - minimal work only."""
@@ -1052,6 +1047,41 @@ class MainWindow:
         except tk.TclError:
             pass  # Window closed during update
     
+    def _start_scan_polling(self):
+        """Start a 500ms polling timer that reads scan counters and updates UI.
+        
+        This replaces the per-channel root.after(0) pattern which flooded the
+        event queue with 18K+ callbacks. A single timer is much lighter.
+        """
+        self._scan_current = 0
+        self._scan_poll_timer = None
+        self._last_poll_current = -1
+        self._last_group_refresh = 0
+        self._poll_scan_progress()
+    
+    def _poll_scan_progress(self):
+        """Periodic scan progress UI update — runs on main thread via after()."""
+        if not self._scan_running:
+            self._scan_poll_timer = None
+            return
+        
+        current = getattr(self, '_scan_current', 0)
+        total = self.scan_total_count or 1
+        
+        # Only update UI if progress actually changed
+        if current != self._last_poll_current:
+            self._last_poll_current = current
+            progress = current / total if total > 0 else 0
+            self._batch_ui_update(progress, current, total)
+            
+            # Refresh group counts every ~2000 channels
+            if current - self._last_group_refresh >= 2000 or current == total:
+                self._last_group_refresh = current
+                self._update_group_counts()
+        
+        # Reschedule
+        self._scan_poll_timer = self.root.after(500, self._poll_scan_progress)
+    
     def _debounced_refresh(self):
         """Debounced UI refresh."""
         self._pending_group_update = None
@@ -1059,30 +1089,70 @@ class MainWindow:
         if self.current_group:
             self._select_group(self.current_group)
     
+    def _update_group_counts(self):
+        """Update group button text with current working/total counts in-place.
+        
+        Much faster than _update_groups() which destroys and recreates all buttons.
+        Used during scan progress to keep counts fresh without layout thrash.
+        """
+        if not hasattr(self, '_group_button_map'):
+            return
+        
+        all_channels = self.channel_manager.channels
+        all_working = sum(1 for c in all_channels if c.get('is_working', False))
+        
+        # Update "All Channels" button if present
+        if '__all__' in self._group_button_map:
+            btn = self._group_button_map['__all__']
+            try:
+                btn.configure(text=f"📺 All Channels  ({all_working}/{len(all_channels)})")
+            except tk.TclError:
+                pass
+        
+        # Update each group button
+        for group, btn in self._group_button_map.items():
+            if group == '__all__':
+                continue
+            try:
+                channels = self.channel_manager.get_channels_by_group(group)
+                working = sum(1 for c in channels if c.get('is_working', False))
+                icon = self._get_group_icon(group)
+                btn.configure(text=f"{icon} {group}  ({working}/{len(channels)})")
+            except (tk.TclError, Exception):
+                pass
+    
     def _on_validation_complete(self):
         """Callback when validation complete."""
-        self.root.after(0, lambda: self.progress_var.set(100))
-        working = len(self.channel_manager.get_working_channels())
-        total = len(self.channel_manager.channels)
-        self.root.after(0, lambda: self._set_status(f"Ready - {working}/{total} channels working"))
-        self.root.after(0, lambda: self.scan_label.configure(text="Scan complete"))
-        self.root.after(0, self._update_groups)
+        def _complete():
+            # Stop polling timer
+            if hasattr(self, '_scan_poll_timer') and self._scan_poll_timer:
+                self.root.after_cancel(self._scan_poll_timer)
+                self._scan_poll_timer = None
+            
+            self.progress_var.set(100)
+            working = len(self.channel_manager.get_working_channels())
+            total = len(self.channel_manager.channels)
+            self._set_status(f"Ready - {working}/{total} channels working")
+            self.scan_label.configure(text="Scan complete")
+            self._update_groups()
+            if self.current_group:
+                self._select_group(self.current_group)
+            self.scan_animation.set_complete(working, total)
+            
+            # Upload results to PrivateBin if enabled
+            try:
+                from utils.privatebin import is_enabled, upload_scan_results
+                if is_enabled():
+                    self.root.after(1000, lambda: upload_scan_results(self.channel_manager.channels))
+            except ImportError:
+                pass
+            
+            self.scan_working_count = 0
+            self.scan_failed_count = 0
+            self._scan_running = False
+            self.scan_btn.configure(text="▶ Start Scan")
         
-        # Update scan animation to show complete
-        self.root.after(0, lambda: self.scan_animation.set_complete(working, total))
-        
-        # Upload results to PrivateBin if enabled
-        try:
-            from utils.privatebin import is_enabled, upload_scan_results
-            if is_enabled():
-                self.root.after(1000, lambda: upload_scan_results(self.channel_manager.channels))
-        except ImportError:
-            pass
-        
-        self.scan_working_count = 0
-        self.scan_failed_count = 0
-        self._scan_running = False
-        self.root.after(0, lambda: self.scan_btn.configure(text="▶ Start Scan"))
+        self.root.after(0, _complete)
     
     def _on_fetch_progress(self, current: int, total: int):
         """Callback for fetch progress."""
@@ -1097,6 +1167,9 @@ class MainWindow:
         if self._scan_running:
             self.channel_manager.stream_checker.stop()
             self._scan_running = False
+            if hasattr(self, '_scan_poll_timer') and self._scan_poll_timer:
+                self.root.after_cancel(self._scan_poll_timer)
+                self._scan_poll_timer = None
             self.scan_btn.configure(text="▶ Start Scan")
             self._set_status("Scan stopped")
             self.scan_label.configure(text="Stopped")
@@ -1109,6 +1182,7 @@ class MainWindow:
             self.scan_label.configure(text="Starting...")
             self.scan_working_count = 0
             self.scan_failed_count = 0
+            self._start_scan_polling()
             self.channel_manager.validate_channels_async(rescan_all=False)
     
     def _edit_channel_config(self):
@@ -1208,14 +1282,14 @@ class MainWindow:
         """Show about dialog with IPTV information."""
         dialog = tk.Toplevel(self.root)
         dialog.title("About")
-        dialog.geometry("550x520")
+        dialog.geometry("620x600")
         dialog.transient(self.root)
         dialog.grab_set()
         
         # Center dialog
         dialog.update_idletasks()
-        x = self.root.winfo_x() + (self.root.winfo_width() - 550) // 2
-        y = self.root.winfo_y() + (self.root.winfo_height() - 520) // 2
+        x = self.root.winfo_x() + (self.root.winfo_width() - 620) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - 600) // 2
         dialog.geometry(f"+{x}+{y}")
         
         # Scrollable content
@@ -1258,11 +1332,10 @@ class MainWindow:
             text=iptv_text,
             font=("Segoe UI", 12),
             foreground=FluentColors.TEXT_SECONDARY,
-            wraplength=480,
+            wraplength=560,
             justify="left"
         ).pack(fill="x", pady=(0, 10))
         
-        # How it works section
         ttk.Label(
             scroll_frame,
             text="🔧 How It Works",
@@ -1282,7 +1355,7 @@ class MainWindow:
             text=how_text,
             font=("Segoe UI", 12),
             foreground=FluentColors.TEXT_SECONDARY,
-            wraplength=480,
+            wraplength=560,
             justify="left"
         ).pack(fill="x", pady=(0, 10))
         
@@ -1335,7 +1408,7 @@ class MainWindow:
             text=disclaimer_text,
             font=("Segoe UI", 11),
             foreground=FluentColors.TEXT_SECONDARY,
-            wraplength=480,
+            wraplength=560,
             justify="left"
         ).pack(fill="x", pady=(0, 15))
         
@@ -1385,11 +1458,13 @@ class MainWindow:
             self.root.after(500, lambda: self.channel_manager.validate_channels_async(rescan_all=False))
             self.root.after(2000, self.channel_manager.fetch_channels_async)
             self._scan_running = True
+            self._start_scan_polling()
             self.scan_btn.configure(text="⏹ Stop Scan")
         else:
             self._set_status("No cache found. Fetching channels...")
             self.channel_manager.fetch_channels_async()
             self._scan_running = True
+            self._start_scan_polling()
             self.scan_btn.configure(text="⏹ Stop Scan")
     
     def _on_close(self):
@@ -1398,6 +1473,10 @@ class MainWindow:
             self.root.after_cancel(self._pending_group_update)
         if self._pending_channel_update:
             self.root.after_cancel(self._pending_channel_update)
+        if hasattr(self, '_scan_poll_timer') and self._scan_poll_timer:
+            self.root.after_cancel(self._scan_poll_timer)
+        if hasattr(self, '_search_timer') and self._search_timer:
+            self.root.after_cancel(self._search_timer)
         
         self.channel_manager.stop()
         

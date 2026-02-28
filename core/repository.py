@@ -84,7 +84,10 @@ class RepositoryHandler:
         progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Fetch channels from all configured repositories.
+        Fetch channels from all configured repositories concurrently.
+        
+        Uses asyncio.gather with a semaphore to fetch up to 10 repos in parallel,
+        dramatically reducing total fetch time compared to sequential fetching.
         
         Args:
             progress_callback: Optional callback(current, total) for progress updates
@@ -94,24 +97,34 @@ class RepositoryHandler:
         """
         all_channels = []
         seen_urls: set = set()
-        
         total = len(self.repositories)
+        completed = 0
+        sem = asyncio.Semaphore(10)
+        
+        async def _fetch_one(repo_url: str) -> List[Dict[str, Any]]:
+            nonlocal completed
+            async with sem:
+                channels = await self.fetch_repository(repo_url)
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total)
+                return channels
         
         try:
-            for i, repo_url in enumerate(self.repositories):
-                channels = await self.fetch_repository(repo_url)
-                
-                # Deduplicate based on URL
-                for channel in channels:
+            results = await asyncio.gather(
+                *[_fetch_one(url) for url in self.repositories],
+                return_exceptions=True
+            )
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.debug(f"Repo fetch error: {result}")
+                    continue
+                for channel in result:
                     url = channel.get('url', '')
                     if url and url not in seen_urls:
                         seen_urls.add(url)
                         all_channels.append(channel)
-                
-                if progress_callback:
-                    progress_callback(i + 1, total)
         finally:
-            # Always close session when done
             await self.close()
         
         logger.debug(f"Total unique channels fetched: {len(all_channels)}")
