@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../services/m3u_service.dart';
@@ -21,6 +22,8 @@ class ChannelProvider extends ChangeNotifier {
   String _searchQuery = '';
   bool _isLoading = false;
   bool _isScanning = false;
+  bool _isOffline = false; // #41: Offline state tracking
+  String _errorMessage = ''; // #41: User-facing error message
   int _scanProgress = 0;
   int _scanTotal = 0;
   int _workingCount = 0;
@@ -39,6 +42,8 @@ class ChannelProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
   bool get isScanning => _isScanning;
+  bool get isOffline => _isOffline; // #41
+  String get errorMessage => _errorMessage; // #41
   int get scanProgress => _scanProgress;
   int get scanTotal => _scanTotal;
   int get workingCount => _workingCount;
@@ -47,10 +52,33 @@ class ChannelProvider extends ChangeNotifier {
   int get favoritesCount => _favoriteUrls.length;
 
 
+  /// Check network connectivity (#41)
+  Future<bool> _hasConnectivity() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      final online = !result.contains(ConnectivityResult.none);
+      if (_isOffline != !online) {
+        _isOffline = !online;
+        notifyListeners();
+      }
+      return online;
+    } catch (e) {
+      logger.error('Connectivity check failed', e);
+      return true; // Assume online if check fails
+    }
+  }
+
+  /// Clear error message
+  void clearError() {
+    _errorMessage = '';
+    notifyListeners();
+  }
+
   /// Load channels from cache or fetch new
   Future<void> loadChannels() async {
     logger.info('Loading channels...');
     _isLoading = true;
+    _errorMessage = '';
     notifyListeners();
 
     // Load favorites first
@@ -66,12 +94,26 @@ class ChannelProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
-      // Fetch updates in background
-      _fetchChannelsInBackground();
+      // #41: Check connectivity before background fetch
+      if (await _hasConnectivity()) {
+        _fetchChannelsInBackground();
+      } else {
+        _errorMessage = 'Offline — showing cached channels';
+        logger.info('Offline: using ${cached.length} cached channels');
+        notifyListeners();
+      }
     } else {
-      logger.info('No cached channels found, fetching fresh data');
-      // No cache, fetch fresh
-      await fetchChannels();
+      // #41: No cache — check connectivity before fetching
+      if (await _hasConnectivity()) {
+        logger.info('No cached channels found, fetching fresh data');
+        await fetchChannels();
+      } else {
+        _isOffline = true;
+        _isLoading = false;
+        _errorMessage = 'No internet connection. Connect to WiFi or mobile data and retry.';
+        logger.warning('Offline with no cache — cannot load channels');
+        notifyListeners();
+      }
     }
   }
 
@@ -79,7 +121,16 @@ class ChannelProvider extends ChangeNotifier {
   Future<void> fetchChannels() async {
     logger.info('Fetching channels from repositories...');
     _isLoading = true;
+    _errorMessage = '';
     notifyListeners();
+
+    // #41: Check connectivity before network operations
+    if (!await _hasConnectivity()) {
+      _isLoading = false;
+      _errorMessage = 'No internet connection. Please check your network and try again.';
+      notifyListeners();
+      return;
+    }
 
     try {
       final channels = await M3UService.fetchAllChannels(
@@ -90,11 +141,26 @@ class ChannelProvider extends ChangeNotifier {
 
       logger.info('Successfully fetched ${channels.length} channels');
       _channels = channels;
+      _isOffline = false;
+      _errorMessage = '';
       _updateCategories();
       _applyFilters();
       await _saveToCache();
     } catch (e, stackTrace) {
       logger.error('Error fetching channels', e, stackTrace);
+      _errorMessage = 'Failed to load channels. Using cached data if available.';
+      // #41: Fall back to cache on fetch failure
+      if (_channels.isEmpty) {
+        final cached = await _loadFromCache();
+        if (cached.isNotEmpty) {
+          _channels = cached;
+          _updateCategories();
+          _applyFilters();
+          _errorMessage = 'Network error — showing cached channels';
+        } else {
+          _errorMessage = 'Could not load channels. Check your connection and retry.';
+        }
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -103,11 +169,18 @@ class ChannelProvider extends ChangeNotifier {
 
   void _fetchChannelsInBackground() async {
     logger.debug('Starting background channel fetch...');
+    // #41: Skip background fetch if offline
+    if (!await _hasConnectivity()) {
+      logger.debug('Skipping background fetch — offline');
+      return;
+    }
     try {
       final channels = await M3UService.fetchAllChannels();
       if (channels.length > _channels.length) {
         logger.info('Background fetch found ${channels.length - _channels.length} new channels');
         _channels = channels;
+        _isOffline = false;
+        _errorMessage = '';
         _updateCategories();
         _applyFilters();
         await _saveToCache();
@@ -123,6 +196,13 @@ class ChannelProvider extends ChangeNotifier {
   /// Validate channels (check if streams are working)
   Future<void> validateChannels() async {
     if (_isScanning) return;
+
+    // #41: Check connectivity before validation
+    if (!await _hasConnectivity()) {
+      _errorMessage = 'Cannot validate channels while offline';
+      notifyListeners();
+      return;
+    }
 
     logger.info('Starting channel validation for ${_channels.length} channels');
     _isScanning = true;

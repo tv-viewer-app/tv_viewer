@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[SEC-010] M3U content size limit** — Flutter M3U fetcher now rejects responses exceeding 50MB to prevent OOM on Android devices
 
 ### Fixed
+- **[#41] Offline/connectivity handling** — App now checks connectivity before network operations, shows offline banner with retry button, falls back to cached channels when offline, and prevents validation when disconnected
 - **Release Gate test failures** — Added `pytest-asyncio` to CI test dependencies; all 6 matrix test jobs now pass
 - **SEC-002 verified** — URL scheme validation before VLC subprocess launch was already implemented in v1.9.1
 

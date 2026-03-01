@@ -247,6 +247,39 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
 
+          // #41: Offline / error banner
+          Consumer<ChannelProvider>(
+            builder: (context, provider, _) {
+              if (provider.errorMessage.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return MaterialBanner(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                content: Text(provider.errorMessage),
+                leading: Icon(
+                  provider.isOffline ? Icons.wifi_off : Icons.error_outline,
+                  color: provider.isOffline ? Colors.orange : Colors.red,
+                ),
+                backgroundColor: provider.isOffline
+                    ? Colors.orange.withOpacity(0.1)
+                    : Colors.red.withOpacity(0.1),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      provider.clearError();
+                      provider.fetchChannels();
+                    },
+                    child: const Text('RETRY'),
+                  ),
+                  TextButton(
+                    onPressed: () => provider.clearError(),
+                    child: const Text('DISMISS'),
+                  ),
+                ],
+              );
+            },
+          ),
+
           // Search Bar
           Padding(
             padding: const EdgeInsets.all(8.0),
