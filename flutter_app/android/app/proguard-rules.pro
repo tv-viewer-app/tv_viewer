@@ -78,3 +78,6 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
+
+# Suppress missing Play Core classes (not needed for sideloaded APKs)
+-dontwarn com.google.android.play.core.**
