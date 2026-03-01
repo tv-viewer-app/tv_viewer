@@ -77,4 +77,12 @@ jobs:
         git config --local user.name "GitHub Action"
         git add -f dist/android/TV_Viewer_v${{ steps.version.outputs.version }}.apk
         git diff --staged --quiet || git commit -m "build: Add APK v${{ steps.version.outputs.version }} to dist folder [skip ci]"
-        git push || (git pull --rebase origin master && git push)
+        # Retry push with pull --rebase, stashing uncommitted changes first
+        for i in 1 2 3; do
+          git push && break
+          echo "Push attempt $i failed, pulling with rebase..."
+          git stash --include-untracked || true
+          git pull --rebase origin master
+          git stash pop || true
+          sleep 5
+        done

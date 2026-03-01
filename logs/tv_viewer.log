@@ -62,3 +62,4 @@
 2026-03-01 16:38:08 - test_write - INFO - Test message 1772375888.266311
 2026-03-01 16:38:30 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
 2026-03-01 16:38:30 - test_write - INFO - Test message 1772375910.4346552
+2026-03-01 16:55:40 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
