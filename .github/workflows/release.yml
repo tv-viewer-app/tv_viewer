@@ -1,0 +1,358 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.9.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  
+jobs:
+  generate-release-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    outputs:
+      release_notes: ${{ steps.notes.outputs.notes }}
+      version: ${{ steps.version.outputs.version }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+      
+      - name: Get version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Generate release notes from conventional commits
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "First release - using all commits"
+            COMMIT_RANGE=""
+          else
+            echo "Previous tag: $PREV_TAG"
+            COMMIT_RANGE="$PREV_TAG..HEAD"
+          fi
+          
+          # Initialize categories
+          FEATURES=""
+          FIXES=""
+          DOCS=""
+          STYLE=""
+          REFACTOR=""
+          PERF=""
+          TEST=""
+          BUILD=""
+          CI=""
+          CHORE=""
+          BREAKING=""
+          OTHER=""
+          
+          # Parse commits
+          while IFS= read -r commit; do
+            # Skip empty lines
+            [ -z "$commit" ] && continue
+            
+            # Extract commit message (first line only)
+            MSG=$(echo "$commit" | head -n1)
+            
+            # Check for breaking changes
+            if echo "$MSG" | grep -qiE "^[a-z]+(\([^)]+\))?!:|BREAKING CHANGE"; then
+              BREAKING="${BREAKING}- ${MSG}\n"
+            fi
+            
+            # Categorize by conventional commit type
+            case "$MSG" in
+              feat:*|feat\(*) 
+                FEATURES="${FEATURES}- ${MSG#*: }\n"
+                ;;
+              fix:*|fix\(*)
+                FIXES="${FIXES}- ${MSG#*: }\n"
+                ;;
+              docs:*|docs\(*)
+                DOCS="${DOCS}- ${MSG#*: }\n"
+                ;;
+              style:*|style\(*)
+                STYLE="${STYLE}- ${MSG#*: }\n"
+                ;;
+              refactor:*|refactor\(*)
+                REFACTOR="${REFACTOR}- ${MSG#*: }\n"
+                ;;
+              perf:*|perf\(*)
+                PERF="${PERF}- ${MSG#*: }\n"
+                ;;
+              test:*|test\(*)
+                TEST="${TEST}- ${MSG#*: }\n"
+                ;;
+              build:*|build\(*)
+                BUILD="${BUILD}- ${MSG#*: }\n"
+                ;;
+              ci:*|ci\(*)
+                CI="${CI}- ${MSG#*: }\n"
+                ;;
+              chore:*|chore\(*)
+                CHORE="${CHORE}- ${MSG#*: }\n"
+                ;;
+              *)
+                # Non-conventional commits
+                OTHER="${OTHER}- ${MSG}\n"
+                ;;
+            esac
+          done < <(git log $COMMIT_RANGE --pretty=format:"%s" --no-merges)
+          
+          # Build release notes
+          NOTES="# 📺 TV Viewer $VERSION\n\n"
+          NOTES="${NOTES}Release built on $(date +'%Y-%m-%d')\n\n"
+          
+          # Breaking changes first
+          if [ -n "$BREAKING" ]; then
+            NOTES="${NOTES}## ⚠️ Breaking Changes\n\n${BREAKING}\n"
+          fi
+          
+          # Features
+          if [ -n "$FEATURES" ]; then
+            NOTES="${NOTES}## ✨ New Features\n\n${FEATURES}\n"
+          fi
+          
+          # Bug fixes
+          if [ -n "$FIXES" ]; then
+            NOTES="${NOTES}## 🐛 Bug Fixes\n\n${FIXES}\n"
+          fi
+          
+          # Performance improvements
+          if [ -n "$PERF" ]; then
+            NOTES="${NOTES}## ⚡ Performance Improvements\n\n${PERF}\n"
+          fi
+          
+          # Refactoring
+          if [ -n "$REFACTOR" ]; then
+            NOTES="${NOTES}## ♻️ Code Refactoring\n\n${REFACTOR}\n"
+          fi
+          
+          # Documentation
+          if [ -n "$DOCS" ]; then
+            NOTES="${NOTES}## 📚 Documentation\n\n${DOCS}\n"
+          fi
+          
+          # Build system
+          if [ -n "$BUILD" ]; then
+            NOTES="${NOTES}## 🔧 Build System\n\n${BUILD}\n"
+          fi
+          
+          # CI/CD
+          if [ -n "$CI" ]; then
+            NOTES="${NOTES}## 👷 CI/CD\n\n${CI}\n"
+          fi
+          
+          # Tests
+          if [ -n "$TEST" ]; then
+            NOTES="${NOTES}## ✅ Tests\n\n${TEST}\n"
+          fi
+          
+          # Other changes
+          if [ -n "$OTHER" ]; then
+            NOTES="${NOTES}## 📦 Other Changes\n\n${OTHER}\n"
+          fi
+          
+          # Installation instructions
+          NOTES="${NOTES}---\n\n"
+          NOTES="${NOTES}## 📥 Installation\n\n"
+          NOTES="${NOTES}### Windows\n"
+          NOTES="${NOTES}1. Download \`TV_Viewer_${VERSION}_Windows.exe\` from the assets below\n"
+          NOTES="${NOTES}2. Install VLC Media Player from https://www.videolan.org/vlc/\n"
+          NOTES="${NOTES}3. Run the executable\n\n"
+          NOTES="${NOTES}### Android\n"
+          NOTES="${NOTES}1. Download \`TV_Viewer_${VERSION}_Android.apk\` from the assets below\n"
+          NOTES="${NOTES}2. Enable installation from unknown sources in your device settings\n"
+          NOTES="${NOTES}3. Install the APK\n\n"
+          NOTES="${NOTES}## 📋 Requirements\n\n"
+          NOTES="${NOTES}**Windows:**\n"
+          NOTES="${NOTES}- Windows 10/11 (64-bit)\n"
+          NOTES="${NOTES}- VLC Media Player 3.0+\n\n"
+          NOTES="${NOTES}**Android:**\n"
+          NOTES="${NOTES}- Android 8.0 (API 26) or higher\n\n"
+          
+          # Save to file (GitHub Actions multiline output)
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Also save to file for artifact
+          echo -e "$NOTES" > RELEASE_NOTES.md
+          
+      - name: Upload release notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 7
+
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    needs: generate-release-notes
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Build Windows executable
+        run: |
+          python build.py --onefile
+      
+      - name: Verify build
+        run: |
+          if (Test-Path "dist\TV_Viewer.exe") {
+            Write-Host "✓ Build successful"
+            $size = (Get-Item "dist\TV_Viewer.exe").Length / 1MB
+            Write-Host "Executable size: $([math]::Round($size, 2)) MB"
+          } else {
+            Write-Error "Build failed - executable not found"
+            exit 1
+          }
+      
+      - name: Rename executable with version
+        run: |
+          $version = "${{ needs.generate-release-notes.outputs.version }}"
+          Move-Item "dist\TV_Viewer.exe" "dist\TV_Viewer_${version}_Windows.exe"
+      
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/TV_Viewer_${{ needs.generate-release-notes.outputs.version }}_Windows.exe
+          retention-days: 7
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: generate-release-notes
+    defaults:
+      run:
+        working-directory: flutter_app
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+      
+      - name: Get Flutter dependencies
+        run: flutter pub get
+      
+      - name: Build Android APK
+        run: flutter build apk --release
+      
+      - name: Verify APK build
+        run: |
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            echo "✓ APK build successful"
+            SIZE=$(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)
+            echo "APK size: $SIZE"
+          else
+            echo "Build failed - APK not found"
+            exit 1
+          fi
+      
+      - name: Rename APK with version
+        run: |
+          VERSION="${{ needs.generate-release-notes.outputs.version }}"
+          mkdir -p ../dist/android
+          cp build/app/outputs/flutter-apk/app-release.apk "../dist/android/TV_Viewer_${VERSION}_Android.apk"
+      
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/android/TV_Viewer_${{ needs.generate-release-notes.outputs.version }}_Android.apk
+          retention-days: 7
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [generate-release-notes, build-windows, build-android]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          ls -R artifacts/
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.generate-release-notes.outputs.version }}
+          name: TV Viewer ${{ needs.generate-release-notes.outputs.version }}
+          body: ${{ needs.generate-release-notes.outputs.release_notes }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/windows-exe/TV_Viewer_${{ needs.generate-release-notes.outputs.version }}_Windows.exe
+            artifacts/android-apk/TV_Viewer_${{ needs.generate-release-notes.outputs.version }}_Android.apk
+            artifacts/release-notes/RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Release summary
+        run: |
+          echo "## 🎉 Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.generate-release-notes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Assets" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows EXE: \`TV_Viewer_${{ needs.generate-release-notes.outputs.version }}_Windows.exe\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Android APK: \`TV_Viewer_${{ needs.generate-release-notes.outputs.version }}_Android.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View the release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.generate-release-notes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
