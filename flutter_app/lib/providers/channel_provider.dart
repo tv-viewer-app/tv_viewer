@@ -10,6 +10,65 @@ import '../utils/logger_service.dart';
 
 /// Provider for managing channel state
 class ChannelProvider extends ChangeNotifier {
+  // ISO/common language code → display name mapping
+  static const _langNormalize = {
+    'heb': 'Hebrew', 'he': 'Hebrew', 'hebrew': 'Hebrew',
+    'eng': 'English', 'en': 'English', 'english': 'English',
+    'ara': 'Arabic', 'ar': 'Arabic', 'arabic': 'Arabic',
+    'spa': 'Spanish', 'es': 'Spanish', 'spanish': 'Spanish',
+    'fra': 'French', 'fr': 'French', 'french': 'French',
+    'deu': 'German', 'de': 'German', 'german': 'German',
+    'ita': 'Italian', 'it': 'Italian', 'italian': 'Italian',
+    'por': 'Portuguese', 'pt': 'Portuguese', 'portuguese': 'Portuguese',
+    'rus': 'Russian', 'ru': 'Russian', 'russian': 'Russian',
+    'tur': 'Turkish', 'tr': 'Turkish', 'turkish': 'Turkish',
+    'pol': 'Polish', 'pl': 'Polish', 'polish': 'Polish',
+    'zho': 'Chinese', 'zh': 'Chinese', 'chinese': 'Chinese',
+    'jpn': 'Japanese', 'ja': 'Japanese', 'japanese': 'Japanese',
+    'kor': 'Korean', 'ko': 'Korean', 'korean': 'Korean',
+    'hin': 'Hindi', 'hi': 'Hindi', 'hindi': 'Hindi',
+    'nld': 'Dutch', 'nl': 'Dutch', 'dutch': 'Dutch',
+    'ell': 'Greek', 'el': 'Greek', 'greek': 'Greek',
+    'tha': 'Thai', 'th': 'Thai', 'thai': 'Thai',
+    'vie': 'Vietnamese', 'vi': 'Vietnamese', 'vietnamese': 'Vietnamese',
+    'ind': 'Indonesian', 'id': 'Indonesian', 'indonesian': 'Indonesian',
+    'msa': 'Malay', 'ms': 'Malay', 'malay': 'Malay',
+    'fil': 'Filipino', 'tl': 'Filipino', 'filipino': 'Filipino',
+    'fas': 'Persian', 'fa': 'Persian', 'persian': 'Persian', 'farsi': 'Persian',
+    'urd': 'Urdu', 'ur': 'Urdu', 'urdu': 'Urdu',
+    'swe': 'Swedish', 'sv': 'Swedish', 'swedish': 'Swedish',
+    'nor': 'Norwegian', 'no': 'Norwegian', 'norwegian': 'Norwegian',
+    'dan': 'Danish', 'da': 'Danish', 'danish': 'Danish',
+    'fin': 'Finnish', 'fi': 'Finnish', 'finnish': 'Finnish',
+    'ron': 'Romanian', 'ro': 'Romanian', 'romanian': 'Romanian',
+    'hun': 'Hungarian', 'hu': 'Hungarian', 'hungarian': 'Hungarian',
+    'ces': 'Czech', 'cs': 'Czech', 'czech': 'Czech',
+    'slk': 'Slovak', 'sk': 'Slovak', 'slovak': 'Slovak',
+    'bul': 'Bulgarian', 'bg': 'Bulgarian', 'bulgarian': 'Bulgarian',
+    'ukr': 'Ukrainian', 'uk': 'Ukrainian', 'ukrainian': 'Ukrainian',
+    'srp': 'Serbian', 'sr': 'Serbian', 'serbian': 'Serbian',
+    'hrv': 'Croatian', 'hr': 'Croatian', 'croatian': 'Croatian',
+    'cat': 'Catalan', 'ca': 'Catalan', 'catalan': 'Catalan',
+    'tam': 'Tamil', 'ta': 'Tamil', 'tamil': 'Tamil',
+    'tel': 'Telugu', 'te': 'Telugu', 'telugu': 'Telugu',
+    'ben': 'Bengali', 'bn': 'Bengali', 'bengali': 'Bengali', 'bangla': 'Bengali',
+    'pan': 'Punjabi', 'pa': 'Punjabi', 'punjabi': 'Punjabi',
+    'guj': 'Gujarati', 'gu': 'Gujarati', 'gujarati': 'Gujarati',
+    'mar': 'Marathi', 'mr': 'Marathi', 'marathi': 'Marathi',
+    'mal': 'Malayalam', 'ml': 'Malayalam', 'malayalam': 'Malayalam',
+    'kan': 'Kannada', 'kn': 'Kannada', 'kannada': 'Kannada',
+    'pus': 'Pashto', 'ps': 'Pashto', 'pashto': 'Pashto',
+    'kur': 'Kurdish', 'ku': 'Kurdish', 'kurdish': 'Kurdish',
+    'som': 'Somali', 'so': 'Somali', 'somali': 'Somali',
+    'amh': 'Amharic', 'am': 'Amharic', 'amharic': 'Amharic',
+  };
+
+  static String _normalizeLanguage(String raw) {
+    final key = raw.toLowerCase().trim();
+    if (key.contains(';')) return _normalizeLanguage(raw.split(';').first);
+    return _langNormalize[key] ?? (raw[0].toUpperCase() + raw.substring(1).toLowerCase());
+  }
+
   List<Channel> _channels = [];
   List<Channel> _filteredChannels = [];
   Set<String> _categories = {};
@@ -446,10 +505,11 @@ class ChannelProvider extends ChangeNotifier {
         .map((c) => c.country ?? 'Unknown')
         .where((c) => c.isNotEmpty && c != 'Unknown')
         .toSet();
-    // BL-017: Extract languages
+    // BL-017: Extract languages with normalization
     _languages = _channels
         .map((c) => c.language ?? 'Unknown')
         .where((c) => c.isNotEmpty && c != 'Unknown')
+        .map(_normalizeLanguage)
         .toSet();
   }
 
@@ -476,9 +536,11 @@ class ChannelProvider extends ChangeNotifier {
         }
       }
       
-      // BL-017: Language filter
+      // BL-017: Language filter (with normalization)
       if (_selectedLanguage != 'All') {
-        if ((channel.language ?? 'Unknown') != _selectedLanguage) {
+        final rawLang = channel.language ?? 'Unknown';
+        final normalizedLang = _normalizeLanguage(rawLang);
+        if (normalizedLang != _selectedLanguage) {
           return false;
         }
       }

@@ -302,41 +302,91 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   
   void _showCastDialog() {
     final streamUrl = widget.channel.url;
-    showDialog(
+    final channelName = widget.channel.name;
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.cast),
-            SizedBox(width: 8),
-            Text('Cast to Device'),
-          ],
-        ),
-        content: Column(
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Built-in casting is coming in a future update.',
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'For now you can cast using:',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '• VLC → Menu → Renderer → Select device\n'
-              '• MX Player → Cast icon in player\n'
-              '• Or copy the stream URL below',
-              style: TextStyle(fontSize: 13, height: 1.5),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[600],
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             const SizedBox(height: 16),
-            // Copy URL button
+            Text('Cast "$channelName"',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+            ),
+            const SizedBox(height: 20),
+            // Option 1: Cast via system (Google Home / Smart TV apps)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final uri = Uri.parse(streamUrl);
+                  try {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(content: Text('No cast-capable app found. Install a media player with cast support.')),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.cast),
+                label: const Text('Open in Media Player (Cast from there)'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: Colors.blue[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Option 2: Share URL to cast apps
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  try {
+                    final shareUri = Uri.parse('https://www.youtube.com/watch?v=cast_redirect&url=${Uri.encodeComponent(streamUrl)}');
+                    // Use share intent — cast-compatible apps will appear
+                    await launchUrl(
+                      Uri.parse(streamUrl),
+                      mode: LaunchMode.externalNonBrowserApplication,
+                    );
+                  } catch (e) {
+                    // Fallback: copy URL
+                    Clipboard.setData(ClipboardData(text: streamUrl));
+                    if (mounted) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(content: Text('Stream URL copied — paste in your cast app')),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Open in External App'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Option 3: Copy URL
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: streamUrl));
                   Navigator.pop(context);
@@ -344,18 +394,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                     const SnackBar(content: Text('Stream URL copied to clipboard')),
                   );
                 },
-                icon: const Icon(Icons.copy),
+                icon: const Icon(Icons.copy, size: 18),
                 label: const Text('Copy Stream URL'),
               ),
             ),
+            const SizedBox(height: 8),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }

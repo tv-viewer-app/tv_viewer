@@ -13,6 +13,7 @@ import os
 from core.channel_manager import ChannelManager
 from utils.helpers import format_age_rating
 from utils.thumbnail import capture_thumbnail_async, get_thumbnail_path, thumbnail_exists
+from utils.favorites import FavoritesManager
 from utils.logger import get_logger
 from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
@@ -68,6 +69,9 @@ class MainWindow:
         # Channel manager
         self.channel_manager = ChannelManager()
         self._setup_callbacks()
+        
+        # Favorites manager
+        self.favorites_manager = FavoritesManager()
         
         # Player window reference
         self.player_window: Optional[PlayerWindow] = None
@@ -359,6 +363,20 @@ class MainWindow:
             bootstyle="round-toggle"
         )
         self.privatebin_switch.pack(side="left")
+        
+        # Row 3: Favorites only toggle
+        row3 = ttk.Frame(filter_frame)
+        row3.pack(fill="x", pady=1)
+        
+        self.show_favorites_var = tk.BooleanVar(value=False)
+        self.show_favorites_switch = ttk.Checkbutton(
+            row3,
+            text="★ Favorites only",
+            variable=self.show_favorites_var,
+            command=self._apply_filters,
+            bootstyle="round-toggle"
+        )
+        self.show_favorites_switch.pack(side="left")
     
     def _create_category_list(self):
         """Create the category/country scrollable list."""
@@ -407,7 +425,7 @@ class MainWindow:
         # Settings button
         self.settings_btn = ttk.Button(
             button_frame,
-            text="⚙️ Config",
+            text="⚙️ Settings",
             command=self._edit_channel_config,
             bootstyle="secondary"
         )
@@ -510,7 +528,7 @@ class MainWindow:
         
         self.channel_tree = ttk.Treeview(
             tree_frame,
-            columns=('name', 'category', 'status', 'last_checked', 'age', 'country'),
+            columns=('fav', 'name', 'category', 'status', 'last_checked', 'age', 'country'),
             show='headings',
             yscrollcommand=self.channel_scrollbar.set,
             selectmode='browse',
@@ -519,7 +537,11 @@ class MainWindow:
         self.channel_tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.channel_scrollbar.config(command=self.channel_tree.yview)
         
-        # Configure columns with wider spacing
+        # Configure fav column (star) — fixed narrow width
+        self.channel_tree.heading('fav', text='★', command=lambda: self._sort_by_column('fav'))
+        self.channel_tree.column('fav', width=30, minwidth=30, anchor='center', stretch=False)
+        
+        # Configure remaining columns with wider spacing
         columns_config = {
             'name': ('Channel Name', 300),
             'category': ('Category', 110),
@@ -537,11 +559,14 @@ class MainWindow:
         self.channel_tree.tag_configure('working', foreground=colors.success)
         self.channel_tree.tag_configure('not_working', foreground=colors.danger)
         self.channel_tree.tag_configure('checking', foreground=colors.warning)
+        self.channel_tree.tag_configure('favorite', foreground=FluentColors.FAVORITE_STAR)
         
         # Bindings
         self.channel_tree.bind('<Double-1>', self._on_channel_double_click)
         self.channel_tree.bind('<Return>', self._on_channel_double_click)
         self.channel_tree.bind('<<TreeviewSelect>>', self._on_channel_select)
+        self.channel_tree.bind('<Button-1>', self._on_tree_click)
+        self.channel_tree.bind('<Button-3>', self._on_tree_right_click)
     
     def _create_preview_panel(self):
         """Create the preview panel."""
@@ -726,7 +751,7 @@ class MainWindow:
         # Show "no results" message if empty
         if not filtered_channels:
             tree.insert('', tk.END, 
-                values=("No channels found", "", "", "", "", ""),
+                values=("", "No channels found", "", "", "", "", ""),
                 tags=('no_results',))
             tree.tag_configure('no_results', foreground='#888888')
             self.channel_count_label.configure(
@@ -761,8 +786,12 @@ class MainWindow:
             last_scanned = channel.get('last_scanned', '')
             last_checked = last_scanned[11:16] if last_scanned else ''
             
+            # Favorite star
+            url = channel.get('url', '')
+            fav_star = '★' if self.favorites_manager.is_favorite(url) else ''
+            
             tree.insert('', tk.END, 
-                values=(name, category, status, last_checked, age_rating, country),
+                values=(fav_star, name, category, status, last_checked, age_rating, country),
                 tags=(tag,))
         
         # Show treeview again and process pending draw events
@@ -781,6 +810,7 @@ class MainWindow:
     
     def _filter_channels(self, channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Filter channels based on current filter settings."""
+        show_favorites_only = self.show_favorites_var.get()
         result = []
         for ch in channels:
             is_working = ch.get('is_working')
@@ -788,6 +818,8 @@ class MainWindow:
             if self.hide_checking_var.get() and is_working is None:
                 continue
             if self.hide_failed_var.get() and is_working is False:
+                continue
+            if show_favorites_only and not self.favorites_manager.is_favorite(ch.get('url', '')):
                 continue
             
             result.append(ch)
@@ -799,7 +831,10 @@ class MainWindow:
         reverse = self._sort_reverse
         
         def get_sort_key(ch):
-            if col == 'name':
+            if col == 'fav':
+                # Favorites first (True=0, False=1 for ascending)
+                return 0 if self.favorites_manager.is_favorite(ch.get('url', '')) else 1
+            elif col == 'name':
                 return ch.get('name', '').lower()
             elif col == 'category':
                 return ch.get('category', '').lower()
@@ -831,7 +866,7 @@ class MainWindow:
         
         # Update headers
         columns_config = {
-            'name': 'Channel Name', 'category': 'Category', 'status': 'Status',
+            'fav': '★', 'name': 'Channel Name', 'category': 'Category', 'status': 'Status',
             'last_checked': 'Checked', 'age': 'Age', 'country': 'Country'
         }
         for c, title in columns_config.items():
@@ -897,7 +932,7 @@ class MainWindow:
             return
         
         item = self.channel_tree.item(selection[0])
-        channel_name = item['values'][0]
+        channel_name = item['values'][1]
         channel = self._find_channel_by_name(channel_name)
         
         if not channel:
@@ -974,12 +1009,106 @@ class MainWindow:
             selection = self.channel_tree.selection()
             if selection:
                 item = self.channel_tree.item(selection[0])
-                channel = self._find_channel_by_name(item['values'][0])
+                channel = self._find_channel_by_name(item['values'][1])
                 if channel and channel.get('url') == url:
                     self.root.after(0, lambda: self._show_channel_thumbnail(channel))
     
+    def _on_tree_click(self, event):
+        """Handle single click on treeview — toggle favorite when clicking star column.
+        
+        Uses a short delay to avoid double-toggling on double-click (tkinter fires
+        two <Button-1> events before <Double-1>).
+        """
+        region = self.channel_tree.identify_region(event.x, event.y)
+        if region != 'cell':
+            return
+        
+        col_id = self.channel_tree.identify_column(event.x)
+        # '#1' is the first column (fav)
+        if col_id != '#1':
+            return
+        
+        row_id = self.channel_tree.identify_row(event.y)
+        if not row_id:
+            return
+        
+        # Cancel any pending star toggle (prevents double-toggle on double-click)
+        if hasattr(self, '_fav_toggle_timer') and self._fav_toggle_timer:
+            self.root.after_cancel(self._fav_toggle_timer)
+        
+        self._fav_toggle_timer = self.root.after(300, lambda: self._do_toggle_fav(row_id))
+    
+    def _do_toggle_fav(self, row_id: str):
+        """Actually toggle favorite for a treeview row (called after debounce)."""
+        self._fav_toggle_timer = None
+        try:
+            item = self.channel_tree.item(row_id)
+        except tk.TclError:
+            return  # Row no longer exists
+        
+        channel_name = item['values'][1]
+        channel = self._find_channel_by_name(channel_name)
+        if not channel:
+            return
+        
+        url = channel.get('url', '')
+        if url:
+            self.favorites_manager.toggle_favorite(url)
+            new_star = '★' if self.favorites_manager.is_favorite(url) else ''
+            values = list(item['values'])
+            values[0] = new_star
+            self.channel_tree.item(row_id, values=values)
+    
+    def _on_tree_right_click(self, event):
+        """Handle right-click context menu on treeview."""
+        row_id = self.channel_tree.identify_row(event.y)
+        if not row_id:
+            return
+        
+        # Select the row under cursor
+        self.channel_tree.selection_set(row_id)
+        
+        item = self.channel_tree.item(row_id)
+        channel_name = item['values'][1]
+        channel = self._find_channel_by_name(channel_name)
+        if not channel:
+            return
+        
+        url = channel.get('url', '')
+        is_fav = self.favorites_manager.is_favorite(url)
+        
+        # Build context menu
+        menu = tk.Menu(self.root, tearoff=0)
+        fav_label = "☆ Remove Favorite" if is_fav else "★ Add Favorite"
+        menu.add_command(label=fav_label, command=lambda: self._toggle_favorite_from_menu(url, row_id))
+        menu.add_separator()
+        menu.add_command(label="▶ Play", command=self._play_selected_channel)
+        
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+    
+    def _toggle_favorite_from_menu(self, url: str, row_id: str):
+        """Toggle favorite from context menu and update the row in-place."""
+        self.favorites_manager.toggle_favorite(url)
+        new_star = '★' if self.favorites_manager.is_favorite(url) else ''
+        item = self.channel_tree.item(row_id)
+        values = list(item['values'])
+        values[0] = new_star
+        self.channel_tree.item(row_id, values=values)
+
     def _on_channel_double_click(self, event):
-        """Handle double-click to play."""
+        """Handle double-click to play (skip if clicking on star column)."""
+        # Cancel pending fav toggle — the double-click supersedes it
+        if hasattr(self, '_fav_toggle_timer') and self._fav_toggle_timer:
+            self.root.after_cancel(self._fav_toggle_timer)
+            self._fav_toggle_timer = None
+        
+        col_id = self.channel_tree.identify_column(event.x)
+        if col_id == '#1':
+            # Star column — do nothing on double-click
+            return
         self._play_selected_channel()
     
     def _play_selected_channel(self):
@@ -989,7 +1118,7 @@ class MainWindow:
             return
         
         item = self.channel_tree.item(selection[0])
-        channel = self._find_channel_by_name(item['values'][0])
+        channel = self._find_channel_by_name(item['values'][1])
         
         if channel:
             self._play_channel(channel)
@@ -1186,36 +1315,381 @@ class MainWindow:
             self.channel_manager.validate_channels_async(rescan_all=False)
     
     def _edit_channel_config(self):
-        """Open config file for editing."""
-        import subprocess
-        import sys
-        
-        config_path = config.CHANNELS_CONFIG_FILE
-        
-        if not os.path.exists(config_path):
-            messagebox.showerror("Error", f"Config file not found:\n{config_path}")
-            return
-        
+        """Open the Settings dialog (replaces old notepad-based config editing)."""
+        self._show_settings_dialog()
+
+    # ── Settings Dialog ──────────────────────────────────────────────────
+    def _show_settings_dialog(self):
+        """Show a proper Settings dialog with stream, repo, and display options."""
+        import json as _json
+
+        # Prevent multiple dialogs
+        if hasattr(self, '_settings_win') and self._settings_win is not None:
+            try:
+                self._settings_win.focus_set()
+                return
+            except tk.TclError:
+                self._settings_win = None
+
+        C = FluentColors  # alias for dark colors used below
+        CD = FluentColors
         try:
-            if sys.platform == 'win32':
-                subprocess.Popen(['notepad.exe', config_path])
-            elif sys.platform == 'darwin':
-                subprocess.Popen(['open', '-t', config_path])
-            else:
-                for editor in ['xdg-open', 'gedit', 'kate', 'nano', 'vi']:
-                    try:
-                        subprocess.Popen([editor, config_path])
-                        break
-                    except FileNotFoundError:
-                        continue
-            
-            messagebox.showinfo(
-                "Edit Config",
-                f"Opening config file:\n{config_path}\n\n"
-                "Restart the app after editing."
-            )
+            from .constants import FluentColorsDark
+            CD = FluentColorsDark
+        except Exception:
+            pass
+
+        FONT = ("Segoe UI", 11)
+        FONT_BOLD = ("Segoe UI", 11, "bold")
+        FONT_SECTION = ("Segoe UI", 13, "bold")
+        FONT_SMALL = ("Segoe UI", 10)
+
+        # ── Load current values ──────────────────────────────────────────
+        cur_stream_timeout = getattr(config, 'STREAM_CHECK_TIMEOUT', 5)
+        cur_max_concurrent = getattr(config, 'MAX_CONCURRENT_CHECKS', 30)
+        cur_request_timeout = getattr(config, 'REQUEST_TIMEOUT', 15)
+        cur_batch_size = getattr(config, 'SCAN_BATCH_SIZE', 200)
+        cur_scan_delay = getattr(config, 'SCAN_REQUEST_DELAY', 0.005)
+
+        # Load repos from channels_config.json
+        config_path = config.CHANNELS_CONFIG_FILE
+        cfg_data = {}
+        repos_list: list = []
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    cfg_data = _json.load(f)
+                repos_list = list(cfg_data.get('repositories', []))
         except Exception as e:
-            messagebox.showerror("Error", f"Could not open config file:\n{e}")
+            logger.error(f"Settings: failed to read config JSON: {e}")
+
+        # Default repos for Reset
+        default_repos = [
+            "https://iptv-org.github.io/iptv/index.m3u",
+            "https://iptv-org.github.io/iptv/index.country.m3u",
+        ]
+
+        # ── Create dialog window ─────────────────────────────────────────
+        dlg = ttk_bs.Toplevel(self.root)
+        dlg.title("Settings")
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        self._settings_win = dlg
+
+        # Size & center on parent
+        dw, dh = 520, 560
+        rx = self.root.winfo_rootx() + (self.root.winfo_width() - dw) // 2
+        ry = self.root.winfo_rooty() + (self.root.winfo_height() - dh) // 2
+        dlg.geometry(f"{dw}x{dh}+{rx}+{ry}")
+
+        def _on_close():
+            self._settings_win = None
+            dlg.destroy()
+
+        dlg.protocol("WM_DELETE_WINDOW", _on_close)
+
+        # Try to set icon
+        if set_window_icon:
+            try:
+                set_window_icon(dlg)
+            except Exception:
+                pass
+
+        # ── Scrollable content ───────────────────────────────────────────
+        outer = ttk.Frame(dlg)
+        outer.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(outer, highlightthickness=0, bd=0)
+        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas)
+
+        scroll_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Enable mouse-wheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        content = ttk.Frame(scroll_frame, padding=18)
+        content.pack(fill="both", expand=True)
+
+        # ── Section helper ───────────────────────────────────────────────
+        def _section(parent, title, row):
+            lbl = ttk.Label(parent, text=title, font=FONT_SECTION,
+                            foreground=CD.ACCENT)
+            lbl.grid(row=row, column=0, columnspan=3, sticky="w", pady=(14, 4))
+            sep = ttk.Separator(parent, orient="horizontal")
+            sep.grid(row=row + 1, column=0, columnspan=3, sticky="ew", pady=(0, 6))
+            return row + 2
+
+        # ── 1. Stream Settings ───────────────────────────────────────────
+        r = _section(content, "⚡  Stream Settings", 0)
+
+        # Stream check timeout
+        ttk.Label(content, text="Stream check timeout (s):", font=FONT
+                  ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+        stream_timeout_var = tk.IntVar(value=cur_stream_timeout)
+        stream_timeout_spin = ttk.Spinbox(
+            content, from_=1, to=30, width=6,
+            textvariable=stream_timeout_var, font=FONT
+        )
+        stream_timeout_spin.grid(row=r, column=1, sticky="w")
+        ttk.Label(content, text="1–30", font=FONT_SMALL,
+                  foreground=CD.TEXT_SECONDARY
+                  ).grid(row=r, column=2, sticky="w", padx=4)
+        r += 1
+
+        # Max concurrent checks
+        ttk.Label(content, text="Max concurrent checks:", font=FONT
+                  ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+        max_concurrent_var = tk.IntVar(value=cur_max_concurrent)
+        max_concurrent_spin = ttk.Spinbox(
+            content, from_=1, to=100, width=6,
+            textvariable=max_concurrent_var, font=FONT
+        )
+        max_concurrent_spin.grid(row=r, column=1, sticky="w")
+        ttk.Label(content, text="1–100", font=FONT_SMALL,
+                  foreground=CD.TEXT_SECONDARY
+                  ).grid(row=r, column=2, sticky="w", padx=4)
+        r += 1
+
+        # Request timeout
+        ttk.Label(content, text="Request timeout (s):", font=FONT
+                  ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+        request_timeout_var = tk.IntVar(value=cur_request_timeout)
+        request_timeout_spin = ttk.Spinbox(
+            content, from_=5, to=60, width=6,
+            textvariable=request_timeout_var, font=FONT
+        )
+        request_timeout_spin.grid(row=r, column=1, sticky="w")
+        ttk.Label(content, text="5–60", font=FONT_SMALL,
+                  foreground=CD.TEXT_SECONDARY
+                  ).grid(row=r, column=2, sticky="w", padx=4)
+        r += 1
+
+        # Batch size
+        ttk.Label(content, text="Scan batch size:", font=FONT
+                  ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+        batch_size_var = tk.IntVar(value=cur_batch_size)
+        batch_size_spin = ttk.Spinbox(
+            content, from_=50, to=1000, increment=50, width=6,
+            textvariable=batch_size_var, font=FONT
+        )
+        batch_size_spin.grid(row=r, column=1, sticky="w")
+        ttk.Label(content, text="50–1000", font=FONT_SMALL,
+                  foreground=CD.TEXT_SECONDARY
+                  ).grid(row=r, column=2, sticky="w", padx=4)
+        r += 1
+
+        # ── 2. Repository Management ────────────────────────────────────
+        r = _section(content, "📡  Repositories", r)
+
+        repo_frame = ttk.Frame(content)
+        repo_frame.grid(row=r, column=0, columnspan=3, sticky="nsew", pady=(0, 4))
+        content.grid_rowconfigure(r, weight=1)
+        content.grid_columnconfigure(0, weight=1)
+        r += 1
+
+        # Listbox + scrollbar for repos
+        repo_lb_frame = ttk.Frame(repo_frame)
+        repo_lb_frame.pack(fill="both", expand=True)
+
+        repo_scrollbar = ttk.Scrollbar(repo_lb_frame, orient="vertical")
+        repo_listbox = tk.Listbox(
+            repo_lb_frame, height=6, selectmode=tk.EXTENDED,
+            font=FONT_SMALL,
+            bg=CD.BG_CARD, fg=CD.TEXT_PRIMARY,
+            selectbackground=CD.ACCENT, selectforeground="#FFFFFF",
+            highlightthickness=0, bd=1, relief="solid",
+            yscrollcommand=repo_scrollbar.set
+        )
+        repo_scrollbar.configure(command=repo_listbox.yview)
+        repo_listbox.pack(side="left", fill="both", expand=True)
+        repo_scrollbar.pack(side="right", fill="y")
+
+        # Populate
+        for url in repos_list:
+            repo_listbox.insert(tk.END, url)
+
+        # Repo buttons
+        repo_btn_frame = ttk.Frame(repo_frame)
+        repo_btn_frame.pack(fill="x", pady=(4, 0))
+
+        def _add_repo():
+            add_dlg = ttk_bs.Toplevel(dlg)
+            add_dlg.title("Add Repository URL")
+            add_dlg.resizable(False, False)
+            add_dlg.grab_set()
+            adw, adh = 440, 120
+            ax = dlg.winfo_rootx() + (dlg.winfo_width() - adw) // 2
+            ay = dlg.winfo_rooty() + (dlg.winfo_height() - adh) // 2
+            add_dlg.geometry(f"{adw}x{adh}+{ax}+{ay}")
+
+            ttk.Label(add_dlg, text="Repository URL:", font=FONT
+                      ).pack(anchor="w", padx=12, pady=(10, 2))
+            url_var = tk.StringVar()
+            url_entry = ttk.Entry(add_dlg, textvariable=url_var, width=52, font=FONT_SMALL)
+            url_entry.pack(padx=12, fill="x")
+            url_entry.focus_set()
+
+            def _confirm(event=None):
+                url = url_var.get().strip()
+                if url:
+                    repo_listbox.insert(tk.END, url)
+                add_dlg.destroy()
+
+            url_entry.bind("<Return>", _confirm)
+            btn_fr = ttk.Frame(add_dlg)
+            btn_fr.pack(pady=8)
+            ttk.Button(btn_fr, text="Add", command=_confirm,
+                       bootstyle="primary", width=10).pack(side="left", padx=4)
+            ttk.Button(btn_fr, text="Cancel", command=add_dlg.destroy,
+                       bootstyle="secondary", width=10).pack(side="left", padx=4)
+
+        def _remove_repo():
+            sel = repo_listbox.curselection()
+            for idx in reversed(sel):
+                repo_listbox.delete(idx)
+
+        ttk.Button(repo_btn_frame, text="➕ Add", command=_add_repo,
+                   bootstyle="success-outline", width=10
+                   ).pack(side="left", padx=(0, 4))
+        ttk.Button(repo_btn_frame, text="➖ Remove", command=_remove_repo,
+                   bootstyle="danger-outline", width=10
+                   ).pack(side="left", padx=(0, 4))
+
+        repo_count_lbl = ttk.Label(
+            repo_btn_frame, text=f"{repo_listbox.size()} repos",
+            font=FONT_SMALL, foreground=CD.TEXT_SECONDARY
+        )
+        repo_count_lbl.pack(side="right")
+
+        # Keep count label updated
+        def _update_repo_count(*_args):
+            repo_count_lbl.configure(text=f"{repo_listbox.size()} repos")
+
+        repo_listbox.bind("<<ListboxSelect>>", _update_repo_count)
+
+        # ── 3. Display Settings ──────────────────────────────────────────
+        r = _section(content, "🎨  Display Settings", r)
+
+        # Default group mode
+        ttk.Label(content, text="Default group by:", font=FONT
+                  ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+        group_mode_var = tk.StringVar(
+            value=self.group_by_mode.capitalize()
+        )
+        group_combo = ttk.Combobox(
+            content, textvariable=group_mode_var,
+            values=["Category", "Country"],
+            state="readonly", width=14, font=FONT
+        )
+        group_combo.grid(row=r, column=1, columnspan=2, sticky="w")
+        r += 1
+
+        # Theme selector
+        ttk.Label(content, text="Theme:", font=FONT
+                  ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+        available_themes = ["darkly", "superhero", "cyborg", "vapor", "solar"]
+        current_theme = self.root.style.theme.name if hasattr(self.root.style, 'theme') else "darkly"
+        theme_var = tk.StringVar(value=current_theme)
+        theme_combo = ttk.Combobox(
+            content, textvariable=theme_var,
+            values=available_themes,
+            state="readonly", width=14, font=FONT
+        )
+        theme_combo.grid(row=r, column=1, columnspan=2, sticky="w")
+        r += 1
+
+        # ── Bottom button bar ────────────────────────────────────────────
+        btn_bar = ttk.Frame(dlg, padding=(18, 8))
+        btn_bar.pack(fill="x", side="bottom")
+
+        def _save():
+            """Persist all settings and apply in-memory."""
+            # -- Stream settings -- apply to config module --
+            try:
+                config.STREAM_CHECK_TIMEOUT = max(1, min(30, stream_timeout_var.get()))
+            except (tk.TclError, ValueError):
+                pass
+            try:
+                config.MAX_CONCURRENT_CHECKS = max(1, min(100, max_concurrent_var.get()))
+            except (tk.TclError, ValueError):
+                pass
+            try:
+                config.REQUEST_TIMEOUT = max(5, min(60, request_timeout_var.get()))
+            except (tk.TclError, ValueError):
+                pass
+            try:
+                config.SCAN_BATCH_SIZE = max(50, min(1000, batch_size_var.get()))
+            except (tk.TclError, ValueError):
+                pass
+
+            # -- Repositories -- write to channels_config.json --
+            new_repos = list(repo_listbox.get(0, tk.END))
+            try:
+                save_data = dict(cfg_data)  # preserve custom_channels etc.
+                save_data['repositories'] = new_repos
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    _json.dump(save_data, f, indent=2, ensure_ascii=False)
+                # Update in-memory repos
+                config.IPTV_REPOSITORIES = new_repos
+                logger.info(f"Settings: saved {len(new_repos)} repos to {config_path}")
+            except Exception as e:
+                logger.error(f"Settings: failed to save repos: {e}")
+                messagebox.showerror("Error", f"Failed to save repositories:\n{e}",
+                                     parent=dlg)
+                return
+
+            # -- Display settings --
+            new_group = group_mode_var.get()
+            if new_group.lower() != self.group_by_mode:
+                self._on_group_by_change(new_group)
+                self.group_by_var.set(new_group)
+
+            new_theme = theme_var.get()
+            if new_theme != current_theme:
+                try:
+                    self.root.style.theme_use(new_theme)
+                    logger.info(f"Settings: theme changed to {new_theme}")
+                except Exception as e:
+                    logger.warning(f"Settings: failed to apply theme: {e}")
+
+            _on_close()
+            logger.info("Settings saved successfully")
+
+        def _reset():
+            """Reset all fields to defaults."""
+            stream_timeout_var.set(5)
+            max_concurrent_var.set(30)
+            request_timeout_var.set(15)
+            batch_size_var.set(200)
+            group_mode_var.set("Category")
+            theme_var.set("darkly")
+            # Reset repo list to defaults
+            repo_listbox.delete(0, tk.END)
+            for url in default_repos:
+                repo_listbox.insert(tk.END, url)
+            _update_repo_count()
+
+        ttk.Button(btn_bar, text="Reset to Defaults", command=_reset,
+                   bootstyle="warning-outline", width=16
+                   ).pack(side="left")
+        ttk.Button(btn_bar, text="Cancel", command=_on_close,
+                   bootstyle="secondary", width=10
+                   ).pack(side="right", padx=(4, 0))
+        ttk.Button(btn_bar, text="Save", command=_save,
+                   bootstyle="primary", width=10
+                   ).pack(side="right")
     
     def _export_m3u(self):
         """Export all channels as M3U playlist file."""
