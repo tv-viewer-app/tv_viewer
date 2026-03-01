@@ -367,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Second row: Language filter (BL-017)
+                    // Second row: Language filter (BL-017) + Favorites toggle
                     Row(
                       children: [
                         Expanded(
@@ -378,6 +378,31 @@ class _HomeScreenState extends State<HomeScreen> {
                             icon: Icons.language,
                             onChanged: (value) => provider.setLanguage(value!),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Favorites toggle button
+                        FilterChip(
+                          label: Text(
+                            '★ Favorites (${provider.favoritesCount})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: provider.showFavoritesOnly
+                                  ? Colors.amber.shade900
+                                  : null,
+                            ),
+                          ),
+                          selected: provider.showFavoritesOnly,
+                          selectedColor: Colors.amber.shade100,
+                          avatar: Icon(
+                            provider.showFavoritesOnly
+                                ? Icons.star
+                                : Icons.star_border,
+                            size: 18,
+                            color: provider.showFavoritesOnly
+                                ? Colors.amber.shade700
+                                : null,
+                          ),
+                          onSelected: (_) => provider.toggleFavoritesFilter(),
                         ),
                       ],
                     ),

@@ -25,6 +25,7 @@ class ChannelProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isScanning = false;
   bool _isOffline = false; // #41: Offline state tracking
+  bool _showFavoritesOnly = false; // Dedicated favorites toggle
   String _errorMessage = ''; // #41: User-facing error message
   int _scanProgress = 0;
   int _scanTotal = 0;
@@ -33,7 +34,7 @@ class ChannelProvider extends ChangeNotifier {
 
   // Getters
   List<Channel> get channels => _filteredChannels;
-  List<String> get categories => ['All', 'Favorites', ..._categories.toList()..sort()];
+  List<String> get categories => ['All', ..._categories.toList()..sort()];
   List<String> get countries => ['All', ..._countries.toList()..sort()];
   List<String> get languages => ['All', ..._languages.toList()..sort()]; // BL-017
   List<String> get mediaTypes => ['All', 'TV', 'Radio'];
@@ -47,6 +48,7 @@ class ChannelProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isScanning => _isScanning;
   bool get isOffline => _isOffline; // #41
+  bool get showFavoritesOnly => _showFavoritesOnly;
   String get errorMessage => _errorMessage; // #41
   int get scanProgress => _scanProgress;
   int get scanTotal => _scanTotal;
@@ -371,6 +373,13 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle favorites-only filter
+  void toggleFavoritesFilter() {
+    _showFavoritesOnly = !_showFavoritesOnly;
+    _applyFilters();
+    notifyListeners();
+  }
+
   /// Set search query
   void setSearchQuery(String query) {
     _searchQuery = query;
@@ -385,6 +394,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedLanguage = 'All';
     _selectedMediaType = 'All';
     _selectedStatus = 'All';
+    _showFavoritesOnly = false;
     _searchQuery = '';
     _applyFilters();
     notifyListeners();
@@ -397,14 +407,41 @@ class ChannelProvider extends ChangeNotifier {
         _selectedLanguage != 'All' ||
         _selectedMediaType != 'All' ||
         _selectedStatus != 'All' ||
+        _showFavoritesOnly ||
         _searchQuery.isNotEmpty;
   }
 
+  /// Known content categories — anything else in group-title is likely a country name
+  static const _knownCategories = {
+    'Animation', 'Auto', 'Business', 'Classic', 'Comedy', 'Cooking',
+    'Culture', 'Documentary', 'Education', 'Entertainment', 'Family',
+    'General', 'Kids', 'Legislative', 'Lifestyle', 'Movies', 'Music',
+    'News', 'Outdoor', 'Radio', 'Relax', 'Religious', 'Science',
+    'Series', 'Shop', 'Sports', 'Travel', 'Weather', 'Xxx', 'Other',
+    'Undefined', 'Fiction', 'Food', 'Health', 'History', 'Nature',
+    'Technology', 'Gaming', 'Drama', 'Crime', 'Reality', 'Talk',
+  };
+
   void _updateCategories() {
-    _categories = _channels
+    // Separate real content categories from country names in group-title
+    final rawCategories = _channels
         .map((c) => c.category ?? 'Other')
         .where((c) => c.isNotEmpty)
         .toSet();
+
+    // Only include known content categories; filter out country names
+    _categories = rawCategories.where((cat) {
+      return _knownCategories.contains(cat) ||
+          // Keep it if it's NOT a recognized country in our countries set
+          // (short names < 4 chars are likely codes, keep them)
+          cat.length <= 3;
+    }).toSet();
+
+    // If very few categories matched, fall back to all (some playlists use custom names)
+    if (_categories.length < 3 && rawCategories.length > 3) {
+      _categories = rawCategories;
+    }
+
     _countries = _channels
         .map((c) => c.country ?? 'Unknown')
         .where((c) => c.isNotEmpty && c != 'Unknown')
@@ -418,14 +455,15 @@ class ChannelProvider extends ChangeNotifier {
 
   void _applyFilters() {
     _filteredChannels = _channels.where((channel) {
-      // Favorites filter (special category)
-      if (_selectedCategory == 'Favorites') {
+      // Favorites toggle (dedicated button)
+      if (_showFavoritesOnly) {
         if (!_favoriteUrls.contains(channel.url)) {
           return false;
         }
       }
+
       // Category filter
-      else if (_selectedCategory != 'All') {
+      if (_selectedCategory != 'All') {
         if ((channel.category ?? 'Other') != _selectedCategory) {
           return false;
         }
