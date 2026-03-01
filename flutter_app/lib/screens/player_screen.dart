@@ -81,21 +81,17 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       });
       logger.info('PiP initialized - Supported: $_isPipSupported');
       
-      // Listen to PiP status changes
-      _pipService.pipStatusStream?.listen((status) {
-        if (mounted) {
+      // Check current PiP status
+      try {
+        final status = await _pipService.pipStatusFuture;
+        if (status != null && mounted) {
           setState(() {
             _isPipMode = status == PiPStatus.enabled;
           });
-          
-          // Handle PiP lifecycle
-          if (status == PiPStatus.enabled) {
-            logger.info('Entered PiP mode for ${widget.channel.name}');
-          } else if (status == PiPStatus.disabled) {
-            logger.info('Exited PiP mode');
-          }
         }
-      });
+      } catch (_) {
+        // PiP status check failed, ignore
+      }
     } catch (e, stackTrace) {
       logger.error('Failed to initialize PiP', e, stackTrace);
     }
