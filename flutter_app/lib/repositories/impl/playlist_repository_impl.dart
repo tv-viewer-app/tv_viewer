@@ -66,7 +66,14 @@ class PlaylistRepositoryImpl implements PlaylistRepository {
     logger.debug('PlaylistRepository: Deduplicating ${channels.length} channels');
     
     try {
-      final deduplicated = M3UService.deduplicateChannels(channels);
+      // Deduplicate by URL, keeping the first occurrence (most complete metadata)
+      final seen = <String>{};
+      final deduplicated = <Channel>[];
+      for (final channel in channels) {
+        if (seen.add(channel.url)) {
+          deduplicated.add(channel);
+        }
+      }
       final removed = channels.length - deduplicated.length;
       
       if (removed > 0) {

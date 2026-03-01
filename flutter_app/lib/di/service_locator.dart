@@ -28,14 +28,12 @@ final getIt = GetIt.instance;
 /// ```
 Future<void> setupServiceLocator() async {
   // Register Logger Service as a singleton
-  // The logger needs to be initialized before other services can use it
+  // Logger is already initialized in main() before this is called,
+  // so we just register the existing instance — no re-initialization.
   getIt.registerLazySingleton<LoggerService>(
     () => LoggerService.instance,
   );
 
-  // Initialize logger
-  await getIt<LoggerService>().initialize();
-  
   // Register Analytics Service as a singleton
   getIt.registerLazySingleton<AnalyticsService>(
     () => AnalyticsService.instance,
@@ -46,9 +44,23 @@ Future<void> setupServiceLocator() async {
     () => CrashlyticsService.instance,
   );
   
-  // Initialize analytics (Supabase-backed) and crashlytics services
-  await getIt<AnalyticsService>().initialize();
-  await getIt<CrashlyticsService>().initialize();
+  // Initialize analytics (Supabase-backed) and crashlytics services.
+  // Wrapped in try-catch: app must still work if Supabase env vars aren't set.
+  try {
+    await getIt<AnalyticsService>().initialize();
+  } catch (e) {
+    LoggerService.instance.warning(
+      'Analytics service initialization failed (non-fatal): $e',
+    );
+  }
+
+  try {
+    await getIt<CrashlyticsService>().initialize();
+  } catch (e) {
+    LoggerService.instance.warning(
+      'Crashlytics service initialization failed (non-fatal): $e',
+    );
+  }
   
   // Register repositories as singletons
   // Repositories are stateless and can be safely shared across the app
@@ -61,7 +73,7 @@ Future<void> setupServiceLocator() async {
   );
   
   // Log successful initialization
-  getIt<LoggerService>().info('Service locator initialized successfully');
+  LoggerService.instance.info('Service locator initialized successfully');
 }
 
 /// Reset the service locator (useful for testing)

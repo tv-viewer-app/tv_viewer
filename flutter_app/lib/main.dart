@@ -5,13 +5,24 @@ import 'screens/home_screen.dart';
 import 'providers/channel_provider.dart';
 import 'utils/logger_service.dart';
 import 'utils/error_handler.dart';
+import 'di/service_locator.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize logger service
+  // Initialize logger service first (before DI container)
   await LoggerService.instance.initialize(minLogLevel: LogLevel.info);
   logger.info('TV Viewer app starting...');
+  
+  // Initialize dependency injection container
+  // This registers all services and repositories for the app.
+  // Wrapped in try-catch: app must still function if DI setup fails.
+  try {
+    await setupServiceLocator();
+    logger.info('Dependency injection initialized');
+  } catch (e, stackTrace) {
+    logger.error('DI setup failed (non-fatal, using fallback)', e, stackTrace);
+  }
   
   // Wrap app in error zone to catch all errors
   runZonedGuarded(() {

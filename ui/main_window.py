@@ -14,6 +14,7 @@ from core.channel_manager import ChannelManager
 from utils.helpers import format_age_rating
 from utils.thumbnail import capture_thumbnail_async, get_thumbnail_path, thumbnail_exists
 from utils.favorites import FavoritesManager
+from utils.channel_descriptions import get_description
 from utils.logger import get_logger
 from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
@@ -1084,6 +1085,15 @@ class MainWindow:
         menu.add_separator()
         menu.add_command(label="▶ Play", command=self._play_selected_channel)
         
+        # Channel info/description option
+        description = get_description(str(channel_name))
+        if description:
+            menu.add_separator()
+            menu.add_command(
+                label="ℹ Channel Info",
+                command=lambda d=description, n=channel_name: self._show_channel_info(str(n), d),
+            )
+        
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -1097,6 +1107,13 @@ class MainWindow:
         values = list(item['values'])
         values[0] = new_star
         self.channel_tree.item(row_id, values=values)
+
+    def _show_channel_info(self, channel_name: str, description: str):
+        """Show channel description in an info messagebox."""
+        messagebox.showinfo(
+            f"Channel Info — {channel_name}",
+            description,
+        )
 
     def _on_channel_double_click(self, event):
         """Handle double-click to play (skip if clicking on star column)."""

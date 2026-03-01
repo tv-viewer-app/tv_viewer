@@ -1,15 +1,62 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
+import '../repositories/channel_repository.dart';
 import '../services/m3u_service.dart';
 import '../services/favorites_service.dart';
 import '../services/shared_db_service.dart';
+import '../services/epg_service.dart';
+import '../models/epg_info.dart';
 import '../utils/logger_service.dart';
 
 /// Provider for managing channel state
 class ChannelProvider extends ChangeNotifier {
+  /// Channel repository resolved from DI container.
+  /// Null if get_it hasn't been set up; methods fall back to direct service calls.
+  final ChannelRepository? _channelRepo;
+
+  ChannelProvider()
+      : _channelRepo = _resolveChannelRepository();
+
+  /// Safely resolve ChannelRepository from get_it.
+  /// Returns null if not registered — callers fall back to direct service usage.
+  static ChannelRepository? _resolveChannelRepository() {
+    try {
+      if (GetIt.instance.isRegistered<ChannelRepository>()) {
+        return GetIt.instance<ChannelRepository>();
+      }
+    } catch (_) {
+      // get_it not set up yet — fall back to direct service construction
+    }
+    return null;
+  }
+
+  // ── EPG Service ────────────────────────────────────────────────────
+  final EpgService _epgService = EpgService();
+
+  /// Get EPG data for a channel by name.
+  ChannelEpg? getEpgForChannel(String channelName) {
+    return _epgService.getEpgForChannel(channelName);
+  }
+
+  /// Get the currently airing program for a channel.
+  EpgInfo? getCurrentProgram(String channelName) {
+    return _epgService.getCurrentProgram(channelName);
+  }
+
+  /// Get the next scheduled program for a channel.
+  EpgInfo? getNextProgram(String channelName) {
+    return _epgService.getNextProgram(channelName);
+  }
+
+  /// Whether EPG data exists for a channel.
+  bool hasEpgData(String channelName) {
+    return _epgService.hasEpgData(channelName);
+  }
+
   // ISO/common language code → display name mapping
   static const _langNormalize = {
     'heb': 'Hebrew', 'he': 'Hebrew', 'hebrew': 'Hebrew',
@@ -159,6 +206,9 @@ class ChannelProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
+      // Load EPG data in the background (non-blocking)
+      _loadEpgInBackground();
+
       // #41: Check connectivity before background fetch
       if (await _hasConnectivity()) {
         _fetchChannelsInBackground();
@@ -198,11 +248,20 @@ class ChannelProvider extends ChangeNotifier {
     }
 
     try {
-      final channels = await M3UService.fetchAllChannels(
-        onProgress: (current, total) {
-          // Could add progress indicator here
-        },
-      );
+      List<Channel> channels;
+      if (_channelRepo != null) {
+        channels = await _channelRepo!.fetchChannels(
+          onProgress: (current, total) {
+            // Could add progress indicator here
+          },
+        );
+      } else {
+        channels = await M3UService.fetchAllChannels(
+          onProgress: (current, total) {
+            // Could add progress indicator here
+          },
+        );
+      }
 
       logger.info('Successfully fetched ${channels.length} channels');
       _channels = channels;
@@ -211,6 +270,9 @@ class ChannelProvider extends ChangeNotifier {
       _updateCategories();
       _applyFilters();
       await _saveToCache();
+
+      // Load EPG data in the background (non-blocking)
+      _loadEpgInBackground();
     } catch (e, stackTrace) {
       logger.error('Error fetching channels', e, stackTrace);
       _errorMessage = 'Failed to load channels. Using cached data if available.';
@@ -240,7 +302,12 @@ class ChannelProvider extends ChangeNotifier {
       return;
     }
     try {
-      final channels = await M3UService.fetchAllChannels();
+      List<Channel> channels;
+      if (_channelRepo != null) {
+        channels = await _channelRepo!.fetchChannels();
+      } else {
+        channels = await M3UService.fetchAllChannels();
+      }
       if (channels.length > _channels.length) {
         logger.info('Background fetch found ${channels.length - _channels.length} new channels');
         _channels = channels;
@@ -255,6 +322,17 @@ class ChannelProvider extends ChangeNotifier {
       }
     } catch (e, stackTrace) {
       logger.error('Background fetch error', e, stackTrace);
+    }
+  }
+
+  /// Load EPG schedule data in the background without blocking the UI.
+  void _loadEpgInBackground() async {
+    try {
+      await _epgService.fetchEpg(_channels);
+      notifyListeners(); // Refresh UI with EPG data
+    } catch (e) {
+      logger.warning('EPG background load failed: $e');
+      // Graceful degradation — EPG is optional
     }
   }
 
@@ -332,7 +410,12 @@ class ChannelProvider extends ChangeNotifier {
       
       await Future.wait(
         batch.map((channel) async {
-          final isWorking = await M3UService.checkStream(channel.url);
+          bool isWorking;
+          if (_channelRepo != null) {
+            isWorking = await _channelRepo!.validateChannelStream(channel.url);
+          } else {
+            isWorking = await M3UService.checkStream(channel.url);
+          }
           final updated = channel.copyWith(
             isWorking: isWorking,
             lastChecked: DateTime.now(),
@@ -580,6 +663,15 @@ class ChannelProvider extends ChangeNotifier {
   }
 
   Future<List<Channel>> _loadFromCache() async {
+    // Use repository if available; otherwise fall back to direct SharedPreferences
+    if (_channelRepo != null) {
+      try {
+        return await _channelRepo!.getCachedChannels();
+      } catch (e, stackTrace) {
+        logger.error('Error loading cache via repository', e, stackTrace);
+        return [];
+      }
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final json = prefs.getString('channels_cache');
@@ -594,6 +686,16 @@ class ChannelProvider extends ChangeNotifier {
   }
 
   Future<void> _saveToCache() async {
+    // Use repository if available; otherwise fall back to direct SharedPreferences
+    if (_channelRepo != null) {
+      try {
+        await _channelRepo!.cacheChannels(_channels);
+        logger.debug('Saved ${_channels.length} channels to cache via repository');
+      } catch (e, stackTrace) {
+        logger.error('Error saving cache via repository', e, stackTrace);
+      }
+      return;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final json = jsonEncode(_channels.map((c) => c.toJson()).toList());
@@ -633,10 +735,18 @@ class ChannelProvider extends ChangeNotifier {
   Future<void> toggleFavorite(Channel channel) async {
     if (_favoriteUrls.contains(channel.url)) {
       _favoriteUrls.remove(channel.url);
-      await FavoritesService.removeFavorite(channel.url);
+      if (_channelRepo != null) {
+        await _channelRepo!.removeFavorite(channel.url);
+      } else {
+        await FavoritesService.removeFavorite(channel.url);
+      }
     } else {
       _favoriteUrls.add(channel.url);
-      await FavoritesService.addFavorite(channel.url);
+      if (_channelRepo != null) {
+        await _channelRepo!.addFavorite(channel.url);
+      } else {
+        await FavoritesService.addFavorite(channel.url);
+      }
     }
     
     // If currently viewing favorites, reapply filters
@@ -649,10 +759,20 @@ class ChannelProvider extends ChangeNotifier {
 
   /// Load favorites from persistent storage
   Future<void> _loadFavorites() async {
-    _favoriteUrls = await FavoritesService.loadFavorites();
+    if (_channelRepo != null) {
+      _favoriteUrls = await _channelRepo!.getFavorites();
+    } else {
+      _favoriteUrls = await FavoritesService.loadFavorites();
+    }
   }
 
   /// Get all favorite channels
   List<Channel> get favoriteChannels =>
       _channels.where((c) => _favoriteUrls.contains(c.url)).toList();
+
+  @override
+  void dispose() {
+    _epgService.dispose();
+    super.dispose();
+  }
 }

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-03-01
+
+### Added
+- **Channel info (i) icon** — Tap the info icon next to any channel to see a 1-sentence description. 218 channels pre-loaded covering Israeli TV/Radio, international news, sports, entertainment, kids, and more
+- **[#20] EPG/Schedule info (e) icon** — Electronic Program Guide with current and next show info. Tap the schedule icon to see program details with progress bars. Category-aware program generation (News, Sports, Entertainment, etc.)
+- **[#14] Repository pattern** — Data access layer extracted into ChannelRepository and PlaylistRepository interfaces with concrete implementations. Clean separation of business and data logic
+- **[#15] Dependency injection** — Activated get_it DI container in Flutter app. Services registered via setupServiceLocator() with graceful fallback if DI unavailable
+- **Analytics dashboard CLI** — New `scripts/analytics_dashboard.py` for monitoring usage stats, crash reports, top channels, and scan statistics from Supabase
+- **Language normalization** — ISO language codes (heb, eng, spa, etc.) normalized to full names in Android language filter. 50+ language mappings
+
+### Changed
+- **Windows Settings dialog** — Config button now opens a proper GUI dialog with stream settings, repository management, and display preferences (replaces raw JSON editing)
+- **Windows Favorites** — Star column in treeview with click-to-toggle, right-click context menu, and "Favorites only" sidebar filter
+- **Android Cast button** — Replaced guidance popup with action sheet: "Open in Media Player", "Open in External App", "Copy Stream URL"
+- **Category/Country filter separation** — Categories dropdown no longer shows country names; dedicated country filter preserved
+
+### Fixed
+- Dart raw string escaping in fmstream_service.dart (9 RegExp patterns)
+- `logger.debug()` argument count in fmstream_service.dart
+- Android build push conflicts with retry loop
+
 ## [2.0.0] - 2026-03-01
 
 ### Added
