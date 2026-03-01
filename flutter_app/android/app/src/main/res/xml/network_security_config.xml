@@ -1,8 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SEC-007: Restrict cleartext traffic to known streaming CDN domains only -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <!-- Default: require HTTPS for all traffic -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system"/>
         </trust-anchors>
     </base-config>
+
+    <!-- Allow cleartext (HTTP) only for known streaming CDN domains -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Israeli streaming CDNs that serve HTTP streams -->
+        <domain includeSubdomains="true">kancdn.medonecdn.net</domain>
+        <domain includeSubdomains="true">cdn-redge.media</domain>
+        <domain includeSubdomains="true">r.il.cdn-redge.media</domain>
+        <domain includeSubdomains="true">g-mana.live</domain>
+        <domain includeSubdomains="true">bynetcdn.com</domain>
+        <domain includeSubdomains="true">cybercdn.live</domain>
+        <domain includeSubdomains="true">gostreaming.tv</domain>
+        <domain includeSubdomains="true">akamaized.net</domain>
+        <domain includeSubdomains="true">akamaihd.net</domain>
+        <domain includeSubdomains="true">cloudfront.net</domain>
+        <domain includeSubdomains="true">encoders.immergo.tv</domain>
+        <!-- Generic IPTV CDNs -->
+        <domain includeSubdomains="true">iptv-org.github.io</domain>
+        <domain includeSubdomains="true">raw.githubusercontent.com</domain>
+    </domain-config>
 </network-security-config>

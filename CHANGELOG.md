@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-03-01
+
+### Security Fixes
+- **[SEC-001] Remove JWT tokens from source** — Replaced i24NEWS Brightcove JWT URLs with clean endpoints; i24NEWS channels still available via IPTV repositories
+- **[SEC-003] Supabase credentials to env vars** — Moved hardcoded placeholder credentials to `SUPABASE_URL`/`SUPABASE_ANON_KEY` environment variables (Python + Flutter)
+- **[SEC-004] Disable PrivateBin unencrypted upload** — Upload function disabled until AES-256-GCM encryption is implemented per PrivateBin v2 protocol
+- **[SEC-005] Replace os.startfile** — Config file now opens with `notepad.exe` (Windows) / `open -t` (macOS) instead of untrusted default handler
+- **[SEC-007] Restrict Android cleartext traffic** — `network_security_config.xml` now only allows HTTP for known streaming CDN domains instead of app-wide cleartext
+- **[SEC-010] M3U content size limit** — Flutter M3U fetcher now rejects responses exceeding 50MB to prevent OOM on Android devices
+
+### Fixed
+- **Release Gate test failures** — Added `pytest-asyncio` to CI test dependencies; all 6 matrix test jobs now pass
+- **SEC-002 verified** — URL scheme validation before VLC subprocess launch was already implemented in v1.9.1
+
+### Added
+- **KAN 4K channel** — Added `kan11_4k` CDN path for KAN 11 4K UHD stream (Windows + Android)
+
 ## [1.9.1] - 2026-03-01
 
 ### Fixed (P0-Critical)

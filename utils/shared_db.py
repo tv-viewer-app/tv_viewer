@@ -49,16 +49,14 @@ except ImportError:
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Supabase configuration
-# TODO: Replace with your actual Supabase project URL and anon key
-# Get these from: https://app.supabase.com/project/_/settings/api
-SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL'
-SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'
+# Supabase configuration — loaded from environment variables (SEC-003)
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 TABLE_NAME = 'channel_status'
 
 # Feature flag to enable/disable shared database
-# Set to False if you don't want to use the shared database
-ENABLED = False  # TODO: Set to True after Supabase setup
+# Automatically enabled when environment variables are set
+ENABLED = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 
 # Cache duration - only fetch results checked within last 24 hours
 CACHE_DURATION_HOURS = 24

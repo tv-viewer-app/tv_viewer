@@ -1,4 +1,10 @@
-"""PrivateBin integration for sharing scan results."""
+"""PrivateBin integration for sharing scan results.
+
+SECURITY NOTE (SEC-004): Upload functionality is disabled because the PrivateBin
+v2 protocol requires client-side AES-256-GCM encryption before upload. The
+previous implementation sent data compressed but unencrypted. Use SharedDb
+approach instead for cross-platform channel status sharing.
+"""
 
 import json
 import base64
@@ -15,8 +21,11 @@ logger = get_logger(__name__)
 
 # PrivateBin configuration
 PRIVATEBIN_URL = "https://privatebin.info"
-PASTE_EXPIRY = "4hour"  # Expire after 4 hours
+PASTE_EXPIRY = "4hour"
 SETTINGS_FILE = "privatebin_cache.json"
+
+# SEC-004: Upload disabled — requires AES-256-GCM encryption implementation
+_UPLOAD_ENABLED = False
 
 
 def _get_settings_path() -> str:
@@ -49,11 +58,16 @@ def _save_settings(settings: Dict[str, Any]):
 
 def is_enabled() -> bool:
     """Check if PrivateBin sharing is enabled."""
+    if not _UPLOAD_ENABLED:
+        return False
     return _load_settings().get("enabled", False)
 
 
 def set_enabled(enabled: bool):
     """Enable or disable PrivateBin sharing."""
+    if not _UPLOAD_ENABLED:
+        logger.warning("PrivateBin upload is disabled (SEC-004: requires encryption)")
+        return
     settings = _load_settings()
     settings["enabled"] = enabled
     _save_settings(settings)
@@ -61,98 +75,13 @@ def set_enabled(enabled: bool):
 
 
 def upload_scan_results(channels: List[Dict[str, Any]]) -> Optional[str]:
+    """Upload scan results to PrivateBin.
+    
+    DISABLED (SEC-004): Returns None. PrivateBin v2 requires AES-256-GCM
+    client-side encryption which is not yet implemented.
     """
-    Upload scan results to PrivateBin.
-    
-    Args:
-        channels: List of channel dictionaries with scan results
-        
-    Returns:
-        Paste URL if successful, None otherwise
-    """
-    if not is_enabled():
-        return None
-    
-    try:
-        import aiohttp
-        import asyncio
-    except ImportError:
-        logger.error("aiohttp required for PrivateBin integration")
-        return None
-    
-    # Prepare scan data - only include status info
-    scan_data = {
-        "timestamp": datetime.now().isoformat(),
-        "app_version": "1.4.0",
-        "channels": []
-    }
-    
-    for ch in channels:
-        scan_data["channels"].append({
-            "url": ch.get("url", ""),
-            "name": ch.get("name", ""),
-            "is_working": ch.get("is_working"),
-            "last_scanned": ch.get("last_scanned", "")
-        })
-    
-    # Convert to JSON
-    data_json = json.dumps(scan_data, ensure_ascii=False)
-    
-    async def _upload():
-        try:
-            # Compress data
-            compressed = zlib.compress(data_json.encode('utf-8'))
-            data_b64 = base64.b64encode(compressed).decode('ascii')
-            
-            # Create paste data
-            paste_data = {
-                "v": 2,
-                "ct": data_b64,
-                "meta": {
-                    "expire": PASTE_EXPIRY,
-                    "formatter": "plaintext"
-                }
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{PRIVATEBIN_URL}",
-                    json=paste_data,
-                    headers={"Content-Type": "application/json", "X-Requested-With": "JSONHttpRequest"}
-                ) as resp:
-                    if resp.status == 200:
-                        result = await resp.json()
-                        if result.get("status") == 0:
-                            paste_id = result.get("id", "")
-                            # NOTE: Don't store deletetoken for security reasons
-                            
-                            # Save only paste_id and timestamp to settings
-                            settings = _load_settings()
-                            settings["paste_id"] = paste_id
-                            settings["timestamp"] = datetime.now().isoformat()
-                            _save_settings(settings)
-                            
-                            paste_url = f"{PRIVATEBIN_URL}/?{paste_id}"
-                            logger.info(f"Uploaded scan results to PrivateBin: {paste_url}")
-                            return paste_url
-                    
-                    logger.error(f"PrivateBin upload failed: {resp.status}")
-                    return None
-                    
-        except Exception as e:
-            logger.error(f"PrivateBin upload error: {e}")
-            return None
-    
-    # Run async upload
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(_upload())
-        loop.close()
-        return result
-    except Exception as e:
-        logger.error(f"Failed to run upload: {e}")
-        return None
+    logger.warning("PrivateBin upload disabled (SEC-004: unencrypted data transfer)")
+    return None
 
 
 def get_recent_scan_results() -> Optional[Dict[str, Any]]:

@@ -17,16 +17,15 @@ import '../utils/logger_service.dart';
 /// - last_checked (TIMESTAMP): Last validation timestamp
 /// - response_time_ms (INTEGER): Response time in milliseconds
 class SharedDbService {
-  // Supabase configuration
-  // TODO: Replace with your actual Supabase project URL and anon key
-  // Get these from: https://app.supabase.com/project/_/settings/api
-  static const String _supabaseUrl = 'YOUR_SUPABASE_PROJECT_URL';
-  static const String _supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  // Supabase configuration — loaded from environment (SEC-003)
+  static String get _supabaseUrl =>
+      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static String get _supabaseAnonKey =>
+      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
   static const String _tableName = 'channel_status';
   
-  // Feature flag to enable/disable shared database
-  // Set to false if you don't want to use the shared database
-  static const bool _enabled = false; // TODO: Set to true after Supabase setup
+  // Automatically enabled when environment variables are set
+  static bool get _enabled => _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
   
   // Cache duration - only fetch results checked within last 24 hours
   static const Duration _cacheDuration = Duration(hours: 24);

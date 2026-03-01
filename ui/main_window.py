@@ -1198,9 +1198,9 @@ class MainWindow:
         
         try:
             if sys.platform == 'win32':
-                os.startfile(config_path)
+                subprocess.Popen(['notepad.exe', config_path])
             elif sys.platform == 'darwin':
-                subprocess.Popen(['open', config_path])
+                subprocess.Popen(['open', '-t', config_path])
             else:
                 for editor in ['xdg-open', 'gedit', 'kate', 'nano', 'vi']:
                     try:

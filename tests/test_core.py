@@ -315,20 +315,19 @@ class TestMainRequirementsCheck:
 class TestAsyncOperations:
     """Tests for async operations."""
     
-    @pytest.mark.asyncio
-    async def test_stream_check_invalid_url(self):
+    def test_stream_check_invalid_url(self):
         """Test stream check with invalid URL."""
         from core.stream_checker import StreamChecker
         import aiohttp
         
-        checker = StreamChecker()
-        checker._semaphore = asyncio.Semaphore(1)
+        async def _run_check():
+            checker = StreamChecker()
+            checker._semaphore = asyncio.Semaphore(1)
+            channel = {'url': 'http://invalid.nonexistent.url/stream.m3u8', 'name': 'Test'}
+            async with aiohttp.ClientSession() as session:
+                return await checker.check_stream(channel, session)
         
-        channel = {'url': 'http://invalid.nonexistent.url/stream.m3u8', 'name': 'Test'}
-        
-        async with aiohttp.ClientSession() as session:
-            result = await checker.check_stream(channel, session)
-        
+        result = asyncio.run(_run_check())
         # Should mark as not working (connection will fail)
         assert result['is_working'] == False
         assert 'last_scanned' in result
