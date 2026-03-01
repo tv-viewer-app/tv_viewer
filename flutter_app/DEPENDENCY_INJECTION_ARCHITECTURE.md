@@ -1,0 +1,218 @@
+# Dependency Injection Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Application Layer                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ Widgets  │  │ Providers│  │ Services │  │  Tests   │       │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
+│       │             │             │             │               │
+│       └─────────────┴─────────────┴─────────────┘               │
+│                         │                                        │
+│                         ▼                                        │
+│              ┌───────────────────────┐                          │
+│              │   getIt<T>() API      │                          │
+│              │  (Service Locator)    │                          │
+│              └───────────┬───────────┘                          │
+└──────────────────────────┼──────────────────────────────────────┘
+                           │
+┌──────────────────────────┼──────────────────────────────────────┐
+│                   Dependency Injection Layer                     │
+│                          │                                       │
+│              ┌───────────▼───────────┐                          │
+│              │  setupServiceLocator()│                          │
+│              │   (lib/di/service_    │                          │
+│              │    locator.dart)      │                          │
+│              └───────────┬───────────┘                          │
+│                          │                                       │
+│         ┌────────────────┼────────────────┐                     │
+│         │                │                │                     │
+│    ┌────▼─────┐    ┌────▼─────┐    ┌────▼─────┐              │
+│    │  Logger  │    │ Channel  │    │ Playlist │              │
+│    │ Service  │    │   Repo   │    │   Repo   │              │
+│    │(Singleton)    │(Singleton)    │(Singleton)              │
+│    └────┬─────┘    └────┬─────┘    └────┬─────┘              │
+└─────────┼───────────────┼───────────────┼─────────────────────┘
+          │               │               │
+┌─────────┼───────────────┼───────────────┼─────────────────────┐
+│         │      Implementation Layer     │                      │
+│         │               │               │                      │
+│    ┌────▼─────┐    ┌────▼──────────┐  ┌▼──────────────┐      │
+│    │ Logger   │    │  Channel      │  │  Playlist     │      │
+│    │ Service  │    │  Repository   │  │  Repository   │      │
+│    │ Instance │    │  Impl         │  │  Impl         │      │
+│    └────┬─────┘    └────┬──────────┘  └┬──────────────┘      │
+│         │               │              │                       │
+└─────────┼───────────────┼──────────────┼───────────────────────┘
+          │               │              │
+┌─────────┼───────────────┼──────────────┼───────────────────────┐
+│         │      Service Layer           │                        │
+│         │               │              │                        │
+│    ┌────▼─────┐    ┌────▼─────┐  ┌───▼──────┐                │
+│    │   File   │    │  M3U     │  │Favorites │                │
+│    │  System  │    │ Service  │  │ Service  │                │
+│    └──────────┘    └──────────┘  └──────────┘                │
+│         │               │              │                        │
+└─────────┼───────────────┼──────────────┼───────────────────────┘
+          │               │              │
+┌─────────┼───────────────┼──────────────┼───────────────────────┐
+│         │      Data Layer              │                        │
+│         │               │              │                        │
+│    ┌────▼─────┐    ┌────▼─────┐  ┌───▼──────┐                │
+│    │  Log     │    │  HTTP    │  │ Shared   │                │
+│    │  Files   │    │ Network  │  │  Prefs   │                │
+│    └──────────┘    └──────────┘  └──────────┘                │
+└───────────────────────────────────────────────────────────────┘
+
+
+DEPENDENCY FLOW:
+═════════════════
+
+Application Code
+    │
+    ├── getIt<LoggerService>()
+    │   └── Returns: LoggerService.instance (singleton)
+    │
+    ├── getIt<ChannelRepository>()
+    │   └── Returns: ChannelRepositoryImpl (singleton)
+    │       └── Uses: M3UService, FavoritesService, SharedPreferences
+    │
+    └── getIt<PlaylistRepository>()
+        └── Returns: PlaylistRepositoryImpl (singleton)
+            └── Uses: M3UService
+
+
+INITIALIZATION SEQUENCE:
+════════════════════════
+
+1. main() called
+2. setupServiceLocator() executes:
+   a. Register LoggerService (lazy singleton)
+   b. Initialize LoggerService
+   c. Register ChannelRepository (lazy singleton)
+   d. Register PlaylistRepository (lazy singleton)
+   e. Log success message
+3. Services created on first access (lazy)
+4. Same instance returned on subsequent calls (singleton)
+
+
+USAGE PATTERNS:
+═══════════════
+
+┌─────────────────────────────────────────────────────────┐
+│ Pattern 1: Widget with Repository                       │
+│                                                          │
+│  class MyWidget extends StatefulWidget {                │
+│    final _repo = getIt<ChannelRepository>();           │
+│                                                          │
+│    Future<void> load() async {                          │
+│      final channels = await _repo.fetchChannels();      │
+│    }                                                     │
+│  }                                                       │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Pattern 2: Provider with DI                             │
+│                                                          │
+│  class MyProvider extends ChangeNotifier {              │
+│    final _repo = getIt<ChannelRepository>();           │
+│    final _logger = getIt<LoggerService>();             │
+│                                                          │
+│    Future<void> load() async {                          │
+│      _logger.info('Loading...');                        │
+│      final data = await _repo.fetchChannels();          │
+│    }                                                     │
+│  }                                                       │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Pattern 3: Testing with Mocks                           │
+│                                                          │
+│  setUp(() async {                                        │
+│    await resetServiceLocator();                         │
+│    getIt.registerLazySingleton<ChannelRepository>(      │
+│      () => MockChannelRepository(),                     │
+│    );                                                    │
+│  });                                                     │
+└─────────────────────────────────────────────────────────┘
+
+
+BENEFITS:
+═════════
+
+✅ Loose Coupling
+   └── Components depend on interfaces, not implementations
+
+✅ Easy Testing
+   └── Swap real services with mocks
+
+✅ Single Source of Truth
+   └── All dependencies registered in one place
+
+✅ Lazy Initialization
+   └── Services created only when needed
+
+✅ Type Safety
+   └── Compile-time checking of dependencies
+
+✅ Singleton Management
+   └── Automatic lifecycle handling
+
+
+FILE STRUCTURE:
+═══════════════
+
+lib/di/
+├── service_locator.dart              ← Main DI setup
+├── injection.dart                    ← Public API export
+├── integration_example.dart          ← Usage examples
+├── main_migration_example.dart       ← How to update main()
+├── channel_provider_migration_       ← How to update provider
+│   example.dart
+└── README.md                         ← Full documentation
+
+
+REGISTRATION TYPES:
+═══════════════════
+
+┌──────────────────┬─────────────────────────────────────────┐
+│ Type             │ Use Case                                │
+├──────────────────┼─────────────────────────────────────────┤
+│ Lazy Singleton   │ Stateless services (LoggerService)      │
+│                  │ Created on first access, reused         │
+├──────────────────┼─────────────────────────────────────────┤
+│ Singleton        │ Pre-initialized services                │
+│                  │ Created at registration time            │
+├──────────────────┼─────────────────────────────────────────┤
+│ Factory          │ Stateful objects needing new instances  │
+│                  │ New instance on each getIt call         │
+└──────────────────┴─────────────────────────────────────────┘
+
+
+CURRENT REGISTRATIONS:
+══════════════════════
+
+getIt.registerLazySingleton<LoggerService>(
+  () => LoggerService.instance
+)
+    ├── Type: Lazy Singleton
+    ├── Created: On first getIt<LoggerService>() call
+    ├── Lifecycle: Lives for entire app lifetime
+    └── Thread-safe: Yes
+
+getIt.registerLazySingleton<ChannelRepository>(
+  () => ChannelRepositoryImpl()
+)
+    ├── Type: Lazy Singleton
+    ├── Created: On first getIt<ChannelRepository>() call
+    ├── Lifecycle: Lives for entire app lifetime
+    └── Implementation: ChannelRepositoryImpl
+
+getIt.registerLazySingleton<PlaylistRepository>(
+  () => PlaylistRepositoryImpl()
+)
+    ├── Type: Lazy Singleton
+    ├── Created: On first getIt<PlaylistRepository>() call
+    ├── Lifecycle: Lives for entire app lifetime
+    └── Implementation: PlaylistRepositoryImpl
+```
