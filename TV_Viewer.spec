@@ -5,15 +5,12 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('channels_config.json', '.'),
-        ('tv_viewer.ico', '.'),
-    ],
-    hiddenimports=['ttkbootstrap'],
+    datas=[('config.py', '.'), ('channels.json', '.')],
+    hiddenimports=['vlc', 'aiohttp', 'asyncio', 'tkinter', 'tkinter.ttk', 'json', 'threading', 'queue', 'pychromecast', 'zeroconf'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'PIL.ImageTk', 'cv2', 'tensorflow', 'torch', 'sklearn'],
     noarchive=False,
     optimize=0,
 )
@@ -38,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='tv_viewer.ico',
+    icon=['tv_viewer.ico'],
 )
