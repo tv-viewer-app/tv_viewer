@@ -444,6 +444,30 @@
       "url": "https://diki.mediacast.co.il/diki",
       "category": "Music",
       "country": "Israel"
+    },
+    {
+      "name": "103FM Radio",
+      "url": "https://cdn.cybercdn.live/103FM/Live/icecast.audio",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "103FM Radio HLS",
+      "url": "https://cdn.cybercdn.live/103FM/Live/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Radio HLS",
+      "url": "https://cdn.cybercdn.live/Radios_100FM/Audio/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
     }
   ]
 }
