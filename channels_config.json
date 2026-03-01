@@ -89,15 +89,7 @@
   "custom_channels": [
     {
       "name": "Channel 10 Economic News (Israel)",
-      "url": "https://kan10.media.kan.org.il/hls/live/2024680/2024680/master.m3u8",
-      "category": "News",
-      "country": "Israel",
-      "language": "Hebrew",
-      "min_age": 7
-    },
-    {
-      "name": "Walla! News (Israel)",
-      "url": "https://walla-live.b-cdn.net/walla_news/walla_news.m3u8",
+      "url": "https://r.il.cdn-redge.media/livehls/oil/calcala-live/live/channel10/live.livx/playlist.m3u8",
       "category": "News",
       "country": "Israel",
       "language": "Hebrew",
@@ -105,7 +97,7 @@
     },
     {
       "name": "100FM Radius (Israel)",
-      "url": "https://cdn.cybercdn.live/100FM/Live/icecast.audio",
+      "url": "https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio",
       "category": "Radio",
       "country": "Israel",
       "language": "Hebrew",
@@ -132,7 +124,7 @@
     },
     {
       "name": "Kan 11 News (Israel)",
-      "url": "https://kan11.media.kan.org.il/hls/live/2024514/2024514/master.m3u8",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8",
       "category": "News",
       "country": "Israel",
       "language": "Hebrew",
@@ -271,12 +263,6 @@
       "country": "Israel"
     },
     {
-      "name": "Walla News",
-      "url": "https://amg01742-walla-wallanews-ono-btlna.amagi.tv/playlist/amg01742-walla-wallanews-ono/playlist.m3u8",
-      "category": "News",
-      "country": "Israel"
-    },
-    {
       "name": "Knesset Channel (ערוץ הכנסת)",
       "url": "https://kneset.gostreaming.tv/p2-kneset/_definst_/myStream/index.m3u8",
       "category": "News",
@@ -290,13 +276,13 @@
     },
     {
       "name": "Kabbalah TV Hebrew",
-      "url": "https://edge2.il.kab.tv/live/tv66-heb-high/playlist.m3u8",
+      "url": "https://edge3.uk.kab.tv/live/tv66-heb-high/playlist.m3u8",
       "category": "Religious",
       "country": "Israel"
     },
     {
       "name": "Kabbalah TV Russian",
-      "url": "https://edge2.il.kab.tv/live/tv66-rus-high/playlist.m3u8",
+      "url": "https://edge3.uk.kab.tv/live/tv66-rus-high/playlist.m3u8",
       "category": "Religious",
       "country": "Israel"
     },
