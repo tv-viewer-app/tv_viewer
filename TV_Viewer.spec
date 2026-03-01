@@ -6,11 +6,11 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('config.py', '.'), ('channels.json', '.')],
-    hiddenimports=['vlc', 'aiohttp', 'asyncio', 'tkinter', 'tkinter.ttk', 'json', 'threading', 'queue', 'pychromecast', 'zeroconf'],
+    hiddenimports=['vlc', 'aiohttp', 'asyncio', 'tkinter', 'tkinter.ttk', 'ttkbootstrap', 'ttkbootstrap.themes', 'ttkbootstrap.style', 'json', 'threading', 'queue', 'pychromecast', 'zeroconf', 'PIL', 'PIL.Image', 'PIL.ImageTk'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'PIL.ImageTk', 'cv2', 'tensorflow', 'torch', 'sklearn'],
+    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'cv2', 'tensorflow', 'torch', 'sklearn'],
     noarchive=False,
     optimize=0,
 )

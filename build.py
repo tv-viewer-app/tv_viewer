@@ -34,11 +34,17 @@ HIDDEN_IMPORTS = [
     "asyncio",
     "tkinter",
     "tkinter.ttk",
+    "ttkbootstrap",
+    "ttkbootstrap.themes",
+    "ttkbootstrap.style",
     "json",
     "threading",
     "queue",
     "pychromecast",
     "zeroconf",
+    "PIL",
+    "PIL.Image",
+    "PIL.ImageTk",
 ]
 
 # Excluded modules to reduce size
@@ -47,7 +53,6 @@ EXCLUDED_MODULES = [
     "numpy",
     "pandas",
     "scipy",
-    "PIL.ImageTk",  # We don't use PIL for display
     "cv2",
     "tensorflow",
     "torch",
