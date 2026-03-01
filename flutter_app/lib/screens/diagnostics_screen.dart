@@ -151,7 +151,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       // Try HEAD request first
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/1.5.0'},
+        headers: {'User-Agent': 'TV Viewer/1.9.1'},
       ).timeout(const Duration(seconds: 10));
       
       stopwatch.stop();

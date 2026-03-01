@@ -31,7 +31,7 @@ class _HelpScreenState extends State<HelpScreen> {
       });
     } catch (e) {
       setState(() {
-        _appVersion = '1.5.0+1'; // Fallback to hardcoded version
+        _appVersion = '1.9.1+2'; // Fallback to hardcoded version
       });
     }
   }

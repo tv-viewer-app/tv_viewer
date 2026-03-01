@@ -6,8 +6,53 @@ import '../utils/logger_service.dart';
 /// Service for fetching and parsing M3U playlists
 class M3UService {
   static const List<String> defaultRepositories = [
+    // Main indices
     'https://iptv-org.github.io/iptv/index.m3u',
     'https://iptv-org.github.io/iptv/index.category.m3u',
+    'https://iptv-org.github.io/iptv/index.country.m3u',
+    'https://iptv-org.github.io/iptv/index.language.m3u',
+    // Categories
+    'https://iptv-org.github.io/iptv/categories/news.m3u',
+    'https://iptv-org.github.io/iptv/categories/sports.m3u',
+    'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
+    'https://iptv-org.github.io/iptv/categories/movies.m3u',
+    'https://iptv-org.github.io/iptv/categories/music.m3u',
+    'https://iptv-org.github.io/iptv/categories/kids.m3u',
+    'https://iptv-org.github.io/iptv/categories/documentary.m3u',
+    'https://iptv-org.github.io/iptv/categories/general.m3u',
+    // Country-specific
+    'https://iptv-org.github.io/iptv/countries/il.m3u',
+    'https://iptv-org.github.io/iptv/languages/heb.m3u',
+    // Community sources
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+  ];
+
+  /// Custom Israeli channels with verified working CDN URLs
+  static const List<Map<String, String>> customChannels = [
+    {'name': 'Kan 11 News', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Kan 11 Subtitled', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11_subs/live.livx/playlist.m3u8', 'group': 'General', 'country': 'Israel'},
+    {'name': 'Kan Kids / Educational', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan_edu/live.livx/playlist.m3u8', 'group': 'Kids', 'country': 'Israel'},
+    {'name': 'Makan 33', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/makan/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Reshet 13', 'url': 'https://reshet.g-mana.live/media/87f59c77-03f6-4bad-a648-897e095e7360/mainManifest.m3u8', 'group': 'General', 'country': 'Israel'},
+    {'name': 'Reshet 13 Alt', 'url': 'https://d18b0e6mopany4.cloudfront.net/out/v1/2f2bc414a3db4698a8e94b89eaf2da2a/index.m3u8', 'group': 'General', 'country': 'Israel'},
+    {'name': 'Channel 14', 'url': 'https://ch14channel14.encoders.immergo.tv/app/2/streamPlaylist.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Channel 14 Alt', 'url': 'https://r.il.cdn-redge.media/livehls/oil/ch14/live/ch14/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Channel 10 Business', 'url': 'https://r.il.cdn-redge.media/livehls/oil/calcala-live/live/channel10/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'i24NEWS Hebrew', 'url': 'https://fastly.live.brightcove.com/6386790215112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTAyMTUxMTIifQ.8ZawImK7DfcrrXeAT2OVZ62qQJrJiBaoc7Y1DNNq1bg/playlist-hls.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'i24NEWS English', 'url': 'https://fastly.live.brightcove.com/6386790908112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU/playlist-hls.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'i24NEWS French', 'url': 'https://fastly.live.brightcove.com/6386790513112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA1MTMxMTIifQ.Szahkl5VVsEWGdM4mgrmlDPVkWPTRgBMwwGg4D5hGFU/playlist-hls.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'i24NEWS Arabic', 'url': 'https://fastly.live.brightcove.com/6386792572112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTI1NzIxMTIifQ.vsA8IfCHFqoqo2BHxx4w0PqBgTESPMYgFGL771vzKoA/playlist-hls.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Knesset Channel', 'url': 'https://kneset.gostreaming.tv/p2-kneset/_definst_/myStream/index.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Ynet Live', 'url': 'https://ynet-live-01.ynet-pic1.yit.co.il/ynet/live.m3u8', 'group': 'News', 'country': 'Israel'},
+    {'name': 'Hala TV', 'url': 'https://gstream4.panet.co.il/edge/halaTV/chunks.m3u8', 'group': 'General', 'country': 'Israel'},
+    {'name': 'Kabbalah TV Hebrew', 'url': 'https://edge3.uk.kab.tv/live/tv66-heb-high/playlist.m3u8', 'group': 'Religious', 'country': 'Israel'},
+    {'name': '100FM TV', 'url': 'https://cdn.cybercdn.live/Radios_100FM/Video/playlist.m3u8', 'group': 'Music', 'country': 'Israel'},
+    {'name': 'Kan Bet / Reshet Bet', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reshet_bet/live.livx/playlist.m3u8', 'group': 'Radio', 'country': 'Israel'},
+    {'name': 'Kan Gimel', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_gimel/live.livx/playlist.m3u8', 'group': 'Radio', 'country': 'Israel'},
+    {'name': 'Kan 88', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_88/live.livx/playlist.m3u8', 'group': 'Radio', 'country': 'Israel'},
+    {'name': 'Galgalatz', 'url': 'https://glzwizzlv.bynetcdn.com/glglz_mp3', 'group': 'Radio', 'country': 'Israel'},
+    {'name': 'Galei Zahal', 'url': 'https://glzwizzlv.bynetcdn.com/glz_mp3', 'group': 'Radio', 'country': 'Israel'},
+    {'name': '100FM Radio', 'url': 'https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio', 'group': 'Radio', 'country': 'Israel'},
   ];
 
   /// Fetch channels from an M3U URL
@@ -17,7 +62,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/1.5.0'},
+        headers: {'User-Agent': 'TV Viewer/1.9.1'},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -160,6 +205,21 @@ class M3UService {
 
     onProgress?.call(defaultRepositories.length, defaultRepositories.length);
     
+    // Add custom Israeli channels (verified working CDN URLs)
+    for (final custom in customChannels) {
+      final url = custom['url']!;
+      if (!seenUrls.contains(url)) {
+        seenUrls.add(url);
+        allChannels.add(Channel(
+          name: custom['name']!,
+          url: url,
+          category: custom['group'],
+          country: custom['country'],
+        ));
+      }
+    }
+    logger.info('Added ${customChannels.length} custom channels');
+    
     // Log summary
     logger.info('Fetch complete: ${allChannels.length} total channels from ${defaultRepositories.length - errors.length}/${defaultRepositories.length} repositories');
     if (errors.isNotEmpty) {
@@ -186,7 +246,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/1.5.0'},
+        headers: {'User-Agent': 'TV Viewer/1.9.1'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||
