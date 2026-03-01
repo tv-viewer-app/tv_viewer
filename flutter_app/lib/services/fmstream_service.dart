@@ -129,7 +129,7 @@ class FMStreamService {
       // <a href="station.html">Station Name</a>
       // <a href="station.html">Station Name - Country</a>
       final linkPattern = RegExp(
-        r'<a\s+[^>]*href=["\']([\w\-/\.]+\.(?:html?|php|asp)[^"\']*)["\'][^>]*>([^<]+)</a>',
+        r"""<a\s+[^>]*href=["']([\w\-/\.]+\.(?:html?|php|asp)[^"']*?)["'][^>]*>([^<]+)</a>""",
         caseSensitive: false,
       );
       
@@ -151,7 +151,7 @@ class FMStreamService {
       
       // Pattern 2: Links with data attributes (modern HTML)
       final dataLinkPattern = RegExp(
-        r'<a\s+[^>]*data-station=["\']([^"\']+)["\'][^>]*data-url=["\']([^"\']+)["\'][^>]*>',
+        r"""<a\s+[^>]*data-station=["']([^"']+)["'][^>]*data-url=["']([^"']+)["'][^>]*>""",
         caseSensitive: false,
       );
       
@@ -183,7 +183,7 @@ class FMStreamService {
     try {
       // Pattern for stream URLs: .pls, .m3u, /stream, etc.
       final streamPattern = RegExp(
-        r'(https?://[^\s"\'<>]+\.(?:pls|m3u|mp3|aac|ogg)(?:\?[^\s"\'<>]*)?|https?://[^\s"\'<>]+/stream(?:/[^\s"\'<>]*)?)',
+        r"""(https?://[^\s"'<>]+\.(?:pls|m3u|mp3|aac|ogg)(?:\?[^\s"'<>]*)?|https?://[^\s"'<>]+/stream(?:/[^\s"'<>]*)?)""",
         caseSensitive: false,
       );
       
@@ -246,7 +246,7 @@ class FMStreamService {
         
         for (final cell in cells) {
           // Check for stream URL
-          final urlMatch = RegExp(r'href=["\'](https?://[^"\']+)["\']', caseSensitive: false).firstMatch(cell);
+          final urlMatch = RegExp(r"""href=["'](https?://[^"']+)["']""", caseSensitive: false).firstMatch(cell);
           if (urlMatch != null) {
             streamUrl = urlMatch.group(1);
           }
@@ -445,7 +445,7 @@ class FMStreamService {
     // Try to find station name in context
     
     // Pattern 1: Text before the stream URL
-    final beforePattern = RegExp(r'(?:title|name|station)[=:"\'>\s]+([^<>"\']+)', caseSensitive: false);
+    final beforePattern = RegExp(r"""(?:title|name|station)[=:"'>\s]+([^<>"']+)""", caseSensitive: false);
     final beforeMatch = beforePattern.firstMatch(context);
     if (beforeMatch != null) {
       final name = beforeMatch.group(1)?.trim();
@@ -481,13 +481,13 @@ class FMStreamService {
     final context = _getContextAroundMatch(position, html, 300);
     
     // Pattern: country="..." or data-country="..."
-    final attrMatch = RegExp(r'country=["\']([^"\']+)["\']', caseSensitive: false).firstMatch(context);
+    final attrMatch = RegExp(r"""country=["']([^"']+)["']""", caseSensitive: false).firstMatch(context);
     if (attrMatch != null) {
       return attrMatch.group(1)?.trim();
     }
     
     // Pattern: <span class="country">Country</span>
-    final spanMatch = RegExp(r'<span[^>]*class=["\'][^"\']*country[^"\']*["\'][^>]*>([^<]+)</span>', caseSensitive: false).firstMatch(context);
+    final spanMatch = RegExp(r"""<span[^>]*class=["'][^"']*country[^"']*["'][^>]*>([^<]+)</span>""", caseSensitive: false).firstMatch(context);
     if (spanMatch != null) {
       final country = spanMatch.group(1)?.trim();
       if (country != null && _isCountryName(country)) {
@@ -510,13 +510,13 @@ class FMStreamService {
     final context = _getContextAroundMatch(position, html, 300);
     
     // Pattern: genre="..." or data-genre="..."
-    final attrMatch = RegExp(r'genre=["\']([^"\']+)["\']', caseSensitive: false).firstMatch(context);
+    final attrMatch = RegExp(r"""genre=["']([^"']+)["']""", caseSensitive: false).firstMatch(context);
     if (attrMatch != null) {
       return attrMatch.group(1)?.trim();
     }
     
     // Pattern: <span class="genre">Genre</span>
-    final spanMatch = RegExp(r'<span[^>]*class=["\'][^"\']*genre[^"\']*["\'][^>]*>([^<]+)</span>', caseSensitive: false).firstMatch(context);
+    final spanMatch = RegExp(r"""<span[^>]*class=["'][^"']*genre[^"']*["'][^>]*>([^<]+)</span>""", caseSensitive: false).firstMatch(context);
     if (spanMatch != null) {
       final genre = spanMatch.group(1)?.trim();
       if (genre != null && _isGenreName(genre)) {
@@ -555,7 +555,7 @@ class FMStreamService {
   /// Extract stream URL from context
   static String? _extractStreamUrlFromContext(String context) {
     final streamPattern = RegExp(
-      r'(https?://[^\s"\'<>]+\.(?:pls|m3u|mp3|aac|ogg)(?:\?[^\s"\'<>]*)?|https?://[^\s"\'<>]+/stream(?:/[^\s"\'<>]*)?)',
+      r"""(https?://[^\s"'<>]+\.(?:pls|m3u|mp3|aac|ogg)(?:\?[^\s"'<>]*)?|https?://[^\s"'<>]+/stream(?:/[^\s"'<>]*)?)""",
       caseSensitive: false,
     );
     

@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[#32] FMStream.org radio integration** — FMStream radio directory parsed and merged into channel list with deduplication. Multi-strategy HTML parsing with bitrate-aware quality selection
 - **Cast dialog improvements** — Cast button now shows proper cast guidance with "Copy Stream URL" instead of auto-redirecting to VLC
 - **External player fix** — Simplified external player launch: tries direct URL first (Android app chooser), then VLC scheme fallback. More reliable than intent-based approach
+- **Category/Country filter separation** — Category dropdown now only shows content categories (News, Sports, etc.), no longer polluted with country names from M3U group-title
+- **Dedicated Favorites toggle** — Star/FilterChip button to show only favorited channels, separate from category dropdown
 
 ### Changed
 - Version bump to 2.0.0 across all platforms (Python + Flutter)
