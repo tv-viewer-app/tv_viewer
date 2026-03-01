@@ -346,7 +346,7 @@ class FMStreamService {
         );
       }
     } catch (e) {
-      logger.debug('Error parsing station info from link: $linkText', e);
+      logger.debug('Error parsing station info from link: $linkText - $e');
     }
     
     return null;
