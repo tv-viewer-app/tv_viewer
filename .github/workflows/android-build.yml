@@ -13,6 +13,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   build-flutter-apk:
     runs-on: ubuntu-latest
