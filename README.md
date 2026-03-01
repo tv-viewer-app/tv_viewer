@@ -6,7 +6,7 @@ A cross-platform IPTV streaming application for Windows and Android.
 ![Flutter](https://img.shields.io/badge/Flutter-3.19-02569B.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-1.9.1-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.9.2-orange.svg)
 
 ## Features
 
@@ -26,7 +26,7 @@ A cross-platform IPTV streaming application for Windows and Android.
 | Platform | Download | Size |
 |----------|----------|------|
 | Windows | [`dist/TV_Viewer.exe`](dist/TV_Viewer.exe) | ~25 MB |
-| Android | [`dist/android/TV_Viewer_v1.9.1.apk`](dist/android/TV_Viewer_v1.9.1.apk) | ~49 MB |
+| Android | [`dist/android/TV_Viewer_v1.9.2.apk`](dist/android/TV_Viewer_v1.9.2.apk) | ~51 MB |
 
 > **Note:** Windows requires [VLC media player](https://www.videolan.org/vlc/) to be installed.
 
@@ -38,7 +38,7 @@ A cross-platform IPTV streaming application for Windows and Android.
 3. Double-click to run
 
 ### Android
-1. Download `TV_Viewer_v1.9.1.apk` from `dist/android/`
+1. Download `TV_Viewer_v1.9.2.apk` from `dist/android/`
 2. Enable "Install from unknown sources" in Settings
 3. Install and open
 
