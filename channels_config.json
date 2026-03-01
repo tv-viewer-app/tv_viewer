@@ -115,7 +115,7 @@
     },
     {
       "name": "Reshet Bet (Israel)",
-      "url": "https://kan-b.media.kan.org.il/hls/live/2019577/2019577/master.m3u8",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reshet_bet/live.livx/playlist.m3u8",
       "category": "Radio",
       "country": "Israel",
       "language": "Hebrew",
@@ -132,38 +132,20 @@
     },
     {
       "name": "Kan 11 Subtitled (כאן 11 כתוביות)",
-      "url": "https://kan11sub.media.kan.org.il/hls/live/2024678/2024678/master.m3u8",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11_subs/live.livx/playlist.m3u8",
       "category": "General",
       "country": "Israel"
     },
     {
-      "name": "Kan 11 4K",
-      "url": "http://kan11.media.kan.org.il/hls/live/2024514-b/2024514/source1_4k/chunklist.m3u8",
-      "category": "General",
-      "country": "Israel"
-    },
-    {
-      "name": "Kan 23 (כאן 23)",
-      "url": "https://kan23.media.kan.org.il/hls/live/2024691/2024691/master.m3u8",
-      "category": "General",
-      "country": "Israel"
-    },
-    {
-      "name": "Kan 23 4K",
-      "url": "https://kan23.media.kan.org.il/hls/live/2024691-b/2024691/source1_4k/chunklist.m3u8",
-      "category": "General",
+      "name": "Kan Kids / Kan Educational (כאן חינוכית)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan_edu/live.livx/playlist.m3u8",
+      "category": "Kids",
       "country": "Israel"
     },
     {
       "name": "Makan 33 (מכאן 33)",
-      "url": "https://makan.media.kan.org.il/hls/live/2024680/2024680/master.m3u8",
-      "category": "General",
-      "country": "Israel"
-    },
-    {
-      "name": "Makan 33 4K",
-      "url": "https://makan.media.kan.org.il/hls/live/2024680-b/2024680/source1_4k/chunklist.m3u8",
-      "category": "General",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/makan/live.livx/playlist.m3u8",
+      "category": "News",
       "country": "Israel"
     },
     {
@@ -287,64 +269,73 @@
       "country": "Israel"
     },
     {
+      "name": "Hala TV (هلا)",
+      "url": "https://gstream4.panet.co.il/edge/halaTV/chunks.m3u8",
+      "category": "General",
+      "country": "Israel",
+      "language": "Arabic"
+    },
+    {
       "name": "100FM TV",
       "url": "https://cdn.cybercdn.live/Radios_100FM/Video/playlist.m3u8",
       "category": "Music",
       "country": "Israel"
     },
     {
-      "name": "Kan Bet (כאן ב)",
-      "url": "https://kanbet.media.kan.org.il/hls/live/2024811/2024811/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "name": "Kan Bet / Reshet Bet (כאן ב)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reshet_bet/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Kan Gimel (כאן ג)",
-      "url": "https://kangimmel.media.kan.org.il/hls/live/2024813/2024813/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_gimel/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Kan Tarbut (כאן תרבות)",
-      "url": "https://kantarbut.media.kan.org.il/hls/live/2024816/2024816/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_tarbut/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Kan 88 (כאן 88)",
-      "url": "https://kan88.media.kan.org.il/hls/live/2024812/2024812/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_88/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Kan Moreshet (כאן מורשת)",
-      "url": "https://kanmoreshet.media.kan.org.il/hls/live/2024814/2024814/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_moreshet/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Kan Kol HaMusica (כאן קול המוסיקה)",
-      "url": "https://kankolhamusica.media.kan.org.il/hls/live/2024817/2024817/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
-    },
-    {
-      "name": "Kan Kids (כאן לילדים)",
-      "url": "https://kankids.media.kan.org.il/hls/live/2024820/2024820/playlist.m3u8",
-      "category": "Kids",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_kol_hamuzika/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Kan Reka (כאן רקע)",
-      "url": "https://kanreka.media.kan.org.il/hls/live/2024815/2024815/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reka/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Makan Radio (מכאן רדיו)",
-      "url": "https://makanradio.media.kan.org.il/hls/live/2024818/2024818/playlist.m3u8",
-      "category": "Music",
-      "country": "Israel"
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/radio_makan/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
     },
     {
       "name": "Galei Zahal (גלי צה\"ל)",
