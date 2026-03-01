@@ -318,10 +318,12 @@ class Channel {
     // Detect media type from category or URL
     final lowerCategory = (category ?? '').toLowerCase();
     final lowerUrl = url.toLowerCase();
-    if (lowerCategory.contains('radio') || 
-        lowerUrl.contains('radio') ||
-        lowerCategory.contains('music') ||
-        name.toLowerCase().contains('radio')) {
+    final lowerName = name.toLowerCase();
+    if (lowerCategory == 'radio' || 
+        lowerUrl.contains('/radio/') ||
+        lowerName.contains('radio') ||
+        lowerUrl.endsWith('.mp3') ||
+        lowerUrl.contains('icecast.audio')) {
       mediaType = 'Radio';
     }
     
