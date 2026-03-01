@@ -17,14 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed (P1-High)  
 - **Israeli channels not working** — Discovered correct CDN paths on `kancdn.medonecdn.net` by scraping kan.org.il live page; all 13 KAN channels now work globally
 - **Android app shows version 1.5.0** — Replaced hardcoded version string in 6 Dart files with 1.9.1
-- **Android app missing channels** — Expanded from 2 to 17 IPTV repositories; added 24 custom Israeli channels with verified CDN URLs
+- **Android app missing channels** — Expanded from 2 to 17 IPTV repositories; added 24→33 custom Israeli channels with verified CDN URLs
+- **Android Radio filter not working** — Custom channels were defaulting to `mediaType: 'TV'`; now correctly set to `'Radio'` when group is Radio
+- **Android Language filter empty** — Custom channels were missing `language` field; now all include Hebrew/Arabic/English/French as appropriate
 - **CVE Scanner workflow failure** — Fixed `pip-audit --output` flag (only creates file when vulns exist); switched to `pip-audit | tee` pattern
+- **Security Gate workflow failure** — Added `usedforsecurity=False` to MD5 hash in thumbnail.py (cache key, not security); removed tag-push trigger
 - **Android build 403 push error** — Added `permissions: contents: write` to workflow
 - **Flutter compilation errors** — Fixed PlatformException, connectivity_plus List API, floating 2.0 API changes
 - **R8/ProGuard minification error** — Added `-dontwarn com.google.android.play.core.**`
 
 ### Added
-- **56 custom Israeli channels** in `channels_config.json` — KAN TV (11, Kids, Subtitled, Makan 33), Reshet 13 (6 variants), Channel 14, i24NEWS (4 languages), Knesset, Ynet, Hala TV, Kabbalah TV, 20+ radio stations
+- **59 custom Israeli channels** in `channels_config.json` — KAN TV (11, Kids, Subtitled, Makan 33), Reshet 13 (6 variants), Channel 14, i24NEWS (4 languages), Knesset, Ynet, Hala TV, Kabbalah TV, 20+ radio stations
+- **33 custom Israeli channels** in Android app — 19 TV + 14 Radio (Kan Bet, Gimel, 88, Tarbut, Moreshet, Kol Hamuzika, Reka, Radio Makan, Galgalatz, Galei Zahal, 100FM, 103FM)
 - **Concurrent repository fetching** — `asyncio.gather` with `Semaphore(10)` replaces sequential fetching
 - **Search debounce** (300ms) — Prevents UI lag during rapid typing
 - **Treeview bulk insert** — Hide widget during mass insert, pack after
