@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:floating/floating.dart';
+import 'dart:io' show Platform;
 import '../models/channel.dart';
 import '../services/pip_service.dart';
 import '../widgets/live_badge.dart';
@@ -223,78 +224,63 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
 
   void _openInExternalPlayer() async {
     final streamUrl = widget.channel.url;
-    logger.info('Opening ${widget.channel.name} in external player');
-    
-    // Try launching with the actual stream URL and let Android's chooser pick the player
-    // This is more reliable than vlc:// or intent: schemes via url_launcher
-    try {
-      // First try: direct URL with external application mode
-      final uri = Uri.parse(streamUrl);
-      logger.debug('Trying direct URL launch: $streamUrl');
-      
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      
-      if (launched) {
-        logger.info('Successfully opened in external player');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Opening in external player...'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+    final channelName = widget.channel.name;
+    logger.info('Opening $channelName in external player');
+
+    if (Platform.isAndroid) {
+      // Use Android intent with video/* MIME type to open in VLC/media player (not browser)
+      try {
+        const platform = MethodChannel('tv_viewer/intent');
+        final result = await platform.invokeMethod('openInVideoPlayer', {
+          'url': streamUrl,
+          'title': channelName,
+          'package': 'org.videolan.vlc', // Try VLC first
+        });
+        if (result == true) {
+          logger.info('Opened in VLC');
+          return;
         }
-        return;
+      } catch (e) {
+        logger.debug('VLC intent failed: $e');
       }
-    } catch (e) {
-      logger.debug('Direct URL launch failed: $e');
-    }
-    
-    // Second try: VLC-specific intent via custom scheme
-    try {
-      final vlcUri = Uri.parse('vlc://$streamUrl');
-      logger.debug('Trying VLC custom scheme');
-      
-      final launched = await launchUrl(
-        vlcUri,
-        mode: LaunchMode.externalApplication,
-      );
-      
-      if (launched) {
-        logger.info('Opened with VLC custom scheme');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Opening in VLC...'),
-              duration: Duration(seconds: 1),
-            ),
-          );
+
+      // Fallback: open with any video player via ACTION_VIEW + video/* MIME type
+      try {
+        const platform = MethodChannel('tv_viewer/intent');
+        final result = await platform.invokeMethod('openInVideoPlayer', {
+          'url': streamUrl,
+          'title': channelName,
+        });
+        if (result == true) {
+          logger.info('Opened in video player via chooser');
+          return;
         }
-        return;
+      } catch (e) {
+        logger.debug('Video intent failed: $e');
       }
-    } catch (e) {
-      logger.debug('VLC custom scheme failed: $e');
+
+      // Last resort: vlc:// custom scheme
+      try {
+        final vlcUri = Uri.parse('vlc://$streamUrl');
+        if (await launchUrl(vlcUri, mode: LaunchMode.externalApplication)) {
+          return;
+        }
+      } catch (_) {}
+    } else {
+      // Non-Android: use url_launcher
+      try {
+        await launchUrl(Uri.parse(streamUrl), mode: LaunchMode.externalApplication);
+        return;
+      } catch (_) {}
     }
 
-    // All methods failed — offer to copy URL
+    // All methods failed
     if (mounted) {
-      logger.warning('All external player attempts failed');
+      Clipboard.setData(ClipboardData(text: streamUrl));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('No external player found. Install VLC or MX Player.'),
-          duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: 'Copy URL',
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: streamUrl));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('URL copied to clipboard')),
-              );
-            },
-          ),
+        const SnackBar(
+          content: Text('No video player found. URL copied to clipboard. Install VLC.'),
+          duration: Duration(seconds: 4),
         ),
       );
     }
@@ -326,25 +312,37 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
             ),
             const SizedBox(height: 20),
-            // Option 1: Cast via system (Google Home / Smart TV apps)
+            // Open in VLC (which has built-in cast)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () async {
                   Navigator.pop(context);
-                  final uri = Uri.parse(streamUrl);
-                  try {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(content: Text('No cast-capable app found. Install a media player with cast support.')),
-                      );
-                    }
+                  // Open in VLC — user can cast from VLC's Renderer menu
+                  if (Platform.isAndroid) {
+                    try {
+                      const platform = MethodChannel('tv_viewer/intent');
+                      await platform.invokeMethod('openInVideoPlayer', {
+                        'url': streamUrl,
+                        'title': channelName,
+                        'package': 'org.videolan.vlc',
+                      });
+                      return;
+                    } catch (_) {}
+                    // Fallback to vlc:// scheme
+                    try {
+                      await launchUrl(Uri.parse('vlc://$streamUrl'), mode: LaunchMode.externalApplication);
+                      return;
+                    } catch (_) {}
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(content: Text('VLC not found. Install VLC for casting.')),
+                    );
                   }
                 },
                 icon: const Icon(Icons.cast),
-                label: const Text('Open in Media Player (Cast from there)'),
+                label: const Text('Cast via VLC'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   backgroundColor: Colors.blue[700],
@@ -352,21 +350,31 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
               ),
             ),
             const SizedBox(height: 10),
-            // Option 2: Share URL to cast apps
+            const Text(
+              'Opens stream in VLC → tap ≡ Menu → Renderer → select Chromecast',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Open in any video player
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () async {
                   Navigator.pop(context);
+                  if (Platform.isAndroid) {
+                    try {
+                      const platform = MethodChannel('tv_viewer/intent');
+                      await platform.invokeMethod('openInVideoPlayer', {
+                        'url': streamUrl,
+                        'title': channelName,
+                      });
+                      return;
+                    } catch (_) {}
+                  }
                   try {
-                    final shareUri = Uri.parse('https://www.youtube.com/watch?v=cast_redirect&url=${Uri.encodeComponent(streamUrl)}');
-                    // Use share intent — cast-compatible apps will appear
-                    await launchUrl(
-                      Uri.parse(streamUrl),
-                      mode: LaunchMode.externalNonBrowserApplication,
-                    );
-                  } catch (e) {
-                    // Fallback: copy URL
+                    await launchUrl(Uri.parse(streamUrl), mode: LaunchMode.externalNonBrowserApplication);
+                  } catch (_) {
                     Clipboard.setData(ClipboardData(text: streamUrl));
                     if (mounted) {
                       ScaffoldMessenger.of(this.context).showSnackBar(
@@ -376,14 +384,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                   }
                 },
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Open in External App'),
+                label: const Text('Open in Other Player'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
             const SizedBox(height: 10),
-            // Option 3: Copy URL
+            // Copy URL
             SizedBox(
               width: double.infinity,
               child: TextButton.icon(
