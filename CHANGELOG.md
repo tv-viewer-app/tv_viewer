@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-03-01
+
+### Fixed (P0-Critical)
+- **Windows app crash on startup** — Added ttkbootstrap, PIL, PIL.ImageTk to PyInstaller hidden imports; removed PIL.ImageTk from excludes (ttkbootstrap depends on Pillow)
+- **Dark theme unreadable text** — Switched from `FluentColors` (light palette) to `FluentColorsDark` with ttkbootstrap "darkly" theme
+- **Country mis-assignment** — Rewrote `_organize_channels()` to use intelligent name/URL lookup instead of trusting M3U `tvg-country` tags (which indicate broadcast availability, not origin)
+
+### Fixed (P1-High)  
+- **Israeli channels not working** — Discovered correct CDN paths on `kancdn.medonecdn.net` by scraping kan.org.il live page; all 13 KAN channels now work globally
+- **Android app shows version 1.5.0** — Replaced hardcoded version string in 6 Dart files with 1.9.1
+- **Android app missing channels** — Expanded from 2 to 17 IPTV repositories; added 24 custom Israeli channels with verified CDN URLs
+- **CVE Scanner workflow failure** — Fixed `pip-audit --output` flag (only creates file when vulns exist); switched to `pip-audit | tee` pattern
+- **Android build 403 push error** — Added `permissions: contents: write` to workflow
+- **Flutter compilation errors** — Fixed PlatformException, connectivity_plus List API, floating 2.0 API changes
+- **R8/ProGuard minification error** — Added `-dontwarn com.google.android.play.core.**`
+
+### Added
+- **56 custom Israeli channels** in `channels_config.json` — KAN TV (11, Kids, Subtitled, Makan 33), Reshet 13 (6 variants), Channel 14, i24NEWS (4 languages), Knesset, Ynet, Hala TV, Kabbalah TV, 20+ radio stations
+- **Concurrent repository fetching** — `asyncio.gather` with `Semaphore(10)` replaces sequential fetching
+- **Search debounce** (300ms) — Prevents UI lag during rapid typing
+- **Treeview bulk insert** — Hide widget during mass insert, pack after
+- **Scan polling timer** — Replaces per-channel callback with periodic UI refresh
+
+### Changed
+- Window size increased from 900×600 to 1200×700
+- Channel list font increased from 12pt to 14pt
+- Sidebar widened from 300px to 340px
+- Version bumped to 1.9.1 (desktop) / 1.9.1+3 (Android)
+- `MAX_CONCURRENT_CHECKS` increased from 20 to 30
+- `SCAN_REQUEST_DELAY` decreased from 0.02 to 0.005
+
+### Israeli Channel CDN Discovery
+KAN channels on `kancdn.medonecdn.net` use different path names than `*.media.kan.org.il`:
+| Channel | CDN Path |
+|---------|----------|
+| Kan 11 | `kan11` |
+| Kan Kids | `kan_edu` |
+| Kan 11 Subtitled | `kan11_subs` |
+| Makan 33 | `makan` |
+| Radio stations | `radio/kan_88`, `radio/kan_tarbut`, etc. |
+
+### Closed Issues
+- #26, #39, #40, #42, #43, #44, #47 — Android bugs verified fixed and closed
+
 ## [1.9.0] - 2026-02-24
 
 ### Fixed (P0-Critical)
