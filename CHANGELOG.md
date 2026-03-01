@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-01
+
+### Added
+- **[#31] Shared channel health database** — Supabase-powered cross-platform channel status sync. Clients share validation results anonymously (URL hashing with SHA256). Fetch cached results on startup to skip re-scanning working channels. Both Python and Flutter
+- **[#45] Working channels filter** — New status filter dropdown (Working/Failed/Unchecked) on Android. Filter to show only validated working channels, hiding offline/untested streams
+- **[#24] Anonymous analytics** — Lightweight Supabase-backed analytics (no Firebase). Tracks app launches, stream failures, scan stats, and crashes anonymously. Privacy-first: URL hashing, no PII, random UUID per install. Batched with 30s flush interval
+- **[#32] FMStream.org radio integration** — FMStream radio directory parsed and merged into channel list with deduplication. Multi-strategy HTML parsing with bitrate-aware quality selection
+- **Cast dialog improvements** — Cast button now shows proper cast guidance with "Copy Stream URL" instead of auto-redirecting to VLC
+- **External player fix** — Simplified external player launch: tries direct URL first (Android app chooser), then VLC scheme fallback. More reliable than intent-based approach
+
+### Changed
+- Version bump to 2.0.0 across all platforms (Python + Flutter)
+- Supabase sync integrated into stream validation pipeline (fetch cached → validate → upload results)
+- FMStream radio stations auto-fetched alongside M3U repositories
+
 ## [1.9.2] - 2026-03-01
 
 ### Security Fixes

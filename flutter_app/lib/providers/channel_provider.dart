@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../services/m3u_service.dart';
 import '../services/favorites_service.dart';
+import '../services/shared_db_service.dart';
 import '../utils/logger_service.dart';
 
 /// Provider for managing channel state
@@ -19,6 +20,7 @@ class ChannelProvider extends ChangeNotifier {
   String _selectedCountry = 'All';
   String _selectedLanguage = 'All'; // BL-017: Language filter
   String _selectedMediaType = 'All'; // 'All', 'TV', or 'Radio'
+  String _selectedStatus = 'All'; // 'All', 'Working', 'Failed', 'Unchecked'
   String _searchQuery = '';
   bool _isLoading = false;
   bool _isScanning = false;
@@ -35,10 +37,12 @@ class ChannelProvider extends ChangeNotifier {
   List<String> get countries => ['All', ..._countries.toList()..sort()];
   List<String> get languages => ['All', ..._languages.toList()..sort()]; // BL-017
   List<String> get mediaTypes => ['All', 'TV', 'Radio'];
+  List<String> get statusOptions => ['All', 'Working', 'Failed', 'Unchecked'];
   String get selectedCategory => _selectedCategory;
   String get selectedCountry => _selectedCountry;
   String get selectedLanguage => _selectedLanguage; // BL-017
   String get selectedMediaType => _selectedMediaType;
+  String get selectedStatus => _selectedStatus;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
   bool get isScanning => _isScanning;
@@ -212,12 +216,53 @@ class ChannelProvider extends ChangeNotifier {
     _failedCount = 0;
     notifyListeners();
 
+    // --- SharedDb: Fetch cached results to skip recently-validated channels ---
+    final sharedDb = SharedDbService();
+    final Set<String> skippedUrls = {};
+    try {
+      if (SharedDbService.isConfigured) {
+        final sharedDbCache = await sharedDb.fetchRecentResults();
+        if (sharedDbCache.isNotEmpty) {
+          for (int j = 0; j < _channels.length; j++) {
+            if (sharedDb.shouldSkipValidation(_channels[j].url, sharedDbCache)) {
+              _channels[j] = _channels[j].copyWith(
+                isWorking: true,
+                lastChecked: DateTime.now(),
+              );
+              skippedUrls.add(_channels[j].url);
+              _workingCount++;
+              _scanProgress++;
+            }
+          }
+          if (skippedUrls.isNotEmpty) {
+            logger.info(
+              'SharedDb: Skipped ${skippedUrls.length}/${_channels.length} channels '
+              'with cached working status',
+            );
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      logger.warning('SharedDb: Failed to fetch cached results: $e');
+      // Reset counters on failure — all channels will be validated normally
+      _workingCount = 0;
+      _failedCount = 0;
+      _scanProgress = 0;
+      skippedUrls.clear();
+    }
+    // Channels that still need validation (excludes SharedDb-cached working channels)
+    final channelsToValidate = skippedUrls.isNotEmpty
+        ? _channels.where((c) => !skippedUrls.contains(c.url)).toList()
+        : _channels;
+    // --- End SharedDb fetch ---
+
     // Validate in batches of 5 for performance
     const batchSize = 5;
-    for (int i = 0; i < _channels.length; i += batchSize) {
+    for (int i = 0; i < channelsToValidate.length; i += batchSize) {
       if (!_isScanning) break; // Allow cancellation
 
-      final batch = _channels.skip(i).take(batchSize).toList();
+      final batch = channelsToValidate.skip(i).take(batchSize).toList();
       
       // Collect results from batch before updating state (BL-031: immutable)
       final updatedChannels = <Channel>[];
@@ -259,6 +304,26 @@ class ChannelProvider extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 50));
     }
 
+    // --- SharedDb: Upload results for channels that were actually validated ---
+    try {
+      if (SharedDbService.isConfigured) {
+        final uploadResults = _channels
+            .where((c) => c.url.startsWith('http') && !skippedUrls.contains(c.url))
+            .map((c) => ChannelResult(
+                  url: c.url,
+                  isWorking: c.isWorking,
+                  lastChecked: c.lastChecked ?? DateTime.now(),
+                ))
+            .toList();
+        if (uploadResults.isNotEmpty) {
+          await sharedDb.uploadResults(uploadResults);
+        }
+      }
+    } catch (e) {
+      logger.warning('SharedDb: Failed to upload results: $e');
+    }
+    // --- End SharedDb upload ---
+
     _isScanning = false;
     logger.info('Channel validation completed: $_workingCount working, $_failedCount failed');
     await _saveToCache();
@@ -299,6 +364,13 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set channel status filter (Working/Failed/Unchecked)
+  void setStatus(String status) {
+    _selectedStatus = status;
+    _applyFilters();
+    notifyListeners();
+  }
+
   /// Set search query
   void setSearchQuery(String query) {
     _searchQuery = query;
@@ -312,6 +384,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedCountry = 'All';
     _selectedLanguage = 'All';
     _selectedMediaType = 'All';
+    _selectedStatus = 'All';
     _searchQuery = '';
     _applyFilters();
     notifyListeners();
@@ -323,6 +396,7 @@ class ChannelProvider extends ChangeNotifier {
         _selectedCountry != 'All' ||
         _selectedLanguage != 'All' ||
         _selectedMediaType != 'All' ||
+        _selectedStatus != 'All' ||
         _searchQuery.isNotEmpty;
   }
 
@@ -374,6 +448,21 @@ class ChannelProvider extends ChangeNotifier {
       // Media type filter
       if (_selectedMediaType != 'All') {
         if (channel.mediaType != _selectedMediaType) {
+          return false;
+        }
+      }
+
+      // Channel status filter
+      if (_selectedStatus == 'Working') {
+        if (!(channel.isWorking && channel.lastChecked != null)) {
+          return false;
+        }
+      } else if (_selectedStatus == 'Failed') {
+        if (channel.isWorking || channel.lastChecked == null) {
+          return false;
+        }
+      } else if (_selectedStatus == 'Unchecked') {
+        if (channel.lastChecked != null) {
           return false;
         }
       }

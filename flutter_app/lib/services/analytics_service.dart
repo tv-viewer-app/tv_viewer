@@ -1,383 +1,343 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../utils/logger_service.dart';
 
-/// Analytics event names
-class AnalyticsEvents {
-  static const String appStart = 'app_start';
-  static const String channelPlay = 'channel_play';
-  static const String scanStart = 'scan_start';
-  static const String scanComplete = 'scan_complete';
-  static const String filterApplied = 'filter_applied';
-  static const String errorOccurred = 'error_occurred';
-  static const String playlistAdded = 'playlist_added';
-  static const String playlistRemoved = 'playlist_removed';
-  static const String favoritesToggled = 'favorites_toggled';
-  static const String settingsChanged = 'settings_changed';
-  static const String helpViewed = 'help_viewed';
-  static const String feedbackSubmitted = 'feedback_submitted';
-  static const String externalPlayerLaunched = 'external_player_launched';
-}
-
-/// Analytics parameter keys
-class AnalyticsParameters {
-  static const String channelName = 'channel_name';
-  static const String channelUrl = 'channel_url';
-  static const String category = 'category';
-  static const String country = 'country';
-  static const String mediaType = 'media_type';
-  static const String playlistUrl = 'playlist_url';
-  static const String playlistName = 'playlist_name';
-  static const String channelCount = 'channel_count';
-  static const String filterType = 'filter_type';
-  static const String filterValue = 'filter_value';
-  static const String errorCode = 'error_code';
-  static const String errorMessage = 'error_message';
-  static const String settingKey = 'setting_key';
-  static const String settingValue = 'setting_value';
-  static const String helpTopic = 'help_topic';
-  static const String feedbackType = 'feedback_type';
-  static const String playerType = 'player_type';
-  static const String duration = 'duration';
-  static const String success = 'success';
-}
-
-/// Analytics service that works with or without Firebase
-/// 
-/// When Firebase is not configured, falls back to logger_service.dart
-/// This allows the app to function without Firebase setup
+/// Anonymous, privacy-first analytics service backed by Supabase REST API.
+///
+/// Features:
+///   - No Firebase dependency — uses Supabase REST directly
+///   - Anonymous: random UUID per install, no PII collected
+///   - Privacy: all URLs are SHA-256 hashed before transmission
+///   - Batched: events are queued and flushed every 30 s or at 20 events
+///   - Fail-safe: errors are logged but never crash the host app
+///   - Auto-enabled only when SUPABASE_URL and SUPABASE_ANON_KEY are set
+///
+/// Database table (Supabase):
+///   analytics_events
+///     id            — bigint, auto-increment (primary key)
+///     device_id     — uuid (anonymous install identifier)
+///     event_type    — text
+///     event_data    — jsonb
+///     app_version   — text
+///     platform      — text ('android' | 'windows')
+///     created_at    — timestamptz (default now())
 class AnalyticsService {
+  // ---------------------------------------------------------------------------
+  // Singleton
+  // ---------------------------------------------------------------------------
   static AnalyticsService? _instance;
   static AnalyticsService get instance => _instance ??= AnalyticsService._();
-  
   AnalyticsService._();
-  
-  bool _isInitialized = false;
-  bool _firebaseAvailable = false;
+
+  // ---------------------------------------------------------------------------
+  // Supabase configuration — loaded from compile-time environment (SEC-003)
+  // ---------------------------------------------------------------------------
+  static String get _supabaseUrl =>
+      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static String get _supabaseAnonKey =>
+      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+  static const String _tableName = 'analytics_events';
+
+  /// Service is automatically enabled when both env vars are provided.
+  static bool get _enabled =>
+      _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
+
+  // ---------------------------------------------------------------------------
+  // Internal state
+  // ---------------------------------------------------------------------------
+  static const String _deviceIdKey = 'analytics_device_id';
+  static const int _maxQueueSize = 20;
+  static const Duration _flushInterval = Duration(seconds: 30);
+  static const Duration _httpTimeout = Duration(seconds: 10);
+
   final LoggerService _logger = LoggerService.instance;
-  
-  // Firebase Analytics instance (will be null if Firebase not configured)
-  // ignore: unused_field
-  dynamic _analytics;
-  
-  /// Initialize analytics service
-  /// 
-  /// Checks if Firebase is configured and available
-  /// Falls back to logger if Firebase is not set up
+
+  bool _isInitialized = false;
+  String _deviceId = '';
+  String _appVersion = '';
+  String _platform = '';
+
+  final List<Map<String, dynamic>> _queue = [];
+  Timer? _flushTimer;
+
+  // ---------------------------------------------------------------------------
+  // Public getters
+  // ---------------------------------------------------------------------------
+
+  /// Whether the analytics backend is reachable and configured.
+  bool get isConfigured =>
+      _enabled &&
+      _supabaseUrl != 'YOUR_SUPABASE_PROJECT_URL' &&
+      _supabaseAnonKey != 'YOUR_SUPABASE_ANON_KEY';
+
+  /// Whether [initialize] has completed successfully.
+  bool get isInitialized => _isInitialized;
+
+  /// Number of events currently queued (useful for testing).
+  int get queueLength => _queue.length;
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  /// Initialise the service: load or generate the anonymous device ID,
+  /// resolve app version and platform, and start the periodic flush timer.
   Future<void> initialize() async {
     if (_isInitialized) return;
-    
+
     try {
-      // Try to initialize Firebase Analytics
-      // This will fail gracefully if Firebase is not configured
-      _firebaseAvailable = await _initializeFirebase();
-      
-      if (_firebaseAvailable) {
-        _logger.info('[Analytics] Firebase Analytics initialized successfully');
-      } else {
-        _logger.info('[Analytics] Running in fallback mode (no Firebase configured)');
+      // Resolve platform
+      _platform = _resolvePlatform();
+
+      // Resolve app version
+      try {
+        final info = await PackageInfo.fromPlatform();
+        _appVersion = info.version;
+      } catch (_) {
+        _appVersion = 'unknown';
       }
-      
+
+      // Load or generate anonymous device ID
+      final prefs = await SharedPreferences.getInstance();
+      _deviceId = prefs.getString(_deviceIdKey) ?? '';
+      if (_deviceId.isEmpty) {
+        _deviceId = _generateUuidV4();
+        await prefs.setString(_deviceIdKey, _deviceId);
+      }
+
+      // Start periodic flush
+      _flushTimer?.cancel();
+      _flushTimer = Timer.periodic(_flushInterval, (_) => flush());
+
       _isInitialized = true;
+
+      if (isConfigured) {
+        _logger.info('[Analytics] Initialised — device=$_deviceId, '
+            'platform=$_platform, version=$_appVersion');
+      } else {
+        _logger.info('[Analytics] Disabled (Supabase env vars not set)');
+      }
     } catch (e) {
-      _logger.warning('[Analytics] Failed to initialize Firebase Analytics, using fallback mode', e);
-      _firebaseAvailable = false;
+      _logger.warning('[Analytics] Failed to initialise', e);
+      // Mark as initialised so callers aren't blocked.
       _isInitialized = true;
     }
   }
-  
-  /// Try to initialize Firebase Analytics
-  /// Returns true if successful, false otherwise
-  Future<bool> _initializeFirebase() async {
-    try {
-      // Check if Firebase core is available
-      // This will be implemented when Firebase is set up
-      // For now, return false to use fallback mode
-      
-      // Uncomment when Firebase is configured:
-      // await Firebase.initializeApp();
-      // _analytics = FirebaseAnalytics.instance;
-      // return true;
-      
-      return false;
-    } catch (e) {
-      debugPrint('[Analytics] Firebase not available: $e');
-      return false;
-    }
+
+  /// Flush remaining events and cancel the periodic timer.
+  Future<void> dispose() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    await flush();
   }
-  
-  /// Log an analytics event
-  /// 
-  /// If Firebase is available, logs to Firebase Analytics
-  /// Otherwise, logs to logger_service.dart
-  Future<void> logEvent({
-    required String name,
-    Map<String, dynamic>? parameters,
-  }) async {
-    if (!_isInitialized) {
-      await initialize();
-    }
-    
+
+  // ---------------------------------------------------------------------------
+  // Generic event tracking
+  // ---------------------------------------------------------------------------
+
+  /// Enqueue a generic analytics event.
+  ///
+  /// Events are batched and sent to Supabase in bulk — see [flush].
+  Future<void> trackEvent(String type, [Map<String, dynamic>? data]) async {
+    if (!_isInitialized) await initialize();
+    if (!isConfigured) return;
+
     try {
-      if (_firebaseAvailable && _analytics != null) {
-        // Log to Firebase Analytics
-        // await _analytics.logEvent(name: name, parameters: parameters);
-        _logger.debug('[Analytics] Event: $name ${parameters != null ? parameters.toString() : ''}');
-      } else {
-        // Fallback: Log to logger service
-        final params = parameters != null ? ' | Params: ${parameters.toString()}' : '';
-        _logger.info('[Analytics] Event: $name$params');
+      final event = <String, dynamic>{
+        'device_id': _deviceId,
+        'event_type': type,
+        'event_data': data ?? <String, dynamic>{},
+        'app_version': _appVersion,
+        'platform': _platform,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      _queue.add(event);
+      _logger.debug('[Analytics] Queued event: $type (queue=${_queue.length})');
+
+      if (_queue.length >= _maxQueueSize) {
+        await flush();
       }
     } catch (e) {
-      _logger.warning('[Analytics] Failed to log event: $name', e);
+      _logger.warning('[Analytics] Failed to queue event: $type', e);
     }
   }
-  
-  /// Set user property
-  /// 
-  /// Useful for segmenting analytics by user characteristics
-  Future<void> setUserProperty({
-    required String name,
-    required String? value,
-  }) async {
-    if (!_isInitialized) {
-      await initialize();
+
+  // ---------------------------------------------------------------------------
+  // Convenience methods
+  // ---------------------------------------------------------------------------
+
+  /// Track an app launch with platform metadata.
+  Future<void> trackAppLaunch() async {
+    await trackEvent('app_launch', {
+      'platform_os': _platform,
+      'app_version': _appVersion,
+    });
+  }
+
+  /// Track when a user plays a channel (URL is SHA-256 hashed).
+  Future<void> trackChannelPlay(String url) async {
+    await trackEvent('channel_play', {
+      'url_hash': _hashUrl(url),
+    });
+  }
+
+  /// Track when a stream fails to play (URL is SHA-256 hashed).
+  Future<void> trackChannelFail(String url, String error) async {
+    await trackEvent('channel_fail', {
+      'url_hash': _hashUrl(url),
+      'error_code': error,
+    });
+  }
+
+  /// Track when a channel validation scan finishes.
+  Future<void> trackScanComplete(
+    int working,
+    int failed,
+    Duration duration,
+  ) async {
+    await trackEvent('scan_complete', {
+      'working_count': working,
+      'failed_count': failed,
+      'duration_ms': duration.inMilliseconds,
+    });
+  }
+
+  /// Track an uncaught exception (first stack-trace line only for privacy).
+  Future<void> trackCrash(dynamic error, StackTrace? stack) async {
+    String firstLine = '';
+    if (stack != null) {
+      final lines = stack.toString().split('\n');
+      if (lines.isNotEmpty) {
+        firstLine = lines.first.trim();
+      }
     }
-    
+
+    await trackEvent('app_crash', {
+      'error_type': error.runtimeType.toString(),
+      'error_message': error.toString().substring(
+            0,
+            error.toString().length > 200 ? 200 : error.toString().length,
+          ),
+      'stack_first_line': firstLine,
+    });
+
+    // Flush immediately on crash — the app may be about to exit.
+    await flush();
+  }
+
+  /// Track when a user applies a filter (type only, not the value).
+  Future<void> trackFilterUsed(String filterType) async {
+    await trackEvent('filter_used', {
+      'filter_type': filterType,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Flush (batch send to Supabase)
+  // ---------------------------------------------------------------------------
+
+  /// Send all queued events to the Supabase `analytics_events` table.
+  ///
+  /// Uses the PostgREST bulk-insert endpoint. On failure the events are kept
+  /// in the queue for the next attempt (up to 100 events to avoid unbounded
+  /// memory growth).
+  Future<void> flush() async {
+    if (_queue.isEmpty || !isConfigured) return;
+
+    // Snapshot and clear the queue so new events don't interfere.
+    final batch = List<Map<String, dynamic>>.from(_queue);
+    _queue.clear();
+
     try {
-      if (_firebaseAvailable && _analytics != null) {
-        // Set Firebase user property
-        // await _analytics.setUserProperty(name: name, value: value);
-        _logger.debug('[Analytics] User property: $name = $value');
+      final url = Uri.parse('$_supabaseUrl/rest/v1/$_tableName');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'apikey': _supabaseAnonKey,
+              'Authorization': 'Bearer $_supabaseAnonKey',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: json.encode(batch),
+          )
+          .timeout(_httpTimeout);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _logger.debug(
+            '[Analytics] Flushed ${batch.length} events successfully');
       } else {
-        // Fallback: Log to logger service
-        _logger.info('[Analytics] User property: $name = $value');
+        _logger.warning(
+            '[Analytics] Flush failed: ${response.statusCode} — '
+            '${response.body}');
+        _requeue(batch);
       }
     } catch (e) {
-      _logger.warning('[Analytics] Failed to set user property: $name', e);
+      _logger.warning('[Analytics] Flush error', e);
+      _requeue(batch);
     }
   }
-  
-  /// Set user ID for analytics
-  Future<void> setUserId(String? userId) async {
-    if (!_isInitialized) {
-      await initialize();
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /// Push failed events back onto the queue (capped at 100 to limit memory).
+  void _requeue(List<Map<String, dynamic>> events) {
+    _queue.insertAll(0, events);
+    if (_queue.length > 100) {
+      _queue.removeRange(0, _queue.length - 100);
     }
-    
+  }
+
+  /// SHA-256 hash a URL for privacy.
+  static String _hashUrl(String url) {
+    final bytes = utf8.encode(url);
+    return sha256.convert(bytes).toString();
+  }
+
+  /// Generate a version-4 (random) UUID without an external package.
+  static String _generateUuidV4() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+
+    // Set version (4) and variant (10xx) bits per RFC 4122.
+    bytes[6] = (bytes[6] & 0x0F) | 0x40;
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+
+    String hex(int byte) => byte.toRadixString(16).padLeft(2, '0');
+
+    return '${bytes.sublist(0, 4).map(hex).join()}-'
+        '${bytes.sublist(4, 6).map(hex).join()}-'
+        '${bytes.sublist(6, 8).map(hex).join()}-'
+        '${bytes.sublist(8, 10).map(hex).join()}-'
+        '${bytes.sublist(10, 16).map(hex).join()}';
+  }
+
+  /// Resolve a short, consistent platform label.
+  static String _resolvePlatform() {
     try {
-      if (_firebaseAvailable && _analytics != null) {
-        // Set Firebase user ID
-        // await _analytics.setUserId(id: userId);
-        _logger.debug('[Analytics] User ID set: $userId');
-      } else {
-        // Fallback: Log to logger service
-        _logger.info('[Analytics] User ID set: $userId');
-      }
-    } catch (e) {
-      _logger.warning('[Analytics] Failed to set user ID', e);
+      if (Platform.isAndroid) return 'android';
+      if (Platform.isWindows) return 'windows';
+      if (Platform.isIOS) return 'ios';
+      if (Platform.isLinux) return 'linux';
+      if (Platform.isMacOS) return 'macos';
+      return Platform.operatingSystem;
+    } catch (_) {
+      return 'unknown';
     }
   }
-  
-  /// Log screen view
-  Future<void> logScreenView({
-    required String screenName,
-    String? screenClass,
-  }) async {
-    await logEvent(
-      name: 'screen_view',
-      parameters: {
-        'screen_name': screenName,
-        if (screenClass != null) 'screen_class': screenClass,
-      },
-    );
-  }
-  
-  // Convenience methods for common events
-  
-  /// Log app start event
-  Future<void> logAppStart() async {
-    await logEvent(name: AnalyticsEvents.appStart);
-  }
-  
-  /// Log channel play event
-  Future<void> logChannelPlay({
-    required String channelName,
-    String? category,
-    String? country,
-    String? mediaType,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.channelPlay,
-      parameters: {
-        AnalyticsParameters.channelName: channelName,
-        if (category != null) AnalyticsParameters.category: category,
-        if (country != null) AnalyticsParameters.country: country,
-        if (mediaType != null) AnalyticsParameters.mediaType: mediaType,
-      },
-    );
-  }
-  
-  /// Log channel scan start
-  Future<void> logScanStart({
-    required String playlistUrl,
-    String? playlistName,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.scanStart,
-      parameters: {
-        AnalyticsParameters.playlistUrl: playlistUrl,
-        if (playlistName != null) AnalyticsParameters.playlistName: playlistName,
-      },
-    );
-  }
-  
-  /// Log channel scan complete
-  Future<void> logScanComplete({
-    required String playlistUrl,
-    required int channelCount,
-    required bool success,
-    int? durationMs,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.scanComplete,
-      parameters: {
-        AnalyticsParameters.playlistUrl: playlistUrl,
-        AnalyticsParameters.channelCount: channelCount,
-        AnalyticsParameters.success: success,
-        if (durationMs != null) AnalyticsParameters.duration: durationMs,
-      },
-    );
-  }
-  
-  /// Log filter applied
-  Future<void> logFilterApplied({
-    required String filterType,
-    required String filterValue,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.filterApplied,
-      parameters: {
-        AnalyticsParameters.filterType: filterType,
-        AnalyticsParameters.filterValue: filterValue,
-      },
-    );
-  }
-  
-  /// Log error occurred
-  Future<void> logError({
-    required String errorMessage,
-    String? errorCode,
-    String? context,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.errorOccurred,
-      parameters: {
-        AnalyticsParameters.errorMessage: errorMessage,
-        if (errorCode != null) AnalyticsParameters.errorCode: errorCode,
-        if (context != null) 'context': context,
-      },
-    );
-  }
-  
-  /// Log playlist added
-  Future<void> logPlaylistAdded({
-    required String playlistUrl,
-    String? playlistName,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.playlistAdded,
-      parameters: {
-        AnalyticsParameters.playlistUrl: playlistUrl,
-        if (playlistName != null) AnalyticsParameters.playlistName: playlistName,
-      },
-    );
-  }
-  
-  /// Log playlist removed
-  Future<void> logPlaylistRemoved({
-    required String playlistUrl,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.playlistRemoved,
-      parameters: {
-        AnalyticsParameters.playlistUrl: playlistUrl,
-      },
-    );
-  }
-  
-  /// Log favorites toggle
-  Future<void> logFavoritesToggled({
-    required String channelName,
-    required bool isFavorite,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.favoritesToggled,
-      parameters: {
-        AnalyticsParameters.channelName: channelName,
-        'is_favorite': isFavorite,
-      },
-    );
-  }
-  
-  /// Log settings changed
-  Future<void> logSettingsChanged({
-    required String settingKey,
-    required dynamic settingValue,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.settingsChanged,
-      parameters: {
-        AnalyticsParameters.settingKey: settingKey,
-        AnalyticsParameters.settingValue: settingValue.toString(),
-      },
-    );
-  }
-  
-  /// Log help viewed
-  Future<void> logHelpViewed({
-    required String helpTopic,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.helpViewed,
-      parameters: {
-        AnalyticsParameters.helpTopic: helpTopic,
-      },
-    );
-  }
-  
-  /// Log feedback submitted
-  Future<void> logFeedbackSubmitted({
-    required String feedbackType,
-    String? category,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.feedbackSubmitted,
-      parameters: {
-        AnalyticsParameters.feedbackType: feedbackType,
-        if (category != null) AnalyticsParameters.category: category,
-      },
-    );
-  }
-  
-  /// Log external player launched
-  Future<void> logExternalPlayerLaunched({
-    required String playerType,
-    String? channelName,
-  }) async {
-    await logEvent(
-      name: AnalyticsEvents.externalPlayerLaunched,
-      parameters: {
-        AnalyticsParameters.playerType: playerType,
-        if (channelName != null) AnalyticsParameters.channelName: channelName,
-      },
-    );
-  }
-  
-  /// Check if Firebase is available
-  bool get isFirebaseAvailable => _firebaseAvailable;
-  
-  /// Check if analytics is initialized
-  bool get isInitialized => _isInitialized;
 }
 
-/// Global analytics instance (convenience)
+/// Global analytics instance (convenience).
 final analytics = AnalyticsService.instance;

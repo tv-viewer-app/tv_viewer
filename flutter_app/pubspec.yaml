@@ -1,7 +1,7 @@
 name: tv_viewer
 description: TV Viewer - IPTV Streaming App for Android
 publish_to: 'none'
-version: 1.9.2+5
+version: 2.0.0+6
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -30,6 +30,9 @@ dependencies:
   # Utils
   url_launcher: ^6.2.4
   intl: ^0.19.0
+  
+  # Cryptography (SHA-256 hashing for analytics & shared DB)
+  crypto: ^3.0.3
   
   # Android-specific features
   wakelock_plus: ^1.2.0

@@ -129,7 +129,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     try {
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(widget.channel.url),
-        httpHeaders: const {'User-Agent': 'TV Viewer/1.9.2'},
+        httpHeaders: const {'User-Agent': 'TV Viewer/2.0.0'},
       );
 
       // Add timeout to initialization
@@ -225,56 +225,66 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     final streamUrl = widget.channel.url;
     logger.info('Opening ${widget.channel.name} in external player');
     
-    // Try various external player intents directly (Issue #26)
-    // Don't wait for canLaunchUrl - just try to launch
-    final players = [
-      // VLC - try custom scheme first
-      {'uri': 'vlc://$streamUrl', 'name': 'VLC (custom scheme)'},
-      // MX Player - use intent scheme
-      {'uri': 'intent:$streamUrl#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end', 'name': 'MX Player'},
-      // VLC package intent
-      {'uri': 'intent:$streamUrl#Intent;package=org.videolan.vlc;type=video/*;end', 'name': 'VLC (intent)'},
-      // Generic - let Android choose
-      {'uri': streamUrl, 'name': 'System default'},
-    ];
-    
-    bool launched = false;
-    
-    for (final player in players) {
-      try {
-        final uri = Uri.parse(player['uri'] as String);
-        logger.debug('Trying ${player['name']}: ${player['uri']}');
-        
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
-        
-        launched = true;
-        logger.info('Successfully opened with ${player['name']}');
-        
-        // Show success message
+    // Try launching with the actual stream URL and let Android's chooser pick the player
+    // This is more reliable than vlc:// or intent: schemes via url_launcher
+    try {
+      // First try: direct URL with external application mode
+      final uri = Uri.parse(streamUrl);
+      logger.debug('Trying direct URL launch: $streamUrl');
+      
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      
+      if (launched) {
+        logger.info('Successfully opened in external player');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Opening in ${player['name']}'),
-              duration: const Duration(seconds: 1),
+            const SnackBar(
+              content: Text('Opening in external player...'),
+              duration: Duration(seconds: 1),
             ),
           );
         }
         return;
-      } catch (e) {
-        logger.debug('Failed to launch with ${player['name']}: $e');
-        // Continue to next player
       }
+    } catch (e) {
+      logger.debug('Direct URL launch failed: $e');
     }
     
-    // If all failed, show error with URL copy option
-    if (!launched && mounted) {
+    // Second try: VLC-specific intent via custom scheme
+    try {
+      final vlcUri = Uri.parse('vlc://$streamUrl');
+      logger.debug('Trying VLC custom scheme');
+      
+      final launched = await launchUrl(
+        vlcUri,
+        mode: LaunchMode.externalApplication,
+      );
+      
+      if (launched) {
+        logger.info('Opened with VLC custom scheme');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Opening in VLC...'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      logger.debug('VLC custom scheme failed: $e');
+    }
+
+    // All methods failed — offer to copy URL
+    if (mounted) {
       logger.warning('All external player attempts failed');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Could not open external player. Install VLC or MX Player.'),
+          content: const Text('No external player found. Install VLC or MX Player.'),
           duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'Copy URL',
@@ -291,6 +301,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
   
   void _showCastDialog() {
+    final streamUrl = widget.channel.url;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -303,23 +314,39 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Cast support requires Google Cast SDK.'),
-            const SizedBox(height: 16),
             const Text(
-              'To cast this stream:\n'
-              '1. Open in VLC/MX Player\n'
-              '2. Use their built-in cast feature',
+              'Built-in casting is coming in a future update.',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'For now you can cast using:',
               style: TextStyle(fontSize: 13),
             ),
+            const SizedBox(height: 8),
+            const Text(
+              '• VLC → Menu → Renderer → Select device\n'
+              '• MX Player → Cast icon in player\n'
+              '• Or copy the stream URL below',
+              style: TextStyle(fontSize: 13, height: 1.5),
+            ),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _openInExternalPlayer();
-              },
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Open in External Player'),
+            // Copy URL button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: streamUrl));
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(content: Text('Stream URL copied to clipboard')),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy Stream URL'),
+              ),
             ),
           ],
         ),

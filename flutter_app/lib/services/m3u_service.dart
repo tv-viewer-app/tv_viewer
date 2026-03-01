@@ -2,6 +2,7 @@ import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
+import 'fmstream_service.dart';
 
 /// Service for fetching and parsing M3U playlists
 class M3UService {
@@ -69,7 +70,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/1.9.2'},
+        headers: {'User-Agent': 'TV Viewer/2.0.0'},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -240,6 +241,23 @@ class M3UService {
     }
     logger.info('Added ${customChannels.length} custom channels');
     
+    // Fetch FMStream radio stations (#32)
+    try {
+      logger.info('Fetching FMStream.org radio stations...');
+      final fmStations = await FMStreamService.fetchFromFMStream();
+      int added = 0;
+      for (final station in fmStations) {
+        if (!seenUrls.contains(station.url)) {
+          seenUrls.add(station.url);
+          allChannels.add(station);
+          added++;
+        }
+      }
+      logger.info('FMStream: Added $added radio stations (${fmStations.length} fetched, ${fmStations.length - added} duplicates)');
+    } catch (e) {
+      logger.warning('FMStream fetch failed (non-fatal): $e');
+    }
+    
     // Log summary
     logger.info('Fetch complete: ${allChannels.length} total channels from ${defaultRepositories.length - errors.length}/${defaultRepositories.length} repositories');
     if (errors.isNotEmpty) {
@@ -266,7 +284,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/1.9.2'},
+        headers: {'User-Agent': 'TV Viewer/2.0.0'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||

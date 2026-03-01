@@ -330,6 +330,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        // Channel Status Filter (Working/Failed/Unchecked)
+                        Expanded(
+                          child: FilterDropdown(
+                            value: provider.selectedStatus,
+                            items: provider.statusOptions,
+                            hint: 'Status',
+                            icon: Icons.check_circle_outline,
+                            onChanged: (value) => provider.setStatus(value!),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         // Category Dropdown
                         Expanded(
                           flex: 2,
@@ -507,7 +518,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '1.9.2',
+      applicationVersion: '2.0.0',
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

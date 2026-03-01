@@ -33,6 +33,13 @@ from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 import config
 
+# SharedDb integration for cross-platform validation result sharing
+try:
+    from utils.shared_db import SharedDbService, ChannelResult
+except ImportError:
+    SharedDbService = None
+    ChannelResult = None
+
 # Get module logger
 logger = logging.getLogger(__name__)
 
@@ -190,6 +197,42 @@ class StreamChecker:
         total = len(channels)
         self._completed = 0
         
+        # --- SharedDb: Fetch cached results to skip recently-validated channels ---
+        shared_db = None
+        channels_to_validate = channels
+        try:
+            if SharedDbService is not None:
+                shared_db = SharedDbService()
+                if shared_db.is_configured:
+                    shared_db_cache = await shared_db.fetch_recent_results()
+                    if shared_db_cache:
+                        channels_to_validate = []
+                        skipped = 0
+                        for ch in channels:
+                            url = ch.get('url', '')
+                            if url and shared_db.should_skip_validation(url, shared_db_cache):
+                                ch['is_working'] = True
+                                ch['last_scanned'] = datetime.now().isoformat()
+                                skipped += 1
+                                self._completed += 1
+                                if on_channel_checked:
+                                    try:
+                                        on_channel_checked(ch, self._completed, total)
+                                    except Exception:
+                                        pass
+                            else:
+                                channels_to_validate.append(ch)
+                        if skipped > 0:
+                            logger.info(
+                                f"SharedDb: Skipped {skipped}/{total} channels "
+                                f"with cached working status"
+                            )
+        except Exception as e:
+            logger.warning(f"SharedDb: Failed to fetch cached results: {e}")
+            channels_to_validate = channels
+            self._completed = 0
+        # --- End SharedDb fetch ---
+        
         async def check_with_callback(channel: Dict[str, Any], session: aiohttp.ClientSession):
             """Check single channel with callback notification."""
             # Check for stop signal before processing
@@ -226,11 +269,11 @@ class StreamChecker:
             self._session = session
             
             # Process in smaller batches to reduce memory pressure
-            for i in range(0, len(channels), self._batch_size):
+            for i in range(0, len(channels_to_validate), self._batch_size):
                 if self._stop_event.is_set():
                     break
                     
-                batch = channels[i:i + self._batch_size]
+                batch = channels_to_validate[i:i + self._batch_size]
                 
                 # Create tasks for this batch only
                 tasks = [check_with_callback(ch, session) for ch in batch]
@@ -245,6 +288,25 @@ class StreamChecker:
                 await asyncio.sleep(0.1)
             
             self._session = None
+        
+        # --- SharedDb: Upload results for channels that were actually validated ---
+        try:
+            if shared_db is not None and shared_db.is_configured and ChannelResult is not None:
+                upload_list = []
+                for ch in channels_to_validate:
+                    url = ch.get('url', '')
+                    if url and url.startswith(('http://', 'https://')):
+                        upload_list.append(ChannelResult(
+                            url=url,
+                            is_working=ch.get('is_working', False),
+                            last_checked=datetime.utcnow(),
+                            response_time_ms=None,
+                        ))
+                if upload_list:
+                    await shared_db.upload_results(upload_list)
+        except Exception as e:
+            logger.warning(f"SharedDb: Failed to upload results: {e}")
+        # --- End SharedDb upload ---
         
         return channels
     

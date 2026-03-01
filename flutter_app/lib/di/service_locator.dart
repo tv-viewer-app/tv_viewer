@@ -46,7 +46,7 @@ Future<void> setupServiceLocator() async {
     () => CrashlyticsService.instance,
   );
   
-  // Initialize Firebase services (will use fallback if Firebase not configured)
+  // Initialize analytics (Supabase-backed) and crashlytics services
   await getIt<AnalyticsService>().initialize();
   await getIt<CrashlyticsService>().initialize();
   

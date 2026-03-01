@@ -1,7 +1,11 @@
-/// Example: Using Analytics and Crashlytics Services
-/// 
-/// This file demonstrates how to use the analytics and crashlytics services
+/// Example: Using the Supabase-backed Analytics and Crashlytics Services
+///
+/// This file demonstrates how to use the anonymous analytics service
 /// in your application. Copy these patterns into your actual code.
+///
+/// The analytics service uses Supabase REST API — no Firebase required.
+/// All data is anonymous: URLs are SHA-256 hashed, and the only identifier
+/// is a random UUID generated per install and stored in shared_preferences.
 
 import 'package:flutter/material.dart';
 import 'package:tv_viewer/services/analytics_service.dart';
@@ -9,291 +13,113 @@ import 'package:tv_viewer/services/crashlytics_service.dart';
 import 'package:tv_viewer/di/service_locator.dart';
 
 // ============================================================================
-// Example 1: Track screen views
-// ============================================================================
-
-class ExampleChannelListScreen extends StatefulWidget {
-  const ExampleChannelListScreen({Key? key}) : super(key: key);
-
-  @override
-  State<ExampleChannelListScreen> createState() => _ExampleChannelListScreenState();
-}
-
-class _ExampleChannelListScreenState extends State<ExampleChannelListScreen> {
-  // Inject analytics service
-  final _analytics = getIt<AnalyticsService>();
-  
-  @override
-  void initState() {
-    super.initState();
-    
-    // Track screen view
-    _analytics.logScreenView(
-      screenName: 'ChannelList',
-      screenClass: 'ExampleChannelListScreen',
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Channels')),
-      body: const Center(child: Text('Channel List')),
-    );
-  }
-}
-
-// ============================================================================
-// Example 2: Track user actions
+// Example 1: Track channel playback (URL is auto-hashed for privacy)
 // ============================================================================
 
 class ExampleChannelPlayer {
   final _analytics = getIt<AnalyticsService>();
   final _crashlytics = getIt<CrashlyticsService>();
-  
+
   Future<void> playChannel({
-    required String channelName,
     required String channelUrl,
-    String? category,
-    String? country,
   }) async {
     try {
-      // Add context for crash reports
-      await _crashlytics.setCustomKey('current_channel', channelName);
-      await _crashlytics.setCustomKey('channel_url', channelUrl);
-      await _crashlytics.log('Starting playback: $channelName');
-      
-      // Track analytics event
-      await _analytics.logChannelPlay(
-        channelName: channelName,
-        category: category,
-        country: country,
-        mediaType: 'Live TV',
-      );
-      
+      // Add breadcrumb for crash reports
+      await _crashlytics.log('Starting playback');
+
+      // Track play event — URL is SHA-256 hashed internally
+      await _analytics.trackChannelPlay(channelUrl);
+
       // Simulate channel playback
-      print('Playing $channelName from $channelUrl');
-      
+      print('Playing $channelUrl');
     } catch (e, stack) {
-      // Record error
+      // Record crash context
       await _crashlytics.recordError(
         e,
         stack,
-        reason: 'Failed to play channel: $channelName',
+        reason: 'Failed to play channel',
       );
-      
-      await _analytics.logError(
-        errorMessage: e.toString(),
-        errorCode: 'CHANNEL_PLAY_ERROR',
-        context: 'playChannel',
-      );
-      
+
+      // Track the failure — URL is SHA-256 hashed internally
+      await _analytics.trackChannelFail(channelUrl, e.toString());
+
       rethrow;
     }
   }
 }
 
 // ============================================================================
-// Example 3: Track playlist operations
+// Example 2: Track scan completion
 // ============================================================================
 
 class ExamplePlaylistManager {
   final _analytics = getIt<AnalyticsService>();
   final _crashlytics = getIt<CrashlyticsService>();
-  
+
   Future<List<dynamic>> scanPlaylist(String playlistUrl) async {
     final startTime = DateTime.now();
-    
+
     try {
-      // Track scan start
-      await _analytics.logScanStart(
-        playlistUrl: playlistUrl,
-        playlistName: 'My Playlist',
-      );
-      
-      // Add breadcrumb
-      await _crashlytics.log('Starting playlist scan: $playlistUrl');
-      
+      await _crashlytics.log('Starting playlist scan');
+
       // Simulate playlist scanning
       await Future.delayed(const Duration(seconds: 2));
       final channels = <dynamic>[]; // Simulated channels
-      
-      // Track scan completion
+
+      // Track scan result
       final duration = DateTime.now().difference(startTime);
-      await _analytics.logScanComplete(
-        playlistUrl: playlistUrl,
-        channelCount: channels.length,
-        success: true,
-        durationMs: duration.inMilliseconds,
+      await _analytics.trackScanComplete(
+        channels.length, // working
+        0, // failed
+        duration,
       );
-      
+
       return channels;
-      
     } catch (e, stack) {
       // Track failed scan
       final duration = DateTime.now().difference(startTime);
-      await _analytics.logScanComplete(
-        playlistUrl: playlistUrl,
-        channelCount: 0,
-        success: false,
-        durationMs: duration.inMilliseconds,
-      );
-      
-      // Record error
+      await _analytics.trackScanComplete(0, 0, duration);
+
       await _crashlytics.recordError(
         e,
         stack,
         reason: 'Playlist scan failed',
       );
-      
-      rethrow;
-    }
-  }
-  
-  Future<void> addPlaylist(String playlistUrl, String playlistName) async {
-    try {
-      // Track playlist added
-      await _analytics.logPlaylistAdded(
-        playlistUrl: playlistUrl,
-        playlistName: playlistName,
-      );
-      
-      // Add context
-      await _crashlytics.setCustomKey('last_playlist_added', playlistUrl);
-      
-    } catch (e, stack) {
-      await _crashlytics.recordError(e, stack, reason: 'Failed to add playlist');
-      rethrow;
-    }
-  }
-  
-  Future<void> removePlaylist(String playlistUrl) async {
-    try {
-      // Track playlist removed
-      await _analytics.logPlaylistRemoved(playlistUrl: playlistUrl);
-      
-    } catch (e, stack) {
-      await _crashlytics.recordError(e, stack, reason: 'Failed to remove playlist');
+
       rethrow;
     }
   }
 }
 
 // ============================================================================
-// Example 4: Track favorites
-// ============================================================================
-
-class ExampleFavoritesManager {
-  final _analytics = getIt<AnalyticsService>();
-  
-  Future<void> toggleFavorite(String channelName, bool isFavorite) async {
-    await _analytics.logFavoritesToggled(
-      channelName: channelName,
-      isFavorite: isFavorite,
-    );
-  }
-}
-
-// ============================================================================
-// Example 5: Track filter usage
+// Example 3: Track filter usage (type only — no PII)
 // ============================================================================
 
 class ExampleFilterManager {
   final _analytics = getIt<AnalyticsService>();
-  
+
   Future<void> applyCategoryFilter(String category) async {
-    await _analytics.logFilterApplied(
-      filterType: 'category',
-      filterValue: category,
-    );
+    // Only the *type* of filter is tracked, never the value
+    await _analytics.trackFilterUsed('category');
   }
-  
+
   Future<void> applyCountryFilter(String country) async {
-    await _analytics.logFilterApplied(
-      filterType: 'country',
-      filterValue: country,
-    );
+    await _analytics.trackFilterUsed('country');
   }
-  
+
   Future<void> applyMediaTypeFilter(String mediaType) async {
-    await _analytics.logFilterApplied(
-      filterType: 'media_type',
-      filterValue: mediaType,
-    );
+    await _analytics.trackFilterUsed('media_type');
   }
 }
 
 // ============================================================================
-// Example 6: Track settings changes
-// ============================================================================
-
-class ExampleSettingsManager {
-  final _analytics = getIt<AnalyticsService>();
-  
-  Future<void> changeTheme(String theme) async {
-    await _analytics.logSettingsChanged(
-      settingKey: 'theme',
-      settingValue: theme,
-    );
-  }
-  
-  Future<void> changeVideoQuality(String quality) async {
-    await _analytics.logSettingsChanged(
-      settingKey: 'video_quality',
-      settingValue: quality,
-    );
-  }
-  
-  Future<void> toggleAutoplay(bool enabled) async {
-    await _analytics.logSettingsChanged(
-      settingKey: 'autoplay',
-      settingValue: enabled,
-    );
-  }
-}
-
-// ============================================================================
-// Example 7: Track help and feedback
-// ============================================================================
-
-class ExampleHelpAndFeedback {
-  final _analytics = getIt<AnalyticsService>();
-  
-  Future<void> viewHelp(String helpTopic) async {
-    await _analytics.logHelpViewed(helpTopic: helpTopic);
-  }
-  
-  Future<void> submitFeedback(String feedbackType) async {
-    await _analytics.logFeedbackSubmitted(
-      feedbackType: feedbackType,
-      category: 'General',
-    );
-  }
-}
-
-// ============================================================================
-// Example 8: Track external player launch
-// ============================================================================
-
-class ExampleExternalPlayerLauncher {
-  final _analytics = getIt<AnalyticsService>();
-  
-  Future<void> launchExternalPlayer(String playerType, String channelName) async {
-    await _analytics.logExternalPlayerLaunched(
-      playerType: playerType,
-      channelName: channelName,
-    );
-  }
-}
-
-// ============================================================================
-// Example 9: Error handling with crashlytics
+// Example 4: Error handling with crash tracking
 // ============================================================================
 
 class ExampleErrorHandler {
   final _crashlytics = getIt<CrashlyticsService>();
   final _analytics = getIt<AnalyticsService>();
-  
+
   Future<void> handleError(
     dynamic error,
     StackTrace stack, {
@@ -307,57 +133,43 @@ class ExampleErrorHandler {
       reason: context,
       fatal: fatal,
     );
-    
-    // Track in analytics
-    await _analytics.logError(
-      errorMessage: error.toString(),
-      context: context,
-    );
-  }
-  
-  Future<void> addCrashContext({
-    required String key,
-    required dynamic value,
-  }) async {
-    await _crashlytics.setCustomKey(key, value);
-  }
-  
-  Future<void> setUserIdentifier(String userId) async {
-    await _crashlytics.setUserIdentifier(userId);
+
+    // Track crash in analytics (first stack line only)
+    await _analytics.trackCrash(error, stack);
   }
 }
 
 // ============================================================================
-// Example 10: App initialization
+// Example 5: App initialisation
 // ============================================================================
 
 Future<void> exampleAppInitialization() async {
-  final analytics = getIt<AnalyticsService>();
+  final analyticsService = getIt<AnalyticsService>();
   final crashlytics = getIt<CrashlyticsService>();
-  
-  // Check if Firebase is available
-  if (analytics.isFirebaseAvailable) {
-    print('✅ Firebase Analytics enabled');
+
+  // Check service status
+  if (analyticsService.isConfigured) {
+    print('✅ Supabase Analytics enabled');
   } else {
-    print('⚠️ Firebase Analytics in fallback mode (using logger)');
+    print('⚠️ Analytics disabled (SUPABASE_URL / SUPABASE_ANON_KEY not set)');
   }
-  
+
   if (crashlytics.isFirebaseAvailable) {
     print('✅ Firebase Crashlytics enabled');
   } else {
     print('⚠️ Firebase Crashlytics in fallback mode (using logger)');
   }
-  
+
   // Track app start
-  await analytics.logAppStart();
-  
+  await analyticsService.trackAppLaunch();
+
   // Set initial crash context
-  await crashlytics.setCustomKey('app_version', '1.9.0');
+  await crashlytics.setCustomKey('app_version', '2.0.0');
   await crashlytics.setCustomKey('environment', 'production');
 }
 
 // ============================================================================
-// Example 11: Widget with analytics
+// Example 6: Widget with analytics
 // ============================================================================
 
 class ExampleAnalyticsWidget extends StatefulWidget {
@@ -369,27 +181,14 @@ class ExampleAnalyticsWidget extends StatefulWidget {
 
 class _ExampleAnalyticsWidgetState extends State<ExampleAnalyticsWidget> {
   final _analytics = getIt<AnalyticsService>();
-  final _crashlytics = getIt<CrashlyticsService>();
-  
-  @override
-  void initState() {
-    super.initState();
-    
-    // Track screen view
-    _analytics.logScreenView(screenName: 'ExampleScreen');
-    
-    // Set crash context
-    _crashlytics.setCustomKey('screen', 'ExampleScreen');
-  }
-  
+
   void _handleButtonPress(String buttonName) async {
-    // Track button press
-    await _analytics.logEvent(
-      name: 'button_pressed',
-      parameters: {'button_name': buttonName},
-    );
+    // Track any custom event via the generic method
+    await _analytics.trackEvent('button_pressed', {
+      'button_name': buttonName,
+    });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -405,107 +204,59 @@ class _ExampleAnalyticsWidgetState extends State<ExampleAnalyticsWidget> {
 }
 
 // ============================================================================
-// Example 12: Custom analytics event
+// Example 7: Custom analytics event
 // ============================================================================
 
 class ExampleCustomEvent {
   final _analytics = getIt<AnalyticsService>();
-  
-  Future<void> trackCustomEvent({
-    required String eventName,
-    Map<String, dynamic>? parameters,
-  }) async {
-    await _analytics.logEvent(
-      name: eventName,
-      parameters: parameters,
-    );
-  }
-  
+
   Future<void> trackVideoPlayback({
-    required String channelName,
-    required int duration,
+    required int durationSeconds,
     required String quality,
   }) async {
-    await trackCustomEvent(
-      eventName: 'video_playback',
-      parameters: {
-        'channel_name': channelName,
-        'duration_seconds': duration,
-        'quality': quality,
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
+    // Use the generic trackEvent for custom telemetry.
+    // Never include channel names, URLs (unless hashed), or user data.
+    await _analytics.trackEvent('video_playback', {
+      'duration_seconds': durationSeconds,
+      'quality': quality,
+    });
   }
 }
 
 // ============================================================================
-// Example 13: Set user properties
-// ============================================================================
-
-class ExampleUserProperties {
-  final _analytics = getIt<AnalyticsService>();
-  
-  Future<void> setUserProperties({
-    String? userId,
-    String? userType,
-    String? preferredLanguage,
-  }) async {
-    if (userId != null) {
-      await _analytics.setUserId(userId);
-    }
-    
-    if (userType != null) {
-      await _analytics.setUserProperty(
-        name: 'user_type',
-        value: userType,
-      );
-    }
-    
-    if (preferredLanguage != null) {
-      await _analytics.setUserProperty(
-        name: 'preferred_language',
-        value: preferredLanguage,
-      );
-    }
-  }
-}
-
-// ============================================================================
-// Testing the services
+// Quick smoke-test (not for production)
 // ============================================================================
 
 void main() async {
-  // Note: In real app, this would be in your actual main.dart
-  // This is just for demonstration
-  
-  print('=== Firebase Services Examples ===\n');
-  
-  // Example 1: Check service status
-  print('Service Status:');
-  final analytics = AnalyticsService.instance;
+  print('=== Analytics Service Examples ===\n');
+
+  final analyticsService = AnalyticsService.instance;
   final crashlytics = CrashlyticsService.instance;
-  
-  await analytics.initialize();
+
+  await analyticsService.initialize();
   await crashlytics.initialize();
-  
-  print('Analytics initialized: ${analytics.isInitialized}');
-  print('Analytics Firebase available: ${analytics.isFirebaseAvailable}');
-  print('Crashlytics initialized: ${crashlytics.isInitialized}');
-  print('Crashlytics Firebase available: ${crashlytics.isFirebaseAvailable}');
-  
-  // Example 2: Track events
+
+  print('Analytics initialised : ${analyticsService.isInitialized}');
+  print('Analytics configured  : ${analyticsService.isConfigured}');
+  print('Crashlytics initialised: ${crashlytics.isInitialized}');
+
+  // Track events
   print('\n=== Tracking Events ===');
-  await analytics.logAppStart();
-  await analytics.logChannelPlay(channelName: 'Example Channel');
-  await analytics.logFilterApplied(filterType: 'category', filterValue: 'News');
-  
-  // Example 3: Record error
+  await analyticsService.trackAppLaunch();
+  await analyticsService.trackChannelPlay('http://example.com/stream.m3u8');
+  await analyticsService.trackFilterUsed('category');
+
+  // Record error
   print('\n=== Recording Error ===');
   try {
     throw Exception('Example error');
   } catch (e, stack) {
+    await analyticsService.trackCrash(e, stack);
     await crashlytics.recordError(e, stack, reason: 'Testing error reporting');
   }
-  
+
+  // Flush remaining events
+  await analyticsService.flush();
+
   print('\n✅ Examples complete! Check logs for output.');
 }
