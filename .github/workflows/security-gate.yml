@@ -1,9 +1,6 @@
 name: Security Gate
 
 on:
-  push:
-    tags:
-      - 'v*'
   pull_request:
     branches: [ master ]
     paths:

@@ -24,7 +24,7 @@ except ImportError:
 def get_thumbnail_path(url: str) -> str:
     """Get the thumbnail file path for a URL."""
     # Create a hash of the URL for the filename
-    url_hash = hashlib.md5(url.encode()).hexdigest()[:16]
+    url_hash = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:16]
     return os.path.join(config.THUMBNAILS_DIR, f"{url_hash}.png")
 
 
