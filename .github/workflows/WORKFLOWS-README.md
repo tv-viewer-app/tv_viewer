@@ -4,43 +4,41 @@
 
 | Workflow | File | Trigger | Purpose | Blocking? |
 |----------|------|---------|---------|-----------|
-| **Tests** | `test.yml` | Push, PR, manual | Multi-platform test matrix (Ubuntu 22.04/24.04 × Python 3.10/3.11/3.12) | No |
-| **PR Validation** | `pr-validation.yml` | PR to master | Lint + security + tests + version sync | **Yes** |
-| **Code Review** | `code-review.yml` | PR (Python files) | Flake8, Radon complexity, threading safety | No |
-| **Security Gate** | `security-gate.yml` | Tags, PR, manual | Bandit, pip-audit, secret detection, shell=True check | **Yes** (HIGH blocks) |
+| **CI** | `ci.yml` | Push, PR, manual | Lint, test, security scan, Flutter analyze | **Yes** |
+| **Build** | `build.yml` | Push (source), manual, called by release | Windows EXE + Android APK | No |
+| **Release** | `release.yml` | Tag push (v*), manual | Cross-platform release with GitHub Release | No |
 | **CVE Scanner** | `cve-scanner.yml` | Daily 6 AM UTC, manual | pip-audit + safety, creates issue on findings | No |
-| **QA Validation** | `qa-validation.yml` | PR (Python files) | Placeholder test detection, coverage, naming | No |
-| **Build Ubuntu** | `build-ubuntu.yml` | Push (Python), manual | PyInstaller binary for Ubuntu 22.04/24.04 | No |
-| **Build Windows** | `build-windows.yml` | Push (Python), manual | PyInstaller .exe for Windows | No |
-| **Build Android** | `android-build.yml` | Push (flutter_app/), manual | Flutter APK | No |
-| **Release Gate** | `release-gate.yml` | Tags (v*), manual | 5-stage gate: test, security, quality, docs, build | **Yes** |
-| **Build Release** | `build-release.yml` | After Release Gate, manual | Build all 3 platforms + create GitHub Release | No |
+
+> **Deprecated workflows** (`test.yml`, `security-gate.yml`, `pr-validation.yml`, `code-review.yml`,
+> `qa-validation.yml`, `build-windows.yml`, `build-ubuntu.yml`, `android-build.yml`,
+> `build-release.yml`, `release-gate.yml`) are stubs that redirect to the new files.
+> They will be removed in a future cleanup.
 
 ## Workflow Pipeline
 
 ```
-Developer Push/PR
+Developer Push / PR to master
         │
-        ├──► test.yml (matrix)
-        ├──► pr-validation.yml (blocking gate)
-        ├──► code-review.yml (annotations)
-        ├──► security-gate.yml (blocking on HIGH)
-        └──► qa-validation.yml (quality check)
+        └──► ci.yml
+              ├── Job 1: python-checks (flake8, bandit, shell=True, pytest)
+              ├── Job 2: flutter-checks (flutter analyze — only if flutter_app/** changed)
+              └── Job 3: security (pip-audit, secret detection — only if *.py or requirements.txt changed)
+              │
+              └── All 3 run in parallel, gated by dorny/paths-filter
+
+Push to master (source files changed)
+        │
+        └──► build.yml
+              ├── Job 1: build-windows (PyInstaller → TV_Viewer.exe)
+              └── Job 2: build-android (Flutter → app-release.apk)
+              │
+              └── Both run in parallel, upload as artifacts (never committed to repo)
 
 Tag Push (v*)
         │
-        └──► release-gate.yml
-              ├── Gate 1: Test (6 matrix combos)
-              ├── Gate 2: Security (bandit + audit)
-              ├── Gate 3: Quality (complexity + lint)
-              ├── Gate 4: Docs (CHANGELOG + README)
-              └── Gate 5: Build (Ubuntu + Windows + Android)
-                    │
-                    └──► build-release.yml
-                          ├── Build Ubuntu (22.04 + 24.04)
-                          ├── Build Windows (.exe)
-                          ├── Build Android (.apk)
-                          └── Create GitHub Release with all artifacts
+        └──► release.yml
+              ├── Job 1: build (calls build.yml via workflow_call)
+              └── Job 2: release (downloads artifacts, extracts CHANGELOG, creates GitHub Release)
 
 Daily (6 AM UTC)
         │
@@ -52,43 +50,46 @@ Daily (6 AM UTC)
 - ❌ Fatal Python errors (E9, F63, F7, F82)
 - ❌ HIGH severity Bandit security issues
 - ❌ `shell=True` in production code
-- ❌ Failing tests
+- ❌ Failing pytest tests
 
-## What Blocks a Release
+## Caching Strategy
 
-- ❌ Any test gate failure (6 matrix combinations)
-- ❌ HIGH severity security issues
-- ❌ More than 5 very-high-complexity functions
-- ❌ Missing README.md or CHANGELOG.md
-- ❌ Version not documented in CHANGELOG.md
-- ❌ Any platform build failure (Ubuntu/Windows/Android)
+| Cache | Keyed On | Used By |
+|-------|----------|---------|
+| **pip** | `requirements.txt` hash | ci.yml, build.yml (Windows) |
+| **Flutter SDK** | Flutter version | ci.yml, build.yml (Android) |
+| **pub packages** | `pubspec.lock` hash | ci.yml, build.yml (Android) |
+| **Gradle** | `*.gradle*` + `pubspec.lock` hash | build.yml (Android) |
 
 ## Release Process
 
 1. Update version in `config.py` (`APP_VERSION`) and `flutter_app/pubspec.yaml`
-2. Update `CHANGELOG.md` with release notes
+2. Update `CHANGELOG.md` with release notes under `## [X.Y.Z]`
 3. Commit and push to master
-4. Create tag: `git tag v1.9.0 && git push origin v1.9.0`
-5. Release Gate runs automatically (5 gates)
-6. Build Release creates GitHub Release with all platform artifacts
-7. Or manually: `gh workflow run build-release.yml -f version=1.9.0`
+4. Create tag: `git tag v2.0.3 && git push origin v2.0.3`
+5. `release.yml` triggers automatically → calls `build.yml` → creates GitHub Release
+6. Or manually: `gh workflow run release.yml -f version=v2.0.3`
 
 ## Manual Triggers
 
-All workflows support manual dispatch via GitHub Actions UI or CLI:
-
 ```bash
-# Run tests
-gh workflow run test.yml
+# Run CI checks
+gh workflow run ci.yml
 
-# Run security scan
-gh workflow run security-gate.yml
+# Build artifacts
+gh workflow run build.yml
 
-# Build for specific platform
-gh workflow run build-ubuntu.yml
-gh workflow run build-windows.yml
+# Create a release
+gh workflow run release.yml -f version=v2.0.3
 
-# Trigger full release
-gh workflow run release-gate.yml -f version=1.9.0
-gh workflow run build-release.yml -f version=1.9.0
+# Run CVE scan
+gh workflow run cve-scanner.yml
 ```
+
+## Secrets Required
+
+| Secret | Used By | Purpose |
+|--------|---------|---------|
+| `SUPABASE_URL` | build.yml (Android) | Supabase backend URL via --dart-define |
+| `SUPABASE_ANON_KEY` | build.yml (Android) | Supabase anonymous key via --dart-define |
+| `GITHUB_TOKEN` | release.yml | Automatically provided, creates releases |

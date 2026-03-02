@@ -136,7 +136,6 @@ const Map<String, LatLng> _countryCoords = {
   'US': LatLng(37.09, -95.71),
   'USA': LatLng(37.09, -95.71),
   'UAE': LatLng(23.42, 53.85),
-  'South Korea': LatLng(35.91, 127.77),
   'Korea': LatLng(35.91, 127.77),
 };
 
@@ -196,7 +195,7 @@ class _MapScreenState extends State<MapScreen> {
           List<Channel> channels = provider.channels;
           if (_favoritesOnly) {
             channels = channels
-                .where((c) => provider.isFavorite(c.url))
+                .where((c) => provider.isFavorite(c))
                 .toList();
           }
           if (_hideOffline) {
@@ -281,7 +280,7 @@ class _MapScreenState extends State<MapScreen> {
               onTap: () => _showChannelPopup(ch, provider),
               child: _ChannelPin(
                 isWorking: ch.isWorking,
-                isFavorite: provider.isFavorite(ch.url),
+                isFavorite: provider.isFavorite(ch),
               ),
             ),
           ));
@@ -355,7 +354,7 @@ class _MapScreenState extends State<MapScreen> {
                 itemCount: channels.length,
                 itemBuilder: (ctx, i) {
                   final ch = channels[i];
-                  final isFav = provider.isFavorite(ch.url);
+                  final isFav = provider.isFavorite(ch);
                   return ListTile(
                     leading: Icon(
                       ch.isWorking ? Icons.tv : Icons.tv_off,
@@ -382,7 +381,7 @@ class _MapScreenState extends State<MapScreen> {
                             size: 20,
                           ),
                           onPressed: () {
-                            provider.toggleFavorite(ch.url);
+                            provider.toggleFavorite(ch);
                             // Refresh the sheet
                             (ctx as Element).markNeedsBuild();
                           },
@@ -405,7 +404,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showChannelPopup(Channel ch, ChannelProvider provider) {
-    final isFav = provider.isFavorite(ch.url);
+    final isFav = provider.isFavorite(ch);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -444,7 +443,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             label: Text(isFav ? 'Unfavorite' : 'Favorite'),
             onPressed: () {
-              provider.toggleFavorite(ch.url);
+              provider.toggleFavorite(ch);
               Navigator.pop(ctx);
             },
           ),

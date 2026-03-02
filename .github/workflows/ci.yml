@@ -1,0 +1,233 @@
+# =============================================================================
+# CI — Fast checks on every push & PR
+# =============================================================================
+# Replaces: test.yml, security-gate.yml, pr-validation.yml, code-review.yml,
+#           qa-validation.yml
+#
+# 3 parallel jobs, each gated by paths-filter so we never waste minutes:
+#   1. python-checks  — lint, test, security (runs when Python files change)
+#   2. flutter-checks — analyze (runs only when flutter_app/** changes)
+#   3. security       — pip-audit (runs when deps or Python files change)
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Determine which file groups changed so downstream jobs can skip themselves
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      flutter: ${{ steps.filter.outputs.flutter }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - '**.py'
+              - 'core/**'
+              - 'ui/**'
+              - 'utils/**'
+              - 'tests/**'
+            flutter:
+              - 'flutter_app/**'
+            deps:
+              - 'requirements.txt'
+              - '**.py'
+
+  # ---------------------------------------------------------------------------
+  # Job 1: Python — lint (flake8), security (bandit), tests (pytest)
+  # ---------------------------------------------------------------------------
+  python-checks:
+    name: Python checks
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq vlc libvlc-dev > /dev/null
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov flake8 bandit
+
+      # --- Lint: fatal errors block the PR ---
+      - name: Flake8 — fatal errors
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics \
+            --exclude=build,dist,flutter_app,android,.git,__pycache__,archive
+
+      # --- Lint: style warnings (non-blocking, shown in summary) ---
+      - name: Flake8 — style warnings
+        run: |
+          echo "## Flake8 Style Warnings" >> $GITHUB_STEP_SUMMARY
+          flake8 . --count --max-complexity=15 --max-line-length=120 --statistics \
+            --exclude=build,dist,flutter_app,android,.git,__pycache__,archive \
+            --output-file=flake8-report.txt || true
+          cat flake8-report.txt >> $GITHUB_STEP_SUMMARY
+
+      # --- Security: bandit static analysis (HIGH = blocking) ---
+      - name: Bandit — security scan
+        run: |
+          bandit -r core/ ui/ utils/ main.py config.py \
+            -ll --format json --output bandit-results.json 2>&1 || true
+
+          python3 << 'PYEOF'
+          import json, sys
+          with open('bandit-results.json') as f:
+              data = json.load(f)
+          results = data.get('results', [])
+          high = [r for r in results if r['issue_severity'] == 'HIGH']
+          medium = [r for r in results if r['issue_severity'] == 'MEDIUM']
+          print(f"HIGH: {len(high)}, MEDIUM: {len(medium)}")
+          for r in high:
+              print(f"  ❌ HIGH [{r['test_id']}] {r['filename']}:{r['line_number']} — {r['issue_text']}")
+          if high:
+              print("\n❌ BLOCKED: HIGH severity issues must be fixed")
+              sys.exit(1)
+          print("✅ Bandit passed (no HIGH severity)")
+          PYEOF
+
+      # --- Safety: shell=True prohibition ---
+      - name: shell=True check
+        run: |
+          if grep -rn "shell=True" core/ ui/ utils/ main.py --include="*.py"; then
+            echo "❌ shell=True found in production code — BLOCKED"
+            exit 1
+          fi
+          echo "✅ No shell=True in production code"
+
+      # --- Tests ---
+      - name: Run pytest
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            --cov=core --cov=ui --cov=utils \
+            --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Flutter — analyze (only when flutter_app files change)
+  # ---------------------------------------------------------------------------
+  flutter-checks:
+    name: Flutter checks
+    needs: changes
+    if: needs.changes.outputs.flutter == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: stable
+          cache: true
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ hashFiles('flutter_app/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Security — pip-audit dependency vulnerability scan
+  # ---------------------------------------------------------------------------
+  security:
+    name: Dependency audit
+    needs: changes
+    if: needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: pip-audit
+        run: |
+          echo "## Dependency Audit" >> $GITHUB_STEP_SUMMARY
+          pip-audit --format=columns 2>&1 | tee pip-audit.txt
+          cat pip-audit.txt >> $GITHUB_STEP_SUMMARY
+
+      - name: Secret detection
+        run: |
+          echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
+          SECRETS=$(grep -rn \
+            -e "password\s*=" \
+            -e "api_key\s*=" \
+            -e "secret\s*=" \
+            -e "BEGIN.*PRIVATE KEY" \
+            core/ ui/ utils/ main.py config.py \
+            --include="*.py" || true)
+
+          if [ -n "$SECRETS" ]; then
+            echo "⚠️ Potential secrets detected (review manually):" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$SECRETS" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$SECRETS"
+          else
+            echo "✅ No hardcoded secrets detected" >> $GITHUB_STEP_SUMMARY
+          fi

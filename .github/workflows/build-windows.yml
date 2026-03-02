@@ -1,75 +1,13 @@
-name: Build Windows
-
+# =============================================================================
+# ⚠️ DEPRECATED — This workflow has been replaced by build.yml
+# =============================================================================
+# Windows builds now run as the build-windows job in .github/workflows/build.yml.
+# =============================================================================
+name: '[Deprecated] Build Windows'
 on:
-  push:
-    branches: [ master ]
-    paths:
-      - 'core/**'
-      - 'ui/**'
-      - 'utils/**'
-      - 'main.py'
-      - 'config.py'
-      - 'build.py'
-      - 'requirements.txt'
   workflow_dispatch:
-    inputs:
-      version_override:
-        description: 'Version override (leave empty to use config.py)'
-        required: false
-        type: string
-
-concurrency:
-  group: build-windows-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build:
-    runs-on: windows-latest
-
+  deprecated:
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-
-    - name: Extract version
-      id: version
-      shell: bash
-      run: |
-        if [ -n "${{ inputs.version_override }}" ]; then
-          VERSION="${{ inputs.version_override }}"
-        else
-          VERSION=$(grep 'APP_VERSION' config.py | head -1 | cut -d'"' -f2)
-        fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-    - name: Build executable
-      run: python build.py --onefile
-
-    - name: Rename artifact
-      shell: bash
-      run: |
-        mv "dist/TV_Viewer.exe" "dist/TV_Viewer_v${{ steps.version.outputs.version }}.exe"
-
-    - name: Verify executable
-      shell: bash
-      run: |
-        ls -lh dist/
-        file "dist/TV_Viewer_v${{ steps.version.outputs.version }}.exe"
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: tv-viewer-windows-v${{ steps.version.outputs.version }}
-        path: dist/TV_Viewer_v${{ steps.version.outputs.version }}.exe
-        retention-days: 30
-        if-no-files-found: error
+      - run: echo "This workflow is deprecated. See build.yml instead."

@@ -1,105 +1,15 @@
-name: Build Flutter Android APK
-
+# =============================================================================
+# ⚠️ DEPRECATED — This workflow has been replaced by build.yml
+# =============================================================================
+# Android APK builds now run as the build-android job in
+# .github/workflows/build.yml. APKs are uploaded as artifacts only
+# (no longer committed back to the repo).
+# =============================================================================
+name: '[Deprecated] Build Flutter Android APK'
 on:
-  push:
-    branches: [ master ]
-    paths:
-      - 'flutter_app/**'
-      - '!flutter_app/**.md'
   workflow_dispatch:
-    inputs:
-      version_override:
-        description: 'Version override (leave empty to use pubspec.yaml)'
-        required: false
-        type: string
-
-permissions:
-  contents: write
-
 jobs:
-  build-flutter-apk:
+  deprecated:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: flutter_app
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-    
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.19.0'
-        channel: 'stable'
-        cache: true
-    
-    - name: Cache Gradle packages
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-          flutter_app/android/.gradle
-          flutter_app/build
-        key: gradle-${{ runner.os }}-${{ hashFiles('flutter_app/android/**/*.gradle*', 'flutter_app/pubspec.lock') }}
-        restore-keys: |
-          gradle-${{ runner.os }}-
-    
-    - name: Cache pub packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.pub-cache
-        key: pub-${{ runner.os }}-${{ hashFiles('flutter_app/pubspec.lock') }}
-        restore-keys: |
-          pub-${{ runner.os }}-
-    
-    - name: Get dependencies
-      run: flutter pub get
-    
-    - name: Build APK
-      run: >-
-        flutter build apk --release
-        --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-        --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-    
-    - name: Get version from pubspec
-      id: version
-      run: |
-        VERSION=$(grep 'version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d'+' -f1)
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-    
-    - name: Copy APK to dist folder
-      run: |
-        mkdir -p ../dist/android
-        cp build/app/outputs/flutter-apk/app-release.apk ../dist/android/TV_Viewer_v${{ steps.version.outputs.version }}.apk
-    
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: tv-viewer-flutter-apk
-        path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
-        retention-days: 30
-        if-no-files-found: error
-    
-    - name: Commit APK to dist folder
-      run: |
-        cd ..
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add -f dist/android/TV_Viewer_v${{ steps.version.outputs.version }}.apk
-        git diff --staged --quiet || git commit -m "build: Add APK v${{ steps.version.outputs.version }} to dist folder [skip ci]"
-        for i in 1 2 3; do
-          git push && break
-          echo "Push attempt $i failed, pulling with rebase..."
-          git stash --include-untracked || true
-          git pull --rebase origin master
-          git stash pop || true
-          sleep 5
-        done
+      - run: echo "This workflow is deprecated. See build.yml instead."
