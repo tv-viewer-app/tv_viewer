@@ -163,6 +163,7 @@ class _MapScreenState extends State<MapScreen>
   bool _favoritesOnly = false;
   bool _hideOffline = false;
   double _currentZoom = 3.0;
+  bool _isClusterView = true; // true when zoom < 6
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
@@ -174,7 +175,7 @@ class _MapScreenState extends State<MapScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-    _pulseAnim = Tween(begin: 0.85, end: 1.15).animate(
+    _pulseAnim = Tween(begin: 0.92, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
   }
@@ -261,8 +262,12 @@ class _MapScreenState extends State<MapScreen>
                   minZoom: 2,
                   maxZoom: 18,
                   onPositionChanged: (pos, _) {
-                    if (pos.zoom != null && pos.zoom != _currentZoom) {
-                      setState(() => _currentZoom = pos.zoom!);
+                    if (pos.zoom == null) return;
+                    _currentZoom = pos.zoom!;
+                    // Only rebuild when crossing cluster/pin threshold
+                    final nowCluster = _currentZoom < 6;
+                    if (nowCluster != _isClusterView) {
+                      setState(() => _isClusterView = nowCluster);
                     }
                   },
                 ),
@@ -270,6 +275,8 @@ class _MapScreenState extends State<MapScreen>
                   TileLayer(
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.tvviewer.app',
+                    tileProvider: NetworkTileProvider(),
+                    keepBuffer: 8,
                   ),
                   MarkerLayer(
                     markers: _buildMarkers(grouped, provider),

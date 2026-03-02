@@ -62,10 +62,18 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Supabase configuration — loaded from environment variables (SEC-003)
+# Supabase configuration — prefer config.py defaults, allow env override
 # ---------------------------------------------------------------------------
-SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "")
-SUPABASE_ANON_KEY: str = os.environ.get("SUPABASE_ANON_KEY", "")
+try:
+    import config as _supabase_cfg
+    _DEFAULT_URL = getattr(_supabase_cfg, "SUPABASE_URL", "")
+    _DEFAULT_KEY = getattr(_supabase_cfg, "SUPABASE_ANON_KEY", "")
+except Exception:
+    _DEFAULT_URL = ""
+    _DEFAULT_KEY = ""
+
+SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "") or _DEFAULT_URL
+SUPABASE_ANON_KEY: str = os.environ.get("SUPABASE_ANON_KEY", "") or _DEFAULT_KEY
 TABLE_NAME: str = "analytics_events"
 
 # Feature flag — automatically enabled when env vars are set.

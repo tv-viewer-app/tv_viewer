@@ -172,6 +172,16 @@ def main():
     except Exception as e:
         print(f"Warning: Could not install crash reporter: {e}")
     
+    # Initialize anonymous analytics (non-blocking, fail-safe)
+    try:
+        import asyncio
+        from utils.analytics import analytics
+        asyncio.get_event_loop().run_until_complete(analytics.initialize())
+        asyncio.get_event_loop().run_until_complete(analytics.track_app_launch())
+        print("Analytics initialized")
+    except Exception as e:
+        print(f"Warning: Analytics init skipped: {e}")
+    
     # Check requirements first
     success, missing, warnings = check_requirements()
     
@@ -183,8 +193,17 @@ def main():
     for warning in warnings:
         print(f"Warning: {warning}")
     
-    # Register cleanup on exit
-    atexit.register(cleanup_temp_files)
+    # Register cleanup on exit (flush analytics before exit)
+    def _cleanup():
+        try:
+            import asyncio
+            from utils.analytics import analytics
+            asyncio.get_event_loop().run_until_complete(analytics.flush())
+        except Exception:
+            pass
+        cleanup_temp_files()
+    
+    atexit.register(_cleanup)
     
     # Check for VLC (already in optional packages but provide install hint)
     try:
@@ -204,7 +223,7 @@ def main():
     app.run()
     
     # Explicit cleanup after mainloop exits
-    cleanup_temp_files()
+    _cleanup()
 
 
 if __name__ == "__main__":

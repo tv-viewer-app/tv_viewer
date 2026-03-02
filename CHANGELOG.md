@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-03-02
+
+### Added
+- **World Map micro-interactions** — animated pulsing country bubbles, smooth camera fly-to, count-up stat badges, health bars, hover effects, filter chip animations (Windows + Android)
+- **Live country search** in Windows map toolbar with debounced input
+- **Stats overlay bar** on Flutter map showing countries/channels/working counts with animated counters
+
+### Fixed
+- **Map performance (Windows)** — debounced search prevents marker rebuild on every keystroke, lazy-load channel rows in batches of 30 for fast popup opening
+- **Map performance (Android)** — eliminated unnecessary `setState` on every zoom change (now only rebuilds on cluster/pin threshold crossing), added tile keepBuffer for smoother panning, reduced pulse animation overhead
+- **Onboarding tooltip off-screen** — scan button tooltip now appears below the AppBar (was rendering above the screen), added safety clamping so no tooltip can ever go off-screen
+- **Supabase analytics not sending data (Windows)** — Python analytics module used empty env var defaults instead of embedded keys from config.py; now falls back to config.py values. Wired analytics init and flush into main.py entry point
+- **Supabase analytics flush on exit** — atexit handler now flushes queued analytics events before app closes
+
+### Changed
+- Fluent Design dark theme applied consistently to Windows map window (toolbar, popups, channel rows)
+- Country popup uses animated health bar and staggered channel loading
+- Flutter map uses `NetworkTileProvider` with `keepBuffer: 8` for smoother tile caching
+- Filter toggles show visual active state (color + checkmark) on both platforms
+
 ## [2.0.2] - 2026-03-01
 
 ### Added

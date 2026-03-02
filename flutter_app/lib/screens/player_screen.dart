@@ -130,7 +130,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     try {
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(widget.channel.url),
-        httpHeaders: const {'User-Agent': 'TV Viewer/2.0.2'},
+        httpHeaders: const {'User-Agent': 'TV Viewer/2.0.3'},
       );
 
       // Add timeout to initialization

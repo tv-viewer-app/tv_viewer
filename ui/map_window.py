@@ -125,10 +125,10 @@ class MapWindow:
         self._show_favorites_only = tk.BooleanVar(value=False)
         self._hide_offline = tk.BooleanVar(value=False)
         self._search_var = tk.StringVar()
-        self._stats_anim_step = 0
+        self._search_debounce_id = None
+        self._cached_grouped = {}
 
         self._build_window()
-        # Animate the stats bar on open
         self._win.after(300, self._place_markers)
         self._win.after(100, lambda: self._animate_open())
 
@@ -266,8 +266,10 @@ class MapWindow:
         self._refresh_markers()
 
     def _on_search(self):
-        """Filter markers to matching countries (live search)."""
-        self._refresh_markers()
+        """Debounced search — waits 300ms after last keystroke."""
+        if self._search_debounce_id:
+            self._win.after_cancel(self._search_debounce_id)
+        self._search_debounce_id = self._win.after(300, self._refresh_markers)
 
     # ── Marker management ──
 
@@ -394,15 +396,17 @@ class MapWindow:
         self._bar_fill.place(x=0, y=0, relheight=1)
         popup.after(200, lambda: self._animate_bar(self._bar_fill, int(120 * ratio)))
 
-        # ── Channel list ──
+        # ── Channel list — lazy-load in batches for speed ──
         scroll = ctk.CTkScrollableFrame(popup, fg_color="transparent",
                                          scrollbar_button_color=self._CARD)
         scroll.pack(fill="both", expand=True, padx=8, pady=8)
 
-        for i, ch in enumerate(channels):
-            # Stagger appearance for a cascade effect
-            row = self._create_channel_row(scroll, ch, popup)
-            row.pack(fill="x", pady=2, padx=2)
+        BATCH_SIZE = 30
+        self._popup_channels = channels
+        self._popup_scroll = scroll
+        self._popup_ref = popup
+        self._popup_loaded = 0
+        self._load_channel_batch()
 
     def _popup_fade_in(self, popup, alpha):
         if alpha >= 1.0:
@@ -416,6 +420,27 @@ class MapWindow:
             popup.after(15, lambda: self._popup_fade_in(popup, alpha + 0.1))
         except tk.TclError:
             pass
+
+    def _load_channel_batch(self):
+        """Load next batch of channel rows into the popup (non-blocking)."""
+        BATCH_SIZE = 30
+        try:
+            popup = self._popup_ref
+            scroll = self._popup_scroll
+            channels = self._popup_channels
+            if not popup.winfo_exists():
+                return
+        except (tk.TclError, AttributeError):
+            return
+
+        end = min(self._popup_loaded + BATCH_SIZE, len(channels))
+        for i in range(self._popup_loaded, end):
+            row = self._create_channel_row(scroll, channels[i], popup)
+            row.pack(fill="x", pady=2, padx=2)
+        self._popup_loaded = end
+
+        if self._popup_loaded < len(channels):
+            popup.after(10, self._load_channel_batch)
 
     def _animate_bar(self, bar, target_w, current_w=1):
         """Smooth grow animation for health bar."""
