@@ -54,7 +54,7 @@ class MainWindow:
         
         # Configure grid
         self.root.grid_rowconfigure(0, weight=1)
-        self.root.grid_columnconfigure(0, minsize=360)
+        self.root.grid_columnconfigure(0, minsize=420)
         self.root.grid_columnconfigure(1, weight=1)
         
         # Set window icon
@@ -149,7 +149,7 @@ class MainWindow:
     def _create_sidebar(self):
         """Create the left sidebar with Windows 11 Fluent Design."""
         # Sidebar frame
-        self.sidebar = ttk.Frame(self.root, width=400)
+        self.sidebar = ttk.Frame(self.root, width=460)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         # Row 6 = category scroll (expandable)
         self.sidebar.grid_rowconfigure(6, weight=1)
@@ -199,17 +199,14 @@ class MainWindow:
         self.scan_frame = ttk.Frame(self.sidebar)
         self.scan_frame.grid(row=7, column=0, padx=10, pady=(5, 2), sticky="ew")
         
-        # Scan animation widget (pixel art) — compact
-        self.scan_animation = ScanProgressFrame(self.scan_frame)
-        self.scan_animation.pack(padx=5, pady=2)
-        
-        # Scan status label
+        # Scan status label — single line, readable
         self.scan_label = ttk.Label(
             self.scan_frame,
             text="Ready",
-            font=("Segoe UI", 10)
+            font=("Segoe UI", 10),
+            anchor="w"
         )
-        self.scan_label.pack(padx=10, pady=(0, 2))
+        self.scan_label.pack(padx=10, pady=(4, 2), fill="x")
         
         # Progress bar
         self.progress_var = tk.DoubleVar(value=0)
@@ -217,18 +214,23 @@ class MainWindow:
             self.scan_frame,
             variable=self.progress_var,
             mode='determinate',
-            bootstyle="info",
-            length=280
+            bootstyle="info"
         )
         self.progress_bar.pack(padx=10, pady=(0, 2), fill="x")
         
-        # Stats label
+        # Stats label below progress bar
         self.stats_label = ttk.Label(
             self.scan_frame,
             text="",
-            font=("Segoe UI", 9)
+            font=("Segoe UI", 9),
+            anchor="w"
         )
-        self.stats_label.pack(padx=10, pady=(0, 2))
+        self.stats_label.pack(padx=10, pady=(0, 4), fill="x")
+        
+        # Keep animation reference for API compatibility but don't display it
+        self.scan_animation = ScanProgressFrame(self.scan_frame)
+        # Hidden — pixel art canvas was causing text overlap issues
+        # self.scan_animation.pack()
     
     def _create_search_box(self):
         """Create search box."""

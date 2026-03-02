@@ -123,19 +123,23 @@ class ChannelTile extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Channel info (i) button — only visible when a description exists
+        // Channel info (i) button — always visible
         Builder(builder: (ctx) {
           final description =
               ChannelDescriptions.getDescription(channel.name);
-          if (description == null) return const SizedBox.shrink();
           return InkWell(
-            onTap: () => _showInfoSnackBar(ctx, description),
+            onTap: () => _showInfoSnackBar(
+              ctx,
+              description ?? '${channel.name} — no additional information available.',
+            ),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.all(4.0),
               child: Icon(
                 Icons.info_outline,
-                color: Colors.blue.shade400,
+                color: description != null
+                    ? Colors.blue.shade400
+                    : Colors.grey.shade500,
                 size: 20,
               ),
             ),
@@ -219,16 +223,21 @@ class ChannelTile extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               // Handle
               Center(
                 child: Container(
@@ -301,7 +310,8 @@ class ChannelTile extends StatelessWidget {
                       ),
                 ),
               ],
-            ],
+              ],
+            ),
           ),
         );
       },

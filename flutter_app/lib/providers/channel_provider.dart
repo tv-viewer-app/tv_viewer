@@ -116,6 +116,59 @@ class ChannelProvider extends ChangeNotifier {
     return _langNormalize[key] ?? (raw[0].toUpperCase() + raw.substring(1).toLowerCase());
   }
 
+  /// Infer language from country when tvg-language is missing.
+  static const _countryToLang = {
+    'Israel': 'Hebrew', 'United States': 'English', 'United Kingdom': 'English',
+    'USA': 'English', 'UK': 'English', 'Canada': 'English', 'Australia': 'English',
+    'Spain': 'Spanish', 'Mexico': 'Spanish', 'Argentina': 'Spanish',
+    'Colombia': 'Spanish', 'Chile': 'Spanish', 'Peru': 'Spanish',
+    'France': 'French', 'Belgium': 'French', 'Germany': 'German',
+    'Austria': 'German', 'Switzerland': 'German', 'Italy': 'Italian',
+    'Portugal': 'Portuguese', 'Brazil': 'Portuguese',
+    'Russia': 'Russian', 'Turkey': 'Turkish', 'Poland': 'Polish',
+    'China': 'Chinese', 'Japan': 'Japanese', 'South Korea': 'Korean',
+    'Korea': 'Korean', 'India': 'Hindi', 'Netherlands': 'Dutch',
+    'Greece': 'Greek', 'Thailand': 'Thai', 'Vietnam': 'Vietnamese',
+    'Indonesia': 'Indonesian', 'Malaysia': 'Malay', 'Philippines': 'Filipino',
+    'Iran': 'Persian', 'Pakistan': 'Urdu', 'Sweden': 'Swedish',
+    'Norway': 'Norwegian', 'Denmark': 'Danish', 'Finland': 'Finnish',
+    'Romania': 'Romanian', 'Hungary': 'Hungarian', 'Czech Republic': 'Czech',
+    'Czechia': 'Czech', 'Slovakia': 'Slovak', 'Bulgaria': 'Bulgarian',
+    'Ukraine': 'Ukrainian', 'Serbia': 'Serbian', 'Croatia': 'Croatian',
+    'Egypt': 'Arabic', 'Saudi Arabia': 'Arabic', 'UAE': 'Arabic',
+    'Iraq': 'Arabic', 'Jordan': 'Arabic', 'Lebanon': 'Arabic',
+    'Morocco': 'Arabic', 'Tunisia': 'Arabic', 'Algeria': 'Arabic',
+    'Libya': 'Arabic', 'Syria': 'Arabic', 'Kuwait': 'Arabic',
+    'Qatar': 'Arabic', 'Bahrain': 'Arabic', 'Oman': 'Arabic',
+    'Yemen': 'Arabic', 'Palestine': 'Arabic', 'Sudan': 'Arabic',
+    'Afghanistan': 'Pashto', 'Somalia': 'Somali', 'Ethiopia': 'Amharic',
+    'Cuba': 'Spanish', 'Venezuela': 'Spanish', 'Ecuador': 'Spanish',
+    'Dominican Republic': 'Spanish', 'Guatemala': 'Spanish',
+    'Ireland': 'English', 'New Zealand': 'English', 'South Africa': 'English',
+    'Nigeria': 'English', 'Kenya': 'English', 'Ghana': 'English',
+    'Jamaica': 'English', 'Singapore': 'English',
+    'Taiwan': 'Chinese', 'Hong Kong': 'Chinese',
+    'Bangladesh': 'Bengali', 'Sri Lanka': 'Tamil',
+    'Albania': 'Albanian', 'Armenia': 'Armenian', 'Georgia': 'Georgian',
+    'Azerbaijan': 'Azerbaijani', 'Kazakhstan': 'Kazakh',
+    'Uzbekistan': 'Uzbek', 'Mongolia': 'Mongolian',
+    'Nepal': 'Nepali', 'Myanmar': 'Burmese', 'Cambodia': 'Khmer',
+    'Laos': 'Lao',
+  };
+
+  /// Get effective language for a channel (tvg-language or inferred from country).
+  static String _effectiveLanguage(Channel c) {
+    final raw = c.language;
+    if (raw != null && raw.isNotEmpty && raw != 'Unknown') {
+      return _normalizeLanguage(raw);
+    }
+    final country = c.country;
+    if (country != null && _countryToLang.containsKey(country)) {
+      return _countryToLang[country]!;
+    }
+    return 'Unknown';
+  }
+
   List<Channel> _channels = [];
   List<Channel> _filteredChannels = [];
   Set<String> _categories = {};
@@ -588,11 +641,10 @@ class ChannelProvider extends ChangeNotifier {
         .map((c) => c.country ?? 'Unknown')
         .where((c) => c.isNotEmpty && c != 'Unknown')
         .toSet();
-    // BL-017: Extract languages with normalization
+    // BL-017: Extract languages with normalization + country inference
     _languages = _channels
-        .map((c) => c.language ?? 'Unknown')
+        .map(_effectiveLanguage)
         .where((c) => c.isNotEmpty && c != 'Unknown')
-        .map(_normalizeLanguage)
         .toSet();
   }
 
@@ -619,10 +671,9 @@ class ChannelProvider extends ChangeNotifier {
         }
       }
       
-      // BL-017: Language filter (with normalization)
+      // BL-017: Language filter (with normalization + country inference)
       if (_selectedLanguage != 'All') {
-        final rawLang = channel.language ?? 'Unknown';
-        final normalizedLang = _normalizeLanguage(rawLang);
+        final normalizedLang = _effectiveLanguage(channel);
         if (normalizedLang != _selectedLanguage) {
           return false;
         }

@@ -92,3 +92,6 @@
 2026-03-02 11:04:57 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
 2026-03-02 11:06:20 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
 2026-03-02 11:07:40 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
+2026-03-02 11:14:05 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
+2026-03-02 11:14:05 - test_write - INFO - Test message 1772442845.461847
+2026-03-02 11:14:43 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
