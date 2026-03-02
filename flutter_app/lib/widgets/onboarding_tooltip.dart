@@ -236,23 +236,31 @@ class _OnboardingTooltipState extends State<OnboardingTooltip>
     const tooltipHeight = 120.0; // Approximate
     const padding = 16.0;
 
+    double top;
     switch (widget.arrowPosition) {
       case ArrowPosition.top:
-        return targetPosition.dy + targetSize.height + 16;
+        top = targetPosition.dy + targetSize.height + 16;
+        break;
       case ArrowPosition.bottom:
-        return targetPosition.dy - tooltipHeight - 16;
+        top = targetPosition.dy - tooltipHeight - 16;
+        // If tooltip would go above the screen, flip to below the target
+        if (top < padding) {
+          top = targetPosition.dy + targetSize.height + 16;
+        }
+        break;
       case ArrowPosition.left:
       case ArrowPosition.right:
         // Center vertically relative to target
-        double top = targetPosition.dy + (targetSize.height / 2) - (tooltipHeight / 2);
-        if (top < padding) top = padding;
-        if (top + tooltipHeight > screenHeight - padding) {
-          top = screenHeight - tooltipHeight - padding;
-        }
-        return top;
-      default:
-        return targetPosition.dy + targetSize.height + 16;
+        top = targetPosition.dy + (targetSize.height / 2) - (tooltipHeight / 2);
+        break;
     }
+
+    // Clamp within screen bounds
+    if (top < padding) top = padding;
+    if (top + tooltipHeight > screenHeight - padding) {
+      top = screenHeight - tooltipHeight - padding;
+    }
+    return top;
   }
 }
 

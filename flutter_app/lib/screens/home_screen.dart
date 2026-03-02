@@ -85,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'scan_button':
         targetKey = _scanButtonKey;
         message = 'Tap to check which channels are working';
-        position = ArrowPosition.bottom;
+        position = ArrowPosition.top;
         break;
       case 'filter_area':
         targetKey = _filterAreaKey;
