@@ -2,13 +2,31 @@
 
 import json
 import os
+import shutil
+import sys
 import time
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FAVORITES_FILE = "favorites.json"
+FAVORITES_FILENAME = "favorites.json"
 MAX_RECENT = 20
+
+
+def _get_persistent_path():
+    """Return a persistent path for favorites that survives app upgrades."""
+    if sys.platform == 'win32':
+        app_data = os.environ.get('APPDATA', os.path.expanduser('~'))
+        fav_dir = os.path.join(app_data, 'TVViewer')
+    elif sys.platform == 'darwin':
+        fav_dir = os.path.join(os.path.expanduser('~'), 'Library',
+                               'Application Support', 'TVViewer')
+    else:
+        xdg = os.environ.get('XDG_DATA_HOME',
+                             os.path.join(os.path.expanduser('~'), '.local', 'share'))
+        fav_dir = os.path.join(xdg, 'tvviewer')
+    os.makedirs(fav_dir, exist_ok=True)
+    return os.path.join(fav_dir, FAVORITES_FILENAME)
 
 
 class FavoritesManager:
@@ -17,10 +35,23 @@ class FavoritesManager:
     __slots__ = ('_favorites', '_recent', '_filepath')
 
     def __init__(self, filepath=None):
-        self._filepath = filepath or FAVORITES_FILE
+        self._filepath = filepath or _get_persistent_path()
         self._favorites = set()  # Set of channel URLs
         self._recent = []  # List of {url, name, timestamp}
+        self._migrate_old_file()
         self._load()
+
+    def _migrate_old_file(self):
+        """Migrate favorites from old relative-path location to persistent dir."""
+        old_path = os.path.join(os.getcwd(), FAVORITES_FILENAME)
+        if old_path == self._filepath:
+            return
+        if os.path.exists(old_path) and not os.path.exists(self._filepath):
+            try:
+                shutil.copy2(old_path, self._filepath)
+                logger.info(f"Migrated favorites from {old_path} to {self._filepath}")
+            except Exception as e:
+                logger.warning(f"Could not migrate old favorites: {e}")
 
     def _load(self):
         """Load favorites from disk."""
