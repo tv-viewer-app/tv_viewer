@@ -18,6 +18,7 @@ from utils.channel_descriptions import get_description
 from utils.logger import get_logger
 from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
+from .map_window import MapWindow
 from .constants import FluentColorsDark as FluentColors, FluentSpacing, FluentTypography
 import config
 
@@ -406,6 +407,7 @@ class MainWindow:
         button_frame.grid(row=8, column=0, padx=10, pady=(5, 10), sticky="ew")
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
+        button_frame.grid_columnconfigure(2, weight=1)
         
         # Scan toggle button (full width, top)
         self.scan_btn = ttk.Button(
@@ -414,7 +416,7 @@ class MainWindow:
             command=self._toggle_scan,
             bootstyle="primary"
         )
-        self.scan_btn.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        self.scan_btn.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 5))
         
         # Export M3U button
         self.export_btn = ttk.Button(
@@ -425,6 +427,15 @@ class MainWindow:
         )
         self.export_btn.grid(row=1, column=0, sticky="ew", padx=(0, 3))
         
+        # World Map button
+        self.map_btn = ttk.Button(
+            button_frame,
+            text="🗺️ Map",
+            command=self._open_map,
+            bootstyle="secondary"
+        )
+        self.map_btn.grid(row=1, column=1, sticky="ew", padx=3)
+        
         # Settings button
         self.settings_btn = ttk.Button(
             button_frame,
@@ -432,7 +443,7 @@ class MainWindow:
             command=self._edit_channel_config,
             bootstyle="secondary"
         )
-        self.settings_btn.grid(row=1, column=1, sticky="ew", padx=(3, 0))
+        self.settings_btn.grid(row=1, column=2, sticky="ew", padx=(3, 0))
     
     def _create_main_content(self):
         """Create the main content area with channel list."""
@@ -1336,6 +1347,22 @@ class MainWindow:
     def _edit_channel_config(self):
         """Open the Settings dialog (replaces old notepad-based config editing)."""
         self._show_settings_dialog()
+
+    def _open_map(self):
+        """Open the World Map window."""
+        try:
+            MapWindow(
+                parent=self.root,
+                channel_manager=self.channel_manager,
+                favorites_manager=self.favorites,
+                on_play_channel=self._play_channel_from_map,
+            )
+        except Exception as e:
+            logger.error(f"Failed to open map: {e}", exc_info=True)
+
+    def _play_channel_from_map(self, channel: dict):
+        """Play a channel selected from the map."""
+        self._play_channel(channel)
 
     # ── Settings Dialog ──────────────────────────────────────────────────
     def _show_settings_dialog(self):

@@ -48,6 +48,10 @@ dependencies:
   
   # Share functionality (BL-024)
   share_plus: ^9.0.0
+  
+  # World Map
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
 
 dev_dependencies:
   flutter_test:

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.2] - 2026-03-01
 
 ### Added
+- **🗺️ World Map view** — Zoomable OpenStreetMap showing TV stream sources by country. Country bubbles at low zoom with channel count and health color (green/orange/red). Individual channel pins at high zoom. Tap/click to see channel details and play. Available on both Windows (tkintermapview) and Android (flutter_map)
+- **Map filters** — Toggle "Favorites only" and "Hide offline" directly on the map to focus on your channels
 - **Supabase analytics embedded** — Crash reporting and anonymous usage analytics now active out-of-the-box (no manual configuration needed). Uses public anon key protected by RLS write-only policies
 - **Crash reporting wired to error zones** — Flutter framework errors and uncaught async exceptions automatically reported to Supabase analytics
 - **Analytics opt-out** — Users can disable anonymous analytics via `analytics.setEnabled(false)` (GDPR compliance)

@@ -10,6 +10,7 @@ import '../widgets/scan_progress_bar.dart';
 import '../widgets/onboarding_tooltip.dart';
 import 'diagnostics_screen.dart';
 import 'help_screen.dart';
+import 'map_screen.dart';
 import 'player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -131,6 +132,15 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('📺 TV Viewer'),
         actions: [
+          // World Map button
+          IconButton(
+            icon: const Icon(Icons.map),
+            tooltip: 'World Map',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MapScreen()),
+            ),
+          ),
           Consumer<ChannelProvider>(
             builder: (context, provider, _) {
               if (provider.isScanning) {
