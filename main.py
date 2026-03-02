@@ -15,6 +15,17 @@ import os
 import gc
 import atexit
 
+# Enable Windows DPI awareness for proper font/UI scaling
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Per-monitor DPI aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 # Optimize Python for better performance
 sys.setrecursionlimit(2000)  # Reasonable limit
 

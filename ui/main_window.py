@@ -54,7 +54,7 @@ class MainWindow:
         
         # Configure grid
         self.root.grid_rowconfigure(0, weight=1)
-        self.root.grid_columnconfigure(0, minsize=280)
+        self.root.grid_columnconfigure(0, minsize=360)
         self.root.grid_columnconfigure(1, weight=1)
         
         # Set window icon
@@ -149,7 +149,7 @@ class MainWindow:
     def _create_sidebar(self):
         """Create the left sidebar with Windows 11 Fluent Design."""
         # Sidebar frame
-        self.sidebar = ttk.Frame(self.root, width=340)
+        self.sidebar = ttk.Frame(self.root, width=400)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         # Row 6 = category scroll (expandable)
         self.sidebar.grid_rowconfigure(6, weight=1)
@@ -488,16 +488,16 @@ class MainWindow:
             foreground=colors.inputfg,
             fieldbackground=colors.inputbg,
             borderwidth=0,
-            font=('Segoe UI', 14),
-            rowheight=44
+            font=('Segoe UI', 12),
+            rowheight=48
         )
         style.configure(
             "Material.Treeview.Heading",
             background=colors.dark,
             foreground=colors.fg,
             borderwidth=0,
-            font=('Segoe UI', 11, 'bold'),
-            padding=(10, 6)
+            font=('Segoe UI', 10, 'bold'),
+            padding=(10, 8)
         )
         style.map(
             "Material.Treeview",
@@ -540,16 +540,16 @@ class MainWindow:
         
         # Configure fav column (star) — fixed narrow width
         self.channel_tree.heading('fav', text='★', command=lambda: self._sort_by_column('fav'))
-        self.channel_tree.column('fav', width=30, minwidth=30, anchor='center', stretch=False)
+        self.channel_tree.column('fav', width=40, minwidth=40, anchor='center', stretch=False)
         
         # Configure remaining columns with wider spacing
         columns_config = {
-            'name': ('Channel Name', 300),
-            'category': ('Category', 110),
-            'status': ('Status', 100),
-            'last_checked': ('Checked', 75),
-            'age': ('Age', 55),
-            'country': ('Country', 90)
+            'name': ('Channel Name', 280),
+            'category': ('Category', 120),
+            'status': ('Status', 90),
+            'last_checked': ('Checked', 80),
+            'age': ('Age', 50),
+            'country': ('Country', 100)
         }
         
         for col, (title, width) in columns_config.items():
