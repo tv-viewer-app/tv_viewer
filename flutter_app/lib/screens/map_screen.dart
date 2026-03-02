@@ -157,11 +157,62 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen>
+    with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   bool _favoritesOnly = false;
   bool _hideOffline = false;
   double _currentZoom = 3.0;
+
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween(begin: 0.85, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  void _animateToCountry(LatLng target, {double zoom = 6.0}) {
+    final latTween = Tween(
+      begin: _mapController.camera.center.latitude,
+      end: target.latitude,
+    );
+    final lngTween = Tween(
+      begin: _mapController.camera.center.longitude,
+      end: target.longitude,
+    );
+    final zoomTween = Tween(
+      begin: _mapController.camera.zoom,
+      end: zoom,
+    );
+    final ctrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 600),
+    );
+    final curve = CurvedAnimation(parent: ctrl, curve: Curves.easeOutCubic);
+    ctrl.addListener(() {
+      _mapController.move(
+        LatLng(latTween.evaluate(curve), lngTween.evaluate(curve)),
+        zoomTween.evaluate(curve),
+      );
+    });
+    ctrl.addStatusListener((s) {
+      if (s == AnimationStatus.completed) ctrl.dispose();
+    });
+    ctrl.forward();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,61 +220,70 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: const Text('🗺️ World Map'),
         actions: [
-          // Favorites filter
-          IconButton(
-            icon: Icon(
-              _favoritesOnly ? Icons.star : Icons.star_border,
-              color: _favoritesOnly ? Colors.amber : null,
-            ),
-            tooltip: 'Favorites only',
-            onPressed: () => setState(() => _favoritesOnly = !_favoritesOnly),
+          _FilterChip(
+            label: 'Favorites',
+            icon: Icons.star_rounded,
+            active: _favoritesOnly,
+            activeColor: Colors.amber,
+            onTap: () => setState(() => _favoritesOnly = !_favoritesOnly),
           ),
-          // Hide offline filter
-          IconButton(
-            icon: Icon(
-              _hideOffline ? Icons.wifi : Icons.wifi_off,
-              color: _hideOffline ? Colors.green : null,
-            ),
-            tooltip: _hideOffline ? 'Showing working only' : 'Show all',
-            onPressed: () => setState(() => _hideOffline = !_hideOffline),
+          const SizedBox(width: 4),
+          _FilterChip(
+            label: 'Working',
+            icon: Icons.wifi_rounded,
+            active: _hideOffline,
+            activeColor: Colors.green,
+            onTap: () => setState(() => _hideOffline = !_hideOffline),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Consumer<ChannelProvider>(
         builder: (context, provider, _) {
-          // Apply filters
           List<Channel> channels = provider.channels;
           if (_favoritesOnly) {
-            channels = channels
-                .where((c) => provider.isFavorite(c))
-                .toList();
+            channels = channels.where((c) => provider.isFavorite(c)).toList();
           }
           if (_hideOffline) {
             channels = channels.where((c) => c.isWorking).toList();
           }
 
           final grouped = _groupByCountry(channels);
+          final totalWorking = channels.where((c) => c.isWorking).length;
 
-          return FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: const LatLng(30.0, 20.0),
-              initialZoom: _currentZoom,
-              minZoom: 2,
-              maxZoom: 18,
-              onPositionChanged: (pos, _) {
-                if (pos.zoom != null && pos.zoom != _currentZoom) {
-                  setState(() => _currentZoom = pos.zoom!);
-                }
-              },
-            ),
+          return Stack(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.tvviewer.app',
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: const LatLng(30.0, 20.0),
+                  initialZoom: _currentZoom,
+                  minZoom: 2,
+                  maxZoom: 18,
+                  onPositionChanged: (pos, _) {
+                    if (pos.zoom != null && pos.zoom != _currentZoom) {
+                      setState(() => _currentZoom = pos.zoom!);
+                    }
+                  },
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.tvviewer.app',
+                  ),
+                  MarkerLayer(
+                    markers: _buildMarkers(grouped, provider),
+                  ),
+                ],
               ),
-              MarkerLayer(
-                markers: _buildMarkers(grouped, provider),
+              // Stats overlay at bottom
+              Positioned(
+                left: 12, right: 12, bottom: 12,
+                child: _StatsBar(
+                  countries: grouped.length,
+                  channels: channels.length,
+                  working: totalWorking,
+                ),
               ),
             ],
           );
@@ -249,17 +309,27 @@ class _MapScreenState extends State<MapScreen> {
 
       // At low zoom show country clusters, at high zoom show individual pins
       if (_currentZoom < 6) {
-        // Country cluster marker
+        // Country cluster marker with pulse animation
         markers.add(Marker(
           point: coords,
-          width: 56,
-          height: 56,
+          width: 64,
+          height: 64,
           child: GestureDetector(
-            onTap: () => _showCountrySheet(country, channels, provider),
-            child: _CountryBubble(
-              country: country,
-              total: total,
-              working: workingCount,
+            onTap: () {
+              _animateToCountry(coords);
+              _showCountrySheet(country, channels, provider);
+            },
+            child: AnimatedBuilder(
+              animation: _pulseController,
+              builder: (ctx, child) => Transform.scale(
+                scale: workingCount > 0 ? _pulseAnim.value : 1.0,
+                child: child,
+              ),
+              child: _CountryBubble(
+                country: country,
+                total: total,
+                working: workingCount,
+              ),
             ),
           ),
         ));
@@ -306,98 +376,109 @@ class _MapScreenState extends State<MapScreen> {
     List<Channel> channels,
     ChannelProvider provider,
   ) {
+    final working = channels.where((c) => c.isWorking).length;
+    final ratio = channels.isNotEmpty ? working / channels.length : 0.0;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        maxChildSize: 0.85,
+        initialChildSize: 0.55,
+        maxChildSize: 0.9,
         minChildSize: 0.3,
         expand: false,
-        builder: (ctx, scrollController) => Column(
-          children: [
-            // Handle
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
+        builder: (ctx, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[500],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.public, size: 24),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '$country — ${channels.length} channels',
-                      style: Theme.of(ctx).textTheme.titleMedium,
-                    ),
-                  ),
-                  Text(
-                    '${channels.where((c) => c.isWorking).length} working',
-                    style: TextStyle(color: Colors.green[400], fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            // Channel list
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: channels.length,
-                itemBuilder: (ctx, i) {
-                  final ch = channels[i];
-                  final isFav = provider.isFavorite(ch);
-                  return ListTile(
-                    leading: Icon(
-                      ch.isWorking ? Icons.tv : Icons.tv_off,
-                      color: ch.isWorking ? Colors.green : Colors.red[300],
-                    ),
-                    title: Text(
-                      ch.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      [ch.category, ch.language]
-                          .where((s) => s != null && s.isNotEmpty)
-                          .join(' · '),
-                      style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+              // Header with animated health bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        IconButton(
-                          icon: Icon(
-                            isFav ? Icons.star : Icons.star_border,
-                            color: isFav ? Colors.amber : null,
-                            size: 20,
+                        const Icon(Icons.public, size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            country,
+                            style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          onPressed: () {
-                            provider.toggleFavorite(ch);
-                            // Refresh the sheet
-                            (ctx as Element).markNeedsBuild();
-                          },
                         ),
-                        const Icon(Icons.play_arrow),
+                        _CountBadge(count: channels.length, label: 'total'),
+                        const SizedBox(width: 8),
+                        _CountBadge(count: working, label: 'live',
+                            color: Colors.green),
                       ],
                     ),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _playChannel(ch);
-                    },
-                  );
-                },
+                    const SizedBox(height: 10),
+                    // Animated health bar
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: ratio),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      builder: (_, value, __) => ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: value,
+                          minHeight: 6,
+                          backgroundColor: Colors.grey[800],
+                          color: ratio > 0.7
+                              ? Colors.green
+                              : ratio > 0.3
+                                  ? Colors.orange
+                                  : Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              // Channel list
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: channels.length,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  itemBuilder: (ctx, i) {
+                    final ch = channels[i];
+                    final isFav = provider.isFavorite(ch);
+                    return _ChannelTile(
+                      channel: ch,
+                      isFavorite: isFav,
+                      onFavToggle: () {
+                        provider.toggleFavorite(ch);
+                        (ctx as Element).markNeedsBuild();
+                      },
+                      onPlay: () {
+                        Navigator.pop(ctx);
+                        _playChannel(ch);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -486,7 +567,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-/// Circular bubble marker for country clusters.
+/// Circular bubble marker for country clusters with gradient glow.
 class _CountryBubble extends StatelessWidget {
   final String country;
   final int total;
@@ -509,10 +590,18 @@ class _CountryBubble extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.85),
+        gradient: RadialGradient(
+          colors: [color.withOpacity(0.95), color.withOpacity(0.6)],
+          stops: const [0.5, 1.0],
+        ),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: Colors.white, width: 2.5),
         boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.45),
+            blurRadius: 12,
+            spreadRadius: 2,
+          ),
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
             blurRadius: 4,
@@ -521,19 +610,34 @@ class _CountryBubble extends StatelessWidget {
         ],
       ),
       alignment: Alignment.center,
-      child: Text(
-        '$total',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$total',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              height: 1.1,
+            ),
+          ),
+          Text(
+            country.length > 3 ? country.substring(0, 3).toUpperCase() : country.toUpperCase(),
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.85),
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Small pin marker for individual channels.
+/// Small pin marker for individual channels with animated glow.
 class _ChannelPin extends StatelessWidget {
   final bool isWorking;
   final bool isFavorite;
@@ -545,15 +649,21 @@ class _ChannelPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final baseColor = isWorking ? Colors.green : Colors.red[400]!;
     return Container(
       decoration: BoxDecoration(
-        color: isWorking ? Colors.green : Colors.red[400],
+        color: baseColor,
         shape: BoxShape.circle,
         border: Border.all(
           color: isFavorite ? Colors.amber : Colors.white,
           width: isFavorite ? 3 : 2,
         ),
         boxShadow: [
+          BoxShadow(
+            color: baseColor.withOpacity(0.5),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
             blurRadius: 3,
@@ -562,9 +672,286 @@ class _ChannelPin extends StatelessWidget {
         ],
       ),
       child: Icon(
-        Icons.tv,
+        isFavorite ? Icons.star_rounded : Icons.tv,
         size: 16,
         color: Colors.white.withOpacity(0.9),
+      ),
+    );
+  }
+}
+
+/// Animated filter chip for the AppBar.
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? activeColor.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? activeColor : Colors.grey[600]!,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16,
+                color: active ? activeColor : Colors.grey[400]),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: active ? activeColor : Colors.grey[400],
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+            if (active) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.check, size: 14, color: activeColor),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Stats overlay bar at the bottom of the map.
+class _StatsBar extends StatelessWidget {
+  final int countries;
+  final int channels;
+  final int working;
+
+  const _StatsBar({
+    required this.countries,
+    required this.channels,
+    required this.working,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.75),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _StatItem(
+            value: countries, label: 'Countries',
+            color: const Color(0xFF4DA6FF),
+          ),
+          _divider(),
+          _StatItem(
+            value: channels, label: 'Channels',
+            color: const Color(0xFF4DA6FF),
+          ),
+          _divider(),
+          _StatItem(
+            value: working, label: 'Working',
+            color: Colors.green,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(
+    width: 1, height: 28,
+    color: Colors.white.withOpacity(0.15),
+  );
+}
+
+/// Single stat counter with animated count-up.
+class _StatItem extends StatelessWidget {
+  final int value;
+  final String label;
+  final Color color;
+
+  const _StatItem({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<int>(
+      tween: IntTween(begin: 0, end: value),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutCubic,
+      builder: (_, v, __) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$v',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.white.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Count badge widget for bottom sheet header.
+class _CountBadge extends StatelessWidget {
+  final int count;
+  final String label;
+  final Color? color;
+
+  const _CountBadge({
+    required this.count,
+    required this.label,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: (color ?? Colors.grey).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (color ?? Colors.grey).withOpacity(0.3),
+        ),
+      ),
+      child: Text(
+        '$count $label',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color ?? Colors.grey[400],
+        ),
+      ),
+    );
+  }
+}
+
+/// Channel tile for the country bottom sheet.
+class _ChannelTile extends StatelessWidget {
+  final Channel channel;
+  final bool isFavorite;
+  final VoidCallback onFavToggle;
+  final VoidCallback onPlay;
+
+  const _ChannelTile({
+    required this.channel,
+    required this.isFavorite,
+    required this.onFavToggle,
+    required this.onPlay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onPlay,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              // Status dot
+              Container(
+                width: 10, height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: channel.isWorking ? Colors.green : Colors.red[400],
+                  boxShadow: channel.isWorking
+                      ? [BoxShadow(
+                          color: Colors.green.withOpacity(0.4),
+                          blurRadius: 6,
+                        )]
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Channel info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      channel.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    if (channel.category != null && channel.category!.isNotEmpty)
+                      Text(
+                        channel.category!,
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      ),
+                  ],
+                ),
+              ),
+              // Favorite button
+              IconButton(
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, anim) =>
+                      ScaleTransition(scale: anim, child: child),
+                  child: Icon(
+                    isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                    key: ValueKey(isFavorite),
+                    color: isFavorite ? Colors.amber : Colors.grey[600],
+                    size: 22,
+                  ),
+                ),
+                onPressed: onFavToggle,
+                visualDensity: VisualDensity.compact,
+              ),
+              // Play button
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0078D4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.play_arrow_rounded,
+                    color: Colors.white, size: 22),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

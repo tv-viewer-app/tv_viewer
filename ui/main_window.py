@@ -1354,11 +1354,13 @@ class MainWindow:
             MapWindow(
                 parent=self.root,
                 channel_manager=self.channel_manager,
-                favorites_manager=self.favorites,
+                favorites_manager=self.favorites_manager,
                 on_play_channel=self._play_channel_from_map,
             )
         except Exception as e:
             logger.error(f"Failed to open map: {e}", exc_info=True)
+            from tkinter import messagebox
+            messagebox.showerror("Map Error", f"Could not open map:\n{e}")
 
     def _play_channel_from_map(self, channel: dict):
         """Play a channel selected from the map."""

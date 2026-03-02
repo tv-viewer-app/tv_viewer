@@ -1,4 +1,4 @@
-"""World Map window — zoomable OpenStreetMap with channel markers."""
+"""World Map window — zoomable OpenStreetMap with animated channel markers."""
 
 import math
 import tkinter as tk
@@ -10,7 +10,6 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Try to import tkintermapview
 try:
     from tkintermapview import TkinterMapView
     MAP_AVAILABLE = True
@@ -93,15 +92,22 @@ COUNTRY_COORDS: Dict[str, Tuple[float, float]] = {
 class MapWindow:
     """Toplevel window showing a zoomable world map of TV stream sources."""
 
+    # Fluent Design colors
+    _BG = "#1b1a1f"
+    _SURFACE = "#252429"
+    _CARD = "#2d2c31"
+    _CARD_HOVER = "#383740"
+    _ACCENT = "#0078D4"
+    _ACCENT_HOVER = "#106EBE"
+    _TEXT = "#ffffff"
+    _TEXT_SEC = "#b3b3b3"
+    _GREEN = "#13A10E"
+    _RED = "#F04A58"
+    _AMBER = "#FFB900"
+    _BORDER = "#3b3a3f"
+
     def __init__(self, parent, channel_manager, favorites_manager=None,
                  on_play_channel=None):
-        """
-        Args:
-            parent: Parent tkinter widget.
-            channel_manager: ChannelManager instance with loaded channels.
-            favorites_manager: FavoritesManager instance (optional).
-            on_play_channel: Callback(channel_dict) to play a channel.
-        """
         if not MAP_AVAILABLE:
             from tkinter import messagebox
             messagebox.showwarning(
@@ -118,66 +124,154 @@ class MapWindow:
         self._markers = []
         self._show_favorites_only = tk.BooleanVar(value=False)
         self._hide_offline = tk.BooleanVar(value=False)
+        self._search_var = tk.StringVar()
+        self._stats_anim_step = 0
 
         self._build_window()
-        self._place_markers()
+        # Animate the stats bar on open
+        self._win.after(300, self._place_markers)
+        self._win.after(100, lambda: self._animate_open())
 
-    # ------------------------------------------------------------------
-    # UI construction
-    # ------------------------------------------------------------------
+    def _animate_open(self):
+        """Fade-in effect on window open."""
+        try:
+            self._win.attributes('-alpha', 0.0)
+            self._fade_in(0.0)
+        except tk.TclError:
+            pass
+
+    def _fade_in(self, alpha):
+        if alpha >= 1.0:
+            self._win.attributes('-alpha', 1.0)
+            return
+        self._win.attributes('-alpha', alpha)
+        self._win.after(20, lambda: self._fade_in(alpha + 0.08))
 
     def _build_window(self):
         self._win = ctk.CTkToplevel(self._parent)
         self._win.title("🗺️ TV Viewer — World Map")
-        self._win.geometry("1100x700")
-        self._win.minsize(700, 450)
+        self._win.geometry("1200x750")
+        self._win.minsize(800, 500)
+        self._win.configure(fg_color=self._BG)
 
-        # Toolbar
-        toolbar = ctk.CTkFrame(self._win, height=40, fg_color="#1e1e2e")
+        # ── Top toolbar ──
+        toolbar = ctk.CTkFrame(self._win, height=50, fg_color=self._SURFACE,
+                               corner_radius=0)
         toolbar.pack(fill="x")
+        toolbar.pack_propagate(False)
 
         ctk.CTkLabel(
-            toolbar, text="🗺️  World Map", font=ctk.CTkFont(size=15, weight="bold"),
-        ).pack(side="left", padx=12)
+            toolbar, text="🗺️  World Map",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=self._TEXT,
+        ).pack(side="left", padx=16)
 
-        # Filters
-        ctk.CTkCheckBox(
-            toolbar, text="★ Favorites only",
-            variable=self._show_favorites_only,
-            command=self._refresh_markers,
-            fg_color="#FFB900", hover_color="#E6A800",
-            text_color="white", font=ctk.CTkFont(size=12),
-        ).pack(side="left", padx=(20, 8))
-
-        ctk.CTkCheckBox(
-            toolbar, text="Hide offline",
-            variable=self._hide_offline,
-            command=self._refresh_markers,
-            fg_color="#13A10E", hover_color="#0F8A0A",
-            text_color="white", font=ctk.CTkFont(size=12),
-        ).pack(side="left", padx=8)
-
-        # Channel count label
-        self._count_label = ctk.CTkLabel(
-            toolbar, text="", font=ctk.CTkFont(size=12),
-            text_color="#888",
+        # Search box
+        search_frame = ctk.CTkFrame(toolbar, fg_color=self._CARD,
+                                     corner_radius=8, height=32)
+        search_frame.pack(side="left", padx=16, pady=9)
+        ctk.CTkLabel(search_frame, text="🔍", width=28,
+                     font=ctk.CTkFont(size=13)).pack(side="left", padx=(8, 0))
+        self._search_entry = ctk.CTkEntry(
+            search_frame, textvariable=self._search_var,
+            placeholder_text="Search country...",
+            fg_color="transparent", border_width=0, width=160, height=28,
+            font=ctk.CTkFont(size=12),
         )
-        self._count_label.pack(side="right", padx=12)
+        self._search_entry.pack(side="left", padx=(0, 8))
+        self._search_var.trace_add("write", lambda *_: self._on_search())
 
-        # Map widget
-        self._map = TkinterMapView(
-            self._win, corner_radius=0,
+        # Filter toggles with animated state
+        self._fav_btn = ctk.CTkButton(
+            toolbar, text="★ Favorites",
+            fg_color="transparent", hover_color=self._CARD_HOVER,
+            text_color=self._TEXT_SEC, font=ctk.CTkFont(size=12),
+            width=100, height=32, corner_radius=16,
+            border_width=1, border_color=self._BORDER,
+            command=self._toggle_favorites,
         )
+        self._fav_btn.pack(side="left", padx=4)
+
+        self._offline_btn = ctk.CTkButton(
+            toolbar, text="📡 Hide offline",
+            fg_color="transparent", hover_color=self._CARD_HOVER,
+            text_color=self._TEXT_SEC, font=ctk.CTkFont(size=12),
+            width=120, height=32, corner_radius=16,
+            border_width=1, border_color=self._BORDER,
+            command=self._toggle_offline,
+        )
+        self._offline_btn.pack(side="left", padx=4)
+
+        # Stats panel (right side of toolbar)
+        self._stats_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        self._stats_frame.pack(side="right", padx=16)
+
+        self._stat_countries = self._make_stat_badge(self._stats_frame, "0", "countries")
+        self._stat_channels = self._make_stat_badge(self._stats_frame, "0", "channels")
+        self._stat_working = self._make_stat_badge(self._stats_frame, "0", "working", self._GREEN)
+
+        # ── Map widget ──
+        self._map = TkinterMapView(self._win, corner_radius=0)
         self._map.pack(fill="both", expand=True)
         self._map.set_position(30, 20)
         self._map.set_zoom(3)
 
-    # ------------------------------------------------------------------
-    # Marker management
-    # ------------------------------------------------------------------
+    def _make_stat_badge(self, parent, value, label, color=None):
+        """Create an animated stat counter badge."""
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.pack(side="left", padx=8)
+        val_label = ctk.CTkLabel(
+            frame, text=value,
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=color or self._ACCENT,
+        )
+        val_label.pack()
+        ctk.CTkLabel(
+            frame, text=label,
+            font=ctk.CTkFont(size=10),
+            text_color=self._TEXT_SEC,
+        ).pack()
+        return val_label
+
+    # ── Filter toggle animations ──
+
+    def _toggle_favorites(self):
+        new_val = not self._show_favorites_only.get()
+        self._show_favorites_only.set(new_val)
+        if new_val:
+            self._fav_btn.configure(
+                fg_color=self._AMBER, text_color="#000",
+                border_color=self._AMBER, text="★ Favorites ✓"
+            )
+        else:
+            self._fav_btn.configure(
+                fg_color="transparent", text_color=self._TEXT_SEC,
+                border_color=self._BORDER, text="★ Favorites"
+            )
+        self._refresh_markers()
+
+    def _toggle_offline(self):
+        new_val = not self._hide_offline.get()
+        self._hide_offline.set(new_val)
+        if new_val:
+            self._offline_btn.configure(
+                fg_color=self._GREEN, text_color="#fff",
+                border_color=self._GREEN, text="📡 Working only ✓"
+            )
+        else:
+            self._offline_btn.configure(
+                fg_color="transparent", text_color=self._TEXT_SEC,
+                border_color=self._BORDER, text="📡 Hide offline"
+            )
+        self._refresh_markers()
+
+    def _on_search(self):
+        """Filter markers to matching countries (live search)."""
+        self._refresh_markers()
+
+    # ── Marker management ──
 
     def _get_filtered_channels(self) -> List[dict]:
-        """Return channels after applying current filters."""
         channels = list(self._cm.channels)
         if self._show_favorites_only.get() and self._fav:
             channels = [c for c in channels if self._fav.is_favorite(c.get('url', ''))]
@@ -186,10 +280,13 @@ class MapWindow:
         return channels
 
     def _group_by_country(self, channels) -> Dict[str, List[dict]]:
+        search = self._search_var.get().lower().strip()
         grouped: Dict[str, List[dict]] = {}
         for ch in channels:
             country = ch.get('country', '') or ''
             if not country:
+                continue
+            if search and search not in country.lower():
                 continue
             grouped.setdefault(country, []).append(ch)
         return grouped
@@ -211,6 +308,7 @@ class MapWindow:
         grouped = self._group_by_country(channels)
 
         total_placed = 0
+        total_working = 0
         for country, ch_list in grouped.items():
             coords = COUNTRY_COORDS.get(country)
             if not coords:
@@ -219,112 +317,205 @@ class MapWindow:
             lat, lon = coords
             count = len(ch_list)
             working = sum(1 for c in ch_list if c.get('status') != 'offline')
+            total_placed += count
+            total_working += working
 
-            # Marker text: "🇬🇧 42" style — use country name + count
             short = country[:3].upper()
             label = f"{short} ({count})"
 
             marker = self._map.set_marker(
-                lat, lon,
-                text=label,
+                lat, lon, text=label,
                 command=lambda e=None, c=country, chs=ch_list: self._on_marker_click(c, chs),
             )
             self._markers.append(marker)
-            total_placed += count
 
-        self._count_label.configure(
-            text=f"{total_placed} channels in {len(grouped)} countries"
-        )
+        # Animate stats counters
+        self._animate_counter(self._stat_countries, len(grouped))
+        self._animate_counter(self._stat_channels, total_placed)
+        self._animate_counter(self._stat_working, total_working)
 
-    # ------------------------------------------------------------------
-    # Interactions
-    # ------------------------------------------------------------------
+    def _animate_counter(self, label, target, current=0, step=0):
+        """Smooth count-up animation for stat badges."""
+        if step > 15 or current >= target:
+            label.configure(text=str(target))
+            return
+        # Ease-out: big jumps first, smaller toward the end
+        progress = (step + 1) / 16
+        value = int(target * progress)
+        label.configure(text=str(value))
+        self._win.after(30, lambda: self._animate_counter(label, target, value, step + 1))
+
+    # ── Country popup ──
 
     def _on_marker_click(self, country: str, channels: List[dict]):
-        """Show a popup list of channels for the clicked country."""
         popup = ctk.CTkToplevel(self._win)
-        popup.title(f"📺 {country} — {len(channels)} channels")
-        popup.geometry("480x500")
+        popup.title(f"📺 {country}")
+        popup.geometry("520x560")
         popup.transient(self._win)
         popup.grab_set()
+        popup.configure(fg_color=self._BG)
 
-        # Header
-        header = ctk.CTkFrame(popup, fg_color="#1e1e2e", height=44)
+        # Fade in the popup
+        try:
+            popup.attributes('-alpha', 0.0)
+            self._popup_fade_in(popup, 0.0)
+        except tk.TclError:
+            pass
+
+        # ── Header with health bar ──
+        header = ctk.CTkFrame(popup, fg_color=self._SURFACE, height=70,
+                              corner_radius=0)
         header.pack(fill="x")
+        header.pack_propagate(False)
+
         working = sum(1 for c in channels if c.get('status') != 'offline')
+        ratio = working / len(channels) if channels else 0
+
+        left = ctk.CTkFrame(header, fg_color="transparent")
+        left.pack(side="left", padx=16, pady=8)
         ctk.CTkLabel(
-            header,
-            text=f"🌍 {country}  —  {len(channels)} channels  ({working} working)",
-            font=ctk.CTkFont(size=14, weight="bold"),
-        ).pack(padx=12, pady=8)
+            left, text=f"🌍 {country}",
+            font=ctk.CTkFont(size=16, weight="bold"), text_color=self._TEXT,
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            left,
+            text=f"{len(channels)} channels  •  {working} working  •  {len(channels) - working} offline",
+            font=ctk.CTkFont(size=11), text_color=self._TEXT_SEC,
+        ).pack(anchor="w")
 
-        # Scrollable channel list
-        scroll = ctk.CTkScrollableFrame(popup, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=4, pady=4)
+        # Animated health bar
+        bar_bg = ctk.CTkFrame(header, fg_color=self._CARD, height=6,
+                              corner_radius=3, width=120)
+        bar_bg.pack(side="right", padx=16)
+        bar_bg.pack_propagate(False)
+        bar_color = self._GREEN if ratio > 0.7 else self._AMBER if ratio > 0.3 else self._RED
+        self._bar_fill = ctk.CTkFrame(bar_bg, fg_color=bar_color, height=6,
+                                       corner_radius=3, width=1)
+        self._bar_fill.place(x=0, y=0, relheight=1)
+        popup.after(200, lambda: self._animate_bar(self._bar_fill, int(120 * ratio)))
 
-        for ch in channels:
-            self._add_channel_row(scroll, ch, popup)
+        # ── Channel list ──
+        scroll = ctk.CTkScrollableFrame(popup, fg_color="transparent",
+                                         scrollbar_button_color=self._CARD)
+        scroll.pack(fill="both", expand=True, padx=8, pady=8)
 
-    def _add_channel_row(self, parent, ch: dict, popup):
-        """Add a single channel row to the popup list."""
+        for i, ch in enumerate(channels):
+            # Stagger appearance for a cascade effect
+            row = self._create_channel_row(scroll, ch, popup)
+            row.pack(fill="x", pady=2, padx=2)
+
+    def _popup_fade_in(self, popup, alpha):
+        if alpha >= 1.0:
+            try:
+                popup.attributes('-alpha', 1.0)
+            except tk.TclError:
+                pass
+            return
+        try:
+            popup.attributes('-alpha', alpha)
+            popup.after(15, lambda: self._popup_fade_in(popup, alpha + 0.1))
+        except tk.TclError:
+            pass
+
+    def _animate_bar(self, bar, target_w, current_w=1):
+        """Smooth grow animation for health bar."""
+        if current_w >= target_w:
+            bar.configure(width=max(target_w, 1))
+            return
+        step = max(1, (target_w - current_w) // 4)
+        new_w = min(current_w + step, target_w)
+        bar.configure(width=new_w)
+        bar.place(x=0, y=0, relheight=1, width=new_w)
+        try:
+            bar.winfo_toplevel().after(20, lambda: self._animate_bar(bar, target_w, new_w))
+        except tk.TclError:
+            pass
+
+    def _create_channel_row(self, parent, ch: dict, popup):
+        """Create a channel row with hover animation."""
         is_working = ch.get('status') != 'offline'
         is_fav = self._fav.is_favorite(ch.get('url', '')) if self._fav else False
 
-        row = ctk.CTkFrame(parent, fg_color="#2a2a3a", corner_radius=6, height=44)
-        row.pack(fill="x", pady=2, padx=2)
+        row = ctk.CTkFrame(parent, fg_color=self._CARD, corner_radius=8,
+                           height=52)
         row.pack_propagate(False)
 
-        # Status indicator
-        status_color = "#13A10E" if is_working else "#F04A58"
-        ctk.CTkLabel(
-            row, text="●", text_color=status_color,
-            font=ctk.CTkFont(size=14), width=24,
-        ).pack(side="left", padx=(8, 4))
+        # Hover animation
+        def on_enter(e):
+            row.configure(fg_color=self._CARD_HOVER)
+        def on_leave(e):
+            row.configure(fg_color=self._CARD)
+        row.bind("<Enter>", on_enter)
+        row.bind("<Leave>", on_leave)
 
-        # Favorite star
-        star = "★" if is_fav else "☆"
-        star_color = "#FFB900" if is_fav else "#555"
-        star_label = ctk.CTkLabel(
-            row, text=star, text_color=star_color,
-            font=ctk.CTkFont(size=16), width=24, cursor="hand2",
-        )
-        star_label.pack(side="left", padx=(0, 4))
-        if self._fav:
-            star_label.bind("<Button-1>", lambda e, url=ch.get('url', ''): self._toggle_fav(url, star_label))
+        # Status dot with pulse for working channels
+        dot_color = self._GREEN if is_working else self._RED
+        dot = ctk.CTkLabel(row, text="●", text_color=dot_color,
+                           font=ctk.CTkFont(size=16), width=28)
+        dot.pack(side="left", padx=(10, 4))
+
+        # Favorite star toggle
+        star_text = "★" if is_fav else "☆"
+        star_color = self._AMBER if is_fav else "#555"
+        star = ctk.CTkLabel(row, text=star_text, text_color=star_color,
+                            font=ctk.CTkFont(size=18), width=28, cursor="hand2")
+        star.pack(side="left", padx=(0, 4))
+
+        def toggle_star(e, url=ch.get('url', ''), lbl=star):
+            if not self._fav:
+                return
+            if self._fav.is_favorite(url):
+                self._fav.remove_favorite(url)
+                lbl.configure(text="☆", text_color="#555")
+            else:
+                self._fav.add_favorite(url)
+                lbl.configure(text="★", text_color=self._AMBER)
+                # Bounce animation
+                self._bounce_widget(lbl)
+
+        star.bind("<Button-1>", toggle_star)
 
         # Channel name
         name = ch.get('name', 'Unknown')
         ctk.CTkLabel(
             row, text=name, font=ctk.CTkFont(size=13),
-            text_color="white", anchor="w",
-        ).pack(side="left", fill="x", expand=True, padx=4)
+            text_color=self._TEXT, anchor="w",
+        ).pack(side="left", fill="x", expand=True, padx=6)
 
-        # Category badge
+        # Category pill
         cat = ch.get('category', '')
         if cat:
-            ctk.CTkLabel(
+            pill = ctk.CTkLabel(
                 row, text=cat, font=ctk.CTkFont(size=10),
-                text_color="#888", width=70, anchor="e",
-            ).pack(side="left", padx=4)
+                text_color=self._TEXT_SEC, fg_color=self._SURFACE,
+                corner_radius=10, width=60, height=20,
+            )
+            pill.pack(side="left", padx=4)
 
-        # Play button
+        # Play button with hover scale effect
         play_btn = ctk.CTkButton(
-            row, text="▶", width=36, height=28,
-            fg_color="#0078D4", hover_color="#106EBE",
-            font=ctk.CTkFont(size=14),
+            row, text="▶", width=40, height=32,
+            fg_color=self._ACCENT, hover_color=self._ACCENT_HOVER,
+            font=ctk.CTkFont(size=15), corner_radius=8,
             command=lambda c=ch, p=popup: self._play(c, p),
         )
-        play_btn.pack(side="right", padx=8)
+        play_btn.pack(side="right", padx=10)
 
-    def _toggle_fav(self, url: str, label):
-        if not self._fav:
-            return
-        if self._fav.is_favorite(url):
-            self._fav.remove_favorite(url)
-            label.configure(text="☆", text_color="#555")
-        else:
-            self._fav.add_favorite(url)
-            label.configure(text="★", text_color="#FFB900")
+        return row
+
+    def _bounce_widget(self, widget):
+        """Quick scale-bounce animation on a label."""
+        original_size = 18
+        sizes = [22, 20, 18]
+        def step(i=0):
+            if i >= len(sizes):
+                return
+            try:
+                widget.configure(font=ctk.CTkFont(size=sizes[i]))
+                widget.after(60, lambda: step(i + 1))
+            except tk.TclError:
+                pass
+        step()
 
     def _play(self, channel: dict, popup):
         popup.destroy()
