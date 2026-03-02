@@ -8,12 +8,14 @@ Usage:
     python scripts/analytics_dashboard.py --raw        # Raw recent events
 
 Requires SUPABASE_URL and SUPABASE_ANON_KEY environment variables.
+Auto-loads from .env file in project root if env vars are not set.
 """
 
 import os
 import sys
 import json
 import argparse
+from pathlib import Path
 from datetime import datetime, timedelta
 
 try:
@@ -21,6 +23,41 @@ try:
 except ImportError:
     print("ERROR: 'requests' package required. Run: pip install requests")
     sys.exit(1)
+
+
+def _load_env_file():
+    """Auto-load Supabase credentials from .env file if env vars are not set.
+
+    Looks for .env in the project root (parent of scripts/).
+    Only sets variables that are not already in the environment.
+    """
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                # Strip surrounding quotes
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                # Only set if not already in environment (env vars take precedence)
+                if key not in os.environ or not os.environ[key]:
+                    os.environ[key] = value
+    except Exception:
+        pass  # Silently ignore .env parse errors — fall through to env var check
+
+
+# Auto-load .env before reading credentials
+_load_env_file()
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
@@ -289,9 +326,17 @@ def main():
 
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("ERROR: Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.")
-        print("  Example:")
+        print()
+        print("  Option 1 — Run the setup script (creates .env automatically):")
+        print("    python scripts/supabase_setup.py")
+        print()
+        print("  Option 2 — Set environment variables manually:")
         print("    $env:SUPABASE_URL = 'https://your-project.supabase.co'")
         print("    $env:SUPABASE_ANON_KEY = 'your-anon-key'")
+        print()
+        print("  Option 3 — Create .env file in project root:")
+        print("    SUPABASE_URL=https://your-project.supabase.co")
+        print("    SUPABASE_ANON_KEY=your-anon-key")
         sys.exit(1)
 
     try:
