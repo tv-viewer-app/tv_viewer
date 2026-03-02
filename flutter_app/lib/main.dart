@@ -6,6 +6,7 @@ import 'providers/channel_provider.dart';
 import 'utils/logger_service.dart';
 import 'utils/error_handler.dart';
 import 'di/service_locator.dart';
+import 'services/analytics_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,13 +16,19 @@ void main() async {
   logger.info('TV Viewer app starting...');
   
   // Initialize dependency injection container
-  // This registers all services and repositories for the app.
-  // Wrapped in try-catch: app must still function if DI setup fails.
   try {
     await setupServiceLocator();
     logger.info('Dependency injection initialized');
   } catch (e, stackTrace) {
     logger.error('DI setup failed (non-fatal, using fallback)', e, stackTrace);
+  }
+  
+  // Initialize analytics (fail-safe — never blocks app startup)
+  try {
+    await analytics.initialize();
+    await analytics.trackAppLaunch();
+  } catch (e) {
+    logger.warning('Analytics init failed (non-fatal)', e);
   }
   
   // Wrap app in error zone to catch all errors
@@ -33,12 +40,14 @@ void main() async {
         details.exception,
         details.stack,
       );
+      analytics.trackCrash(details.exception, details.stack);
     };
     
     runApp(const TVViewerApp());
   }, (error, stackTrace) {
     // Catch async errors not caught by Flutter
     logger.error('Uncaught async error', error, stackTrace);
+    analytics.trackCrash(error, stackTrace);
   });
 }
 

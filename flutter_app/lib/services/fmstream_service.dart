@@ -22,7 +22,7 @@ class FMStreamService {
       final response = await http.get(
         Uri.parse(fmstreamDirectoryUrl),
         headers: {
-          'User-Agent': 'TV Viewer/2.0.1',
+          'User-Agent': 'TV Viewer/2.0.2',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       ).timeout(const Duration(seconds: 30));
@@ -712,7 +712,7 @@ class FMStreamService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.0.1'},
+        headers: {'User-Agent': 'TV Viewer/2.0.2'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||

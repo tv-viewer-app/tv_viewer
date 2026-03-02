@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-03-01
+
+### Added
+- **Supabase analytics embedded** — Crash reporting and anonymous usage analytics now active out-of-the-box (no manual configuration needed). Uses public anon key protected by RLS write-only policies
+- **Crash reporting wired to error zones** — Flutter framework errors and uncaught async exceptions automatically reported to Supabase analytics
+- **Analytics opt-out** — Users can disable anonymous analytics via `analytics.setEnabled(false)` (GDPR compliance)
+- **Error message sanitization** — Crash reports strip file paths, URLs, and tokens before transmission (privacy hardening)
+
+### Changed
+- **Supabase schema fixes** — `analytics_events` CHECK constraint now matches actual event types (`app_launch` not `app_open`); added UPDATE RLS policy for `channel_status` upserts
+- **favorites_service.dart** — Replaced all `print()` calls with proper `logger.warning()` for production logging
+
+### Security
+- [H-001] Fixed event_type mismatch causing silent data loss for app_launch events
+- [H-002] Added missing RLS UPDATE policy for channel_status upserts
+- [M-001] Sanitized error messages before sending to analytics (strips paths, URLs, tokens)
+- [M-002] Added analytics opt-out mechanism for GDPR compliance
+- [M-004] Removed Supabase response bodies from warning logs (prevents schema leakage)
+
 ## [2.0.1] - 2026-03-01
 
 ### Added

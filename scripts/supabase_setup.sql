@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS analytics_events (
 ALTER TABLE analytics_events
     ADD CONSTRAINT chk_event_type CHECK (
         event_type IN (
-            'app_open', 'channel_play', 'channel_fail',
+            'app_launch', 'channel_play', 'channel_fail',
             'app_crash', 'error', 'scan_complete', 'filter_used'
         )
     );
@@ -157,6 +157,14 @@ CREATE POLICY "anon_read_channel_status"
     FOR SELECT
     TO anon
     USING (true);
+
+-- channel_status: anon can UPDATE existing records (required for upsert)
+CREATE POLICY "anon_update_channel_status"
+    ON channel_status
+    FOR UPDATE
+    TO anon
+    USING (true)
+    WITH CHECK (true);
 
 -- channel_status: service_role can read everything (admin/dashboard)
 CREATE POLICY "service_read_channel_status"

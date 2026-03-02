@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/logger_service.dart';
 
 /// Service for managing channel favorites persistence
 /// Stores favorite channel URLs in SharedPreferences
@@ -16,7 +17,7 @@ class FavoritesService {
       }
       return {};
     } catch (e) {
-      print('Error loading favorites: $e');
+      logger.warning('Error loading favorites', e);
       return {};
     }
   }
@@ -27,7 +28,7 @@ class FavoritesService {
       final prefs = await SharedPreferences.getInstance();
       return await prefs.setStringList(_favoritesKey, favoriteUrls.toList());
     } catch (e) {
-      print('Error saving favorites: $e');
+      logger.warning('Error saving favorites', e);
       return false;
     }
   }
@@ -39,7 +40,7 @@ class FavoritesService {
       favorites.add(channelUrl);
       return await saveFavorites(favorites);
     } catch (e) {
-      print('Error adding favorite: $e');
+      logger.warning('Error adding favorite', e);
       return false;
     }
   }
@@ -51,7 +52,7 @@ class FavoritesService {
       favorites.remove(channelUrl);
       return await saveFavorites(favorites);
     } catch (e) {
-      print('Error removing favorite: $e');
+      logger.warning('Error removing favorite', e);
       return false;
     }
   }
@@ -62,7 +63,7 @@ class FavoritesService {
       final favorites = await loadFavorites();
       return favorites.contains(channelUrl);
     } catch (e) {
-      print('Error checking favorite: $e');
+      logger.warning('Error checking favorite', e);
       return false;
     }
   }
@@ -73,7 +74,7 @@ class FavoritesService {
       final prefs = await SharedPreferences.getInstance();
       return await prefs.remove(_favoritesKey);
     } catch (e) {
-      print('Error clearing favorites: $e');
+      logger.warning('Error clearing favorites', e);
       return false;
     }
   }

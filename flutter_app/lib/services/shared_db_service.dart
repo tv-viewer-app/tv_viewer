@@ -17,11 +17,14 @@ import '../utils/logger_service.dart';
 /// - last_checked (TIMESTAMP): Last validation timestamp
 /// - response_time_ms (INTEGER): Response time in milliseconds
 class SharedDbService {
-  // Supabase configuration — loaded from environment (SEC-003)
+  // Supabase configuration — compile-time env overrides hardcoded defaults
+  // The anon key is public and safe to embed (protected by RLS policies)
   static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const String.fromEnvironment('SUPABASE_URL',
+          defaultValue: 'https://cdtxpefohpwtusmqengu.supabase.co');
   static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      const String.fromEnvironment('SUPABASE_ANON_KEY',
+          defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo');
   static const String _tableName = 'channel_status';
   
   // Automatically enabled when environment variables are set

@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 
 # =============================================================================
 # File Paths
@@ -76,6 +76,14 @@ WINDOW_WIDTH = 1200
 WINDOW_HEIGHT = 700
 PLAYER_WIDTH = 800
 PLAYER_HEIGHT = 500
+
+# =============================================================================
+# Supabase Analytics & Shared DB (anon key — public, protected by RLS)
+# =============================================================================
+SUPABASE_URL = os.environ.get('SUPABASE_URL',
+    'https://cdtxpefohpwtusmqengu.supabase.co')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo')
 
 
 def load_external_config():

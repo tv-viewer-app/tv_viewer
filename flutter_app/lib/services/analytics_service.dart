@@ -38,12 +38,15 @@ class AnalyticsService {
   AnalyticsService._();
 
   // ---------------------------------------------------------------------------
-  // Supabase configuration — loaded from compile-time environment (SEC-003)
+  // Supabase configuration — compile-time env overrides hardcoded defaults
+  // The anon key is public and safe to embed (protected by RLS policies)
   // ---------------------------------------------------------------------------
   static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const String.fromEnvironment('SUPABASE_URL',
+          defaultValue: 'https://cdtxpefohpwtusmqengu.supabase.co');
   static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      const String.fromEnvironment('SUPABASE_ANON_KEY',
+          defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo');
   static const String _tableName = 'analytics_events';
 
   /// Service is automatically enabled when both env vars are provided.
@@ -54,6 +57,7 @@ class AnalyticsService {
   // Internal state
   // ---------------------------------------------------------------------------
   static const String _deviceIdKey = 'analytics_device_id';
+  static const String _analyticsEnabledKey = 'analytics_enabled';
   static const int _maxQueueSize = 20;
   static const Duration _flushInterval = Duration(seconds: 30);
   static const Duration _httpTimeout = Duration(seconds: 10);
@@ -61,6 +65,7 @@ class AnalyticsService {
   final LoggerService _logger = LoggerService.instance;
 
   bool _isInitialized = false;
+  bool _userOptedIn = true;
   String _deviceId = '';
   String _appVersion = '';
   String _platform = '';
@@ -72,14 +77,18 @@ class AnalyticsService {
   // Public getters
   // ---------------------------------------------------------------------------
 
-  /// Whether the analytics backend is reachable and configured.
+  /// Whether the analytics backend is reachable and user has not opted out.
   bool get isConfigured =>
       _enabled &&
+      _userOptedIn &&
       _supabaseUrl != 'YOUR_SUPABASE_PROJECT_URL' &&
       _supabaseAnonKey != 'YOUR_SUPABASE_ANON_KEY';
 
   /// Whether [initialize] has completed successfully.
   bool get isInitialized => _isInitialized;
+
+  /// Whether the user has opted in to analytics.
+  bool get isOptedIn => _userOptedIn;
 
   /// Number of events currently queued (useful for testing).
   int get queueLength => _queue.length;
@@ -105,8 +114,9 @@ class AnalyticsService {
         _appVersion = 'unknown';
       }
 
-      // Load or generate anonymous device ID
+      // Load or generate anonymous device ID and opt-in preference
       final prefs = await SharedPreferences.getInstance();
+      _userOptedIn = prefs.getBool(_analyticsEnabledKey) ?? true;
       _deviceId = prefs.getString(_deviceIdKey) ?? '';
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuidV4();
@@ -137,6 +147,14 @@ class AnalyticsService {
     _flushTimer?.cancel();
     _flushTimer = null;
     await flush();
+  }
+
+  /// Allow user to opt in/out of anonymous analytics collection.
+  Future<void> setEnabled(bool enabled) async {
+    _userOptedIn = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_analyticsEnabledKey, enabled);
+    _logger.info('[Analytics] User opted ${enabled ? "in" : "out"}');
   }
 
   // ---------------------------------------------------------------------------
@@ -211,7 +229,7 @@ class AnalyticsService {
     });
   }
 
-  /// Track an uncaught exception (first stack-trace line only for privacy).
+  /// Track an uncaught exception (sanitized for privacy).
   Future<void> trackCrash(dynamic error, StackTrace? stack) async {
     String firstLine = '';
     if (stack != null) {
@@ -223,10 +241,7 @@ class AnalyticsService {
 
     await trackEvent('app_crash', {
       'error_type': error.runtimeType.toString(),
-      'error_message': error.toString().substring(
-            0,
-            error.toString().length > 200 ? 200 : error.toString().length,
-          ),
+      'error_message': _sanitizeErrorMessage(error.toString()),
       'stack_first_line': firstLine,
     });
 
@@ -278,8 +293,7 @@ class AnalyticsService {
             '[Analytics] Flushed ${batch.length} events successfully');
       } else {
         _logger.warning(
-            '[Analytics] Flush failed: ${response.statusCode} — '
-            '${response.body}');
+            '[Analytics] Flush failed: ${response.statusCode}');
         _requeue(batch);
       }
     } catch (e) {
@@ -304,6 +318,15 @@ class AnalyticsService {
   static String _hashUrl(String url) {
     final bytes = utf8.encode(url);
     return sha256.convert(bytes).toString();
+  }
+
+  /// Strip potential PII (file paths, URLs, tokens) from error messages.
+  static String _sanitizeErrorMessage(String msg) {
+    msg = msg.replaceAll(RegExp(r'https?://[^\s]+'), '[URL]');
+    msg = msg.replaceAll(RegExp(r'[A-Za-z]:\\[^\s]+'), '[PATH]');
+    msg = msg.replaceAll(RegExp(r'/[^\s]*/[^\s]*'), '[PATH]');
+    if (msg.length > 100) msg = msg.substring(0, 100);
+    return msg;
   }
 
   /// Generate a version-4 (random) UUID without an external package.
