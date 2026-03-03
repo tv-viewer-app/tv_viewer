@@ -536,6 +536,12 @@ class MainWindow:
         self.channel_tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.channel_scrollbar.config(command=self.channel_tree.yview)
         
+        # Fast mouse-wheel scrolling (5 lines per tick instead of default 1)
+        def _fast_scroll(event):
+            self.channel_tree.yview_scroll(int(-5 * (event.delta / 120)), "units")
+            return "break"
+        self.channel_tree.bind("<MouseWheel>", _fast_scroll)
+        
         # Configure fav column (star) — fixed narrow width
         self.channel_tree.heading('fav', text='★', command=lambda: self._sort_by_column('fav'))
         self.channel_tree.column('fav', width=40, minwidth=40, anchor='center', stretch=False)
@@ -1466,9 +1472,9 @@ class MainWindow:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # Enable mouse-wheel scrolling
+        # Enable mouse-wheel scrolling (5x faster than default)
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            canvas.yview_scroll(int(-5 * (event.delta / 120)), "units")
 
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
