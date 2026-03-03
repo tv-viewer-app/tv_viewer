@@ -83,7 +83,8 @@ ENABLED: bool = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 MAX_QUEUE_SIZE: int = 20
 
 # Persistent file that stores the anonymous device UUID.
-_DEVICE_ID_PATH: Path = Path.home() / ".tv_viewer_analytics_id"
+# Shared with telemetry.py to avoid creating phantom duplicate devices.
+_DEVICE_ID_PATH: Path = Path.home() / ".tv_viewer_device_id"
 
 # App version — resolved once at import time.
 try:
@@ -93,6 +94,21 @@ except Exception:
     _APP_VERSION = "unknown"
 
 _PLATFORM: str = "windows" if sys.platform == "win32" else platform.system().lower()
+
+
+def _get_country() -> str:
+    """Get country from system locale (no IP geolocation)."""
+    import locale as _locale
+    try:
+        loc = _locale.getlocale()
+        if loc and loc[0] and '_' in loc[0]:
+            return loc[0].split('_')[1].upper()
+    except Exception:
+        pass
+    return 'XX'
+
+
+_COUNTRY: str = _get_country()
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +226,7 @@ class AnalyticsService:
                 "event_data": data or {},
                 "app_version": _APP_VERSION,
                 "platform": _PLATFORM,
+                "country": _COUNTRY,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             self._queue.append(event)

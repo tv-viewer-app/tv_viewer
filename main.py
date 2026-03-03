@@ -176,8 +176,12 @@ def main():
     try:
         import asyncio
         from utils.analytics import analytics
-        asyncio.get_event_loop().run_until_complete(analytics.initialize())
-        asyncio.get_event_loop().run_until_complete(analytics.track_app_launch())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(analytics.initialize())
+            loop.run_until_complete(analytics.track_app_launch())
+        finally:
+            loop.close()
         print("Analytics initialized")
     except Exception as e:
         print(f"Warning: Analytics init skipped: {e}")
@@ -198,7 +202,13 @@ def main():
         try:
             import asyncio
             from utils.analytics import analytics
-            asyncio.get_event_loop().run_until_complete(analytics.flush())
+            # Create a fresh event loop for shutdown — the main loop may already
+            # be closed by the time atexit handlers fire.
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(analytics.flush())
+            finally:
+                loop.close()
         except Exception:
             pass
         cleanup_temp_files()

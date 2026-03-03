@@ -333,5 +333,183 @@ class TestAsyncOperations:
         assert 'last_scanned' in result
 
 
+# ---------------------------------------------------------------------------
+# Supabase data contract tests — catch serialization and schema mismatches
+# ---------------------------------------------------------------------------
+
+class TestSupabaseContracts:
+    """Ensure telemetry/analytics payloads match the Supabase schema.
+
+    These tests prevent regressions like double-serialized event_data
+    (stored as JSON string instead of JSONB object) and missing required
+    columns (country, device_id).
+    """
+
+    # Required top-level columns in analytics_events table
+    REQUIRED_COLUMNS = {'device_id', 'event_type', 'event_data', 'app_version', 'platform'}
+
+    def test_telemetry_event_data_is_dict_not_string(self):
+        """event_data must be a dict, not json.dumps'd string (BUG-001 regression)."""
+        from utils.telemetry import _send_event
+        from unittest.mock import AsyncMock, patch, MagicMock
+
+        captured = {}
+
+        mock_resp = AsyncMock()
+        mock_resp.status = 201
+
+        async def _run():
+            mock_session = AsyncMock()
+            # session.post() returns an async context manager
+            cm = AsyncMock()
+            cm.__aenter__ = AsyncMock(return_value=mock_resp)
+            cm.__aexit__ = AsyncMock(return_value=False)
+
+            def fake_post(url, json=None, headers=None, timeout=None):
+                captured['payload'] = json
+                return cm
+
+            mock_session.post = fake_post
+            mock_session_cls = MagicMock()
+            mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            with patch('aiohttp.ClientSession', mock_session_cls):
+                await _send_event('test_event', {'key': 'value'})
+
+        asyncio.run(_run())
+
+        assert 'payload' in captured, "No POST was made"
+        ed = captured['payload']['event_data']
+        assert isinstance(ed, dict), f"event_data is {type(ed).__name__}, expected dict (double-serialization bug)"
+        assert ed.get('key') == 'value'
+
+    def test_analytics_event_has_country(self):
+        """analytics.py must include country field (BUG-003 regression)."""
+        from utils.analytics import AnalyticsService, _COUNTRY
+
+        svc = AnalyticsService.__new__(AnalyticsService)
+        svc._initialized = True
+        svc._device_id = 'test'
+        svc._queue = []
+
+        asyncio.run(svc.track_event('test', {'x': 1}))
+
+        assert len(svc._queue) == 1
+        evt = svc._queue[0]
+        assert 'country' in evt, "analytics event missing 'country' column"
+        assert evt['country'] != '', "country should not be empty"
+
+    def test_analytics_event_has_required_columns(self):
+        """Every analytics event must have all columns required by the SQL schema."""
+        from utils.analytics import AnalyticsService
+
+        svc = AnalyticsService.__new__(AnalyticsService)
+        svc._initialized = True
+        svc._device_id = 'test-device'
+        svc._queue = []
+
+        asyncio.run(svc.track_event('app_launch', {'os': 'windows'}))
+
+        evt = svc._queue[0]
+        for col in self.REQUIRED_COLUMNS:
+            assert col in evt, f"analytics event missing required column '{col}'"
+        assert isinstance(evt['event_data'], dict), "event_data must be a dict"
+
+    def test_analytics_uses_shared_device_id_path(self):
+        """analytics.py and telemetry.py must use the same device ID file."""
+        from utils.analytics import _DEVICE_ID_PATH
+        from utils.telemetry import _DEVICE_ID_FILE
+        from pathlib import Path
+
+        assert str(_DEVICE_ID_PATH) == _DEVICE_ID_FILE, (
+            f"Device ID file mismatch: analytics={_DEVICE_ID_PATH}, telemetry={_DEVICE_ID_FILE}"
+        )
+
+    def test_telemetry_hash_is_full_sha256(self):
+        """URL hashes must be full 64-char SHA256 (not truncated)."""
+        from utils.telemetry import _hash
+        h = _hash('http://example.com/stream.m3u8')
+        assert len(h) == 64, f"Hash is {len(h)} chars, expected 64 (full SHA256)"
+
+    def test_supabase_channels_urls_not_double_serialized(self):
+        """contribute_channels must send urls as a list, not json.dumps'd string."""
+        from utils.supabase_channels import contribute_channels
+        from unittest.mock import AsyncMock, patch, MagicMock
+
+        captured = {}
+
+        mock_resp = AsyncMock()
+        mock_resp.status = 201
+
+        async def _run():
+            mock_session = AsyncMock()
+            cm = AsyncMock()
+            cm.__aenter__ = AsyncMock(return_value=mock_resp)
+            cm.__aexit__ = AsyncMock(return_value=False)
+
+            def fake_post(url, json=None, headers=None, timeout=None):
+                captured['payload'] = json
+                return cm
+
+            mock_session.post = fake_post
+            mock_session_cls = MagicMock()
+            mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            with patch('aiohttp.ClientSession', mock_session_cls):
+                with patch('utils.supabase_channels.is_configured', return_value=True):
+                    await contribute_channels([{
+                        'url': 'http://a.example.com/stream.m3u8',
+                        'urls': ['http://a.example.com/stream.m3u8'],
+                        'name': 'Test',
+                    }])
+
+        asyncio.run(_run())
+
+        assert 'payload' in captured, "No POST was made"
+        urls_val = captured['payload'][0]['urls']
+        assert isinstance(urls_val, list), f"urls is {type(urls_val).__name__}, expected list (double-serialization bug)"
+
+    def test_app_start_event_keys_match_view(self):
+        """app_launch event_data keys must match mv_client_platforms view columns."""
+        from utils.analytics import AnalyticsService
+
+        svc = AnalyticsService.__new__(AnalyticsService)
+        svc._initialized = True
+        svc._device_id = 'test'
+        svc._queue = []
+
+        asyncio.run(svc.track_app_launch())
+
+        evt = svc._queue[0]
+        ed = evt['event_data']
+        # mv_client_platforms queries event_data->>'os' and ->>'os_version'
+        # At minimum, platform_os must be present
+        assert 'platform_os' in ed or 'os' in ed, "app_launch must include platform_os or os"
+
+    def test_session_end_event_has_required_keys(self):
+        """session_end event_data must include keys that mv_engagement queries."""
+        from utils.analytics import AnalyticsService
+
+        svc = AnalyticsService.__new__(AnalyticsService)
+        svc._initialized = True
+        svc._device_id = 'test'
+        svc._queue = []
+
+        # Don't actually flush
+        async def noop(): pass
+        svc.flush = noop
+
+        asyncio.run(svc.track_session_end(
+            session_duration_s=120, channels_played=5, channels_failed=2
+        ))
+
+        evt = svc._queue[0]
+        ed = evt['event_data']
+        assert 'session_duration_s' in ed
+        assert 'channels_played' in ed
+        assert 'channels_failed' in ed
+        assert ed['session_duration_s'] == 120
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

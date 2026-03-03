@@ -20,7 +20,7 @@ from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
 from .map_window import MapWindow
 from .constants import FluentColorsDark as FluentColors, FluentSpacing, FluentTypography
-from utils.telemetry import track_app_start, track_channel_play, track_feature, track_scan_complete
+from utils.telemetry import track_channel_play, track_feature, track_scan_complete
 import config
 
 # Get logger for this module
@@ -96,6 +96,12 @@ class MainWindow:
         self.scan_failed_count = 0
         self.scan_total_count = 0
         self._scan_running = False
+        
+        # Session analytics counters
+        import time
+        self._app_start_time = time.time()
+        self._channels_played_count = 0
+        self._channels_failed_count = 0
         
         # Thumbnail images cache (with size limit)
         self._thumbnail_images = {}
@@ -1061,10 +1067,13 @@ class MainWindow:
         url = channel.get('url', '')
         if url:
             self.favorites_manager.toggle_favorite(url)
-            new_star = '★' if self.favorites_manager.is_favorite(url) else ''
+            is_fav = self.favorites_manager.is_favorite(url)
+            new_star = '★' if is_fav else ''
             values = list(item['values'])
             values[0] = new_star
             self.channel_tree.item(row_id, values=values)
+            # Track favorite event
+            track_feature(f"favorite_{'add' if is_fav else 'remove'}")
     
     def _on_tree_right_click(self, event):
         """Handle right-click context menu on treeview."""
@@ -1108,11 +1117,13 @@ class MainWindow:
     def _toggle_favorite_from_menu(self, url: str, row_id: str):
         """Toggle favorite from context menu and update the row in-place."""
         self.favorites_manager.toggle_favorite(url)
-        new_star = '★' if self.favorites_manager.is_favorite(url) else ''
+        is_fav = self.favorites_manager.is_favorite(url)
+        new_star = '★' if is_fav else ''
         item = self.channel_tree.item(row_id)
         values = list(item['values'])
         values[0] = new_star
         self.channel_tree.item(row_id, values=values)
+        track_feature(f"favorite_{'add' if is_fav else 'remove'}")
 
     def _show_channel_info(self, channel_name: str, description: str):
         """Show channel description in an info messagebox."""
@@ -1155,6 +1166,7 @@ class MainWindow:
     def _play_channel(self, channel: Dict[str, Any], channel_index: Optional[int] = None):
         """Open player for channel. Boosts scan priority for channel's country."""
         track_channel_play(channel)
+        self._channels_played_count += 1
         # Boost scan priority for this channel's country and URL
         country = channel.get('country', '')
         url = channel.get('url', '')
@@ -1958,7 +1970,8 @@ class MainWindow:
         """Initialize on startup."""
         self._set_status("Loading cached channels...")
         self.scan_label.configure(text="Loading...")
-        track_app_start()
+        # Note: app_launch event already tracked by analytics in main.py
+        # track_app_start() from telemetry.py removed to avoid duplicate events
         
         has_cache = self.channel_manager.load_cached_channels()
         if has_cache:
@@ -1993,6 +2006,24 @@ class MainWindow:
             self.root.after_cancel(self._scan_poll_timer)
         if hasattr(self, '_search_timer') and self._search_timer:
             self.root.after_cancel(self._search_timer)
+        
+        # Track session end and flush analytics before shutdown
+        try:
+            import asyncio, time
+            from utils.analytics import analytics
+            duration = int(time.time() - self._app_start_time) if hasattr(self, '_app_start_time') else 0
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(analytics.track_session_end(
+                    session_duration_s=duration,
+                    channels_played=getattr(self, '_channels_played_count', 0),
+                    channels_failed=getattr(self, '_channels_failed_count', 0),
+                ))
+                loop.run_until_complete(analytics.flush())
+            finally:
+                loop.close()
+        except Exception:
+            pass
         
         self.channel_manager.stop()
         

@@ -22,7 +22,6 @@ Supabase table: analytics_events
 
 import asyncio
 import hashlib
-import json
 import locale
 import logging
 import os
@@ -54,7 +53,7 @@ except (ImportError, AttributeError):
 _TABLE = 'analytics_events'
 _PLATFORM = 'windows' if sys.platform == 'win32' else sys.platform
 _DEVICE_ID_FILE = os.path.join(
-    os.path.expanduser('~'), '.tv_viewer_device_id'
+    os.path.expanduser('~'), '.tv_viewer_device_id'  # Shared with analytics.py
 )
 
 # Rate limiting: max events per type per session
@@ -92,7 +91,7 @@ def _get_country() -> str:
 
 def _hash(value: str) -> str:
     """SHA256 hash for deduplication without exposing raw values."""
-    return hashlib.sha256(value.encode('utf-8')).hexdigest()[:16]
+    return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
 _DEVICE_ID = _get_device_id()
@@ -117,7 +116,7 @@ async def _send_event(event_type: str, event_data: Dict[str, Any]):
 
     payload = {
         'event_type': event_type,
-        'event_data': json.dumps(event_data),
+        'event_data': event_data,  # Pass dict directly; aiohttp json= handles serialization
         'app_version': _APP_VERSION,
         'platform': _PLATFORM,
         'device_id': _DEVICE_ID,
@@ -146,6 +145,11 @@ async def _send_event(event_type: str, event_data: Dict[str, Any]):
 def track(event_type: str, event_data: Optional[Dict[str, Any]] = None):
     """Fire-and-forget telemetry event (non-blocking, thread-safe).
 
+    NOTE: Each call spawns a new thread + event loop + HTTP session.
+    This is acceptable for low-frequency events (app_start, scan_complete)
+    but wasteful for high-frequency ones. For batched delivery, prefer
+    utils.analytics.AnalyticsService instead.
+
     Args:
         event_type: One of: app_start, channel_play, channel_fail,
                     feature_use, scan_start, scan_complete
@@ -159,8 +163,10 @@ def track(event_type: str, event_data: Optional[Dict[str, Any]] = None):
     def _fire():
         try:
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(_send_event(event_type, data))
-            loop.close()
+            try:
+                loop.run_until_complete(_send_event(event_type, data))
+            finally:
+                loop.close()
         except Exception:
             pass
 

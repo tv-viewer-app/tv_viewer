@@ -129,3 +129,11 @@ class RepositoryHandler:
         
         logger.debug(f"Total unique channels fetched: {len(all_channels)}")
         return all_channels
+
+    async def fetch_single_repository(self, url: str) -> List[Dict[str, Any]]:
+        """Fetch channels from a single M3U URL (for custom imports)."""
+        try:
+            channels = await self.fetch_repository(url)
+            return channels
+        finally:
+            await self.close()

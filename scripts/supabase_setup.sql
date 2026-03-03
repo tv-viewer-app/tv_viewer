@@ -97,11 +97,40 @@ CREATE INDEX idx_cs_status  ON channel_status (status);
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  TABLE 3: channels — Crowdsourced channel repository                    ║
+-- ║  Full channel data shared across all clients. Clients pull this first,  ║
+-- ║  then supplement with M3U sources. New channels are contributed back.   ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
+
+DROP TABLE IF EXISTS channels CASCADE;
+
+CREATE TABLE channels (
+    url_hash      text         PRIMARY KEY,       -- SHA256 of primary URL
+    name          text         NOT NULL,
+    urls          jsonb        DEFAULT '[]',       -- Array of stream URLs
+    category      text         DEFAULT 'Other',
+    country       text         DEFAULT 'Unknown',
+    logo          text,
+    media_type    text,                            -- 'TV' or 'Radio'
+    source        text         DEFAULT 'iptv-org', -- 'iptv-org', 'user', 'custom_m3u'
+    report_count  integer      DEFAULT 1,          -- How many devices contributed this
+    created_at    timestamptz  DEFAULT now(),
+    updated_at    timestamptz  DEFAULT now()
+);
+
+CREATE INDEX idx_ch_country  ON channels (country);
+CREATE INDEX idx_ch_category ON channels (category);
+CREATE INDEX idx_ch_updated  ON channels (updated_at DESC);
+CREATE INDEX idx_ch_source   ON channels (source);
+
+
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  ROW LEVEL SECURITY — Who can do what                                   ║
 -- ╚═══════════════════════════════════════════════════════════════════════════╝
 
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE channel_status   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE channels         ENABLE ROW LEVEL SECURITY;
 
 -- analytics_events: anon INSERT only (write-only telemetry)
 CREATE POLICY "ae_anon_insert"   ON analytics_events FOR INSERT TO anon WITH CHECK (true);
@@ -113,6 +142,12 @@ CREATE POLICY "cs_anon_select"   ON channel_status FOR SELECT TO anon USING (tru
 CREATE POLICY "cs_anon_update"   ON channel_status FOR UPDATE TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "cs_service_read"  ON channel_status FOR SELECT TO service_role USING (true);
 
+-- channels: anon read + write (crowdsourced channel repository)
+CREATE POLICY "ch_anon_insert"   ON channels FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "ch_anon_select"   ON channels FOR SELECT TO anon USING (true);
+CREATE POLICY "ch_anon_update"   ON channels FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "ch_service_all"   ON channels FOR ALL TO service_role USING (true);
+
 
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  RATE LIMITING — Prevent channel_status poisoning                       ║
@@ -122,19 +157,23 @@ CREATE POLICY "cs_service_read"  ON channel_status FOR SELECT TO service_role US
 CREATE OR REPLACE FUNCTION check_channel_status_rate()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF EXISTS (
+    -- Rate-limit rapid-fire INSERTs to the same url_hash within 1 minute.
+    -- When rate-limited, the trigger performs its own UPDATE (with the new
+    -- status/timestamp) and returns NULL to skip the INSERT.  This means
+    -- PostgREST's ON CONFLICT clause never fires, but the data is still
+    -- written correctly via the trigger's UPDATE.
+    IF TG_OP = 'INSERT' AND EXISTS (
         SELECT 1 FROM channel_status
         WHERE url_hash = NEW.url_hash
           AND last_checked > now() - INTERVAL '1 minute'
     ) THEN
-        -- Silently accept but increment report_count instead of duplicating
         UPDATE channel_status
         SET report_count = report_count + 1,
             last_checked = now(),
             status = NEW.status,
             response_time_ms = COALESCE(NEW.response_time_ms, response_time_ms)
         WHERE url_hash = NEW.url_hash;
-        RETURN NULL;  -- Skip the original INSERT/UPDATE
+        RETURN NULL;  -- Skip the INSERT; data already written above
     END IF;
     RETURN NEW;
 END;

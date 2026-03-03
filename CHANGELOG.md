@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.6] - 2026-03-03
+
+### Fixed
+- **Supabase data pipeline (CRITICAL)** — Four root causes prevented ANY data from reaching Supabase:
+  1. `analytics_events` RLS policy blocked anonymous INSERT — fixed by re-running updated SQL schema
+  2. `analytics.py` was missing `country` field — all events had `country='XX'`, breaking geographic analytics
+  3. Two separate device ID files (`.tv_viewer_device_id` and `.tv_viewer_analytics_id`) made one device appear as two — consolidated to single shared file
+  4. `telemetry.py` URL hash truncated to 16 chars vs 64 in `analytics.py` — now full SHA256 everywhere
+- **`channels` table created in Supabase** — crowdsourced channel repository now operational. Clients fetch channel list from Supabase first, then supplement with M3U sources. New channels contributed back.
+- **`supabase_channels.py` urls double-serialization** — `urls` JSONB column was stored as escaped string instead of array. Fixed to pass native list to PostgREST.
+- **Session analytics never tracked** — `_on_close()` now calls `track_session_end()` with duration, channels played/failed, and flushes analytics before shutdown
+- **Favorite events not wired up** — `_do_toggle_fav()` and `_toggle_favorite_from_menu()` now emit `favorite_add`/`favorite_remove` telemetry events
+
+### Added
+- **Supabase-first channel architecture** — App pulls channel list from Supabase `channels` table on startup (fast, pre-consolidated), then fetches M3U repos in parallel. New M3U channels are contributed back to Supabase for crowdsourcing.
+- **`utils/supabase_channels.py`** — New service: `fetch_channels()`, `contribute_channels()`, `diff_channels()` with paginated fetch, batch upsert, and graceful fallback.
+- **8 Supabase contract tests** — Regression tests that catch serialization bugs (double-JSON, missing columns, schema drift) before they reach production. Tests for: event_data format, country field, device ID consistency, URL hash length, urls serialization, event key alignment.
+- **Session analytics counters** — `_app_start_time`, `_channels_played_count`, `_channels_failed_count` tracked throughout session for accurate `session_end` events.
+
+### Changed
+- `channel_manager._fetch_and_update()` rewritten for Supabase-first flow with M3U fallback
+- `analytics.py` now uses same device ID file as `telemetry.py` (`.tv_viewer_device_id`)
+- `telemetry.py` URL hash uses full 64-char SHA256 (was truncated to 16)
+- Test suite expanded from 23 to 31 tests
+
 ## [2.1.5] - 2026-03-04
 
 ### Fixed

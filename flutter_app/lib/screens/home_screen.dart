@@ -570,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '2.1.5',
+      applicationVersion: '2.1.6',
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

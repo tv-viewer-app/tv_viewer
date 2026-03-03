@@ -26,6 +26,7 @@ from collections import defaultdict
 
 from utils.helpers import load_json_file, save_json_file, categorize_channel, get_channel_country, get_minimum_age, detect_media_type
 from utils.logger import get_logger
+from utils import supabase_channels
 from .repository import RepositoryHandler
 from .stream_checker import StreamChecker
 import config
@@ -778,48 +779,76 @@ class ChannelManager:
             self.media_type_filter = media_type
     
     async def _fetch_and_update(self):
-        """Fetch channels from repositories and update the list."""
+        """Fetch channels: Supabase first, then M3U repos, contribute back new ones."""
         logger.debug("_fetch_and_update starting...")
         
         def progress(current, total):
             if self.on_fetch_progress:
                 self.on_fetch_progress(current, total)
         
+        supabase_chs: List[Dict[str, Any]] = []
+        m3u_chs: List[Dict[str, Any]] = []
+        
+        # Step 1: Try Supabase first (fast, pre-consolidated)
         try:
-            channels = await self.repository_handler.fetch_all_repositories(progress)
-            logger.debug(f"Repository fetch complete, got {len(channels)} channels")
+            supabase_chs = await supabase_channels.fetch_channels()
+            if supabase_chs:
+                logger.info(f"Pulled {len(supabase_chs)} channels from Supabase")
         except Exception as e:
-            logger.error(f"Error fetching repositories: {e}")
-            
+            logger.warning(f"Supabase fetch failed, falling back to M3U: {e}")
+        
+        # Step 2: Fetch from M3U repositories (always, to find new channels)
+        try:
+            m3u_chs = await self.repository_handler.fetch_all_repositories(progress)
+            logger.debug(f"M3U fetch complete, got {len(m3u_chs)} channels")
+        except Exception as e:
+            logger.error(f"Error fetching M3U repositories: {e}")
+        
+        # If both failed, nothing to do
+        if not supabase_chs and not m3u_chs:
+            logger.warning("No channels from Supabase or M3U")
             return
         
         try:
             with self._lock:
-                # Merge with existing, keeping status for known URLs
                 existing_urls = {ch['url']: ch for ch in self.channels}
-                
                 merged_channels = []
-                seen_urls = set()
+                seen_urls: Set[str] = set()
                 
-                for channel in channels:
+                # Priority 1: Supabase channels (pre-consolidated, trusted)
+                for ch in supabase_chs:
+                    url = ch.get('url', '')
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    # Also mark all alternate URLs as seen
+                    for u in ch.get('urls', []):
+                        seen_urls.add(u)
+                    # Preserve local working status if available
+                    if url in existing_urls:
+                        ex = existing_urls[url]
+                        ch['is_working'] = ex.get('is_working')
+                        ch['scan_status'] = ex.get('scan_status', 'pending')
+                    else:
+                        ch['scan_status'] = 'pending'
+                    merged_channels.append(ch)
+                
+                # Priority 2: M3U channels (supplement)
+                for channel in m3u_chs:
                     url = channel.get('url', '')
                     if not url or url in seen_urls:
                         continue
                     seen_urls.add(url)
-                    
                     if url in existing_urls:
-                        # Keep existing channel data (working status, scan status)
                         existing = existing_urls[url]
                         channel['is_working'] = existing.get('is_working')
                         channel['scan_status'] = existing.get('scan_status', 'pending')
                         channel['min_age'] = existing.get('min_age')
                     else:
-                        # New channel - mark as pending
                         channel['scan_status'] = 'pending'
-                    
                     merged_channels.append(channel)
                 
-                # Also keep any cached channels that weren't in the new fetch
+                # Priority 3: Cached channels not in either source
                 for url, existing in existing_urls.items():
                     if url not in seen_urls:
                         merged_channels.append(existing)
@@ -830,7 +859,6 @@ class ChannelManager:
                     for custom in config.CUSTOM_CHANNELS:
                         url = custom.get('url', '')
                         if url and url not in seen_urls:
-                            # Copy to avoid mutating config
                             channel = custom.copy()
                             if url in existing_urls:
                                 existing = existing_urls[url]
@@ -840,7 +868,6 @@ class ChannelManager:
                                 channel['scan_status'] = 'pending'
                             merged_channels.append(channel)
                             seen_urls.add(url)
-                            logger.debug(f"Added custom channel: {channel.get('name')}")
                 
                 self.channels = merged_channels
                 logger.debug(f"Merged channels: {len(self.channels)}")
@@ -848,11 +875,22 @@ class ChannelManager:
                 logger.debug("Channels organized")
         except Exception as e:
             logger.debug(f"Error merging channels: {e}")
-            
             return
         
+        # Step 3: Contribute new M3U channels back to Supabase (background)
+        if m3u_chs and supabase_channels.is_configured():
+            try:
+                new_chs = supabase_channels.diff_channels(supabase_chs, m3u_chs)
+                if new_chs:
+                    contributed = await supabase_channels.contribute_channels(
+                        new_chs, source='iptv-org'
+                    )
+                    logger.info(f"Contributed {contributed} new channels to Supabase")
+            except Exception as e:
+                logger.debug(f"Channel contribution failed (non-blocking): {e}")
+        
         if self.on_channels_loaded:
-            self.on_channels_loaded(len(channels))
+            self.on_channels_loaded(len(self.channels))
         logger.debug("_fetch_and_update complete")
     
     def fetch_channels_async(self, callback: Optional[Callable] = None):
@@ -885,6 +923,70 @@ class ChannelManager:
         
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
+    
+    def import_m3u_async(self, m3u_url: str,
+                         on_done: Optional[Callable[[int], None]] = None):
+        """Import channels from a custom M3U URL, merge, and contribute to Supabase.
+
+        Args:
+            m3u_url: URL to an M3U playlist
+            on_done: Callback with count of new channels added
+        """
+        import asyncio
+
+        async def _import():
+            try:
+                # Fetch and parse the M3U
+                new_channels = await self.repository_handler.fetch_single_repository(
+                    m3u_url
+                )
+                if not new_channels:
+                    logger.warning(f"No channels found in M3U: {m3u_url}")
+                    return 0
+
+                logger.info(f"Parsed {len(new_channels)} channels from custom M3U")
+
+                with self._lock:
+                    existing_urls = {ch.get('url', ''): ch for ch in self.channels}
+                    added = 0
+                    for ch in new_channels:
+                        url = ch.get('url', '')
+                        if not url or url in existing_urls:
+                            continue
+                        ch['scan_status'] = 'pending'
+                        ch['source'] = 'custom_m3u'
+                        self.channels.append(ch)
+                        existing_urls[url] = ch
+                        added += 1
+
+                    if added:
+                        self._organize_channels()
+                        self.save_channels()
+                        logger.info(f"Added {added} new channels from custom M3U")
+
+                # Contribute to Supabase
+                if added and supabase_channels.is_configured():
+                    await supabase_channels.contribute_channels(
+                        new_channels, source='custom_m3u'
+                    )
+
+                return added
+            except Exception as e:
+                logger.error(f"Custom M3U import failed: {e}")
+                return 0
+
+        def _run():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                count = loop.run_until_complete(_import())
+                loop.close()
+            except Exception:
+                count = 0
+            if on_done:
+                on_done(count)
+
+        threading.Thread(target=_run, daemon=True).start()
     
     def validate_channels_async(self, rescan_all: bool = False):
         """Start validating channels in the background."""

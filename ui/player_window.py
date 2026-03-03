@@ -673,14 +673,14 @@ class PlayerWindow(tk.Toplevel):
             from utils.analytics import analytics
             import asyncio
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(analytics.track_channel_health(
-                url=url,
-                is_working=is_working,
-                channel_name='',
-                error_message=error,
-            ))
-            loop.close()
-            asyncio.set_event_loop(None)
+            try:
+                loop.run_until_complete(analytics.track_channel_health(
+                    url=url,
+                    is_working=is_working,
+                    error_message=error,
+                ))
+            finally:
+                loop.close()
         except Exception:
             pass  # Don't let analytics errors affect playback
     

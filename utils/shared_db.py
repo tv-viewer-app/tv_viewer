@@ -37,7 +37,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, NamedTuple
 from dataclasses import dataclass, asdict
 
@@ -171,7 +171,7 @@ class SharedDbService:
             
             # Calculate timestamp for 24 hours ago
             cutoff_time = (
-                datetime.utcnow() - timedelta(hours=CACHE_DURATION_HOURS)
+                datetime.now(timezone.utc) - timedelta(hours=CACHE_DURATION_HOURS)
             ).isoformat()
             
             # Build query URL
@@ -308,7 +308,7 @@ class SharedDbService:
                 payload.append({
                     'url_hash': self._hash_url(ch_url),
                     'status': 'working' if ch.get('is_working', False) else 'failed',
-                    'last_checked': datetime.utcnow().isoformat(),
+                    'last_checked': datetime.now(timezone.utc).isoformat(),
                     'response_time_ms': None,
                 })
         if not payload:
@@ -378,7 +378,7 @@ class SharedDbService:
             return False
         
         # Only skip if it's working and recently checked
-        age = datetime.utcnow() - cached.last_checked
+        age = datetime.now(timezone.utc) - cached.last_checked
         return cached.status and age < timedelta(hours=CACHE_DURATION_HOURS)
 
 
@@ -404,13 +404,13 @@ if __name__ == '__main__':
             ChannelResult(
                 url='http://example.com/stream1.m3u8',
                 is_working=True,
-                last_checked=datetime.utcnow(),
+                last_checked=datetime.now(timezone.utc),
                 response_time_ms=150,
             ),
             ChannelResult(
                 url='http://example.com/stream2.m3u8',
                 is_working=False,
-                last_checked=datetime.utcnow(),
+                last_checked=datetime.now(timezone.utc),
             ),
         ]
         
