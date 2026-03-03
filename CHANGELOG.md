@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-03-04
+
+### Added
+- **Usage telemetry** — anonymous, privacy-first telemetry to Supabase: tracks app launches, channel plays/failures, feature usage, and scan completions. No channel names or URLs sent (only hashed). Random device UUID, country from locale, rate-limited (max 500 events/type/session). Fire-and-forget — never blocks UI
+- **Flutter analytics wiring** — trackChannelPlay, trackChannelFail, trackFeature('map_open') wired into home_screen, player_screen, and map_screen
+- **SSRF protection** — stream URL validation now blocks private/loopback/link-local/reserved IP addresses via `ipaddress` module
+
+### Fixed
+- **Supabase always-on** — shared_db.py now imports URL/key from config.py instead of empty env vars. Crowd-sourced health sharing actually works for all clients now
+- **Event loop leaks** — fixed asyncio event loops not closed in player_window.py and channel_manager.py
+- **Map pause safety** — scanning resumes on map close even if init fails (try/finally)
+- **FMStream HTTPS** — default URL changed from http to https
+- **Channel name privacy** — removed channel_name from analytics payloads in health reporting
+
+### Changed
+- **Scan 6x faster** — MAX_CONCURRENT_CHECKS 10→30, SCAN_REQUEST_DELAY 0.1→0.005 (was adding 30min of pure sleep for 18K channels)
+- **TCP connection reuse** — aiohttp force_close=False with keepalive_timeout=30 enables 2-3x speedup for CDN hosts
+- **Always share results** — removed "Share scan results" toggle; scan results stream to Supabase per-batch automatically
+- **Removed PrivateBin** — all dead PrivateBin code removed; Supabase is the only backend
+- **Removed .env file** — hardcoded defaults in config.py eliminate env-var misconfiguration
+
+### Security
+- Private IP blocking prevents SSRF attacks via crafted M3U playlists
+- HTTPS enforced for FMStream radio directory
+- No PII in telemetry: no channel names, no URLs, no user identifiers
+
 ## [2.1.1] - 2026-03-03
 
 ### Added

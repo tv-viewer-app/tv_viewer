@@ -52,6 +52,7 @@ except ImportError:
 
 import config
 from utils.helpers import format_duration
+from utils.telemetry import track_channel_fail, track_feature
 from ui.constants import FluentColors, FluentSpacing
 from ui.tooltip import add_tooltip
 
@@ -514,6 +515,7 @@ class PlayerWindow(tk.Toplevel):
         
         # All URLs failed
         self.channel['is_working'] = False
+        track_channel_fail(self.channel, 'all_urls_failed')
         logger.error(f"All URLs failed for channel: {self.channel.get('name', '?')}")
         messagebox.showerror("Playback Error", "Failed to play stream. All URLs failed.")
     
@@ -552,10 +554,11 @@ class PlayerWindow(tk.Toplevel):
             loop.run_until_complete(analytics.track_channel_health(
                 url=url,
                 is_working=is_working,
-                channel_name=self.channel.get('name', ''),
+                channel_name='',
                 error_message=error,
             ))
             loop.close()
+            asyncio.set_event_loop(None)
         except Exception:
             pass  # Don't let analytics errors affect playback
     
@@ -604,6 +607,8 @@ class PlayerWindow(tk.Toplevel):
         """Toggle fullscreen mode."""
         is_fullscreen = self.attributes('-fullscreen')
         self.attributes('-fullscreen', not is_fullscreen)
+        if not is_fullscreen:
+            track_feature('fullscreen')
         
         if not is_fullscreen:
             # Hide controls in fullscreen

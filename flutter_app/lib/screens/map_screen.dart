@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../providers/channel_provider.dart';
+import '../services/analytics_service.dart';
 import 'player_screen.dart';
 
 /// Country center coordinates for map markers.
@@ -171,6 +172,7 @@ class _MapScreenState extends State<MapScreen>
   @override
   void initState() {
     super.initState();
+    AnalyticsService.instance.trackFeature('map_open');
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),

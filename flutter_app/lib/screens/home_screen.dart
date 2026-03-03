@@ -4,6 +4,7 @@ import '../providers/channel_provider.dart';
 import '../models/channel.dart';
 import '../services/feedback_service.dart';
 import '../services/onboarding_service.dart';
+import '../services/analytics_service.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/filter_dropdown.dart';
 import '../widgets/scan_progress_bar.dart';
@@ -541,6 +542,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _playChannel(Channel channel) {
+    // Track channel play telemetry (no names/URLs)
+    AnalyticsService.instance.trackChannelPlay(
+      channel.url,
+      country: channel.country ?? '',
+      category: channel.category ?? '',
+    );
     // Boost scan priority for this channel's country
     if (channel.country != null && channel.country!.isNotEmpty) {
       final provider = Provider.of<ChannelProvider>(context, listen: false);
@@ -558,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '2.1.1',
+      applicationVersion: '2.1.2',
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

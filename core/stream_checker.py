@@ -434,11 +434,12 @@ class StreamChecker:
         
         connector = aiohttp.TCPConnector(
             limit=max_concurrent,
-            limit_per_host=2,
-            force_close=True,
+            limit_per_host=3,
+            force_close=False,
             enable_cleanup_closed=True,
             ttl_dns_cache=600,
             use_dns_cache=True,
+            keepalive_timeout=30,
         )
         
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:

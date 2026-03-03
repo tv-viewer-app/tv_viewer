@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.1.2"
 
 # =============================================================================
 # File Paths
@@ -49,15 +49,15 @@ STREAM_CHECK_TIMEOUT = 5
 # Maximum concurrent stream checks
 # Lower = less CPU/bandwidth, higher = faster but more resource usage
 # Recommended: 25-35 for normal use, 5 for low-end systems
-MAX_CONCURRENT_CHECKS = 10
+MAX_CONCURRENT_CHECKS = 30
 
 # Batch size for stream checking (memory optimization)
 # Lower = less memory per batch, but more GC cycles
 SCAN_BATCH_SIZE = 100
 
 # Delay between scan requests in seconds (CPU throttling)
-# Higher = less CPU usage but slower scan
-SCAN_REQUEST_DELAY = 0.1
+# Semaphore handles concurrency; this is just a brief yield
+SCAN_REQUEST_DELAY = 0.005
 
 # Delay between batches in seconds (prevents CDN rate limiting)
 SCAN_BATCH_DELAY = 0.5
@@ -139,6 +139,3 @@ DEFAULT_CATEGORIES = [
 
 # Refresh interval for channel checking (in seconds)
 CHANNEL_REFRESH_INTERVAL = 300  # 5 minutes
-
-# Skip rescanning channels that were checked within this many minutes
-SCAN_SKIP_MINUTES = 10

@@ -201,18 +201,22 @@ class AnalyticsService {
     });
   }
 
-  /// Track when a user plays a channel (URL is SHA-256 hashed).
-  Future<void> trackChannelPlay(String url) async {
+  /// Track when a user plays a channel (NO names or URLs — only country/category).
+  Future<void> trackChannelPlay(String url, {String country = '', String category = ''}) async {
     await trackEvent('channel_play', {
       'url_hash': _hashUrl(url),
+      'country': country,
+      'category': category,
     });
   }
 
-  /// Track when a stream fails to play (URL is SHA-256 hashed).
-  Future<void> trackChannelFail(String url, String error) async {
+  /// Track when a stream fails to play (NO names or URLs).
+  Future<void> trackChannelFail(String url, String error, {String country = '', String category = ''}) async {
     await trackEvent('channel_fail', {
       'url_hash': _hashUrl(url),
       'error_code': error,
+      'country': country,
+      'category': category,
     });
   }
 
@@ -253,6 +257,13 @@ class AnalyticsService {
   Future<void> trackFilterUsed(String filterType) async {
     await trackEvent('filter_used', {
       'filter_type': filterType,
+    });
+  }
+
+  /// Track feature usage (e.g. 'map_open', 'search', 'fullscreen').
+  Future<void> trackFeature(String feature) async {
+    await trackEvent('feature_use', {
+      'feature': feature,
     });
   }
 

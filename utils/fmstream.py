@@ -40,7 +40,7 @@ BITRATE_PATTERN = r'(\d+)\s*k(?:bps|b/s)?'
 
 
 def fetch_fmstream_stations(
-    url: str = 'http://fmstream.org',
+    url: str = 'https://fmstream.org',
     existing_channels: Optional[List[Dict[str, Any]]] = None,
     max_stations: int = MAX_STATIONS
 ) -> List[Dict[str, Any]]:

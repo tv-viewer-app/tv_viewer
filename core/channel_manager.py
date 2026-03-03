@@ -755,6 +755,10 @@ class ChannelManager:
                 logger.debug(f"Error in fetch: {e}")
                 
             finally:
+                try:
+                    loop.close()
+                except Exception:
+                    pass
                 if callback:
                     callback()
                 # Start validation after fetching

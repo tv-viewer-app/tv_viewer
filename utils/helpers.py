@@ -61,7 +61,7 @@ def parse_m3u(content: str) -> List[Dict[str, Any]]:
 
 def _is_valid_stream_url(url: str) -> bool:
     """
-    Validate stream URL for security.
+    Validate stream URL for security (scheme + SSRF protection).
     
     Args:
         url: URL to validate
@@ -82,6 +82,24 @@ def _is_valid_stream_url(url: str) -> bool:
     # Block dangerous schemes
     dangerous = ('javascript:', 'data:', 'file://', 'vbscript:', 'about:')
     if url_lower.startswith(dangerous):
+        return False
+    
+    # SSRF protection: block private/reserved IPs
+    try:
+        from urllib.parse import urlparse
+        import ipaddress
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if hostname:
+            if hostname in ('localhost', '0.0.0.0', '[::]'):
+                return False
+            try:
+                addr = ipaddress.ip_address(hostname)
+                if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                    return False
+            except ValueError:
+                pass  # Not an IP literal — hostname OK
+    except Exception:
         return False
     
     return True

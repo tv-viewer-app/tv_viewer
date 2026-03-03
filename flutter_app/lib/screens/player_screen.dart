@@ -7,6 +7,7 @@ import 'package:floating/floating.dart';
 import 'dart:io' show Platform;
 import '../models/channel.dart';
 import '../services/pip_service.dart';
+import '../services/analytics_service.dart';
 import '../widgets/live_badge.dart';
 import '../widgets/quality_badge.dart';
 import '../utils/error_handler.dart';
@@ -150,7 +151,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.1'},
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.2'},
         );
 
         await _videoController!.initialize().timeout(
@@ -206,7 +207,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       }
     }
     
-    // All URLs failed
+    // All URLs failed — track failure telemetry
+    AnalyticsService.instance.trackChannelFail(
+      urls.first,
+      'all_urls_failed',
+      country: widget.channel.country ?? '',
+      category: widget.channel.category ?? '',
+    );
     final appError = ErrorHandler.streamError(
       'all_failed',
       'All ${urls.length} URLs failed for ${widget.channel.name}',

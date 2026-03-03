@@ -134,10 +134,18 @@ class MapWindow:
         except Exception:
             pass
 
-        self._build_window()
-        self._win.protocol("WM_DELETE_WINDOW", self._on_close)
-        self._win.after(300, self._place_markers)
-        self._win.after(100, lambda: self._animate_open())
+        try:
+            self._build_window()
+            self._win.protocol("WM_DELETE_WINDOW", self._on_close)
+            self._win.after(300, self._place_markers)
+            self._win.after(100, lambda: self._animate_open())
+        except Exception:
+            # Resume scanning if map init fails
+            try:
+                self._cm.stream_checker.resume()
+            except Exception:
+                pass
+            raise
 
     def _on_close(self):
         """Resume scanning when map window closes."""

@@ -20,6 +20,7 @@ from .player_window import PlayerWindow
 from .scan_animation import ScanProgressFrame
 from .map_window import MapWindow
 from .constants import FluentColorsDark as FluentColors, FluentSpacing, FluentTypography
+from utils.telemetry import track_app_start, track_channel_play, track_feature, track_scan_complete
 import config
 
 # Get logger for this module
@@ -1141,6 +1142,7 @@ class MainWindow:
     
     def _play_channel(self, channel: Dict[str, Any]):
         """Open player for channel. Boosts scan priority for channel's country."""
+        track_channel_play(channel)
         # Boost scan priority for this channel's country and URL
         country = channel.get('country', '')
         url = channel.get('url', '')
@@ -1292,6 +1294,10 @@ class MainWindow:
                 self._select_group(self.current_group)
             self.scan_animation.set_complete(working, total)
             
+            # Track scan telemetry
+            duration = time.time() - getattr(self, '_scan_start_time', time.time())
+            track_scan_complete(total, working, duration)
+            
             self.scan_working_count = 0
             self.scan_failed_count = 0
             self._scan_running = False
@@ -1322,6 +1328,8 @@ class MainWindow:
             self.scan_animation.set_stopped()
         else:
             self._scan_running = True
+            self._scan_start_time = time.time()
+            track_feature('scan_start')
             self.scan_btn.configure(text="⏹ Stop Scan")
             self._set_status("Starting scan...")
             self.scan_label.configure(text="Starting...")
@@ -1336,6 +1344,7 @@ class MainWindow:
 
     def _open_map(self):
         """Open the World Map window."""
+        track_feature('map_open')
         try:
             MapWindow(
                 parent=self.root,
@@ -1933,6 +1942,7 @@ class MainWindow:
         """Initialize on startup."""
         self._set_status("Loading cached channels...")
         self.scan_label.configure(text="Loading...")
+        track_app_start()
         
         has_cache = self.channel_manager.load_cached_channels()
         if has_cache:
