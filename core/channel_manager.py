@@ -142,64 +142,92 @@ def get_channel_url(channel: Dict[str, Any]) -> str:
 import re
 
 # Quality/variant suffixes to strip when consolidating channel names
-_QUALITY_PATTERN = re.compile(
-    r'\s*[\(\[]?\s*'
-    r'(alt\s*\d*|backup|mirror|'
+_QUALITY_SUFFIX = re.compile(
+    r'\b(alt\s*\d*|backup|mirror|'
     r'\d{3,4}[pi]|'           # 720p, 1080i, etc
-    r'[hHsS][dD]|[fF][hH][dD]|[uU][hH][dD]|4[kK]|'  # HD, FHD, UHD, 4K
+    r'HD|FHD|UHD|4K|SD|'      # Quality labels
     r'h\.?26[45]|hevc|avc|'   # Codecs
+    r'mpeg\d?|mp3|aac\+?|flac|mono|stereo|'  # Audio codecs
     r'multi\s*[-_]?\s*audio|'
+    r'subtitl\w*|dubbed|subs?|cc|closed\s*cap\w*|'  # Subtitle/dub variants
     r'low|high|med|'
     r'stream\s*\d+|'
     r'v\d+|'                  # v1, v2
     r'option\s*\d+|'
-    r'feed\s*\d+)'
-    r'\s*[\)\]]?\s*$',
+    r'feed\s*\d+|'
+    r'\d+k)\s*$',             # Bitrate: 128k, 320k
     re.IGNORECASE
 )
 
+# Trailing parenthesized/bracketed annotations to strip
+_PAREN_SUFFIX = re.compile(r'\s*[\(\[][^\)\]]*[\)\]]\s*$')
+
+
 def _normalize_channel_name(name: str) -> str:
-    """Strip quality/variant suffixes to get a canonical channel name for grouping."""
+    """Strip quality/variant suffixes to get a canonical channel name for grouping.
+    
+    Multi-pass: strips trailing [...], (...), then known variant words,
+    repeating until stable. This handles names like 'CNN (576p) [Not 24/7]'.
+    """
     if not name:
         return ''
-    normalized = _QUALITY_PATTERN.sub('', name).strip()
-    # Remove trailing separators
-    normalized = normalized.rstrip(' -–—|/')
+    normalized = name.strip()
+    for _ in range(4):  # max 4 passes to converge
+        prev = normalized
+        # Strip trailing [...] (schedule/geo notes)
+        normalized = _PAREN_SUFFIX.sub('', normalized).strip()
+        # Strip trailing known variant words (alt, 720p, HD, subtitled, etc.)
+        normalized = _QUALITY_SUFFIX.sub('', normalized).strip()
+        # Remove trailing separators
+        normalized = normalized.rstrip(' -–—|/')
+        if normalized == prev:
+            break
     return normalized if normalized else name
 
 
 def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Merge channels with the same base name into single multi-URL entries.
     
-    Channels like "Reshet 13 720p", "Reshet 13 alt", "Reshet 13" are merged
-    into one entry with all their URLs in the 'urls' list. The best metadata
-    (logo, category, country) is kept from the first entry.
+    Channels like "Reshet 13 720p", "Reshet 13 alt", "Reshet 13 (רשת 13)"
+    are merged into one entry with all their URLs in the 'urls' list.
+    
+    URL ordering: working URLs first (sorted by response_time_ms),
+    then unchecked, then known-failed. The preferred/last-working URL
+    is preserved via working_url_index.
     
     Returns a new list; does not modify the originals.
     """
     from collections import OrderedDict
     
     groups: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+    # Track per-URL health metadata for priority ordering
+    url_health: Dict[str, Dict[str, Any]] = {}
     
     for ch in channels:
         name = ch.get('name', '')
         base_name = _normalize_channel_name(name)
         country = ch.get('country', 'Unknown')
-        # Group key includes country to avoid merging channels from different countries
+        # Group key: case-insensitive base name + country
         group_key = f"{base_name.lower()}|{country.lower()}"
         
         url = ch.get('url', '')
         if not url:
             continue
         
+        # Record health info for each URL
+        ch_urls = ch.get('urls', [url])
+        for u in ch_urls:
+            if u and u not in url_health:
+                url_health[u] = {
+                    'is_working': ch.get('is_working'),
+                    'response_time_ms': ch.get('response_time_ms', 9999),
+                    'last_checked': ch.get('last_checked', ''),
+                }
+        
         if group_key not in groups:
-            # First occurrence — use as the base entry
             merged = dict(ch)
             merged['name'] = base_name if base_name else name
-            urls = list(ch.get('urls', []))
-            if not urls:
-                urls = [url]
-            # Deduplicate URLs
+            urls = list(ch_urls)
             seen = set()
             unique_urls = []
             for u in urls:
@@ -208,15 +236,13 @@ def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                     unique_urls.append(u)
             merged['urls'] = unique_urls
             merged['url'] = unique_urls[0] if unique_urls else ''
-            merged['working_url_index'] = 0
+            merged['working_url_index'] = ch.get('working_url_index', 0)
             groups[group_key] = merged
         else:
-            # Merge into existing group
             existing = groups[group_key]
             existing_urls = existing.get('urls', [])
             seen = set(existing_urls)
             
-            # Add this channel's URL(s)
             new_urls = ch.get('urls', [url])
             for u in new_urls:
                 if u and u not in seen:
@@ -227,16 +253,46 @@ def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]
             # Prefer working status
             if ch.get('is_working') and not existing.get('is_working'):
                 existing['is_working'] = True
-                # Point to the working URL
-                working_idx = len(existing_urls) - len(new_urls)
-                existing['working_url_index'] = max(0, working_idx)
-                existing['url'] = existing_urls[existing['working_url_index']]
             
-            # Fill in missing metadata from subsequent entries
+            # Fill in missing metadata
             if not existing.get('logo') and ch.get('logo'):
                 existing['logo'] = ch['logo']
             if existing.get('category', 'Other') == 'Other' and ch.get('category', 'Other') != 'Other':
                 existing['category'] = ch['category']
+    
+    # Second pass: sort URLs by health (working first, then by response time)
+    for merged in groups.values():
+        urls = merged.get('urls', [])
+        if len(urls) <= 1:
+            continue
+        
+        def _url_sort_key(u):
+            h = url_health.get(u, {})
+            working = h.get('is_working')
+            rt = h.get('response_time_ms', 9999)
+            # Sort order: working (0) > unchecked (1) > failed (2), then by response time
+            if working is True:
+                return (0, rt)
+            elif working is None:
+                return (1, rt)
+            else:
+                return (2, rt)
+        
+        # Preserve the current preferred URL before sorting
+        preferred_url = ''
+        widx = merged.get('working_url_index', 0)
+        if 0 <= widx < len(urls):
+            preferred_url = urls[widx]
+        
+        urls.sort(key=_url_sort_key)
+        merged['urls'] = urls
+        merged['url'] = urls[0]
+        
+        # Restore working_url_index to point to the preferred URL
+        if preferred_url and preferred_url in urls:
+            merged['working_url_index'] = urls.index(preferred_url)
+        else:
+            merged['working_url_index'] = 0
     
     result = list(groups.values())
     removed = len(channels) - len(result)

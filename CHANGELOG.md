@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-03-03
+
+### Fixed
+- **Channel consolidation overhaul** — aggressive multi-pass name normalization now strips trailing parenthesized annotations `(720p)`, `(רשת 13)`, `[Not 24/7]`, `[Geo-blocked]`, subtitle/dub variants, audio codecs (MP3, AAC, FLAC), and bitrate suffixes. "Reshet 13" now shows as 1 channel with 5 stream URLs instead of 5 separate entries
+- **URL health-based ordering** — consolidated channels sort their URLs by health: working streams first (by response time), then unchecked, then failed. The preferred/last-working URL index is preserved across sorts
+- **Flutter consolidation parity** — Android app now uses the same improved normalization patterns as the Windows client
+
+### Changed
+- Channel list reduced ~18% (17,948 → ~14,700) through better consolidation — no content lost, just unified into multi-URL entries
+
 ## [2.1.2] - 2026-03-04
 
 ### Added

@@ -91,27 +91,38 @@ class PlaylistRepositoryImpl implements PlaylistRepository {
   }
   
   /// Quality/variant suffixes to strip when consolidating channel names
-  static final _qualityPattern = RegExp(
-    r'\s*[\(\[]?\s*'
-    r'(alt\s*\d*|backup|mirror|'
+  static final _qualitySuffix = RegExp(
+    r'\b(alt\s*\d*|backup|mirror|'
     r'\d{3,4}[pi]|'
-    r'[hHsS][dD]|[fF][hH][dD]|[uU][hH][dD]|4[kK]|'
+    r'HD|FHD|UHD|4K|SD|'
     r'h\.?26[45]|hevc|avc|'
+    r'mpeg\d?|mp3|aac\+?|flac|mono|stereo|'
+    r'multi\s*[-_]?\s*audio|'
+    r'subtitl\w*|dubbed|subs?|cc|closed\s*cap\w*|'
     r'low|high|med|'
     r'stream\s*\d+|'
     r'v\d+|'
     r'option\s*\d+|'
-    r'feed\s*\d+)'
-    r'\s*[\)\]]?\s*$',
+    r'feed\s*\d+|'
+    r'\d+k)\s*$',
     caseSensitive: false,
   );
-  
-  /// Strip quality/variant suffixes to get canonical channel name
+
+  /// Trailing parenthesized/bracketed annotations
+  static final _parenSuffix = RegExp(r'\s*[\(\[][^\)\]]*[\)\]]\s*$');
+
+  /// Strip quality/variant suffixes to get canonical channel name.
+  /// Multi-pass: strips trailing [...], (...), then known variant words.
   static String _normalizeChannelName(String name) {
     if (name.isEmpty) return '';
-    var normalized = name.replaceAll(_qualityPattern, '').trim();
-    // Remove trailing separators
-    normalized = normalized.replaceAll(RegExp(r'[\s\-–—|/]+$'), '');
+    var normalized = name.trim();
+    for (var i = 0; i < 4; i++) {
+      final prev = normalized;
+      normalized = normalized.replaceAll(_parenSuffix, '').trim();
+      normalized = normalized.replaceAll(_qualitySuffix, '').trim();
+      normalized = normalized.replaceAll(RegExp(r'[\s\-–—|/]+$'), '');
+      if (normalized == prev) break;
+    }
     return normalized.isNotEmpty ? normalized : name;
   }
   
