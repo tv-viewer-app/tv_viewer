@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tv_viewer_project/providers/channel_provider.dart';
-import 'package:tv_viewer_project/models/channel.dart';
+import 'package:tv_viewer/providers/channel_provider.dart';
+import 'package:tv_viewer/models/channel.dart';
 
 /// Unit tests for ChannelProvider
 /// Coverage: Filtering logic, state management, search functionality
@@ -262,7 +262,7 @@ void main() {
       });
 
       test('EC-2.3: Search with special characters', () {
-        provider.setSearchQuery('!@#$%');
+        provider.setSearchQuery(r'!@#$%');
         final filtered = provider.filteredChannels;
         
         // Should not crash, returns no matches

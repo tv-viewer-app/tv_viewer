@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tv_viewer/repositories/impl/channel_repository_impl.dart';
-import 'package:tv_viewer/models/channel.dart';
 
 /// Unit tests for ChannelRepositoryImpl
 /// 

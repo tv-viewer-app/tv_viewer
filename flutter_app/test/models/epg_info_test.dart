@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_app/models/epg_info.dart';
+import 'package:tv_viewer/models/epg_info.dart';
 
 void main() {
   group('EpgInfo', () {
