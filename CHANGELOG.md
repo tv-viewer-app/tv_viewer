@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-02
+
+### Added
+- **Multi-URL channel fallback** — channels can now have multiple stream URLs. If the primary URL fails, the player automatically tries the next URL in the list (both Windows and Android)
+- **Channel health on play/fail** — playing a channel marks it as working; playback failure marks it as failed and triggers fallback to next URL
+- **Crowdsourced health reporting** — `track_channel_health()` reports play success/failure to Supabase for future aggregation across all users
+- **Supabase keep-alive** — GitHub Actions cron workflow pings Supabase every 5 days to prevent free-tier inactivity pause
+- **20 100FM digital sub-channels** — Hip Hop, Dance, Trance, Club, Top 40, 90s, 80s, Workout, Chillout, Retro, Latin, Jazz, Deep, Classic Rock, TikTok, DJ Set, K-Pop, Mizrachit, and more
+
+### Fixed
+- **Japan channels** — removed 55 dead JP-PrimeHome URLs (CDN decommissioned), marked 46 geo-blocked willfonk.com channels as not working
+- **Ynet Live** — updated stream URL from dead ynet-pic1 CDN to new hls-video-ynet endpoint
+- **Map pin labels** — channel names now show under pins when deeply zoomed in (Android)
+- **Map pin colors** — pins are green (working) or red (not working) (Android)
+- **Map stats bar position** — stats bar positioned above Android navigation bar using MediaQuery padding
+
+### Changed
+- **Scan speed reduced** — concurrent checks 30→10, batch size 200→100, request delay 0.005→0.1s, added 0.5s batch delay between batches (less aggressive, avoids CDN rate limits)
+- Stream checker iterates all URLs per channel, sets working index on first success
+- Python channel_manager migrates old single-URL channels to multi-URL format automatically
+
 ## [2.0.3] - 2026-03-02
 
 ### Added

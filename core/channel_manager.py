@@ -89,6 +89,56 @@ def _normalize_country(country_str: str) -> str:
     return country_str
 
 
+def _migrate_channel_urls(channel: Dict[str, Any]) -> Dict[str, Any]:
+    """Migrate a channel dict to ensure it has both 'url' and 'urls' keys.
+    
+    v2.1.0: Ensures backward compatibility during the transition to multi-URL
+    support. After migration, the channel will have:
+      - 'urls': List[str] — all alternate stream URLs
+      - 'url': str — the primary URL (urls[working_url_index])
+      - 'working_url_index': int — index of the currently active URL
+    
+    This is safe to call multiple times (idempotent).
+    """
+    # Already migrated — has a valid urls list
+    if 'urls' in channel and isinstance(channel['urls'], list) and channel['urls']:
+        # Ensure 'url' stays in sync as primary URL shortcut
+        try:
+            idx = int(channel.get('working_url_index', 0))
+        except (TypeError, ValueError):
+            idx = 0
+        urls = channel['urls']
+        idx = max(0, min(idx, len(urls) - 1))
+        channel['working_url_index'] = idx
+        channel['url'] = urls[idx]
+        return channel
+    
+    # Legacy format — single 'url' string
+    single_url = channel.get('url', '')
+    channel['urls'] = [single_url] if single_url else ['']
+    channel['working_url_index'] = 0
+    # 'url' key already exists (or is set now)
+    channel['url'] = channel['urls'][0]
+    return channel
+
+
+def get_channel_url(channel: Dict[str, Any]) -> str:
+    """Get the currently active URL for a channel.
+    
+    v2.1.0: Supports both legacy single-url and new multi-url formats.
+    Returns the URL at working_url_index, falling back gracefully.
+    """
+    urls = channel.get('urls', [channel.get('url', '')])
+    if not urls:
+        return channel.get('url', '')
+    try:
+        idx = int(channel.get('working_url_index', 0))
+    except (TypeError, ValueError):
+        idx = 0
+    idx = max(0, min(idx, len(urls) - 1))
+    return urls[idx]
+
+
 class ChannelManager:
     """Manages channel discovery, validation, and persistence.
     
@@ -187,6 +237,9 @@ class ChannelManager:
                     logger.info(f"Removed {deduped} duplicate channels from cache")
                 
                 self.channels = unique_channels
+                # Migrate channels to multi-URL format (v2.1.0)
+                for ch in self.channels:
+                    _migrate_channel_urls(ch)
                 # Ensure all channels have scan_status field
                 for ch in self.channels:
                     if 'scan_status' not in ch:
@@ -204,6 +257,9 @@ class ChannelManager:
             True if saved successfully
         """
         with self._lock:
+            # Ensure all channels are migrated to multi-URL format before saving (v2.1.0)
+            for ch in self.channels:
+                _migrate_channel_urls(ch)
             data = {
                 'channels': self.channels,
                 'version': config.APP_VERSION,
@@ -327,6 +383,9 @@ class ChannelManager:
         for idx, channel in enumerate(self.channels):
             if idx % 5000 == 0 and idx > 0:
                 logger.debug(f"Organizing channels: {idx}/{total}...")
+            
+            # Migrate to multi-URL format if needed (v2.1.0)
+            _migrate_channel_urls(channel)
             
             # Build URL index for fast lookups
             url = channel.get('url')

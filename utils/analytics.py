@@ -249,6 +249,27 @@ class AnalyticsService:
             "error_code": error,
         })
 
+    async def track_channel_health(
+        self,
+        url: str,
+        is_working: bool,
+        channel_name: str = "",
+        error_message: str = "",
+        response_time_ms: int = 0,
+    ) -> None:
+        """Report channel health for crowdsourced health tracking.
+        
+        This data is used to aggregate channel health across all users.
+        URL is hashed for privacy.
+        """
+        await self.track_event("channel_play" if is_working else "channel_fail", {
+            "url_hash": _hash_url(url),
+            "channel_name": channel_name[:50] if channel_name else "",
+            "is_working": is_working,
+            "error_code": error_message[:100] if error_message else "",
+            "response_time_ms": response_time_ms,
+        })
+
     async def track_scan_complete(
         self,
         working: int,

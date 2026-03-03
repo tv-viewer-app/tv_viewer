@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.0.3"
+APP_VERSION = "2.1.0"
 
 # =============================================================================
 # File Paths
@@ -49,15 +49,18 @@ STREAM_CHECK_TIMEOUT = 5
 # Maximum concurrent stream checks
 # Lower = less CPU/bandwidth, higher = faster but more resource usage
 # Recommended: 25-35 for normal use, 5 for low-end systems
-MAX_CONCURRENT_CHECKS = 30
+MAX_CONCURRENT_CHECKS = 10
 
 # Batch size for stream checking (memory optimization)
 # Lower = less memory per batch, but more GC cycles
-SCAN_BATCH_SIZE = 200
+SCAN_BATCH_SIZE = 100
 
 # Delay between scan requests in seconds (CPU throttling)
 # Higher = less CPU usage but slower scan
-SCAN_REQUEST_DELAY = 0.005
+SCAN_REQUEST_DELAY = 0.1
+
+# Delay between batches in seconds (prevents CDN rate limiting)
+SCAN_BATCH_DELAY = 0.5
 
 # Skip re-scanning channels checked within this many minutes
 SCAN_SKIP_MINUTES = 30

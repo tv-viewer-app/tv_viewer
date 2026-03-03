@@ -427,5 +427,242 @@ void main() {
         expect(() => Channel.fromM3ULine(m3uLine, url), returnsNormally);
       });
     });
+
+    group('v2.1.0: Multi-URL Support', () {
+      test('Constructor with single url creates single-element urls list', () {
+        final channel = Channel(
+          name: 'Test',
+          url: 'http://example.com/stream1.m3u8',
+        );
+        
+        expect(channel.urls, ['http://example.com/stream1.m3u8']);
+        expect(channel.url, 'http://example.com/stream1.m3u8');
+        expect(channel.workingUrlIndex, 0);
+      });
+
+      test('Constructor with urls list stores all URLs', () {
+        final channel = Channel(
+          name: 'Test',
+          urls: [
+            'http://example.com/stream1.m3u8',
+            'http://example.com/stream2.m3u8',
+            'http://example.com/stream3.m3u8',
+          ],
+        );
+        
+        expect(channel.urls.length, 3);
+        expect(channel.url, 'http://example.com/stream1.m3u8');
+        expect(channel.workingUrlIndex, 0);
+      });
+
+      test('url getter returns URL at workingUrlIndex', () {
+        final channel = Channel(
+          name: 'Test',
+          urls: [
+            'http://example.com/stream1.m3u8',
+            'http://example.com/stream2.m3u8',
+            'http://example.com/stream3.m3u8',
+          ],
+          workingUrlIndex: 1,
+        );
+        
+        expect(channel.url, 'http://example.com/stream2.m3u8');
+      });
+
+      test('url getter clamps out-of-range workingUrlIndex', () {
+        final channel = Channel(
+          name: 'Test',
+          urls: ['http://example.com/stream1.m3u8'],
+          workingUrlIndex: 99,
+        );
+        
+        // Should clamp to last valid index (0)
+        expect(channel.url, 'http://example.com/stream1.m3u8');
+      });
+
+      test('url getter handles negative workingUrlIndex', () {
+        final channel = Channel(
+          name: 'Test',
+          urls: ['http://a.m3u8', 'http://b.m3u8'],
+          workingUrlIndex: -5,
+        );
+        
+        // clamp(-5, 0, 1) == 0
+        expect(channel.url, 'http://a.m3u8');
+      });
+
+      test('Constructor: urls takes precedence over url when both provided', () {
+        final channel = Channel(
+          name: 'Test',
+          url: 'http://example.com/single.m3u8',
+          urls: ['http://example.com/list1.m3u8', 'http://example.com/list2.m3u8'],
+        );
+        
+        expect(channel.urls.length, 2);
+        expect(channel.url, 'http://example.com/list1.m3u8');
+      });
+
+      test('Constructor with neither url nor urls defaults to empty string', () {
+        final channel = Channel(name: 'Test');
+        
+        expect(channel.urls, ['']);
+        expect(channel.url, '');
+      });
+
+      test('fromJson: parse legacy single-url JSON', () {
+        final json = {
+          'name': 'Legacy Channel',
+          'url': 'http://example.com/old.m3u8',
+          'category': 'News',
+        };
+        
+        final channel = Channel.fromJson(json);
+        
+        expect(channel.urls, ['http://example.com/old.m3u8']);
+        expect(channel.url, 'http://example.com/old.m3u8');
+        expect(channel.workingUrlIndex, 0);
+      });
+
+      test('fromJson: parse new multi-url JSON', () {
+        final json = {
+          'name': 'Multi Channel',
+          'urls': ['http://example.com/a.m3u8', 'http://example.com/b.m3u8'],
+          'workingUrlIndex': 1,
+          'category': 'News',
+        };
+        
+        final channel = Channel.fromJson(json);
+        
+        expect(channel.urls.length, 2);
+        expect(channel.url, 'http://example.com/b.m3u8');
+        expect(channel.workingUrlIndex, 1);
+      });
+
+      test('fromJson: urls takes precedence when both url and urls present', () {
+        final json = {
+          'name': 'Mixed',
+          'url': 'http://example.com/old.m3u8',
+          'urls': ['http://example.com/new1.m3u8', 'http://example.com/new2.m3u8'],
+        };
+        
+        final channel = Channel.fromJson(json);
+        
+        expect(channel.urls.length, 2);
+        expect(channel.url, 'http://example.com/new1.m3u8');
+      });
+
+      test('fromJson: handles empty urls array by falling back to url', () {
+        final json = {
+          'name': 'Channel',
+          'url': 'http://example.com/fallback.m3u8',
+          'urls': [],
+        };
+        
+        final channel = Channel.fromJson(json);
+        
+        expect(channel.urls, ['http://example.com/fallback.m3u8']);
+        expect(channel.url, 'http://example.com/fallback.m3u8');
+      });
+
+      test('fromJson: handles working_url_index snake_case key', () {
+        final json = {
+          'name': 'Channel',
+          'urls': ['http://a.m3u8', 'http://b.m3u8'],
+          'working_url_index': 1,
+        };
+        
+        final channel = Channel.fromJson(json);
+        
+        expect(channel.workingUrlIndex, 1);
+        expect(channel.url, 'http://b.m3u8');
+      });
+
+      test('toJson: serializes urls array and url for backward compat', () {
+        final channel = Channel(
+          name: 'Test',
+          urls: ['http://a.m3u8', 'http://b.m3u8'],
+          workingUrlIndex: 1,
+        );
+        
+        final json = channel.toJson();
+        
+        expect(json['urls'], ['http://a.m3u8', 'http://b.m3u8']);
+        expect(json['url'], 'http://b.m3u8'); // backward compat
+        expect(json['workingUrlIndex'], 1);
+      });
+
+      test('fromM3ULine: creates single-element urls list', () {
+        const m3uLine = '#EXTINF:-1,Test Channel';
+        const url = 'http://example.com/stream.m3u8';
+        
+        final channel = Channel.fromM3ULine(m3uLine, url);
+        
+        expect(channel.urls, [url]);
+        expect(channel.url, url);
+        expect(channel.workingUrlIndex, 0);
+      });
+
+      test('copyWith: update urls list', () {
+        final original = Channel(
+          name: 'Test',
+          urls: ['http://a.m3u8'],
+        );
+        
+        final updated = original.copyWith(
+          urls: ['http://a.m3u8', 'http://b.m3u8', 'http://c.m3u8'],
+          workingUrlIndex: 2,
+        );
+        
+        expect(updated.urls.length, 3);
+        expect(updated.url, 'http://c.m3u8');
+        expect(updated.workingUrlIndex, 2);
+        // Original unchanged (immutable)
+        expect(original.urls.length, 1);
+      });
+
+      test('copyWith: single url wraps into urls list', () {
+        final original = Channel(
+          name: 'Test',
+          urls: ['http://a.m3u8', 'http://b.m3u8'],
+        );
+        
+        final updated = original.copyWith(url: 'http://new.m3u8');
+        
+        expect(updated.urls, ['http://new.m3u8']);
+        expect(updated.url, 'http://new.m3u8');
+      });
+
+      test('copyWith: preserves urls when neither url nor urls provided', () {
+        final original = Channel(
+          name: 'Test',
+          urls: ['http://a.m3u8', 'http://b.m3u8'],
+          workingUrlIndex: 1,
+        );
+        
+        final updated = original.copyWith(name: 'Updated');
+        
+        expect(updated.urls, original.urls);
+        expect(updated.workingUrlIndex, 1);
+        expect(updated.name, 'Updated');
+      });
+
+      test('Round-trip: toJson -> fromJson preserves multi-URL data', () {
+        final original = Channel(
+          name: 'Round Trip',
+          urls: ['http://primary.m3u8', 'http://backup1.m3u8', 'http://backup2.m3u8'],
+          workingUrlIndex: 1,
+          category: 'News',
+          isWorking: true,
+        );
+        
+        final json = original.toJson();
+        final restored = Channel.fromJson(json);
+        
+        expect(restored.urls, original.urls);
+        expect(restored.workingUrlIndex, original.workingUrlIndex);
+        expect(restored.url, original.url);
+        expect(restored.name, original.name);
+      });
+    });
   });
 }

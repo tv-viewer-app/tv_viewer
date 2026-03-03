@@ -100,57 +100,87 @@ class StreamChecker:
         session: aiohttp.ClientSession
     ) -> Dict[str, Any]:
         """
-        Check if a single stream is accessible — HEAD first, GET fallback.
+        Check if a channel's stream(s) are accessible — supports multi-URL fallback.
         
-        Uses HEAD for speed (no body download), with content-type sniffing
-        to catch HTML error pages. Falls back to GET+Range only when HEAD
-        returns 405 (Method Not Allowed).
+        Tries each URL in the channel's urls list. First working URL is set as
+        the active one via working_url_index.
         
         Args:
-            channel: Channel dictionary with 'url' key
+            channel: Channel dictionary with 'url' or 'urls' key
             session: aiohttp session to use
             
         Returns:
-            Channel dict with 'is_working' and 'last_scanned' keys updated in-place
+            Channel dict with 'is_working', 'working_url_index', and 'last_scanned' updated
         """
-        url = channel.get('url', '')
+        # Support both single url and multi-url formats
+        urls = channel.get('urls', [])
+        if not urls:
+            single_url = channel.get('url', '')
+            urls = [single_url] if single_url else []
+        
         channel['is_working'] = False
         channel['last_scanned'] = datetime.now().isoformat()
         
-        if not url:
+        if not urls:
             return channel
         
-        if not url.startswith(('http://', 'https://', 'rtmp://', 'rtsp://')):
-            return channel
-        
-        if url.startswith(('file://', 'javascript:', 'data:')):
-            return channel
-        
-        # Non-HTTP streams can't be checked via HTTP — assume working
-        if url.startswith(('rtmp://', 'rtsp://')):
-            channel['is_working'] = True
-            return channel
-        
-        try:
-            async with self._semaphore:
-                # HEAD first — fast, no body download
-                async with session.head(url, allow_redirects=True) as response:
-                    if response.status == 200:
-                        ct = (response.content_type or '').lower()
-                        # HTML response = error page, not a stream
-                        channel['is_working'] = 'text/html' not in ct
-                    elif response.status == 405:
-                        # HEAD rejected, try GET with Range (read only headers)
-                        async with session.get(
-                            url,
-                            headers={'Range': 'bytes=0-512'},
-                            allow_redirects=True
-                        ) as get_resp:
-                            if get_resp.status in (200, 206):
-                                ct = (get_resp.content_type or '').lower()
-                                channel['is_working'] = 'text/html' not in ct
-                    elif response.status in (301, 302, 303, 307, 308):
+        for idx, url in enumerate(urls):
+            if not url or not isinstance(url, str):
+                continue
+            if not url.startswith(('http://', 'https://', 'rtmp://', 'rtsp://')):
+                continue
+            if url.startswith(('file://', 'javascript:', 'data:')):
+                continue
+            
+            # Non-HTTP streams can't be checked via HTTP — assume working
+            if url.startswith(('rtmp://', 'rtsp://')):
+                channel['is_working'] = True
+                channel['working_url_index'] = idx
+                channel['url'] = url
+                return channel
+            
+            try:
+                async with self._semaphore:
+                    is_working = await self._check_single_url(url, session)
+                    if is_working:
                         channel['is_working'] = True
+                        channel['working_url_index'] = idx
+                        channel['url'] = url
+                        return channel
+            except Exception:
+                continue
+        
+        # No working URL found
+        channel['working_url_index'] = 0
+        if urls:
+            channel['url'] = urls[0]
+        return channel
+    
+    async def _check_single_url(
+        self,
+        url: str,
+        session: aiohttp.ClientSession
+    ) -> bool:
+        """Check if a single URL is accessible. Returns True if working."""
+        try:
+            # HEAD first — fast, no body download
+            async with session.head(url, allow_redirects=True) as response:
+                if response.status == 200:
+                    ct = (response.content_type or '').lower()
+                    # HTML response = error page, not a stream
+                    return 'text/html' not in ct
+                elif response.status == 405:
+                    # HEAD rejected, try GET with Range
+                    async with session.get(
+                        url,
+                        headers={'Range': 'bytes=0-512'},
+                        allow_redirects=True
+                    ) as get_resp:
+                        if get_resp.status in (200, 206):
+                            ct = (get_resp.content_type or '').lower()
+                            return 'text/html' not in ct
+                elif response.status in (301, 302, 303, 307, 308):
+                    return True
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
         except aiohttp.ClientConnectorError:
@@ -161,8 +191,7 @@ class StreamChecker:
             logger.debug(f"SSL error for {url[:40]}: {type(e).__name__}")
         except Exception:
             pass
-        
-        return channel
+        return False
     
     async def check_streams_batch(
         self,
@@ -285,7 +314,8 @@ class StreamChecker:
                 gc.collect(0)
                 
                 # CPU breathing room between batches
-                await asyncio.sleep(0.1)
+                batch_delay = getattr(config, 'SCAN_BATCH_DELAY', 0.5)
+                await asyncio.sleep(batch_delay)
             
             self._session = None
         

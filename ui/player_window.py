@@ -441,48 +441,123 @@ class PlayerWindow(tk.Toplevel):
         ).pack(side=tk.LEFT, padx=5)
     
     def play(self):
-        """Start playing the stream."""
+        """Start playing the stream with multi-URL fallback."""
         if not VLC_AVAILABLE or not self.player:
             return
         
-        url = self.channel.get('url', '')
-        if not url:
+        # Get URL list (multi-URL support)
+        urls = self.channel.get('urls', [])
+        if not urls:
+            single_url = self.channel.get('url', '')
+            urls = [single_url] if single_url else []
+        
+        if not urls:
             return
         
-        # Security: Validate URL scheme
-        url_lower = url.lower()
-        allowed_schemes = ('http://', 'https://', 'rtmp://', 'rtsp://', 'mms://')
-        if not url_lower.startswith(allowed_schemes):
-            logger.warning(f"Invalid URL scheme: {url}")
-            messagebox.showwarning("Invalid URL", "This stream URL scheme is not supported.")
-            return
+        # Start from the working URL index
+        start_idx = self.channel.get('working_url_index', 0)
+        if start_idx >= len(urls):
+            start_idx = 0
         
-        # Security: Block dangerous schemes
-        if url_lower.startswith(('file://', 'javascript:', 'data:')):
-            logger.warning(f"Blocked dangerous URL: {url}")
-            return
+        # Reorder URLs to try working one first
+        ordered_urls = urls[start_idx:] + urls[:start_idx]
         
-        try:
-            media = self.instance.media_new(url)
-            if not media:
-                logger.error(f"Failed to create media for: {url}")
-                messagebox.showerror("Playback Error", "Failed to load stream. The URL may be invalid.")
+        for idx, url in enumerate(ordered_urls):
+            if not url:
+                continue
+            
+            # Security: Validate URL scheme
+            url_lower = url.lower()
+            allowed_schemes = ('http://', 'https://', 'rtmp://', 'rtsp://', 'mms://')
+            if not url_lower.startswith(allowed_schemes):
+                continue
+            
+            # Security: Block dangerous schemes
+            if url_lower.startswith(('file://', 'javascript:', 'data:')):
+                continue
+            
+            try:
+                media = self.instance.media_new(url)
+                if not media:
+                    logger.warning(f"Failed to create media for URL {idx}: {url[:60]}")
+                    continue
+                
+                self.player.set_media(media)
+                self.player.play()
+                self.is_playing = True
+                self.play_btn.configure(text="⏸")
+                
+                # Update channel with working URL
+                actual_idx = (start_idx + idx) % len(urls)
+                self.channel['url'] = url
+                self.channel['working_url_index'] = actual_idx
+                self.channel['is_working'] = True
+                
+                # Report health
+                self._report_channel_health(url, True)
+                
+                # Start updating time display
+                self._update_time()
+                
+                # Start updating quality info (with delay to let stream start)
+                self.after(2000, self._update_quality_info)
+                
+                # Monitor playback health after 5 seconds
+                self.after(5000, lambda: self._check_playback_health(url))
+                
                 return
-            
-            self.player.set_media(media)
-            self.player.play()
-            self.is_playing = True
-            self.play_btn.configure(text="⏸")
-            
-            # Start updating time display
-            self._update_time()
-            
-            # Start updating quality info (with delay to let stream start)
-            self.after(2000, self._update_quality_info)
-            
-        except Exception as e:
-            logger.error(f"Error playing stream: {e}")
-            messagebox.showerror("Playback Error", f"Failed to play stream:\n{e}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to play URL {idx}: {e}")
+                self._report_channel_health(url, False, str(e))
+                continue
+        
+        # All URLs failed
+        self.channel['is_working'] = False
+        logger.error(f"All URLs failed for channel: {self.channel.get('name', '?')}")
+        messagebox.showerror("Playback Error", "Failed to play stream. All URLs failed.")
+    
+    def _check_playback_health(self, url: str):
+        """Check if playback is actually working after a few seconds."""
+        if not self.player:
+            return
+        state = self.player.get_state()
+        if state in (vlc.State.Error, vlc.State.Ended):
+            self.channel['is_working'] = False
+            self._report_channel_health(url, False, f"state={state}")
+            # Try next URL
+            self._try_next_url()
+        elif state == vlc.State.Playing:
+            self.channel['is_working'] = True
+    
+    def _try_next_url(self):
+        """Try the next URL in the channel's URL list."""
+        urls = self.channel.get('urls', [])
+        if len(urls) <= 1:
+            return
+        current_idx = self.channel.get('working_url_index', 0)
+        next_idx = (current_idx + 1) % len(urls)
+        if next_idx == current_idx:
+            return
+        self.channel['working_url_index'] = next_idx
+        logger.info(f"Trying fallback URL {next_idx} for {self.channel.get('name', '?')}")
+        self.play()
+    
+    def _report_channel_health(self, url: str, is_working: bool, error: str = ""):
+        """Report channel health to analytics (async-safe from UI thread)."""
+        try:
+            from utils.analytics import analytics
+            import asyncio
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(analytics.track_channel_health(
+                url=url,
+                is_working=is_working,
+                channel_name=self.channel.get('name', ''),
+                error_message=error,
+            ))
+            loop.close()
+        except Exception:
+            pass  # Don't let analytics errors affect playback
     
     def pause(self):
         """Pause playback."""

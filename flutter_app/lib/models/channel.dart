@@ -1,7 +1,11 @@
 /// Channel model for IPTV streams (BL-031: Immutable)
+/// v2.1.0: Multi-URL support for channel health / failover
 class Channel {
   final String name;
-  final String url;
+  /// List of alternate stream URLs for failover (v2.1.0)
+  final List<String> urls;
+  /// Index into [urls] for the currently working URL (v2.1.0)
+  final int workingUrlIndex;
   final String? category;
   final String? logo;
   final String? country;
@@ -14,9 +18,19 @@ class Channel {
   final String? resolution;
   final int? bitrate;
 
+  /// Backward-compatible getter: returns the currently active URL.
+  String get url => urls.isNotEmpty
+      ? urls[workingUrlIndex.clamp(0, urls.length - 1)]
+      : '';
+
+  /// Constructor accepts either [url] (single, backward compat) or [urls] (list).
+  /// If both are provided, [urls] takes precedence.
+  /// If neither is provided, defaults to an empty single-element list.
   Channel({
     required this.name,
-    required this.url,
+    String? url,
+    List<String>? urls,
+    this.workingUrlIndex = 0,
     this.category,
     this.logo,
     this.country,
@@ -26,7 +40,7 @@ class Channel {
     this.lastChecked,
     this.resolution,
     this.bitrate,
-  });
+  }) : urls = urls ?? (url != null ? [url] : ['']);
   
   /// Normalize category by splitting on semicolons and taking first meaningful part
   static String? normalizeCategory(String? rawCategory) {
@@ -335,7 +349,7 @@ class Channel {
 
     return Channel(
       name: name,
-      url: url,
+      urls: [url],
       category: category,
       logo: logo,
       country: country,
@@ -347,7 +361,9 @@ class Channel {
 
   Map<String, dynamic> toJson() => {
         'name': name,
-        'url': url,
+        'url': url, // backward compat: primary URL
+        'urls': urls, // v2.1.0: full URL list
+        'workingUrlIndex': workingUrlIndex,
         'category': category,
         'logo': logo,
         'country': country,
@@ -361,14 +377,27 @@ class Channel {
 
   factory Channel.fromJson(Map<String, dynamic> json) {
         final name = json['name'] ?? 'Unknown';
-        final url = json['url'] ?? '';
         final language = json['language'] as String?;
+
+        // v2.1.0: Parse both old "url" (string) and new "urls" (list) formats
+        List<String> urls;
+        if (json['urls'] != null && json['urls'] is List && (json['urls'] as List).isNotEmpty) {
+          urls = (json['urls'] as List).map((e) => e.toString()).toList();
+        } else {
+          final singleUrl = json['url'] ?? '';
+          urls = [singleUrl is String ? singleUrl : singleUrl.toString()];
+        }
+        final workingUrlIndex = json['workingUrlIndex'] ?? json['working_url_index'] ?? 0;
+        // Use primary URL for country normalization
+        final primaryUrl = urls.isNotEmpty ? urls[0] : '';
+
         // Always normalize country for consistency (Issue #27)
         final rawCountry = json['country'] as String?;
-        final country = normalizeCountry(rawCountry, language, name, url: url);
+        final country = normalizeCountry(rawCountry, language, name, url: primaryUrl);
         return Channel(
           name: name,
-          url: url,
+          urls: urls,
+          workingUrlIndex: workingUrlIndex is int ? workingUrlIndex : 0,
           category: normalizeCategory(json['category']),
           logo: json['logo'],
           country: country,
@@ -395,9 +424,12 @@ class Channel {
   }
   
   /// BL-031: copyWith method for immutable updates
+  /// v2.1.0: Added urls and workingUrlIndex params
   Channel copyWith({
     String? name,
     String? url,
+    List<String>? urls,
+    int? workingUrlIndex,
     String? category,
     String? logo,
     String? country,
@@ -408,9 +440,15 @@ class Channel {
     String? resolution,
     int? bitrate,
   }) {
+    // If a single url is provided but not urls, wrap it in a list
+    List<String>? resolvedUrls = urls;
+    if (resolvedUrls == null && url != null) {
+      resolvedUrls = [url];
+    }
     return Channel(
       name: name ?? this.name,
-      url: url ?? this.url,
+      urls: resolvedUrls ?? this.urls,
+      workingUrlIndex: workingUrlIndex ?? this.workingUrlIndex,
       category: category ?? this.category,
       logo: logo ?? this.logo,
       country: country ?? this.country,

@@ -121,63 +121,121 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     }
   }
 
+  int _currentUrlIndex = 0;
+  
   Future<void> _initializePlayer() async {
     // Dispose existing controller before creating new one (fixes memory leak on retry)
     _disposeController();
     
-    logger.info('Initializing player for ${widget.channel.name} (${widget.channel.url})');
-    
-    try {
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.channel.url),
-        httpHeaders: const {'User-Agent': 'TV Viewer/2.0.3'},
-      );
-
-      // Add timeout to initialization
-      await _videoController!.initialize().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw ErrorHandler.streamError(
-            'timeout',
-            'Stream initialization timeout after 30 seconds for ${widget.channel.name}',
-          );
-        },
-      );
-      
-      _videoController!.play();
-      _videoController!.setVolume(_volume); // Set initial volume
-      
-      // Get video info
-      final value = _videoController!.value;
-      if (value.isInitialized) {
-        _resolution = '${value.size.width.toInt()}x${value.size.height.toInt()}';
-        logger.info('Stream initialized successfully - Resolution: $_resolution');
-      }
-
+    final urls = widget.channel.urls;
+    if (urls.isEmpty) {
       setState(() {
         _isLoading = false;
-        _isPlaying = true;
+        _error = ErrorHandler.streamError('no_url', 'No stream URL available');
       });
-
-      // Create named listener for proper cleanup
-      _playerListener = () {
-        if (mounted && _videoController != null) {
-          setState(() {
-            _isPlaying = _videoController!.value.isPlaying;
-          });
-        }
-      };
-      _videoController!.addListener(_playerListener!);
-    } catch (e, stackTrace) {
-      final appError = ErrorHandler.handle(e, stackTrace);
-      logger.error('Player initialization failed for ${widget.channel.name}', e, stackTrace);
-      logger.error('Error details: ${appError.getDetailedLog()}');
-      
-      setState(() {
-        _isLoading = false;
-        _error = appError;
-      });
+      return;
     }
+    
+    // Start from working URL index
+    _currentUrlIndex = widget.channel.workingUrlIndex.clamp(0, urls.length - 1);
+    
+    // Try each URL in order, starting from working index
+    for (int attempt = 0; attempt < urls.length; attempt++) {
+      final idx = (_currentUrlIndex + attempt) % urls.length;
+      final streamUrl = urls[idx];
+      
+      logger.info('Trying URL $idx/${urls.length} for ${widget.channel.name}: $streamUrl');
+      
+      try {
+        _disposeController();
+        _videoController = VideoPlayerController.networkUrl(
+          Uri.parse(streamUrl),
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.0'},
+        );
+
+        await _videoController!.initialize().timeout(
+          const Duration(seconds: 15),
+          onTimeout: () {
+            throw ErrorHandler.streamError(
+              'timeout',
+              'Stream timeout after 15s for URL $idx',
+            );
+          },
+        );
+        
+        _videoController!.play();
+        _videoController!.setVolume(_volume);
+        
+        // Get video info
+        final value = _videoController!.value;
+        if (value.isInitialized) {
+          _resolution = '${value.size.width.toInt()}x${value.size.height.toInt()}';
+          logger.info('Stream initialized - URL $idx, Resolution: $_resolution');
+        }
+
+        _currentUrlIndex = idx;
+        
+        setState(() {
+          _isLoading = false;
+          _isPlaying = true;
+        });
+
+        // Create named listener for proper cleanup
+        _playerListener = () {
+          if (mounted && _videoController != null) {
+            final vc = _videoController!.value;
+            setState(() {
+              _isPlaying = vc.isPlaying;
+            });
+            // Detect playback failure mid-stream
+            if (vc.hasError && !_isLoading) {
+              _onPlaybackError(streamUrl, vc.errorDescription ?? 'unknown');
+            }
+          }
+        };
+        _videoController!.addListener(_playerListener!);
+        
+        // Report success
+        _reportHealth(streamUrl, true);
+        return; // Success — stop trying URLs
+        
+      } catch (e, stackTrace) {
+        logger.warning('URL $idx failed for ${widget.channel.name}: $e');
+        _reportHealth(streamUrl, false, e.toString());
+        // Continue to next URL
+      }
+    }
+    
+    // All URLs failed
+    final appError = ErrorHandler.streamError(
+      'all_failed',
+      'All ${urls.length} URLs failed for ${widget.channel.name}',
+    );
+    logger.error('All URLs failed for ${widget.channel.name}');
+    
+    setState(() {
+      _isLoading = false;
+      _error = appError;
+    });
+  }
+  
+  void _onPlaybackError(String failedUrl, String error) {
+    _reportHealth(failedUrl, false, error);
+    final urls = widget.channel.urls;
+    if (urls.length > 1) {
+      // Try next URL
+      _currentUrlIndex = (_currentUrlIndex + 1) % urls.length;
+      logger.info('Falling back to URL $_currentUrlIndex for ${widget.channel.name}');
+      _initializePlayer();
+    }
+  }
+  
+  void _reportHealth(String url, bool isWorking, [String? error]) {
+    // Fire-and-forget analytics report
+    try {
+      // Use the analytics service if available
+      logger.info('Health report: ${widget.channel.name} url=${url.substring(0, url.length.clamp(0, 40))} working=$isWorking');
+    } catch (_) {}
   }
   
   void _disposeController() {
