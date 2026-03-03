@@ -352,23 +352,7 @@ class MainWindow:
         )
         self.hide_failed_switch.pack(side="right")
         
-        # Row 2: Share toggle
-        from utils.privatebin import is_enabled, set_enabled
-        
-        row2 = ttk.Frame(filter_frame)
-        row2.pack(fill="x", pady=1)
-        
-        self.privatebin_var = tk.BooleanVar(value=is_enabled())
-        self.privatebin_switch = ttk.Checkbutton(
-            row2,
-            text="Share scan results",
-            variable=self.privatebin_var,
-            command=lambda: set_enabled(self.privatebin_var.get()),
-            bootstyle="round-toggle"
-        )
-        self.privatebin_switch.pack(side="left")
-        
-        # Row 3: Favorites only toggle
+        # Row 2: Favorites only toggle
         row3 = ttk.Frame(filter_frame)
         row3.pack(fill="x", pady=1)
         
@@ -1308,14 +1292,6 @@ class MainWindow:
                 self._select_group(self.current_group)
             self.scan_animation.set_complete(working, total)
             
-            # Upload results to PrivateBin if enabled
-            try:
-                from utils.privatebin import is_enabled, upload_scan_results
-                if is_enabled():
-                    self.root.after(1000, lambda: upload_scan_results(self.channel_manager.channels))
-            except ImportError:
-                pass
-            
             self.scan_working_count = 0
             self.scan_failed_count = 0
             self._scan_running = False
@@ -1958,21 +1934,6 @@ class MainWindow:
         self._set_status("Loading cached channels...")
         self.scan_label.configure(text="Loading...")
         
-        # Check for shared scan results from PrivateBin
-        shared_scan_data = None
-        try:
-            from utils.privatebin import is_enabled, get_recent_scan_results, get_non_working_urls
-            if is_enabled():
-                self._set_status("Checking for shared scan results...")
-                shared_scan_data = get_recent_scan_results()
-                if shared_scan_data:
-                    non_working = get_non_working_urls(shared_scan_data)
-                    if non_working:
-                        logger.info(f"Found {len(non_working)} non-working channels from shared scan")
-                        self.channel_manager.set_non_working_urls(non_working)
-        except Exception as e:
-            logger.warning(f"Could not check shared scan results: {e}")
-        
         has_cache = self.channel_manager.load_cached_channels()
         if has_cache:
             self._update_groups()
@@ -1982,10 +1943,7 @@ class MainWindow:
             # Select "All Channels" to show content immediately
             self.root.after(100, lambda: self._select_group('__all__'))
             
-            if shared_scan_data:
-                self._set_status(f"Loaded {cached_count} channels - scanning only failed channels")
-            else:
-                self._set_status(f"Loaded {cached_count} cached channels ({working} working)")
+            self._set_status(f"Loaded {cached_count} cached channels ({working} working)")
             
             self.root.after(500, lambda: self.channel_manager.validate_channels_async(rescan_all=False))
             self.root.after(2000, self.channel_manager.fetch_channels_async)

@@ -18,6 +18,8 @@ name: Build
 on:
   push:
     branches: [master]
+    tags-ignore:
+      - 'v*'
     paths:
       - 'flutter_app/**'
       - 'core/**'

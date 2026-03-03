@@ -128,9 +128,24 @@ class MapWindow:
         self._search_debounce_id = None
         self._cached_grouped = {}
 
+        # Pause background scanning while map is open to free network for tiles
+        try:
+            self._cm.stream_checker.pause()
+        except Exception:
+            pass
+
         self._build_window()
+        self._win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._win.after(300, self._place_markers)
         self._win.after(100, lambda: self._animate_open())
+
+    def _on_close(self):
+        """Resume scanning when map window closes."""
+        try:
+            self._cm.stream_checker.resume()
+        except Exception:
+            pass
+        self._win.destroy()
 
     def _animate_open(self):
         """Fade-in effect on window open."""
@@ -210,8 +225,17 @@ class MapWindow:
         self._stat_channels = self._make_stat_badge(self._stats_frame, "0", "channels")
         self._stat_working = self._make_stat_badge(self._stats_frame, "0", "working", self._GREEN)
 
-        # ── Map widget ──
-        self._map = TkinterMapView(self._win, corner_radius=0)
+        # ── Map widget — CartoDB Dark tiles (fast, matches dark theme) ──
+        import os, tempfile
+        _tile_cache = os.path.join(tempfile.gettempdir(), "tv_viewer_tiles.db")
+        self._map = TkinterMapView(
+            self._win, corner_radius=0,
+            database_path=_tile_cache, max_zoom=17,
+        )
+        self._map.set_tile_server(
+            "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+            max_zoom=17,
+        )
         self._map.pack(fill="both", expand=True)
         self._map.set_position(30, 20)
         self._map.set_zoom(3)

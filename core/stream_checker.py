@@ -80,7 +80,8 @@ class StreamChecker:
     
     __slots__ = ('_running', '_thread', '_semaphore', '_stop_event', '_loop', 
                  '_batch_size', '_request_delay', '_completed', '_session',
-                 '_alt_queue', '_priority_countries', '_recently_played')
+                 '_alt_queue', '_priority_countries', '_recently_played',
+                 '_paused')
     
     def __init__(self, batch_size: int = None, request_delay: float = None):
         """Initialize StreamChecker with configurable parameters.
@@ -93,6 +94,7 @@ class StreamChecker:
         self._thread: Optional[threading.Thread] = None
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._stop_event = threading.Event()
+        self._paused = threading.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._batch_size = batch_size or getattr(config, 'SCAN_BATCH_SIZE', 200)
         self._request_delay = request_delay or getattr(config, 'SCAN_REQUEST_DELAY', 0.02)
@@ -119,7 +121,21 @@ class StreamChecker:
         if channel_url and channel_url not in self._recently_played:
             self._recently_played.insert(0, channel_url)
             self._recently_played = self._recently_played[:20]
-    
+
+    def pause(self):
+        """Pause scanning to yield network/CPU to user interaction (e.g. map)."""
+        self._paused.set()
+        logger.debug("StreamChecker paused")
+
+    def resume(self):
+        """Resume scanning after user interaction completes."""
+        self._paused.clear()
+        logger.debug("StreamChecker resumed")
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused.is_set()
+
     def prioritize_channels(self, channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Reorder channels by dynamic priority for scanning.
         
@@ -431,10 +447,21 @@ class StreamChecker:
             for i in range(0, len(channels_to_validate), self._batch_size):
                 if self._stop_event.is_set():
                     break
+                
+                # Wait while paused (map open, user interaction)
+                while self._paused.is_set() and not self._stop_event.is_set():
+                    await asyncio.sleep(0.5)
                     
                 batch = channels_to_validate[i:i + self._batch_size]
                 tasks = [check_with_callback(ch, session) for ch in batch]
                 await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Stream results to Supabase per-batch
+                if shared_db is not None and shared_db.is_configured:
+                    try:
+                        await shared_db.upload_batch_inline(batch, session)
+                    except Exception:
+                        pass
                 
                 gc.collect(0)
                 
@@ -446,24 +473,6 @@ class StreamChecker:
                 await self._check_alternatives(session, on_channel_checked)
             
             self._session = None
-        
-        # --- SharedDb: Upload results ---
-        try:
-            if shared_db is not None and shared_db.is_configured and ChannelResult is not None:
-                upload_list = []
-                for ch in channels_to_validate:
-                    url = ch.get('url', '')
-                    if url and url.startswith(('http://', 'https://')):
-                        upload_list.append(ChannelResult(
-                            url=url,
-                            is_working=ch.get('is_working', False),
-                            last_checked=datetime.utcnow(),
-                            response_time_ms=None,
-                        ))
-                if upload_list:
-                    await shared_db.upload_results(upload_list)
-        except Exception as e:
-            logger.warning(f"SharedDb: Failed to upload results: {e}")
         
         return channels
     

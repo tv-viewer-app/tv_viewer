@@ -50,13 +50,18 @@ except ImportError:
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Supabase configuration — loaded from environment variables (SEC-003)
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
-SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+# Supabase configuration — imported from config.py which has hardcoded defaults
+try:
+    import config as _cfg
+    SUPABASE_URL = _cfg.SUPABASE_URL
+    SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY
+except (ImportError, AttributeError):
+    SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+    SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+
 TABLE_NAME = 'channel_status'
 
-# Feature flag to enable/disable shared database
-# Automatically enabled when environment variables are set
+# Always enabled when Supabase is configured — no opt-out toggle
 ENABLED = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 
 # Cache duration - only fetch results checked within last 24 hours
@@ -284,6 +289,52 @@ class SharedDbService:
         except Exception as e:
             logger.error(f'Error uploading to shared database: {e}', exc_info=True)
             return False  # Don't block on upload failure
+
+    async def upload_batch_inline(
+        self, channels: List[Dict], session: 'aiohttp.ClientSession'
+    ) -> bool:
+        """Upload a batch of checked channels using an existing aiohttp session.
+        
+        Called per-batch during scanning so results stream to Supabase
+        incrementally instead of waiting for the full scan to finish.
+        """
+        if not self.is_configured:
+            return False
+        
+        payload = []
+        for ch in channels:
+            ch_url = ch.get('url', '')
+            if ch_url and ch_url.startswith(('http://', 'https://')):
+                payload.append({
+                    'url_hash': self._hash_url(ch_url),
+                    'status': 'working' if ch.get('is_working', False) else 'failed',
+                    'last_checked': datetime.utcnow().isoformat(),
+                    'response_time_ms': None,
+                })
+        if not payload:
+            return True
+        
+        try:
+            url = f'{self.supabase_url}/rest/v1/{self.table_name}'
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates',
+            }
+            async with session.post(
+                url, json=payload, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status in (200, 201):
+                    logger.debug(f'SharedDb: streamed {len(payload)} results')
+                    return True
+                else:
+                    logger.debug(f'SharedDb: batch upload {resp.status}')
+                    return False
+        except Exception as e:
+            logger.debug(f'SharedDb: batch upload error: {e}')
+            return False
     
     def get_cached_status(
         self,

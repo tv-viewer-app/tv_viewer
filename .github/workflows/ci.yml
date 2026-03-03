@@ -19,6 +19,10 @@ on:
     branches: [master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -30,8 +34,6 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     outputs:
       python: ${{ steps.filter.outputs.python }}
       flutter: ${{ steps.filter.outputs.flutter }}
