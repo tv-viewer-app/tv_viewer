@@ -390,6 +390,39 @@ class ChannelProvider extends ChangeNotifier {
   }
 
   /// Validate channels (check if streams are working)
+  /// Country to prioritize during scanning (set by user interaction)
+  String? _priorityCountry;
+  
+  /// Boost a country to scan first (called when user browses/plays from a country)
+  void boostCountry(String country) {
+    _priorityCountry = country;
+    logger.info('Scan priority boosted for country: $country');
+  }
+  
+  /// Reorder channels for scanning: priority country first, then new, then revalidate
+  List<Channel> _prioritizeForScan(List<Channel> channels) {
+    if (_priorityCountry == null || _priorityCountry!.isEmpty) {
+      return channels;
+    }
+    
+    final priorityChannels = <Channel>[];
+    final otherChannels = <Channel>[];
+    
+    for (final ch in channels) {
+      if (ch.country?.toLowerCase() == _priorityCountry?.toLowerCase()) {
+        priorityChannels.add(ch);
+      } else {
+        otherChannels.add(ch);
+      }
+    }
+    
+    if (priorityChannels.isNotEmpty) {
+      logger.info('Scan priority: ${priorityChannels.length} channels from $_priorityCountry first');
+    }
+    
+    return [...priorityChannels, ...otherChannels];
+  }
+
   Future<void> validateChannels() async {
     if (_isScanning) return;
 
@@ -437,38 +470,44 @@ class ChannelProvider extends ChangeNotifier {
       }
     } catch (e) {
       logger.warning('SharedDb: Failed to fetch cached results: $e');
-      // Reset counters on failure — all channels will be validated normally
       _workingCount = 0;
       _failedCount = 0;
       _scanProgress = 0;
       skippedUrls.clear();
     }
-    // Channels that still need validation (excludes SharedDb-cached working channels)
-    final channelsToValidate = skippedUrls.isNotEmpty
+    // Channels that still need validation
+    var channelsToValidate = skippedUrls.isNotEmpty
         ? _channels.where((c) => !skippedUrls.contains(c.url)).toList()
-        : _channels;
-    // --- End SharedDb fetch ---
+        : List<Channel>.from(_channels);
+    
+    // Apply priority ordering (user's country first)
+    channelsToValidate = _prioritizeForScan(channelsToValidate);
+    
+    // Channels with failed primary URL that have alternatives
+    final altQueue = <int>[];
 
-    // Validate in batches of 5 for performance
+    // Phase 1: Smart scan — only check primary URL per channel
     const batchSize = 5;
     for (int i = 0; i < channelsToValidate.length; i += batchSize) {
-      if (!_isScanning) break; // Allow cancellation
+      if (!_isScanning) break;
 
       final batch = channelsToValidate.skip(i).take(batchSize).toList();
       
-      // Collect results from batch before updating state (BL-031: immutable)
       final updatedChannels = <Channel>[];
       int batchWorking = 0;
       int batchFailed = 0;
       
       await Future.wait(
         batch.map((channel) async {
+          // Only check primary (working) URL
+          final primaryUrl = channel.url; // Uses workingUrlIndex getter
           bool isWorking;
           if (_channelRepo != null) {
-            isWorking = await _channelRepo!.validateChannelStream(channel.url);
+            isWorking = await _channelRepo!.validateChannelStream(primaryUrl);
           } else {
-            isWorking = await M3UService.checkStream(channel.url);
+            isWorking = await M3UService.checkStream(primaryUrl);
           }
+          
           final updated = channel.copyWith(
             isWorking: isWorking,
             lastChecked: DateTime.now(),
@@ -479,29 +518,76 @@ class ChannelProvider extends ChangeNotifier {
             batchWorking++;
           } else {
             batchFailed++;
+            // Queue for alternative URL check if multi-URL
+            if (channel.urls.length > 1) {
+              final idx = _channels.indexWhere((c) => c.url == channel.url);
+              if (idx != -1) altQueue.add(idx);
+            }
           }
         }),
       );
       
-      // Update channels list with new instances (BL-031: immutable pattern)
       for (var updated in updatedChannels) {
-        final index = _channels.indexWhere((c) => c.url == updated.url);
+        final index = _channels.indexWhere((c) => c.name == updated.name && c.urls == updated.urls);
         if (index != -1) {
           _channels[index] = updated;
         }
       }
       
-      // Update state once after batch completes
       _workingCount += batchWorking;
       _failedCount += batchFailed;
       _scanProgress += batch.length;
       notifyListeners();
 
-      // Small delay to prevent overwhelming
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    
+    // Phase 2: Check alternative URLs for failed multi-URL channels
+    if (altQueue.isNotEmpty && _isScanning) {
+      logger.info('Checking alternative URLs for ${altQueue.length} channels...');
+      int resolved = 0;
+      
+      for (final channelIdx in altQueue) {
+        if (!_isScanning || channelIdx >= _channels.length) break;
+        
+        final channel = _channels[channelIdx];
+        final urls = channel.urls;
+        final primaryIdx = channel.workingUrlIndex.clamp(0, urls.length - 1);
+        
+        for (int urlIdx = 0; urlIdx < urls.length; urlIdx++) {
+          if (urlIdx == primaryIdx) continue;
+          
+          final altUrl = urls[urlIdx];
+          if (altUrl.isEmpty || !altUrl.startsWith('http')) continue;
+          
+          bool isWorking;
+          if (_channelRepo != null) {
+            isWorking = await _channelRepo!.validateChannelStream(altUrl);
+          } else {
+            isWorking = await M3UService.checkStream(altUrl);
+          }
+          
+          if (isWorking) {
+            _channels[channelIdx] = channel.copyWith(
+              isWorking: true,
+              workingUrlIndex: urlIdx,
+              lastChecked: DateTime.now(),
+            );
+            _workingCount++;
+            _failedCount--;
+            resolved++;
+            notifyListeners();
+            break;
+          }
+        }
+      }
+      
+      if (resolved > 0) {
+        logger.info('Alternative URL check: resolved $resolved/${altQueue.length} channels');
+      }
     }
 
-    // --- SharedDb: Upload results for channels that were actually validated ---
+    // --- SharedDb: Upload results ---
     try {
       if (SharedDbService.isConfigured) {
         final uploadResults = _channels
@@ -519,7 +605,6 @@ class ChannelProvider extends ChangeNotifier {
     } catch (e) {
       logger.warning('SharedDb: Failed to upload results: $e');
     }
-    // --- End SharedDb upload ---
 
     _isScanning = false;
     logger.info('Channel validation completed: $_workingCount working, $_failedCount failed');

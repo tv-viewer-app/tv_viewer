@@ -42,7 +42,7 @@ class M3UService {
     {'name': 'Channel 10 Business', 'url': 'https://r.il.cdn-redge.media/livehls/oil/calcala-live/live/channel10/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Kan 11 4K', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11_4k/live.livx/playlist.m3u8', 'group': 'General', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Knesset Channel', 'url': 'https://kneset.gostreaming.tv/p2-kneset/_definst_/myStream/index.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
-    {'name': 'Ynet Live', 'url': 'https://ynet-live-01.ynet-pic1.yit.co.il/ynet/live.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': 'Ynet Live', 'url': 'https://hls-video-ynet.ynethd.com/ynet/live.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Hala TV', 'url': 'https://gstream4.panet.co.il/edge/halaTV/chunks.m3u8', 'group': 'General', 'country': 'Israel', 'language': 'Arabic'},
     {'name': 'Kabbalah TV Hebrew', 'url': 'https://edge3.uk.kab.tv/live/tv66-heb-high/playlist.m3u8', 'group': 'Religious', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': '100FM TV', 'url': 'https://cdn.cybercdn.live/Radios_100FM/Video/playlist.m3u8', 'group': 'Music', 'country': 'Israel', 'language': 'Hebrew'},
@@ -61,6 +61,26 @@ class M3UService {
     {'name': '100FM Radio HLS', 'url': 'https://cdn.cybercdn.live/Radios_100FM/Audio/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': '103FM Radio', 'url': 'https://cdn.cybercdn.live/103FM/Live/icecast.audio', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': '103FM Radio HLS', 'url': 'https://cdn.cybercdn.live/103FM/Live/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    // 100FM Digital Sub-Channels (gb25.streamgates.net CDN)
+    {'name': '100FM Hits', 'url': 'https://gb25.streamgates.net/radios-audio/100Hits/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Hip Hop', 'url': 'https://gb25.streamgates.net/radios-audio/100HipHop/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Dance', 'url': 'https://gb25.streamgates.net/radios-audio/100Dance/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Trance', 'url': 'https://gb25.streamgates.net/radios-audio/100Trance/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Club', 'url': 'https://gb25.streamgates.net/radios-audio/100Club/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Top 40', 'url': 'https://gb25.streamgates.net/radios-audio/100Top40/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM 90s', 'url': 'https://gb25.streamgates.net/radios-audio/10090s/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM 80s', 'url': 'https://gb25.streamgates.net/radios-audio/10080s/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Workout', 'url': 'https://gb25.streamgates.net/radios-audio/100Workout/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Chillout', 'url': 'https://gb25.streamgates.net/radios-audio/100Chillout/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Retro', 'url': 'https://gb25.streamgates.net/radios-audio/100Retro/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Latin', 'url': 'https://gb25.streamgates.net/radios-audio/100Latin/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Jazz', 'url': 'https://gb25.streamgates.net/radios-audio/100Jazz/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Deep', 'url': 'https://gb25.streamgates.net/radios-audio/100Deep/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Classic Rock', 'url': 'https://gb25.streamgates.net/radios-audio/100ClassicRock/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM TikTok', 'url': 'https://gb25.streamgates.net/radios-audio/100TikTok/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM DJ Set', 'url': 'https://gb25.streamgates.net/radios-audio/100DJSet/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM K-Pop', 'url': 'https://gb25.streamgates.net/radios-audio/100KPop/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': '100FM Mizrachit', 'url': 'https://gb25.streamgates.net/radios-audio/100Mizrachit/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
   ];
 
   /// Fetch channels from an M3U URL
@@ -70,7 +90,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.1.0'},
+        headers: {'User-Agent': 'TV Viewer/2.1.1'},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -284,7 +304,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.1.0'},
+        headers: {'User-Agent': 'TV Viewer/2.1.1'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||

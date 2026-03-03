@@ -150,7 +150,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.0'},
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.1'},
         );
 
         await _videoController!.initialize().timeout(

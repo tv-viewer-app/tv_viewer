@@ -77,15 +77,91 @@ class PlaylistRepositoryImpl implements PlaylistRepository {
       final removed = channels.length - deduplicated.length;
       
       if (removed > 0) {
-        logger.info('PlaylistRepository: Removed $removed duplicates');
+        logger.info('PlaylistRepository: Removed $removed URL duplicates');
       }
       
-      return deduplicated;
+      // Phase 2: Consolidate channels with similar names into multi-URL entries
+      final consolidated = consolidateByName(deduplicated);
+      
+      return consolidated;
     } catch (e, stackTrace) {
       logger.error('PlaylistRepository: Error deduplicating', e, stackTrace);
-      // Return original list on error
       return channels;
     }
+  }
+  
+  /// Quality/variant suffixes to strip when consolidating channel names
+  static final _qualityPattern = RegExp(
+    r'\s*[\(\[]?\s*'
+    r'(alt\s*\d*|backup|mirror|'
+    r'\d{3,4}[pi]|'
+    r'[hHsS][dD]|[fF][hH][dD]|[uU][hH][dD]|4[kK]|'
+    r'h\.?26[45]|hevc|avc|'
+    r'low|high|med|'
+    r'stream\s*\d+|'
+    r'v\d+|'
+    r'option\s*\d+|'
+    r'feed\s*\d+)'
+    r'\s*[\)\]]?\s*$',
+    caseSensitive: false,
+  );
+  
+  /// Strip quality/variant suffixes to get canonical channel name
+  static String _normalizeChannelName(String name) {
+    if (name.isEmpty) return '';
+    var normalized = name.replaceAll(_qualityPattern, '').trim();
+    // Remove trailing separators
+    normalized = normalized.replaceAll(RegExp(r'[\s\-–—|/]+$'), '');
+    return normalized.isNotEmpty ? normalized : name;
+  }
+  
+  /// Merge channels with same base name into single multi-URL entries
+  List<Channel> consolidateByName(List<Channel> channels) {
+    final groups = <String, Channel>{};
+    final groupOrder = <String>[];
+    
+    for (final ch in channels) {
+      final baseName = _normalizeChannelName(ch.name);
+      final country = (ch.country ?? 'Unknown').toLowerCase();
+      final key = '${baseName.toLowerCase()}|$country';
+      
+      if (!groups.containsKey(key)) {
+        // First occurrence — use as base, ensure urls list is populated
+        final urls = ch.urls.isNotEmpty ? List<String>.from(ch.urls) : [ch.url];
+        groups[key] = ch.copyWith(
+          name: baseName,
+          urls: urls,
+          workingUrlIndex: 0,
+        );
+        groupOrder.add(key);
+      } else {
+        // Merge URLs into existing entry
+        final existing = groups[key]!;
+        final existingUrls = List<String>.from(existing.urls);
+        final seen = existingUrls.toSet();
+        
+        for (final url in ch.urls) {
+          if (url.isNotEmpty && !seen.contains(url)) {
+            seen.add(url);
+            existingUrls.add(url);
+          }
+        }
+        
+        // Update with merged URLs, prefer working status
+        groups[key] = existing.copyWith(
+          urls: existingUrls,
+          isWorking: existing.isWorking || ch.isWorking,
+          logo: existing.logo ?? ch.logo,
+        );
+      }
+    }
+    
+    final result = groupOrder.map((k) => groups[k]!).toList();
+    final merged = channels.length - result.length;
+    if (merged > 0) {
+      logger.info('PlaylistRepository: Consolidated $merged channels by name → ${result.length} unique');
+    }
+    return result;
   }
 
   @override

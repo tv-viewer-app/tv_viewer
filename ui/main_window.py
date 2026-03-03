@@ -727,7 +727,7 @@ class MainWindow:
         return icons.get(group, '📁')
     
     def _select_group(self, group: str):
-        """Handle group selection."""
+        """Handle group selection. Boosts scan priority for selected country."""
         self.current_group = group
         
         if group == '__all__':
@@ -736,6 +736,8 @@ class MainWindow:
         else:
             self.channel_header.configure(text=group)
             channels = self.channel_manager.get_channels_by_group(group)
+            # Boost scan priority for this group (may be a country)
+            self.channel_manager.stream_checker.boost_country(group)
         
         self._update_channel_list(channels)
     
@@ -1154,7 +1156,15 @@ class MainWindow:
             self._play_channel(channel)
     
     def _play_channel(self, channel: Dict[str, Any]):
-        """Open player for channel. Health status updated only after confirmed playback."""
+        """Open player for channel. Boosts scan priority for channel's country."""
+        # Boost scan priority for this channel's country and URL
+        country = channel.get('country', '')
+        url = channel.get('url', '')
+        if country:
+            self.channel_manager.stream_checker.boost_country(country)
+        if url:
+            self.channel_manager.stream_checker.boost_channel(url)
+        
         def _on_playback_confirmed(ch: Dict[str, Any]):
             """Called by PlayerWindow when VLC confirms video is playing."""
             if not ch.get('is_working'):

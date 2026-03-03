@@ -139,6 +139,112 @@ def get_channel_url(channel: Dict[str, Any]) -> str:
     return urls[idx]
 
 
+import re
+
+# Quality/variant suffixes to strip when consolidating channel names
+_QUALITY_PATTERN = re.compile(
+    r'\s*[\(\[]?\s*'
+    r'(alt\s*\d*|backup|mirror|'
+    r'\d{3,4}[pi]|'           # 720p, 1080i, etc
+    r'[hHsS][dD]|[fF][hH][dD]|[uU][hH][dD]|4[kK]|'  # HD, FHD, UHD, 4K
+    r'h\.?26[45]|hevc|avc|'   # Codecs
+    r'multi\s*[-_]?\s*audio|'
+    r'low|high|med|'
+    r'stream\s*\d+|'
+    r'v\d+|'                  # v1, v2
+    r'option\s*\d+|'
+    r'feed\s*\d+)'
+    r'\s*[\)\]]?\s*$',
+    re.IGNORECASE
+)
+
+def _normalize_channel_name(name: str) -> str:
+    """Strip quality/variant suffixes to get a canonical channel name for grouping."""
+    if not name:
+        return ''
+    normalized = _QUALITY_PATTERN.sub('', name).strip()
+    # Remove trailing separators
+    normalized = normalized.rstrip(' -–—|/')
+    return normalized if normalized else name
+
+
+def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge channels with the same base name into single multi-URL entries.
+    
+    Channels like "Reshet 13 720p", "Reshet 13 alt", "Reshet 13" are merged
+    into one entry with all their URLs in the 'urls' list. The best metadata
+    (logo, category, country) is kept from the first entry.
+    
+    Returns a new list; does not modify the originals.
+    """
+    from collections import OrderedDict
+    
+    groups: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+    
+    for ch in channels:
+        name = ch.get('name', '')
+        base_name = _normalize_channel_name(name)
+        country = ch.get('country', 'Unknown')
+        # Group key includes country to avoid merging channels from different countries
+        group_key = f"{base_name.lower()}|{country.lower()}"
+        
+        url = ch.get('url', '')
+        if not url:
+            continue
+        
+        if group_key not in groups:
+            # First occurrence — use as the base entry
+            merged = dict(ch)
+            merged['name'] = base_name if base_name else name
+            urls = list(ch.get('urls', []))
+            if not urls:
+                urls = [url]
+            # Deduplicate URLs
+            seen = set()
+            unique_urls = []
+            for u in urls:
+                if u and u not in seen:
+                    seen.add(u)
+                    unique_urls.append(u)
+            merged['urls'] = unique_urls
+            merged['url'] = unique_urls[0] if unique_urls else ''
+            merged['working_url_index'] = 0
+            groups[group_key] = merged
+        else:
+            # Merge into existing group
+            existing = groups[group_key]
+            existing_urls = existing.get('urls', [])
+            seen = set(existing_urls)
+            
+            # Add this channel's URL(s)
+            new_urls = ch.get('urls', [url])
+            for u in new_urls:
+                if u and u not in seen:
+                    seen.add(u)
+                    existing_urls.append(u)
+            existing['urls'] = existing_urls
+            
+            # Prefer working status
+            if ch.get('is_working') and not existing.get('is_working'):
+                existing['is_working'] = True
+                # Point to the working URL
+                working_idx = len(existing_urls) - len(new_urls)
+                existing['working_url_index'] = max(0, working_idx)
+                existing['url'] = existing_urls[existing['working_url_index']]
+            
+            # Fill in missing metadata from subsequent entries
+            if not existing.get('logo') and ch.get('logo'):
+                existing['logo'] = ch['logo']
+            if existing.get('category', 'Other') == 'Other' and ch.get('category', 'Other') != 'Other':
+                existing['category'] = ch['category']
+    
+    result = list(groups.values())
+    removed = len(channels) - len(result)
+    if removed > 0:
+        logger.info(f"Channel consolidation: {len(channels)} → {len(result)} ({removed} merged)")
+    return result
+
+
 class ChannelManager:
     """Manages channel discovery, validation, and persistence.
     
@@ -372,6 +478,9 @@ class ChannelManager:
         
         # Filter out adult channels first
         self.channels = [ch for ch in self.channels if not self._is_adult_channel(ch)]
+        
+        # Consolidate channels with similar names into multi-URL entries
+        self.channels = consolidate_channels(self.channels)
         
         total = len(self.channels)
         

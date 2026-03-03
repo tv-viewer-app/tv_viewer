@@ -541,6 +541,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _playChannel(Channel channel) {
+    // Boost scan priority for this channel's country
+    if (channel.country != null && channel.country!.isNotEmpty) {
+      final provider = Provider.of<ChannelProvider>(context, listen: false);
+      provider.boostCountry(channel.country!);
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -553,7 +558,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '2.1.0',
+      applicationVersion: '2.1.1',
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

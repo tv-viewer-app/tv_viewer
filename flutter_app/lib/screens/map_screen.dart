@@ -569,6 +569,11 @@ class _MapScreenState extends State<MapScreen>
   }
 
   void _playChannel(Channel ch) {
+    // Boost scan priority for this channel's country
+    if (ch.country != null && ch.country!.isNotEmpty) {
+      final provider = Provider.of<ChannelProvider>(context, listen: false);
+      provider.boostCountry(ch.country!);
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => PlayerScreen(channel: ch)),

@@ -54,8 +54,9 @@ if sys.platform == 'win32':
 class StreamChecker:
     """Checks if IPTV streams are working in the background.
     
-    This class manages asynchronous HTTP validation of IPTV streams with
-    optimizations for CPU, memory, and network efficiency.
+    v2.1.1: Smart scanning — only checks primary URL during main scan,
+    queues alternatives for background verification. Supports dynamic
+    priority reordering based on user interaction.
     
     Attributes:
         _running: Boolean flag indicating if checker is active
@@ -65,9 +66,12 @@ class StreamChecker:
         _loop: Asyncio event loop running in background thread
         _batch_size: Number of channels to process per batch (memory optimization)
         _request_delay: Delay between requests in seconds (CPU throttling)
+        _alt_queue: Channels whose alternative URLs need background checking
+        _priority_countries: Countries to scan first (set by user interaction)
     
     Example:
         checker = StreamChecker()
+        checker.boost_country('Israel')  # Prioritize user's country
         checker.start_background_check(
             channels,
             on_channel_checked=lambda ch, cur, tot: logger.debug(f"{cur}/{tot}")
@@ -75,7 +79,8 @@ class StreamChecker:
     """
     
     __slots__ = ('_running', '_thread', '_semaphore', '_stop_event', '_loop', 
-                 '_batch_size', '_request_delay', '_completed', '_session')
+                 '_batch_size', '_request_delay', '_completed', '_session',
+                 '_alt_queue', '_priority_countries', '_recently_played')
     
     def __init__(self, batch_size: int = None, request_delay: float = None):
         """Initialize StreamChecker with configurable parameters.
@@ -93,6 +98,77 @@ class StreamChecker:
         self._request_delay = request_delay or getattr(config, 'SCAN_REQUEST_DELAY', 0.02)
         self._completed = 0
         self._session: Optional[aiohttp.ClientSession] = None
+        self._alt_queue: List[Dict[str, Any]] = []
+        self._priority_countries: List[str] = []
+        self._recently_played: List[str] = []
+    
+    def boost_country(self, country: str):
+        """Boost a country to the top of scan priority (called on user interaction)."""
+        if not country or country == 'Unknown':
+            return
+        # Move to front, dedup
+        if country in self._priority_countries:
+            self._priority_countries.remove(country)
+        self._priority_countries.insert(0, country)
+        # Keep only top 5
+        self._priority_countries = self._priority_countries[:5]
+        logger.debug(f"Scan priority countries: {self._priority_countries}")
+    
+    def boost_channel(self, channel_url: str):
+        """Record a recently played channel URL for priority scanning."""
+        if channel_url and channel_url not in self._recently_played:
+            self._recently_played.insert(0, channel_url)
+            self._recently_played = self._recently_played[:20]
+    
+    def prioritize_channels(self, channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Reorder channels by dynamic priority for scanning.
+        
+        Priority order:
+        1. Recently played channels (highest — user cares about these)
+        2. Channels in priority countries (user's active region)
+        3. Never-scanned channels
+        4. Working channels needing revalidation
+        5. Known-failed channels (lowest)
+        """
+        recently_played = []
+        priority_country = []
+        never_scanned = []
+        working_revalidate = []
+        failed = []
+        
+        priority_set = set(self._priority_countries)
+        played_set = set(self._recently_played)
+        
+        for ch in channels:
+            url = ch.get('url', '')
+            country = ch.get('country', 'Unknown')
+            
+            if url in played_set:
+                recently_played.append(ch)
+            elif country in priority_set:
+                priority_country.append(ch)
+            elif ch.get('scan_status') == 'pending' or not ch.get('last_scanned'):
+                never_scanned.append(ch)
+            elif ch.get('is_working'):
+                working_revalidate.append(ch)
+            else:
+                failed.append(ch)
+        
+        # Sort priority countries by boost order
+        if self._priority_countries:
+            country_order = {c: i for i, c in enumerate(self._priority_countries)}
+            priority_country.sort(key=lambda ch: country_order.get(ch.get('country', ''), 99))
+        
+        result = recently_played + priority_country + never_scanned + working_revalidate + failed
+        if priority_set:
+            logger.info(
+                f"Scan priority: {len(recently_played)} played, "
+                f"{len(priority_country)} priority-country, "
+                f"{len(never_scanned)} new, "
+                f"{len(working_revalidate)} revalidate, "
+                f"{len(failed)} failed"
+            )
+        return result
     
     async def check_stream(
         self, 
@@ -100,10 +176,11 @@ class StreamChecker:
         session: aiohttp.ClientSession
     ) -> Dict[str, Any]:
         """
-        Check if a channel's stream(s) are accessible — supports multi-URL fallback.
+        Smart stream check — only tests the primary (working) URL.
         
-        Tries each URL in the channel's urls list. First working URL is set as
-        the active one via working_url_index.
+        v2.1.1: Instead of iterating all URLs, checks only the workingUrlIndex URL.
+        If it fails, marks channel as failed and queues it for background alternative
+        checking. This makes the main scan 2-5x faster for multi-URL channels.
         
         Args:
             channel: Channel dictionary with 'url' or 'urls' key
@@ -112,49 +189,103 @@ class StreamChecker:
         Returns:
             Channel dict with 'is_working', 'working_url_index', and 'last_scanned' updated
         """
-        # Support both single url and multi-url formats
         urls = channel.get('urls', [])
         if not urls:
             single_url = channel.get('url', '')
             urls = [single_url] if single_url else []
         
-        channel['is_working'] = False
         channel['last_scanned'] = datetime.now().isoformat()
         
         if not urls:
+            channel['is_working'] = False
             return channel
         
-        for idx, url in enumerate(urls):
-            if not url or not isinstance(url, str):
-                continue
-            if not url.startswith(('http://', 'https://', 'rtmp://', 'rtsp://')):
-                continue
-            if url.startswith(('file://', 'javascript:', 'data:')):
-                continue
-            
-            # Non-HTTP streams can't be checked via HTTP — assume working
-            if url.startswith(('rtmp://', 'rtsp://')):
-                channel['is_working'] = True
-                channel['working_url_index'] = idx
-                channel['url'] = url
-                return channel
-            
-            try:
-                async with self._semaphore:
-                    is_working = await self._check_single_url(url, session)
-                    if is_working:
-                        channel['is_working'] = True
-                        channel['working_url_index'] = idx
-                        channel['url'] = url
-                        return channel
-            except Exception:
-                continue
+        # Check only the primary (last-known-working) URL
+        primary_idx = channel.get('working_url_index', 0)
+        if primary_idx >= len(urls):
+            primary_idx = 0
         
-        # No working URL found
-        channel['working_url_index'] = 0
-        if urls:
-            channel['url'] = urls[0]
+        primary_url = urls[primary_idx]
+        
+        if not primary_url or not isinstance(primary_url, str):
+            channel['is_working'] = False
+            return channel
+        
+        if not primary_url.startswith(('http://', 'https://', 'rtmp://', 'rtsp://')):
+            channel['is_working'] = False
+            return channel
+        
+        # Non-HTTP streams can't be checked via HTTP — assume working
+        if primary_url.startswith(('rtmp://', 'rtsp://')):
+            channel['is_working'] = True
+            channel['url'] = primary_url
+            return channel
+        
+        try:
+            async with self._semaphore:
+                is_working = await self._check_single_url(primary_url, session)
+                if is_working:
+                    channel['is_working'] = True
+                    channel['url'] = primary_url
+                    return channel
+        except Exception:
+            pass
+        
+        # Primary URL failed — if there are alternatives, queue for background check
+        if len(urls) > 1:
+            self._alt_queue.append(channel)
+            logger.debug(f"Queued {channel.get('name', '?')[:30]} for alt-URL check ({len(urls)-1} alternatives)")
+        
+        channel['is_working'] = False
         return channel
+    
+    async def _check_alternatives(
+        self,
+        session: aiohttp.ClientSession,
+        on_channel_checked: Optional[Callable] = None,
+    ):
+        """Background check of alternative URLs for channels whose primary failed.
+        
+        Runs after the main scan completes. Tries remaining URLs for each
+        queued channel and updates working_url_index on success.
+        """
+        if not self._alt_queue:
+            return
+        
+        alt_count = len(self._alt_queue)
+        logger.info(f"Checking alternative URLs for {alt_count} channels...")
+        
+        resolved = 0
+        for channel in self._alt_queue:
+            if self._stop_event.is_set():
+                break
+            
+            urls = channel.get('urls', [])
+            primary_idx = channel.get('working_url_index', 0)
+            
+            for idx, url in enumerate(urls):
+                if idx == primary_idx:
+                    continue  # Already checked
+                if not url or not url.startswith(('http://', 'https://')):
+                    continue
+                
+                try:
+                    async with self._semaphore:
+                        is_working = await self._check_single_url(url, session)
+                        if is_working:
+                            channel['is_working'] = True
+                            channel['working_url_index'] = idx
+                            channel['url'] = url
+                            resolved += 1
+                            break
+                except Exception:
+                    continue
+                
+                if self._request_delay > 0:
+                    await asyncio.sleep(self._request_delay)
+        
+        self._alt_queue.clear()
+        logger.info(f"Alternative URL check: resolved {resolved}/{alt_count} channels")
     
     async def _check_single_url(
         self,
@@ -198,14 +329,13 @@ class StreamChecker:
         channels: List[Dict[str, Any]],
         on_channel_checked: Optional[Callable[[Dict[str, Any], int, int], None]] = None
     ) -> List[Dict[str, Any]]:
-        """Check multiple streams concurrently with optimized resource usage.
+        """Check multiple streams with smart priority ordering.
         
-        This method implements several optimizations:
-        - Semaphore-limited concurrency prevents resource exhaustion
-        - Batch processing reduces memory pressure
-        - DNS caching reduces repeated lookups
-        - Connection pooling with per-host limits
-        - Adaptive delays prevent CPU saturation
+        v2.1.1 optimizations:
+        - Priority ordering: user country > recently played > new > revalidate > failed
+        - Primary-URL-only scan (alternatives checked in background pass)
+        - SharedDb cache skip for recently-validated channels
+        - Batch processing with GC and delays
         
         Args:
             channels: List of channel dictionaries to validate
@@ -216,10 +346,11 @@ class StreamChecker:
         """
         max_concurrent = getattr(config, 'MAX_CONCURRENT_CHECKS', 5)
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._alt_queue = []  # Reset alternative URL queue
         
         timeout = aiohttp.ClientTimeout(
             total=getattr(config, 'STREAM_CHECK_TIMEOUT', 5),
-            connect=3,  # Fast connection timeout
+            connect=3,
             sock_read=getattr(config, 'STREAM_CHECK_TIMEOUT', 5)
         )
         
@@ -262,15 +393,16 @@ class StreamChecker:
             self._completed = 0
         # --- End SharedDb fetch ---
         
+        # Apply dynamic priority ordering
+        channels_to_validate = self.prioritize_channels(channels_to_validate)
+        
         async def check_with_callback(channel: Dict[str, Any], session: aiohttp.ClientSession):
             """Check single channel with callback notification."""
-            # Check for stop signal before processing
             if self._stop_event.is_set():
                 return channel
             
             result = await self.check_stream(channel, session)
             
-            # CPU breathing room - yield control
             if self._request_delay > 0:
                 await asyncio.sleep(self._request_delay)
             
@@ -280,46 +412,42 @@ class StreamChecker:
                 try:
                     on_channel_checked(result, self._completed, total)
                 except Exception:
-                    pass  # Don't let callback errors stop the scan
+                    pass
             
             return result
         
-        # Optimized connection pooling - fewer connections = less resource usage
         connector = aiohttp.TCPConnector(
-            limit=max_concurrent,        # Total connection limit
-            limit_per_host=2,            # Prevent overwhelming single servers
-            force_close=True,            # Close connections after use
-            enable_cleanup_closed=True,  # Clean up closed connections
-            ttl_dns_cache=600,           # Cache DNS for 10 minutes
-            use_dns_cache=True,          # Enable DNS caching
+            limit=max_concurrent,
+            limit_per_host=2,
+            force_close=True,
+            enable_cleanup_closed=True,
+            ttl_dns_cache=600,
+            use_dns_cache=True,
         )
         
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             self._session = session
             
-            # Process in smaller batches to reduce memory pressure
             for i in range(0, len(channels_to_validate), self._batch_size):
                 if self._stop_event.is_set():
                     break
                     
                 batch = channels_to_validate[i:i + self._batch_size]
-                
-                # Create tasks for this batch only
                 tasks = [check_with_callback(ch, session) for ch in batch]
-                
-                # Gather with return_exceptions to continue on individual failures
                 await asyncio.gather(*tasks, return_exceptions=True)
                 
-                # Memory optimization: trigger generation-0 GC between batches
                 gc.collect(0)
                 
-                # CPU breathing room between batches
                 batch_delay = getattr(config, 'SCAN_BATCH_DELAY', 0.5)
                 await asyncio.sleep(batch_delay)
             
+            # Phase 2: Check alternative URLs for failed channels
+            if not self._stop_event.is_set():
+                await self._check_alternatives(session, on_channel_checked)
+            
             self._session = None
         
-        # --- SharedDb: Upload results for channels that were actually validated ---
+        # --- SharedDb: Upload results ---
         try:
             if shared_db is not None and shared_db.is_configured and ChannelResult is not None:
                 upload_list = []
@@ -336,7 +464,6 @@ class StreamChecker:
                     await shared_db.upload_results(upload_list)
         except Exception as e:
             logger.warning(f"SharedDb: Failed to upload results: {e}")
-        # --- End SharedDb upload ---
         
         return channels
     

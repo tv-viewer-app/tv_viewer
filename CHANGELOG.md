@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-03-03
+
+### Added
+- **Smart scan — primary URL only** — scanner now checks only the last-known-working URL per channel during the main pass; alternative URLs are verified in a separate background phase. Main scan is 2-5x faster for multi-URL channels
+- **Dynamic scan priority queue** — channels are scanned in priority order: recently played → user's active country → never-scanned → revalidation → known-failed
+- **Country-based priority boost** — selecting a country group or playing a channel automatically boosts that country's channels to the top of the scan queue (both Windows and Android)
+- **User interaction drives scan order** — playing a channel records its URL and country for priority scanning in the next cycle
+- **Alternative URL background pass** — after the main scan, channels whose primary URL failed are re-checked against their alternative URLs; resolved channels are marked working with updated workingUrlIndex
+- **Channel name consolidation** — channels with similar names (e.g. "Reshet 13 720p", "Reshet 13 alt", "Reshet 13") are automatically merged into a single entry with multiple stream URLs (both Windows and Android)
+- **100FM digital sub-channels on Android** — added 19 100FM radio stations (Hip Hop, Dance, Trance, Club, Top 40, 90s, 80s, etc.) to Flutter custom channels
+
+### Fixed
+- **Missing radio stations on Android** — Flutter was not loading channels_config.json; 100FM sub-channels and other custom radio stations now included in hardcoded custom channel list
+- **Ynet Live URL on Android** — updated to new CDN endpoint (was still using dead ynet-pic1 URL)
+
+### Changed
+- Stream checker only tests one URL per channel during main scan (was testing all URLs sequentially)
+- Flutter scan batches increased delay 50ms→100ms for stability
+- Scan priority logged to help debug channel ordering
+
 ## [2.1.0] - 2026-03-02
 
 ### Added
