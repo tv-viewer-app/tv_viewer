@@ -396,7 +396,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
             _isPlaying = controller.value.isPlaying;
           });
           if (controller.value.hasError) {
-            _onPlaybackError(streamUrl, controller.value.errorDescription ?? 'Unknown');
+            final idx = widget.channel.urls.indexOf(streamUrl);
+            _onPlaybackError(idx >= 0 ? idx : _currentUrlIndex, controller.value.errorDescription ?? 'Unknown');
           }
         }
       };
