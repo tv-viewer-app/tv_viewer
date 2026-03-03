@@ -283,9 +283,10 @@ class _MapScreenState extends State<MapScreen>
                   ),
                 ],
               ),
-              // Stats overlay at bottom
+              // Stats overlay at bottom (extra padding for Android nav bar)
               Positioned(
-                left: 12, right: 12, bottom: 12,
+                left: 12, right: 12,
+                bottom: MediaQuery.of(context).padding.bottom + 16,
                 child: _StatsBar(
                   countries: grouped.length,
                   channels: channels.length,
@@ -351,11 +352,12 @@ class _MapScreenState extends State<MapScreen>
           );
           markers.add(Marker(
             point: point,
-            width: 36,
-            height: 36,
+            width: 100,
+            height: 56,
             child: GestureDetector(
               onTap: () => _showChannelPopup(ch, provider),
               child: _ChannelPin(
+                name: ch.name,
                 isWorking: ch.isWorking,
                 isFavorite: provider.isFavorite(ch),
               ),
@@ -644,12 +646,14 @@ class _CountryBubble extends StatelessWidget {
   }
 }
 
-/// Small pin marker for individual channels with animated glow.
+/// Small pin marker for individual channels with name label.
 class _ChannelPin extends StatelessWidget {
+  final String? name;
   final bool isWorking;
   final bool isFavorite;
 
   const _ChannelPin({
+    this.name,
     required this.isWorking,
     required this.isFavorite,
   });
@@ -657,32 +661,60 @@ class _ChannelPin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseColor = isWorking ? Colors.green : Colors.red[400]!;
-    return Container(
-      decoration: BoxDecoration(
-        color: baseColor,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isFavorite ? Colors.amber : Colors.white,
-          width: isFavorite ? 3 : 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: baseColor.withOpacity(0.5),
-            blurRadius: 8,
-            spreadRadius: 1,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: baseColor,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isFavorite ? Colors.amber : Colors.white,
+              width: isFavorite ? 3 : 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: baseColor.withOpacity(0.5),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 3,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
+          child: Icon(
+            isFavorite ? Icons.star_rounded : Icons.tv,
+            size: 14,
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
+        if (name != null) ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              name!.length > 14 ? '${name!.substring(0, 12)}…' : name!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+                height: 1.1,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
-      ),
-      child: Icon(
-        isFavorite ? Icons.star_rounded : Icons.tv,
-        size: 16,
-        color: Colors.white.withOpacity(0.9),
-      ),
+      ],
     );
   }
 }

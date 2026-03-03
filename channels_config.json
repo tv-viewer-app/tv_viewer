@@ -246,7 +246,7 @@
     },
     {
       "name": "Ynet Live",
-      "url": "https://ynet-live-01.ynet-pic1.yit.co.il/ynet/live.m3u8",
+      "url": "https://hls-video-ynet.ynethd.com/0323/7a92522310b049209122e2ffbd920508/master.m3u8",
       "category": "News",
       "country": "Israel"
     },
@@ -470,6 +470,158 @@
     {
       "name": "100FM Radio HLS",
       "url": "https://cdn.cybercdn.live/Radios_100FM/Audio/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Hits",
+      "url": "https://gb25.streamgates.net/radios-audio/100Hits/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Hip Hop",
+      "url": "https://gb25.streamgates.net/radios-audio/100Hiphop/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Dance",
+      "url": "https://gb25.streamgates.net/radios-audio/100Dance/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Trance",
+      "url": "https://gb25.streamgates.net/radios-audio/100Trance/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Club",
+      "url": "https://gb25.streamgates.net/radios-audio/100Club/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Top 40",
+      "url": "https://gb25.streamgates.net/radios-audio/100Top40/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM 90s",
+      "url": "https://gb25.streamgates.net/radios-audio/10090s/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM 80s",
+      "url": "https://gb25.streamgates.net/radios-audio/10080s/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Workout",
+      "url": "https://gb25.streamgates.net/radios-audio/100Workout/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Chillout",
+      "url": "https://gb25.streamgates.net/radios-audio/100Chillout/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Retro",
+      "url": "https://gb25.streamgates.net/radios-audio/100Retro/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Latin",
+      "url": "https://gb25.streamgates.net/radios-audio/100Latin/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Jazz",
+      "url": "https://gb25.streamgates.net/radios-audio/100Jazz/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Deep",
+      "url": "https://gb25.streamgates.net/radios-audio/100Deep/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Classic Rock",
+      "url": "https://gb25.streamgates.net/radios-audio/100ClassicRock/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM TikTok",
+      "url": "https://gb25.streamgates.net/radios-audio/100Tiktok/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM DJ Set",
+      "url": "https://gb25.streamgates.net/radios-audio/100Djset/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM K-Pop",
+      "url": "https://gb25.streamgates.net/radios-audio/100kpop/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Mizrachit",
+      "url": "https://gb25.streamgates.net/radios-audio/100Mizrachit/playlist.m3u8",
       "category": "Radio",
       "country": "Israel",
       "language": "Hebrew",
