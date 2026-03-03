@@ -107,3 +107,9 @@
 2026-03-03 16:40:10 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
 2026-03-03 16:40:12 - test_write - INFO - Test message 1772548812.5424914
 2026-03-03 16:43:02 - tv_viewer - INFO - TV Viewer logging initialized - Log file: D:\Visual Studio 2017\tv_viewer_project\logs\tv_viewer.log
+2026-03-03 15:51:55 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:52:10 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:52:38 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:52:39 - core.channel_manager - INFO - Channel consolidation: 17948 → 14721 (3227 merged)
+2026-03-03 15:52:49 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:53:39 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
