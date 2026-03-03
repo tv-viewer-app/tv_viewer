@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:floating/floating.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform;
 import '../models/channel.dart';
 import '../services/pip_service.dart';
@@ -137,8 +138,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       return;
     }
     
-    // Start from working URL index
-    _currentUrlIndex = widget.channel.workingUrlIndex.clamp(0, urls.length - 1);
+    // Start from preferred source (saved by user) or working URL index
+    final preferred = await loadPreferredSource(widget.channel);
+    _currentUrlIndex = preferred.clamp(0, urls.length - 1);
     
     // Try each URL in order, starting from working index
     for (int attempt = 0; attempt < urls.length; attempt++) {
@@ -151,7 +153,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.3'},
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.4'},
         );
 
         await _videoController!.initialize().timeout(
@@ -271,6 +273,92 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _volume = volume;
     });
     _videoController?.setVolume(volume);
+  }
+
+  /// Switch to a specific source URL by index and save as preferred
+  void _switchSource(int index) {
+    if (index == _currentUrlIndex) return;
+    if (index < 0 || index >= widget.channel.urls.length) return;
+    
+    logger.info('Switching to source #${index + 1} for ${widget.channel.name}');
+    AnalyticsService.instance.trackFeature('switch_source');
+    
+    _currentUrlIndex = index;
+    
+    // Save preferred source via SharedPreferences
+    _savePreferredSource(index);
+    
+    // Reinitialize player with the selected URL
+    _disposeController();
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _initializePlayerWithUrl(widget.channel.urls[index]);
+  }
+
+  /// Initialize player with a specific URL (used by source switcher)
+  Future<void> _initializePlayerWithUrl(String streamUrl) async {
+    try {
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(streamUrl),
+        httpHeaders: const {'User-Agent': 'TV Viewer/2.1.4'},
+      );
+      
+      await controller.initialize();
+      
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+      
+      _videoController = controller;
+      _playerListener = () {
+        if (mounted) {
+          setState(() {
+            _isPlaying = controller.value.isPlaying;
+          });
+          if (controller.value.hasError) {
+            _onPlaybackError(streamUrl, controller.value.errorDescription ?? 'Unknown');
+          }
+        }
+      };
+      controller.addListener(_playerListener!);
+      controller.setVolume(_volume);
+      controller.play();
+      
+      _reportHealth(streamUrl, true);
+      
+      setState(() {
+        _isLoading = false;
+        _isPlaying = true;
+        _error = null;
+      });
+    } catch (e) {
+      logger.error('Failed to play source: $streamUrl', e);
+      setState(() {
+        _isLoading = false;
+        _error = ErrorHandler.streamError('source_fail', e.toString());
+      });
+    }
+  }
+
+  Future<void> _savePreferredSource(int index) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'preferred_source_${widget.channel.name.toLowerCase().hashCode}';
+      await prefs.setInt(key, index);
+    } catch (_) {}
+  }
+
+  static Future<int> loadPreferredSource(Channel channel) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'preferred_source_${channel.name.toLowerCase().hashCode}';
+      return prefs.getInt(key) ?? channel.workingUrlIndex;
+    } catch (_) {
+      return channel.workingUrlIndex;
+    }
   }
   
   void _toggleControls() {
@@ -711,6 +799,51 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                         ],
                       ),
                       const SizedBox(height: 8),
+                      // Source selector (when multiple URLs available)
+                      if (widget.channel.urls.length > 1)
+                        Row(
+                          children: [
+                            const Icon(Icons.stream, color: Colors.white70, size: 16),
+                            const SizedBox(width: 8),
+                            const Text('Source:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SizedBox(
+                                height: 28,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: widget.channel.urls.length,
+                                  itemBuilder: (context, index) {
+                                    final isActive = index == _currentUrlIndex;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: GestureDetector(
+                                        onTap: () => _switchSource(index),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: isActive ? Colors.blue : Colors.white12,
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: isActive ? null : Border.all(color: Colors.white24),
+                                          ),
+                                          child: Text(
+                                            '#${index + 1}',
+                                            style: TextStyle(
+                                              color: isActive ? Colors.white : Colors.white60,
+                                              fontSize: 12,
+                                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (widget.channel.urls.length > 1) const SizedBox(height: 8),
                       // Info text
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,

@@ -6,7 +6,7 @@ A cross-platform IPTV streaming application for Windows and Android.
 ![Flutter](https://img.shields.io/badge/Flutter-3.19-02569B.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-2.0.0-orange.svg)
+![Version](https://img.shields.io/badge/Version-2.1.4-orange.svg)
 
 ## Features
 
@@ -16,9 +16,15 @@ A cross-platform IPTV streaming application for Windows and Android.
 - 📂 **Categorized channel list** — Channels organized by category, country, or language
 - 📺 **Media type filtering** — Filter by TV, Radio, or All
 - 🎬 **Embedded video player** — VLC-powered player (Windows) / native player (Android)
+- 🔀 **Source selector in player** — Switch between alternative stream sources without leaving the player
 - 💾 **Persistent cache** — Saves working channels for faster startup
+- 🧹 **Channel consolidation** — Multi-pass name normalization eliminates 18% fewer duplicates across sources
+- 🔍 **Smart scan** — Dynamic priority queue orders stream checks by likelihood of success
 - 🎨 **Windows 11 Fluent Design** — Modern dark theme with ttkbootstrap
 - 📱 **Android app** — Flutter-based mobile app with Material Design
+- 🌐 **Crowd-sourced channel health** — Supabase-backed health sharing lets users collectively surface working streams
+- 📊 **Privacy-first telemetry** — Opt-in anonymous usage analytics with no PII collection
+- 🛡️ **SSRF protection** — Server-side request forgery guards on all outbound URL fetches
 - 🔒 **No login required** — Just start and watch
 
 ## Downloads
@@ -26,7 +32,7 @@ A cross-platform IPTV streaming application for Windows and Android.
 | Platform | Download | Size |
 |----------|----------|------|
 | Windows | [`dist/TV_Viewer.exe`](dist/TV_Viewer.exe) | ~25 MB |
-| Android | [`dist/android/TV_Viewer_v2.0.0.apk`](dist/android/TV_Viewer_v2.0.0.apk) | ~51 MB |
+| Android | [`dist/android/TV_Viewer_v2.1.4.apk`](dist/android/TV_Viewer_v2.1.4.apk) | ~51 MB |
 
 > **Note:** Windows requires [VLC media player](https://www.videolan.org/vlc/) to be installed.
 
@@ -38,7 +44,7 @@ A cross-platform IPTV streaming application for Windows and Android.
 3. Double-click to run
 
 ### Android
-1. Download `TV_Viewer_v2.0.0.apk` from `dist/android/`
+1. Download `TV_Viewer_v2.1.4.apk` from `dist/android/`
 2. Enable "Install from unknown sources" in Settings
 3. Install and open
 
@@ -50,13 +56,14 @@ python main.py
 
 ## Tech Stack
 
-| Component | Windows (Python) | Android (Flutter) |
-|-----------|-----------------|-------------------|
-| UI Framework | ttkbootstrap (Fluent Design) | Flutter / Material Design |
+| Component | Windows (Python / tkinter) | Android (Flutter / Dart) |
+|-----------|---------------------------|--------------------------|
+| UI Framework | ttkbootstrap / tkinter (Fluent Design) | Flutter / Material Design |
 | Video Player | VLC (python-vlc) | video_player |
 | HTTP Client | aiohttp + requests | http package |
 | Concurrency | asyncio + threading | Dart async/await |
 | Data Storage | JSON files | SharedPreferences |
+| Cloud Backend | Supabase (crowd-sourced health) | Supabase (crowd-sourced health) |
 | Build | PyInstaller | Flutter build / GitHub Actions |
 
 ## Documentation
@@ -135,7 +142,9 @@ See [SUPPORT_GUIDE.md](SUPPORT_GUIDE.md) for detailed troubleshooting.
 |---------|----------|
 | VLC not found | Install VLC from [videolan.org](https://www.videolan.org/vlc/) |
 | No channels | Check internet connection, click "Refresh" |
-| Stream not playing | Try another channel — some may be geo-restricted or offline |
+| Duplicate channels | Clear cache — channels consolidate automatically on next load |
+| Stream not playing | Use the source selector in the player to try an alternative stream |
+| Supabase unavailable | App works fully offline; health sharing resumes when connectivity returns |
 | App crashes on Windows | Ensure ttkbootstrap and Pillow are installed |
 
 ## License

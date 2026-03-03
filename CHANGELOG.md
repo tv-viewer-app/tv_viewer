@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-03-03
+
+### Added
+- **Source selector in player** — both Windows and Android players show a source picker when a channel has multiple stream URLs. Select which source to use; preferred source is saved per channel (SharedPreferences on Android, working_url_index on Windows)
+- **Flutter channel consolidation (Issue #58)** — `ChannelRepositoryImpl.fetchChannels()` now calls `deduplicateChannels()` + `consolidateByName()` before returning. Consolidation code was previously orphaned and never invoked on Android
+
+### Fixed
+- **Android duplicate channels (Issue #58)** — channels now properly consolidated on Android with same multi-pass normalization as Windows. "Reshet 13 (720p)", "Reshet 13 (רשת 13)", "Reshet 13 Subtitled" all merge into one entry
+
+### Changed
+- **Documentation overhaul** — ARCHITECTURE.md rewritten for v2.1.4 (consolidation, smart scan, Supabase, telemetry, source selector, security). README.md updated with new features and tech stack. SUPPORT_GUIDE.md updated with troubleshooting for duplicates, source selector, and Supabase connectivity
+
 ## [2.1.3] - 2026-03-03
 
 ### Fixed

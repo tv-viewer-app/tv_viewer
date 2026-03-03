@@ -287,6 +287,28 @@ class PlayerWindow(tk.Toplevel):
         )
         self.channel_label.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_XLARGE)
         
+        # Source selector (when multiple URLs available)
+        urls = self.channel.get('urls', [])
+        if len(urls) > 1:
+            src_frame = ttk.Frame(self.controls_frame)
+            src_frame.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_SMALL)
+            ttk.Label(src_frame, text="Source:", font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=2)
+            self._source_var = tk.StringVar()
+            source_labels = [f"#{i+1}" for i in range(len(urls))]
+            current_idx = self.channel.get('working_url_index', 0)
+            self._source_var.set(source_labels[min(current_idx, len(source_labels)-1)])
+            self._source_combo = ttk.Combobox(
+                src_frame,
+                textvariable=self._source_var,
+                values=source_labels,
+                width=5,
+                state="readonly",
+                font=("Segoe UI", 10)
+            )
+            self._source_combo.pack(side=tk.LEFT, padx=2)
+            self._source_combo.bind('<<ComboboxSelected>>', self._on_source_selected)
+            add_tooltip(self._source_combo, f"{len(urls)} stream sources available")
+        
         # Quality info frame (below controls)
         self.quality_frame = ttk.Frame(
             self.main_frame,
@@ -543,6 +565,22 @@ class PlayerWindow(tk.Toplevel):
             return
         self.channel['working_url_index'] = next_idx
         logger.info(f"Trying fallback URL {next_idx} for {self.channel.get('name', '?')}")
+        self.play()
+    
+    def _on_source_selected(self, event=None):
+        """User selected a different stream source from the combo."""
+        if not hasattr(self, '_source_var'):
+            return
+        selected = self._source_var.get()
+        try:
+            idx = int(selected.replace('#', '')) - 1
+        except (ValueError, AttributeError):
+            return
+        urls = self.channel.get('urls', [])
+        if idx < 0 or idx >= len(urls) or idx == self.channel.get('working_url_index', 0):
+            return
+        logger.info(f"User selected source #{idx+1} for {self.channel.get('name', '?')}")
+        self.channel['working_url_index'] = idx
         self.play()
     
     def _report_channel_health(self, url: str, is_working: bool, error: str = ""):

@@ -5,15 +5,18 @@ import '../../services/m3u_service.dart';
 import '../../services/favorites_service.dart';
 import '../../utils/logger_service.dart';
 import '../channel_repository.dart';
+import 'playlist_repository_impl.dart';
 
 /// Default implementation of ChannelRepository
 /// 
 /// This implementation uses:
 /// - M3UService for remote channel fetching
+/// - PlaylistRepositoryImpl for deduplication & consolidation
 /// - SharedPreferences for local caching
 /// - FavoritesService for favorites persistence
 class ChannelRepositoryImpl implements ChannelRepository {
   static const String _channelsCacheKey = 'channels_cache';
+  final _playlistRepo = PlaylistRepositoryImpl();
 
   @override
   Future<List<Channel>> fetchChannels({
@@ -26,8 +29,11 @@ class ChannelRepositoryImpl implements ChannelRepository {
         onProgress: onProgress,
       );
       
-      logger.info('ChannelRepository: Fetched ${channels.length} channels');
-      return channels;
+      // Deduplicate by URL then consolidate by name (Issue #58)
+      final consolidated = _playlistRepo.deduplicateChannels(channels);
+      
+      logger.info('ChannelRepository: Fetched ${channels.length} → consolidated to ${consolidated.length}');
+      return consolidated;
     } catch (e, stackTrace) {
       logger.error('ChannelRepository: Error fetching channels', e, stackTrace);
       rethrow;

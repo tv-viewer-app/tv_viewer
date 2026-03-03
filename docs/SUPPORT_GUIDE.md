@@ -1,8 +1,8 @@
 # TV Viewer - Support Engineering Guide
 
-**Document Version:** 1.0  
+**Document Version:** 2.0  
 **Last Updated:** 2025-01-20  
-**Application Version:** 1.0.0  
+**Application Version:** 2.1.4  
 **Classification:** Support Team Internal
 
 ---
@@ -426,6 +426,136 @@ STREAM_CHECK_TIMEOUT = 10   # Increase from default 8
 - Memory usage exceeds 500MB → L2
 - CPU stays at 100% after scan → L2
 - App crashes with memory error → L3
+
+---
+
+### 3.7 Duplicate Channels
+
+**Symptoms:**
+- Same channel appears multiple times in the list
+- Slightly different names for the same channel (e.g., "CNN", "CNN International", "CNN Int'l")
+- Channel count seems inflated
+
+**Root Causes:**
+1. Multiple sources providing the same channel with different naming
+2. Stale cache containing old entries before consolidation was applied
+3. Custom channels duplicating auto-discovered ones
+
+**Diagnostic Steps:**
+```
+Step 1: Check app version
+  - Ensure running v2.1.4+ (includes multi-pass name normalization)
+
+Step 2: Clear the channel cache
+  - Windows: Delete "channels.json" in the app directory
+  - Android: Settings > Apps > TV Viewer > Clear Data
+
+Step 3: Reload channels
+  - Restart the app or click "Refresh"
+  - Channels consolidate automatically on next load via multi-pass normalization
+
+Step 4: Verify reduction
+  - After reload, duplicate count should drop by ~18% compared to pre-2.1.4
+```
+
+**Quick Fixes:**
+1. **Clear cache and reload** — Delete `channels.json` and restart; consolidation runs automatically
+2. **Wait for full scan** — Normalization happens after all sources are loaded
+3. **Check custom channels** — Remove manual entries in `channels_config.json` that duplicate auto-discovered ones
+
+**Escalation Criteria:**
+- Duplicates persist after cache clear and reload → L2
+- Consolidation causes valid channels to merge incorrectly → L3
+
+---
+
+### 3.8 Source Selector / Switching Streams
+
+**Symptoms:**
+- User cannot find alternative streams for a channel
+- Stream quality is poor and user wants to switch
+- Source selector not appearing in the player
+
+**Root Causes:**
+1. Channel has only one known source (no alternatives available)
+2. Player UI not fully loaded before interaction
+3. Alternative sources are offline or geo-restricted
+
+**Diagnostic Steps:**
+```
+Step 1: Open the player for any channel
+  - Click a channel to begin playback
+
+Step 2: Locate the source selector
+  - Windows: Look for the source dropdown/button in the player controls bar
+  - Android: Tap the screen to reveal controls, then tap the source icon
+
+Step 3: Switch streams
+  - Select an alternative source from the list
+  - Playback switches automatically; buffering is expected for 1-2 seconds
+
+Step 4: If source selector is missing
+  - The channel may have only one source — selector only appears for multi-source channels
+  - Check the channel info panel for "Sources: N" count
+```
+
+**Quick Fixes:**
+1. **Tap/click player controls** — Source selector is in the player control bar; tap the screen (Android) or hover (Windows) to reveal it
+2. **Try a different channel** — Not all channels have multiple sources
+3. **Refresh channel list** — New sources are discovered on each scan
+
+**Escalation Criteria:**
+- Source selector never appears for any channel → L2
+- App crashes when switching sources → L3
+- Switched source plays wrong channel → L3
+
+---
+
+### 3.9 Supabase Connectivity / Crowd-Sourced Health
+
+**Symptoms:**
+- "Health data unavailable" or similar notice in the UI
+- Channel health indicators not updating
+- App startup slower than usual (waiting for Supabase timeout)
+
+**Root Causes:**
+1. No internet connectivity
+2. Supabase service temporarily unavailable
+3. Firewall or corporate proxy blocking Supabase endpoints
+4. DNS resolution failure for Supabase host
+
+**Diagnostic Steps:**
+```
+Step 1: Confirm the app still works
+  - TV Viewer is fully functional offline — Supabase is optional
+  - Channels load from local cache; only crowd-sourced health data is affected
+
+Step 2: Check internet connectivity
+  - Try loading a website in a browser
+  - If offline, health sharing resumes automatically when connectivity returns
+
+Step 3: Check Supabase status
+  - Visit https://status.supabase.com for service status
+
+Step 4: Check firewall/proxy
+  - Supabase uses HTTPS (port 443)
+  - Ensure *.supabase.co is not blocked by corporate firewall or proxy
+```
+
+**Quick Fixes:**
+1. **Do nothing** — App works fully offline; health sharing is a background enhancement
+2. **Check network** — Verify internet access; Supabase reconnects automatically
+3. **Restart app** — Forces a fresh connection attempt on startup
+
+**Important Notes:**
+- **Offline-first design:** All core features (channel loading, playback, caching) work without Supabase
+- **Automatic recovery:** Health sharing resumes silently when Supabase becomes reachable
+- **No user data at risk:** Supabase stores only anonymous, aggregate channel health votes — no PII
+
+**Escalation Criteria:**
+- App hangs on startup waiting for Supabase → L2
+- Health data is clearly incorrect/stale despite connectivity → L2
+- Privacy concern from user about data shared → L2 (refer to privacy-first telemetry docs)
 
 ---
 
@@ -875,7 +1005,7 @@ ENVIRONMENT:
 - OS: [Windows 10/11, macOS version, Linux distro]
 - Python: [version]
 - VLC: [version]
-- App Version: [1.0.0]
+- App Version: [2.1.4]
 
 ATTACHMENTS:
 - [ ] Console/debug log
