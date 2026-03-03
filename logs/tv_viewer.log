@@ -113,3 +113,24 @@
 2026-03-03 15:52:39 - core.channel_manager - INFO - Channel consolidation: 17948 → 14721 (3227 merged)
 2026-03-03 15:52:49 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
 2026-03-03 15:53:39 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:55:04 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:55:04 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:55:04 - core.channel_manager - INFO - Channel consolidation: 4 → 2 (2 merged)
+2026-03-03 15:55:04 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:55:04 - core.channel_manager - INFO - Channel consolidation: 17948 → 14721 (3227 merged)
+2026-03-03 15:55:50 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:55:50 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:55:50 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:55:50 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:55:50 - core.channel_manager - INFO - Channel consolidation: 4 → 1 (3 merged)
+2026-03-03 15:55:59 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:55:59 - test_write - INFO - Test message 1772553359.7787344
+2026-03-03 15:56:00 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:56:00 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:56:00 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:56:00 - core.channel_manager - INFO - Channel consolidation: 4 → 1 (3 merged)
+2026-03-03 15:57:56 - tv_viewer - INFO - TV Viewer logging initialized - Log file: /home/runner/work/tv_viewer/tv_viewer/logs/tv_viewer.log
+2026-03-03 15:57:56 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:57:56 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:57:56 - core.channel_manager - INFO - Channel consolidation: 2 → 1 (1 merged)
+2026-03-03 15:57:56 - core.channel_manager - INFO - Channel consolidation: 4 → 1 (3 merged)

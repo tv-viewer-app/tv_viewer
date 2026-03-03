@@ -333,5 +333,71 @@ class TestAsyncOperations:
         assert 'last_scanned' in result
 
 
+class TestConsolidateChannels:
+    """Tests for core/channel_manager.consolidate_channels (Issue: non-consolidated channels)."""
+
+    def test_none_country_does_not_crash(self):
+        """consolidate_channels must not crash when channel country is None."""
+        from core.channel_manager import consolidate_channels
+
+        channels = [
+            {'name': 'CNN', 'url': 'http://stream1.com', 'country': None},
+            {'name': 'CNN HD', 'url': 'http://stream2.com', 'country': None},
+        ]
+        result = consolidate_channels(channels)
+        # Both should be merged into one entry (same base name, both unknown country)
+        assert len(result) == 1
+        assert len(result[0].get('urls', [])) == 2
+
+    def test_iso_code_and_full_name_consolidate(self):
+        """Channels with country as ISO code ('IL') and full name ('Israel') must consolidate."""
+        from core.channel_manager import consolidate_channels
+
+        channels = [
+            {'name': 'Reshet 13', 'url': 'http://s1.com', 'country': 'IL'},
+            {'name': 'Reshet 13 HD', 'url': 'http://s2.com', 'country': 'Israel'},
+        ]
+        result = consolidate_channels(channels)
+        assert len(result) == 1
+        assert len(result[0].get('urls', [])) == 2
+
+    def test_semicolon_country_consolidates_with_full_name(self):
+        """Channels with 'GB;US' country should consolidate with 'UK' channels."""
+        from core.channel_manager import consolidate_channels
+
+        channels = [
+            {'name': 'BBC News', 'url': 'http://s1.com', 'country': 'GB;US'},
+            {'name': 'BBC News HD', 'url': 'http://s2.com', 'country': 'UK'},
+        ]
+        result = consolidate_channels(channels)
+        assert len(result) == 1
+        assert len(result[0].get('urls', [])) == 2
+
+    def test_different_countries_not_consolidated(self):
+        """Channels with genuinely different countries must not be merged."""
+        from core.channel_manager import consolidate_channels
+
+        channels = [
+            {'name': 'CNN', 'url': 'http://s1.com', 'country': 'US'},
+            {'name': 'CNN', 'url': 'http://s2.com', 'country': 'France'},
+        ]
+        result = consolidate_channels(channels)
+        assert len(result) == 2
+
+    def test_quality_suffix_stripped_for_grouping(self):
+        """Quality suffixes like '720p', 'HD', 'alt' must be stripped before grouping."""
+        from core.channel_manager import consolidate_channels
+
+        channels = [
+            {'name': 'Channel 1', 'url': 'http://s1.com', 'country': 'US'},
+            {'name': 'Channel 1 HD', 'url': 'http://s2.com', 'country': 'US'},
+            {'name': 'Channel 1 720p', 'url': 'http://s3.com', 'country': 'US'},
+            {'name': 'Channel 1 alt', 'url': 'http://s4.com', 'country': 'US'},
+        ]
+        result = consolidate_channels(channels)
+        assert len(result) == 1
+        assert len(result[0].get('urls', [])) == 4
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -206,7 +206,11 @@ def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     for ch in channels:
         name = ch.get('name', '')
         base_name = _normalize_channel_name(name)
-        country = ch.get('country', 'Unknown')
+        # Normalize country so that ISO codes ("IL") and full names ("Israel")
+        # map to the same group key.  Use `or ''` to treat both None and empty
+        # string as 'Unknown' via _normalize_country (which returns 'Unknown'
+        # for falsy input).
+        country = _normalize_country(ch.get('country') or '')
         # Group key: case-insensitive base name + country
         group_key = f"{base_name.lower()}|{country.lower()}"
         
