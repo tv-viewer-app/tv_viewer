@@ -267,6 +267,31 @@ class AnalyticsService {
     });
   }
 
+  /// Track favorite add/remove (url hashed for privacy).
+  Future<void> trackFavorite(String url, String action,
+      {String country = '', String category = ''}) async {
+    await trackEvent('favorite', {
+      'url_hash': _hashUrl(url),
+      'action': action, // 'add' or 'remove'
+      'country': country,
+      'category': category,
+    });
+  }
+
+  /// Track session end with engagement depth.
+  Future<void> trackSessionEnd({
+    int sessionDurationS = 0,
+    int channelsPlayed = 0,
+    int channelsFailed = 0,
+  }) async {
+    await trackEvent('session_end', {
+      'session_duration_s': sessionDurationS,
+      'channels_played': channelsPlayed,
+      'channels_failed': channelsFailed,
+    });
+    await flush();
+  }
+
   // ---------------------------------------------------------------------------
   // Flush (batch send to Supabase)
   // ---------------------------------------------------------------------------

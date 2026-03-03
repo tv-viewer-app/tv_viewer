@@ -253,22 +253,43 @@ class AnalyticsService:
         self,
         url: str,
         is_working: bool,
-        channel_name: str = "",
         error_message: str = "",
         response_time_ms: int = 0,
     ) -> None:
         """Report channel health for crowdsourced health tracking.
-        
-        This data is used to aggregate channel health across all users.
-        URL is hashed for privacy.
+
+        URL is hashed for privacy. No channel names are sent.
         """
         await self.track_event("channel_play" if is_working else "channel_fail", {
             "url_hash": _hash_url(url),
-            "channel_name": channel_name[:50] if channel_name else "",
             "is_working": is_working,
             "error_code": error_message[:100] if error_message else "",
             "response_time_ms": response_time_ms,
         })
+
+    async def track_favorite(self, url: str, action: str = "add",
+                             country: str = "", category: str = "") -> None:
+        """Track favorite add/remove (url hashed for privacy)."""
+        await self.track_event("favorite", {
+            "url_hash": _hash_url(url),
+            "action": action,  # 'add' or 'remove'
+            "country": country,
+            "category": category,
+        })
+
+    async def track_session_end(
+        self,
+        session_duration_s: int = 0,
+        channels_played: int = 0,
+        channels_failed: int = 0,
+    ) -> None:
+        """Track session end with engagement depth."""
+        await self.track_event("session_end", {
+            "session_duration_s": session_duration_s,
+            "channels_played": channels_played,
+            "channels_failed": channels_failed,
+        })
+        await self.flush()
 
     async def track_scan_complete(
         self,

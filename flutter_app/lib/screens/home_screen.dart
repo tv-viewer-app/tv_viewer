@@ -529,7 +529,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     final channel = provider.channels[index];
                     return ChannelTile(
                       channel: channel,
-                      onTap: () => _playChannel(channel),
+                      onTap: () => _playChannel(channel, index),
                     );
                   },
                 );
@@ -541,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _playChannel(Channel channel) {
+  void _playChannel(Channel channel, [int? index]) {
     // Track channel play telemetry (no names/URLs)
     AnalyticsService.instance.trackChannelPlay(
       channel.url,
@@ -553,10 +553,15 @@ class _HomeScreenState extends State<HomeScreen> {
       final provider = Provider.of<ChannelProvider>(context, listen: false);
       provider.boostCountry(channel.country!);
     }
+    final provider = Provider.of<ChannelProvider>(context, listen: false);
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PlayerScreen(channel: channel),
+        builder: (context) => PlayerScreen(
+          channel: channel,
+          channelList: provider.channels,
+          channelIndex: index,
+        ),
       ),
     );
   }
@@ -565,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '2.1.4',
+      applicationVersion: '2.1.5',
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

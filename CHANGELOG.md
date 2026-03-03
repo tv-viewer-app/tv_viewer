@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-03-04
+
+### Fixed
+- **Supabase schema mismatch (CRITICAL)** — `telemetry.py` was writing to non-existent `app_telemetry` table instead of `analytics_events`. `channel_status` table had mismatched column names (`channel_url_hash`/`is_working`/`checked_at` in SQL vs `url_hash`/`status`/`last_checked` in code). No telemetry or shared health data was being written. Schema and code now fully aligned.
+- **Privacy: removed channel_name from analytics** — `track_channel_health()` no longer sends `channel_name` in event data (security review finding: viewing habits are sensitive). Only hashed URL is sent.
+
+### Added
+- **Futureproof Supabase schema** — 2 immutable tables + N disposable materialized views. No CHECK constraints; JSONB event_data handles any shape. Adding new event types requires zero DDL changes. Includes rate-limiting trigger on `channel_status`, consensus-based `report_count`, data retention functions (`cleanup_old_data()`), and `db_health()` diagnostic function.
+- **Favorite tracking** — both Python (`track_favorite()`) and Flutter (`trackFavorite()`) analytics now track favorite add/remove events with hashed URL and country/category.
+- **Session end tracking** — both platforms track `session_end` events with session duration, channels played/failed for engagement analysis.
+- **Dashboard materialized views** — `mv_daily_active_users`, `mv_top_channels`, `mv_client_platforms`, `mv_favorite_channels`, `mv_crash_summary`, `mv_engagement` for analytics dashboards. Refreshable via `refresh_analytics_views()`.
+- **Next/Previous channel navigation** — both Windows and Android players have ⏮/⏭ buttons to jump to adjacent channels in the filtered list without returning to the channel browser.
+- **Country-aware channel consolidation** — `_normalize_name_for_grouping()` strips Hebrew/Arabic text separated by dash, trailing country names, and embedded country names. "KAN 11 Israel" and "Kan 11" now merge correctly. Fixes PR #59 `None` country crash.
+
+### Changed
+- **Map popup performance** — cached class-level fonts (was creating 700+ font objects per popup), removed popup fade-in animation, deferred modal grab. Significantly faster popup rendering.
+- **Android player source fallback** — reworked `_initializePlayer()` with `_failedIndices` set and `startIndex` parameter to prevent `loadPreferredSource()` from overriding fallback index. Added re-entrancy guard (`_isFallingBack`) for error listener.
+
+### Security
+- Supabase `channel_status` now has rate-limiting trigger (max 1 update per url_hash per minute)
+- `report_count` column for consensus-based trust (clients should trust entries with count ≥ 3)
+- Data retention: `cleanup_old_data()` function deletes events >90 days and stale channel_status >7 days
+
 ## [2.1.4] - 2026-03-03
 
 ### Added

@@ -106,6 +106,32 @@ class MapWindow:
     _AMBER = "#FFB900"
     _BORDER = "#3b3a3f"
 
+    # Cached fonts (created once, reused across all rows)
+    _FONTS_INIT = False
+    _F_TITLE = None
+    _F_BODY = None
+    _F_SMALL = None
+    _F_DOT = None
+    _F_STAR = None
+    _F_PLAY = None
+
+    @classmethod
+    def _init_fonts(cls):
+        if cls._FONTS_INIT:
+            return
+        cls._F_TITLE = ctk.CTkFont(size=16, weight="bold")
+        cls._F_BODY = ctk.CTkFont(size=13)
+        cls._F_SMALL = ctk.CTkFont(size=11)
+        cls._F_TINY = ctk.CTkFont(size=10)
+        cls._F_DOT = ctk.CTkFont(size=16)
+        cls._F_STAR = ctk.CTkFont(size=18)
+        cls._F_PLAY = ctk.CTkFont(size=15)
+        cls._F_STAT_VAL = ctk.CTkFont(size=18, weight="bold")
+        cls._F_STAT_LBL = ctk.CTkFont(size=10)
+        cls._F_SEARCH = ctk.CTkFont(size=12)
+        cls._F_SEARCH_ICON = ctk.CTkFont(size=13)
+        cls._FONTS_INIT = True
+
     def __init__(self, parent, channel_manager, favorites_manager=None,
                  on_play_channel=None):
         if not MAP_AVAILABLE:
@@ -115,6 +141,8 @@ class MapWindow:
                 "Install tkintermapview:\n  pip install tkintermapview"
             )
             return
+
+        MapWindow._init_fonts()
 
         self._parent = parent
         self._cm = channel_manager
@@ -185,7 +213,7 @@ class MapWindow:
 
         ctk.CTkLabel(
             toolbar, text="🗺️  World Map",
-            font=ctk.CTkFont(size=16, weight="bold"),
+            font=self._F_TITLE,
             text_color=self._TEXT,
         ).pack(side="left", padx=16)
 
@@ -194,12 +222,12 @@ class MapWindow:
                                      corner_radius=8, height=32)
         search_frame.pack(side="left", padx=16, pady=9)
         ctk.CTkLabel(search_frame, text="🔍", width=28,
-                     font=ctk.CTkFont(size=13)).pack(side="left", padx=(8, 0))
+                     font=self._F_SEARCH_ICON).pack(side="left", padx=(8, 0))
         self._search_entry = ctk.CTkEntry(
             search_frame, textvariable=self._search_var,
             placeholder_text="Search country...",
             fg_color="transparent", border_width=0, width=160, height=28,
-            font=ctk.CTkFont(size=12),
+            font=self._F_SEARCH,
         )
         self._search_entry.pack(side="left", padx=(0, 8))
         self._search_var.trace_add("write", lambda *_: self._on_search())
@@ -208,7 +236,7 @@ class MapWindow:
         self._fav_btn = ctk.CTkButton(
             toolbar, text="★ Favorites",
             fg_color="transparent", hover_color=self._CARD_HOVER,
-            text_color=self._TEXT_SEC, font=ctk.CTkFont(size=12),
+            text_color=self._TEXT_SEC, font=self._F_SEARCH,
             width=100, height=32, corner_radius=16,
             border_width=1, border_color=self._BORDER,
             command=self._toggle_favorites,
@@ -218,7 +246,7 @@ class MapWindow:
         self._offline_btn = ctk.CTkButton(
             toolbar, text="📡 Hide offline",
             fg_color="transparent", hover_color=self._CARD_HOVER,
-            text_color=self._TEXT_SEC, font=ctk.CTkFont(size=12),
+            text_color=self._TEXT_SEC, font=self._F_SEARCH,
             width=120, height=32, corner_radius=16,
             border_width=1, border_color=self._BORDER,
             command=self._toggle_offline,
@@ -254,13 +282,13 @@ class MapWindow:
         frame.pack(side="left", padx=8)
         val_label = ctk.CTkLabel(
             frame, text=value,
-            font=ctk.CTkFont(size=18, weight="bold"),
+            font=self._F_STAT_VAL,
             text_color=color or self._ACCENT,
         )
         val_label.pack()
         ctk.CTkLabel(
             frame, text=label,
-            font=ctk.CTkFont(size=10),
+            font=self._F_STAT_LBL,
             text_color=self._TEXT_SEC,
         ).pack()
         return val_label
@@ -386,15 +414,7 @@ class MapWindow:
         popup.title(f"📺 {country}")
         popup.geometry("520x560")
         popup.transient(self._win)
-        popup.grab_set()
         popup.configure(fg_color=self._BG)
-
-        # Fade in the popup
-        try:
-            popup.attributes('-alpha', 0.0)
-            self._popup_fade_in(popup, 0.0)
-        except tk.TclError:
-            pass
 
         # ── Header with health bar ──
         header = ctk.CTkFrame(popup, fg_color=self._SURFACE, height=70,
@@ -409,36 +429,40 @@ class MapWindow:
         left.pack(side="left", padx=16, pady=8)
         ctk.CTkLabel(
             left, text=f"🌍 {country}",
-            font=ctk.CTkFont(size=16, weight="bold"), text_color=self._TEXT,
+            font=self._F_TITLE, text_color=self._TEXT,
         ).pack(anchor="w")
         ctk.CTkLabel(
             left,
             text=f"{len(channels)} channels  •  {working} working  •  {len(channels) - working} offline",
-            font=ctk.CTkFont(size=11), text_color=self._TEXT_SEC,
+            font=self._F_SMALL, text_color=self._TEXT_SEC,
         ).pack(anchor="w")
 
-        # Animated health bar
+        # Health bar
         bar_bg = ctk.CTkFrame(header, fg_color=self._CARD, height=6,
                               corner_radius=3, width=120)
         bar_bg.pack(side="right", padx=16)
         bar_bg.pack_propagate(False)
         bar_color = self._GREEN if ratio > 0.7 else self._AMBER if ratio > 0.3 else self._RED
         self._bar_fill = ctk.CTkFrame(bar_bg, fg_color=bar_color, height=6,
-                                       corner_radius=3, width=1)
+                                       corner_radius=3, width=max(1, int(120 * ratio)))
         self._bar_fill.place(x=0, y=0, relheight=1)
-        popup.after(200, lambda: self._animate_bar(self._bar_fill, int(120 * ratio)))
 
-        # ── Channel list — lazy-load in batches for speed ──
+        # ── Channel list — small batches for instant popup ──
         scroll = ctk.CTkScrollableFrame(popup, fg_color="transparent",
                                          scrollbar_button_color=self._CARD)
         scroll.pack(fill="both", expand=True, padx=8, pady=8)
 
-        BATCH_SIZE = 30
-        self._popup_channels = channels
+        # Sort: working channels first for user convenience
+        sorted_channels = sorted(channels, key=lambda c: (0 if c.get('status') != 'offline' else 1))
+
+        self._popup_channels = sorted_channels
         self._popup_scroll = scroll
         self._popup_ref = popup
         self._popup_loaded = 0
         self._load_channel_batch()
+
+        # Grab focus after first batch renders
+        popup.after(50, lambda: popup.grab_set() if popup.winfo_exists() else None)
 
     def _popup_fade_in(self, popup, alpha):
         if alpha >= 1.0:

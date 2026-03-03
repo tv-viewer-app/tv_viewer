@@ -16,8 +16,15 @@ import '../utils/logger_service.dart';
 
 class PlayerScreen extends StatefulWidget {
   final Channel channel;
+  final List<Channel>? channelList;
+  final int? channelIndex;
 
-  const PlayerScreen({super.key, required this.channel});
+  const PlayerScreen({
+    super.key,
+    required this.channel,
+    this.channelList,
+    this.channelIndex,
+  });
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -40,6 +47,16 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   final PipService _pipService = PipService();
   bool _isPipMode = false;
   bool _isPipSupported = false;
+
+  // Channel navigation
+  bool get _hasChannelList =>
+      widget.channelList != null && widget.channelList!.length > 1;
+  bool get _hasPrevious =>
+      _hasChannelList && widget.channelIndex != null && widget.channelIndex! > 0;
+  bool get _hasNext =>
+      _hasChannelList &&
+      widget.channelIndex != null &&
+      widget.channelIndex! < widget.channelList!.length - 1;
 
   @override
   void initState() {
@@ -124,8 +141,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
 
   int _currentUrlIndex = 0;
+  final Set<int> _failedIndices = {}; // Track indices that failed this session
+  bool _isFallingBack = false; // Prevent re-entrant fallback from listener
   
-  Future<void> _initializePlayer() async {
+  Future<void> _initializePlayer({int? startIndex}) async {
     // Dispose existing controller before creating new one (fixes memory leak on retry)
     _disposeController();
     
@@ -138,11 +157,16 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       return;
     }
     
-    // Start from preferred source (saved by user) or working URL index
-    final preferred = await loadPreferredSource(widget.channel);
-    _currentUrlIndex = preferred.clamp(0, urls.length - 1);
+    // Use explicit startIndex (from fallback), or load preferred source
+    if (startIndex != null) {
+      _currentUrlIndex = startIndex.clamp(0, urls.length - 1);
+    } else {
+      final preferred = await loadPreferredSource(widget.channel);
+      _currentUrlIndex = preferred.clamp(0, urls.length - 1);
+      _failedIndices.clear(); // Fresh start — clear failed tracking
+    }
     
-    // Try each URL in order, starting from working index
+    // Try each URL in order, starting from current index
     for (int attempt = 0; attempt < urls.length; attempt++) {
       final idx = (_currentUrlIndex + attempt) % urls.length;
       final streamUrl = urls[idx];
@@ -153,7 +177,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.4'},
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.1.5'},
         );
 
         await _videoController!.initialize().timeout(
@@ -181,6 +205,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         setState(() {
           _isLoading = false;
           _isPlaying = true;
+          _error = null;
         });
 
         // Create named listener for proper cleanup
@@ -191,8 +216,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
               _isPlaying = vc.isPlaying;
             });
             // Detect playback failure mid-stream
-            if (vc.hasError && !_isLoading) {
-              _onPlaybackError(streamUrl, vc.errorDescription ?? 'unknown');
+            if (vc.hasError && !_isLoading && !_isFallingBack) {
+              _onPlaybackError(idx, vc.errorDescription ?? 'unknown');
             }
           }
         };
@@ -204,6 +229,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         
       } catch (e, stackTrace) {
         logger.warning('URL $idx failed for ${widget.channel.name}: $e');
+        _failedIndices.add(idx);
         _reportHealth(streamUrl, false, e.toString());
         // Continue to next URL
       }
@@ -218,7 +244,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     );
     final appError = ErrorHandler.streamError(
       'all_failed',
-      'All ${urls.length} URLs failed for ${widget.channel.name}',
+      'All ${urls.length} sources failed for ${widget.channel.name}',
     );
     logger.error('All URLs failed for ${widget.channel.name}');
     
@@ -228,15 +254,33 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     });
   }
   
-  void _onPlaybackError(String failedUrl, String error) {
-    _reportHealth(failedUrl, false, error);
+  void _onPlaybackError(int failedIndex, String error) {
     final urls = widget.channel.urls;
-    if (urls.length > 1) {
-      // Try next URL
-      _currentUrlIndex = (_currentUrlIndex + 1) % urls.length;
-      logger.info('Falling back to URL $_currentUrlIndex for ${widget.channel.name}');
-      _initializePlayer();
+    _failedIndices.add(failedIndex);
+    _reportHealth(urls[failedIndex], false, error);
+    
+    if (urls.length <= 1) return;
+    
+    // Find next untried source
+    final nextIdx = (failedIndex + 1) % urls.length;
+    if (_failedIndices.length >= urls.length) {
+      // All sources have failed — show error with source selector
+      logger.error('All sources exhausted for ${widget.channel.name}');
+      setState(() {
+        _isLoading = false;
+        _error = ErrorHandler.streamError(
+          'all_failed',
+          'All ${urls.length} sources failed',
+        );
+      });
+      return;
     }
+    
+    logger.info('Auto-fallback: source #${failedIndex + 1} → #${nextIdx + 1} for ${widget.channel.name}');
+    _isFallingBack = true;
+    _initializePlayer(startIndex: nextIdx).then((_) {
+      _isFallingBack = false;
+    });
   }
   
   void _reportHealth(String url, bool isWorking, [String? error]) {
@@ -297,12 +341,45 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _initializePlayerWithUrl(widget.channel.urls[index]);
   }
 
+  /// Navigate to the previous channel in the list
+  void _previousChannel() {
+    if (!_hasPrevious) return;
+    final newIndex = widget.channelIndex! - 1;
+    final newChannel = widget.channelList![newIndex];
+    _navigateToChannel(newChannel, newIndex);
+  }
+
+  /// Navigate to the next channel in the list
+  void _nextChannel() {
+    if (!_hasNext) return;
+    final newIndex = widget.channelIndex! + 1;
+    final newChannel = widget.channelList![newIndex];
+    _navigateToChannel(newChannel, newIndex);
+  }
+
+  void _navigateToChannel(Channel channel, int index) {
+    _disposeController();
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => PlayerScreen(
+          channel: channel,
+          channelList: widget.channelList,
+          channelIndex: index,
+        ),
+        transitionDuration: const Duration(milliseconds: 200),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
+    );
+  }
+
   /// Initialize player with a specific URL (used by source switcher)
   Future<void> _initializePlayerWithUrl(String streamUrl) async {
     try {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(streamUrl),
-        httpHeaders: const {'User-Agent': 'TV Viewer/2.1.4'},
+        httpHeaders: const {'User-Agent': 'TV Viewer/2.1.5'},
       );
       
       await controller.initialize();
@@ -658,6 +735,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                           icon: const Icon(Icons.arrow_back, color: Colors.white),
                           onPressed: () => Navigator.pop(context),
                         ),
+                        // Previous channel button
+                        if (_hasChannelList)
+                          IconButton(
+                            icon: Icon(Icons.skip_previous,
+                                color: _hasPrevious ? Colors.white : Colors.white24),
+                            tooltip: 'Previous channel',
+                            onPressed: _hasPrevious ? _previousChannel : null,
+                          ),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -703,6 +788,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                             ],
                           ),
                         ),
+                        // Next channel button
+                        if (_hasChannelList)
+                          IconButton(
+                            icon: Icon(Icons.skip_next,
+                                color: _hasNext ? Colors.white : Colors.white24),
+                            tooltip: 'Next channel',
+                            onPressed: _hasNext ? _nextChannel : null,
+                          ),
                         // PiP button (only show if supported and not in PiP mode)
                         if (_isPipSupported && !_isPipMode)
                           IconButton(

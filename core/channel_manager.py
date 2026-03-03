@@ -162,6 +162,12 @@ _QUALITY_SUFFIX = re.compile(
 # Trailing parenthesized/bracketed annotations to strip
 _PAREN_SUFFIX = re.compile(r'\s*[\(\[][^\)\]]*[\)\]]\s*$')
 
+# Pattern to match non-Latin script blocks (Hebrew, Arabic, CJK) separated by dash
+_SCRIPT_SEPARATOR = re.compile(
+    r'[\u0590-\u05FF\u0600-\u06FF\uFB1D-\uFDFF\uFE70-\uFEFF]+'  # non-Latin block
+)
+_DASH_SPLIT = re.compile(r'\s+[-–—]\s+')  # " - ", " – ", " — "
+
 
 def _normalize_channel_name(name: str) -> str:
     """Strip quality/variant suffixes to get a canonical channel name for grouping.
@@ -185,6 +191,61 @@ def _normalize_channel_name(name: str) -> str:
     return normalized if normalized else name
 
 
+def _normalize_name_for_grouping(name: str, country: str) -> str:
+    """Advanced normalization for consolidation grouping.
+    
+    Extends _normalize_channel_name with country-aware rules:
+    - Strips non-Latin script portions separated by dash (Hebrew/Arabic aliases)
+    - Strips the country name from the channel name when redundant
+    - Handles embedded country: "Kan Israel Tarbut" → "Kan Tarbut" (when country=Israel)
+    """
+    # Step 1: basic quality/variant normalization
+    base = _normalize_channel_name(name)
+    if not base:
+        return ''
+    
+    # Step 2: if name has " - " separator, check for non-Latin/Latin halves
+    parts = _DASH_SPLIT.split(base)
+    if len(parts) >= 2:
+        # Keep the part that has the most Latin characters
+        latin_parts = []
+        for p in parts:
+            stripped = p.strip()
+            if not stripped:
+                continue
+            latin_chars = sum(1 for c in stripped if c.isascii() and c.isalpha())
+            total_alpha = sum(1 for c in stripped if c.isalpha())
+            if total_alpha > 0 and latin_chars / total_alpha > 0.5:
+                latin_parts.append(stripped)
+        if latin_parts:
+            base = latin_parts[0]  # take first Latin-dominant part
+    
+    # Step 3: strip trailing country name when it matches the channel's country
+    if country and country.lower() not in ('unknown', ''):
+        country_lower = country.lower()
+        base_lower = base.lower()
+        # Trailing country: "KAN 11 Israel" → "KAN 11"
+        if base_lower.endswith(' ' + country_lower):
+            base = base[:-(len(country) + 1)].strip()
+        # Embedded country: "Kan Israel Tarbut" → "Kan Tarbut"
+        # Only strip if country is in the middle (not first/last word)
+        else:
+            words = base.split()
+            if len(words) >= 3:
+                words_lower = [w.lower() for w in words]
+                # Check for country name in middle positions (not first or last)
+                for i in range(1, len(words) - 1):
+                    if words_lower[i] == country_lower:
+                        words.pop(i)
+                        base = ' '.join(words)
+                        break
+    
+    # Step 4: re-run quality stripping in case country removal exposed suffixes
+    base = _normalize_channel_name(base)
+    
+    return base.strip() if base.strip() else _normalize_channel_name(name)
+
+
 def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Merge channels with the same base name into single multi-URL entries.
     
@@ -205,9 +266,11 @@ def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     
     for ch in channels:
         name = ch.get('name', '')
-        base_name = _normalize_channel_name(name)
-        country = ch.get('country', 'Unknown')
-        # Group key: case-insensitive base name + country
+        # Normalize country (fixes None crash + ISO/full-name mismatch)
+        country = _normalize_country(ch.get('country') or '')
+        # Country-aware name normalization for grouping
+        base_name = _normalize_name_for_grouping(name, country)
+        # Group key: case-insensitive base name + normalized country
         group_key = f"{base_name.lower()}|{country.lower()}"
         
         url = ch.get('url', '')

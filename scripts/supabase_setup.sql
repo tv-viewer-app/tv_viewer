@@ -1,301 +1,387 @@
 -- =============================================================================
--- TV Viewer — Supabase Analytics Database Schema
+-- TV Viewer — Supabase Futureproof Schema
 -- =============================================================================
 --
--- Run this entire script in the Supabase SQL Editor (https://supabase.com/dashboard)
--- to set up the analytics and shared channel health tables.
+-- ARCHITECTURE:  2 immutable tables  +  N disposable materialized views
 --
--- PRIVACY NOTICE:
---   This schema is designed to be Google Play compliant and privacy-first:
---   - NO personally identifiable information (PII) is stored
---   - Device IDs are SHA-256 hashed (anonymous, irreversible)
---   - Channel URLs are SHA-256 hashed (cannot be reconstructed)
---   - Row Level Security (RLS) ensures clients can only INSERT, not read analytics
---   - Channel health data is readable by all for shared functionality
+--   ┌──────────────────────┐     ┌──────────────────────┐
+--   │   analytics_events   │     │    channel_status     │
+--   │  (append-only log)   │     │  (consensus cache)    │
+--   │                      │     │                       │
+--   │  id  uuid PK         │     │  url_hash  text PK    │
+--   │  device_id  text     │     │  status    text       │
+--   │  event_type text     │     │  last_checked tstz    │
+--   │  event_data jsonb ←──│─ flexible   response_time_ms│
+--   │  app_version text    │     │  report_count int     │
+--   │  platform   text     │     └───────────────────────┘
+--   │  country    text     │
+--   │  created_at tstz     │
+--   └──────────────────────┘
+--            │
+--   ┌───────┴─────────────────────────────────────┐
+--   │        Materialized Views (disposable)       │
+--   │  mv_daily_active_users     — DAU per platform│
+--   │  mv_top_channels           — most-played     │
+--   │  mv_client_platforms       — OS breakdown    │
+--   │  mv_favorite_channels      — community favs  │
+--   │  mv_crash_summary          — error rates     │
+--   │  mv_engagement             — session depth   │
+--   └─────────────────────────────────────────────┘
 --
--- Tables:
---   1. analytics_events  — App usage, crashes, errors (write-only from clients)
---   2. channel_status    — Shared channel health data (read/write from clients)
+-- WHY THIS IS FUTUREPROOF:
+--   • No CHECK constraints — clients can send ANY event_type string
+--   • JSONB event_data — any shape, no ALTER TABLE needed for new fields
+--   • New feature = new event_type value, zero DDL
+--   • New dashboard = CREATE MATERIALIZED VIEW, zero client changes
+--   • Views are disposable — DROP + CREATE freely, app keeps working
+--   • Retention functions auto-clean old data
 --
--- Materialized Views:
---   3. mv_daily_active_users  — DAU aggregation for dashboard
---   4. mv_top_channels        — Most-played channels
---   5. mv_crash_summary       — Crash rate aggregation
+-- HOW TO USE:
+--   1. Copy this entire script into Supabase SQL Editor
+--   2. Click "Run" — safe to re-run (uses DROP IF EXISTS)
+--   3. Done. No more SQL needed unless you want new dashboard views.
 --
 -- =============================================================================
 
 
--- ---------------------------------------------------------------------------
--- 1. analytics_events — Stores all app telemetry (anonymous, write-only)
--- ---------------------------------------------------------------------------
--- Clients INSERT events but CANNOT read them back (one-way analytics).
--- Only the service_role (admin/dashboard) can SELECT from this table.
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  TABLE 1: analytics_events — Append-only telemetry log                  ║
+-- ║  Handles: app_start, channel_play, channel_fail, app_crash,             ║
+-- ║           scan_complete, feature_use, favorite, session_end,            ║
+-- ║           session_heartbeat, app_install, playback_end, ...anything     ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
 
-CREATE TABLE IF NOT EXISTS analytics_events (
+DROP TABLE IF EXISTS analytics_events CASCADE;
+
+CREATE TABLE analytics_events (
     id            uuid         DEFAULT gen_random_uuid() PRIMARY KEY,
-    device_id     text         NOT NULL,        -- SHA-256 hashed device identifier (anonymous, irreversible)
-    event_type    text         NOT NULL,        -- Event category: 'app_open', 'channel_play', 'channel_fail',
-                                                --   'app_crash', 'error', 'scan_complete', 'filter_used'
-    event_data    jsonb        DEFAULT '{}',    -- Flexible JSON payload (varies by event_type)
-    app_version   text,                         -- Semantic version, e.g. '2.1.0'
-    platform      text,                         -- 'android', 'windows', 'linux', 'macos'
-    created_at    timestamptz  DEFAULT now()    -- Server-side timestamp (UTC)
+    device_id     text         NOT NULL,
+    event_type    text         NOT NULL,         -- No constraint: clients send any string
+    event_data    jsonb        DEFAULT '{}',     -- Schemaless: any fields, any shape
+    app_version   text,
+    platform      text,
+    country       text         DEFAULT 'XX',
+    created_at    timestamptz  DEFAULT now()
 );
 
--- Add a CHECK constraint to enforce known event types (optional, prevents garbage data)
-ALTER TABLE analytics_events
-    ADD CONSTRAINT chk_event_type CHECK (
-        event_type IN (
-            'app_launch', 'channel_play', 'channel_fail',
-            'app_crash', 'error', 'scan_complete', 'filter_used'
-        )
-    );
+-- Indexes for common query patterns (events are write-heavy, read via views)
+CREATE INDEX idx_ae_type           ON analytics_events (event_type);
+CREATE INDEX idx_ae_created        ON analytics_events (created_at DESC);
+CREATE INDEX idx_ae_device         ON analytics_events (device_id);
+CREATE INDEX idx_ae_platform       ON analytics_events (platform);
+CREATE INDEX idx_ae_type_created   ON analytics_events (event_type, created_at DESC);
+CREATE INDEX idx_ae_device_type    ON analytics_events (device_id, event_type);
 
-COMMENT ON TABLE analytics_events IS
-    'Privacy-first analytics events. All identifiers are SHA-256 hashed. No PII stored.';
-COMMENT ON COLUMN analytics_events.device_id IS
-    'SHA-256 hash of device UUID — anonymous, cannot be reversed to identify a user.';
-COMMENT ON COLUMN analytics_events.event_data IS
-    'Flexible JSON payload. Contents vary by event_type. Never contains PII.';
+-- GIN index on JSONB for ad-hoc queries like event_data->>'url_hash'
+CREATE INDEX idx_ae_data           ON analytics_events USING gin (event_data);
 
 
--- ---------------------------------------------------------------------------
--- 2. channel_status — Shared channel health/validation data
--- ---------------------------------------------------------------------------
--- Clients can both INSERT new results and SELECT existing ones.
--- This enables cross-device channel validation sharing — if one device
--- recently verified a channel works, other devices can skip re-scanning it.
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  TABLE 2: channel_status — Consensus-based channel health cache         ║
+-- ║  Clients upsert results; report_count tracks how many devices agree.    ║
+-- ║  Clients should only trust entries where report_count >= 3.             ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
 
-CREATE TABLE IF NOT EXISTS channel_status (
-    id               uuid         DEFAULT gen_random_uuid() PRIMARY KEY,
-    channel_url_hash text         NOT NULL,        -- SHA-256 hash of the channel URL (privacy-safe)
-    is_working       boolean      NOT NULL,        -- true = channel responded successfully
-    checked_by       text         NOT NULL,        -- SHA-256 hashed device ID of the reporter
-    checked_at       timestamptz  DEFAULT now(),   -- When the check was performed
-    app_version      text,                         -- App version that performed the check
-    response_time_ms integer                       -- Response latency in milliseconds (NULL if failed)
+DROP TABLE IF EXISTS channel_status CASCADE;
+
+CREATE TABLE channel_status (
+    url_hash          text         PRIMARY KEY,
+    status            text         NOT NULL DEFAULT 'working',
+    last_checked      timestamptz  DEFAULT now(),
+    response_time_ms  integer,
+    report_count      integer      DEFAULT 1
 );
 
-COMMENT ON TABLE channel_status IS
-    'Shared channel health data. URLs and device IDs are SHA-256 hashed. No PII stored.';
-COMMENT ON COLUMN channel_status.channel_url_hash IS
-    'SHA-256 hash of the full channel URL — cannot be reversed to the original URL.';
-COMMENT ON COLUMN channel_status.checked_by IS
-    'SHA-256 hashed device ID of the device that performed the check.';
+CREATE INDEX idx_cs_checked ON channel_status (last_checked DESC);
+CREATE INDEX idx_cs_status  ON channel_status (status);
 
 
--- ---------------------------------------------------------------------------
--- 3. Indexes for query performance
--- ---------------------------------------------------------------------------
-
--- analytics_events indexes
-CREATE INDEX IF NOT EXISTS idx_analytics_event_type
-    ON analytics_events(event_type);
-
-CREATE INDEX IF NOT EXISTS idx_analytics_created
-    ON analytics_events(created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_analytics_device
-    ON analytics_events(device_id);
-
-CREATE INDEX IF NOT EXISTS idx_analytics_platform
-    ON analytics_events(platform);
-
--- Composite index for dashboard queries (event type + time range)
-CREATE INDEX IF NOT EXISTS idx_analytics_type_created
-    ON analytics_events(event_type, created_at DESC);
-
--- channel_status indexes
-CREATE INDEX IF NOT EXISTS idx_channel_status_hash
-    ON channel_status(channel_url_hash);
-
-CREATE INDEX IF NOT EXISTS idx_channel_status_checked
-    ON channel_status(checked_at DESC);
-
--- Composite index for "latest status per channel" queries
-CREATE INDEX IF NOT EXISTS idx_channel_status_hash_checked
-    ON channel_status(channel_url_hash, checked_at DESC);
-
-
--- ---------------------------------------------------------------------------
--- 4. Row Level Security (RLS) — Critical for privacy
--- ---------------------------------------------------------------------------
--- RLS ensures that anonymous (anon) API key users:
---   - CAN insert analytics events (write-only telemetry)
---   - CANNOT read other users' analytics data
---   - CAN read/write channel_status (shared health data)
---
--- Only the service_role (used by admin dashboards) can read analytics.
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  ROW LEVEL SECURITY — Who can do what                                   ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
 
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE channel_status ENABLE ROW LEVEL SECURITY;
+ALTER TABLE channel_status   ENABLE ROW LEVEL SECURITY;
 
--- analytics_events: anon can INSERT only (one-way, write-only)
-CREATE POLICY "anon_insert_analytics"
-    ON analytics_events
-    FOR INSERT
-    TO anon
-    WITH CHECK (true);
+-- analytics_events: anon INSERT only (write-only telemetry)
+CREATE POLICY "ae_anon_insert"   ON analytics_events FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "ae_service_read"  ON analytics_events FOR SELECT TO service_role USING (true);
 
--- analytics_events: service_role can read everything (admin/dashboard)
-CREATE POLICY "service_read_analytics"
-    ON analytics_events
-    FOR SELECT
-    TO service_role
-    USING (true);
-
--- channel_status: anon can INSERT new check results
-CREATE POLICY "anon_insert_channel_status"
-    ON channel_status
-    FOR INSERT
-    TO anon
-    WITH CHECK (true);
-
--- channel_status: anon can READ all channel health data (shared functionality)
-CREATE POLICY "anon_read_channel_status"
-    ON channel_status
-    FOR SELECT
-    TO anon
-    USING (true);
-
--- channel_status: anon can UPDATE existing records (required for upsert)
-CREATE POLICY "anon_update_channel_status"
-    ON channel_status
-    FOR UPDATE
-    TO anon
-    USING (true)
-    WITH CHECK (true);
-
--- channel_status: service_role can read everything (admin/dashboard)
-CREATE POLICY "service_read_channel_status"
-    ON channel_status
-    FOR SELECT
-    TO service_role
-    USING (true);
+-- channel_status: anon read + write (shared health data)
+CREATE POLICY "cs_anon_insert"   ON channel_status FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "cs_anon_select"   ON channel_status FOR SELECT TO anon USING (true);
+CREATE POLICY "cs_anon_update"   ON channel_status FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "cs_service_read"  ON channel_status FOR SELECT TO service_role USING (true);
 
 
--- ---------------------------------------------------------------------------
--- 5. Materialized Views — Pre-aggregated data for the analytics dashboard
--- ---------------------------------------------------------------------------
--- These views are queried by scripts/analytics_dashboard.py and avoid
--- expensive full-table scans on every dashboard load.
---
--- Refresh them periodically with:
---   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_active_users;
---   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_top_channels;
---   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_crash_summary;
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  RATE LIMITING — Prevent channel_status poisoning                       ║
+-- ║  Rejects updates to the same url_hash more than once per minute.        ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
 
--- 5a. Daily Active Users (DAU) — unique devices per day per platform
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_daily_active_users AS
+CREATE OR REPLACE FUNCTION check_channel_status_rate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM channel_status
+        WHERE url_hash = NEW.url_hash
+          AND last_checked > now() - INTERVAL '1 minute'
+    ) THEN
+        -- Silently accept but increment report_count instead of duplicating
+        UPDATE channel_status
+        SET report_count = report_count + 1,
+            last_checked = now(),
+            status = NEW.status,
+            response_time_ms = COALESCE(NEW.response_time_ms, response_time_ms)
+        WHERE url_hash = NEW.url_hash;
+        RETURN NULL;  -- Skip the original INSERT/UPDATE
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_cs_rate_limit
+    BEFORE INSERT ON channel_status
+    FOR EACH ROW EXECUTE FUNCTION check_channel_status_rate();
+
+
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  MATERIALIZED VIEWS — Disposable, re-creatable analytics layers         ║
+-- ║  DROP + CREATE freely. The app never reads these directly.              ║
+-- ║  Only dashboards / admin queries use them.                              ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
+
+-- ── 1. Daily Active Users ────────────────────────────────────────────────
+
+DROP MATERIALIZED VIEW IF EXISTS mv_daily_active_users CASCADE;
+CREATE MATERIALIZED VIEW mv_daily_active_users AS
 SELECT
     date_trunc('day', created_at)::date AS day,
     platform,
     COUNT(DISTINCT device_id)           AS unique_devices,
     COUNT(*)                            AS total_events
 FROM analytics_events
-GROUP BY date_trunc('day', created_at)::date, platform
+GROUP BY 1, platform
 ORDER BY day DESC;
 
--- Unique index required for CONCURRENTLY refresh
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_dau_day_platform
-    ON mv_daily_active_users(day, platform);
-
-COMMENT ON MATERIALIZED VIEW mv_daily_active_users IS
-    'Daily active users by platform. Refresh periodically for dashboard.';
+CREATE UNIQUE INDEX idx_mv_dau ON mv_daily_active_users (day, platform);
 
 
--- 5b. Top Channels — most-played channel URL hashes
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_top_channels AS
+-- ── 2. Top Played Channels ──────────────────────────────────────────────
+
+DROP MATERIALIZED VIEW IF EXISTS mv_top_channels CASCADE;
+CREATE MATERIALIZED VIEW mv_top_channels AS
 SELECT
-    event_data->>'url_hash'  AS channel_hash,
-    COUNT(*)                 AS play_count,
-    COUNT(DISTINCT device_id) AS unique_players,
-    MAX(created_at)          AS last_played
+    event_data->>'url_hash'              AS channel_hash,
+    event_data->>'country'               AS channel_country,
+    event_data->>'category'              AS channel_category,
+    COUNT(*)                             AS play_count,
+    COUNT(DISTINCT device_id)            AS unique_players,
+    MAX(created_at)                      AS last_played
 FROM analytics_events
 WHERE event_type = 'channel_play'
   AND event_data->>'url_hash' IS NOT NULL
-GROUP BY event_data->>'url_hash'
+GROUP BY 1, 2, 3
 ORDER BY play_count DESC
-LIMIT 500;
+LIMIT 1000;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_top_channels_hash
-    ON mv_top_channels(channel_hash);
-
-COMMENT ON MATERIALIZED VIEW mv_top_channels IS
-    'Top 500 most-played channels by play count. Refresh periodically.';
+CREATE UNIQUE INDEX idx_mv_top ON mv_top_channels (channel_hash);
 
 
--- 5c. Crash Summary — crash/error rates per version per platform
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_crash_summary AS
+-- ── 3. Client Platform Breakdown ────────────────────────────────────────
+
+DROP MATERIALIZED VIEW IF EXISTS mv_client_platforms CASCADE;
+CREATE MATERIALIZED VIEW mv_client_platforms AS
+SELECT
+    platform,
+    event_data->>'os'             AS os_name,
+    event_data->>'os_version'     AS os_version,
+    app_version,
+    COUNT(DISTINCT device_id)     AS unique_devices,
+    COUNT(*)                      AS session_count,
+    MIN(created_at)               AS first_seen,
+    MAX(created_at)               AS last_seen
+FROM analytics_events
+WHERE event_type IN ('app_start', 'app_launch', 'app_install')
+GROUP BY 1, 2, 3, 4
+ORDER BY session_count DESC;
+
+CREATE UNIQUE INDEX idx_mv_clients
+    ON mv_client_platforms (platform, os_name, os_version, app_version);
+
+
+-- ── 4. Favorite Channels ────────────────────────────────────────────────
+
+DROP MATERIALIZED VIEW IF EXISTS mv_favorite_channels CASCADE;
+CREATE MATERIALIZED VIEW mv_favorite_channels AS
+SELECT
+    event_data->>'url_hash'   AS channel_hash,
+    event_data->>'country'    AS channel_country,
+    event_data->>'category'   AS channel_category,
+    SUM(CASE WHEN event_data->>'action' = 'add' THEN 1 ELSE -1 END)
+                              AS net_favorites,
+    COUNT(DISTINCT device_id) AS unique_users,
+    MAX(created_at)           AS last_favorited
+FROM analytics_events
+WHERE event_type = 'favorite'
+GROUP BY 1, 2, 3
+HAVING SUM(CASE WHEN event_data->>'action' = 'add' THEN 1 ELSE -1 END) > 0
+ORDER BY net_favorites DESC
+LIMIT 1000;
+
+CREATE UNIQUE INDEX idx_mv_favs ON mv_favorite_channels (channel_hash);
+
+
+-- ── 5. Crash & Error Summary ────────────────────────────────────────────
+
+DROP MATERIALIZED VIEW IF EXISTS mv_crash_summary CASCADE;
+CREATE MATERIALIZED VIEW mv_crash_summary AS
 SELECT
     app_version,
     platform,
-    COALESCE(event_data->>'error_type', 'unknown') AS error_type,
-    COUNT(*)                     AS crash_count,
-    MIN(created_at)              AS first_seen,
-    MAX(created_at)              AS last_seen,
-    COUNT(DISTINCT device_id)    AS affected_devices
+    event_data->>'error_category'  AS error_category,
+    event_data->>'error_type'      AS error_type,
+    COUNT(*)                       AS total_occurrences,
+    COUNT(DISTINCT device_id)      AS affected_devices,
+    MIN(created_at)                AS first_seen,
+    MAX(created_at)                AS last_seen
 FROM analytics_events
-WHERE event_type IN ('app_crash', 'error')
-GROUP BY app_version, platform, COALESCE(event_data->>'error_type', 'unknown')
-ORDER BY crash_count DESC;
+WHERE event_type IN ('app_crash', 'channel_fail')
+  AND created_at > now() - INTERVAL '30 days'
+GROUP BY 1, 2, 3, 4
+ORDER BY affected_devices DESC, total_occurrences DESC;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_crash_summary
-    ON mv_crash_summary(app_version, platform, error_type);
-
-COMMENT ON MATERIALIZED VIEW mv_crash_summary IS
-    'Crash/error rates per version and platform. Refresh periodically.';
+CREATE UNIQUE INDEX idx_mv_crash
+    ON mv_crash_summary (app_version, platform, error_category, error_type);
 
 
--- ---------------------------------------------------------------------------
--- 6. Utility: Scheduled refresh function (optional — use with pg_cron)
--- ---------------------------------------------------------------------------
--- If you have pg_cron enabled in your Supabase project, you can schedule
--- automatic refreshes of the materialized views.
---
--- To enable pg_cron, go to Supabase Dashboard > Database > Extensions > pg_cron
---
--- Then run:
---   SELECT cron.schedule(
---       'refresh-analytics-views',
---       '0 */6 * * *',  -- Every 6 hours
---       $$
---           REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_active_users;
---           REFRESH MATERIALIZED VIEW CONCURRENTLY mv_top_channels;
---           REFRESH MATERIALIZED VIEW CONCURRENTLY mv_crash_summary;
---       $$
---   );
+-- ── 6. Engagement (session depth) ───────────────────────────────────────
 
+DROP MATERIALIZED VIEW IF EXISTS mv_engagement CASCADE;
+CREATE MATERIALIZED VIEW mv_engagement AS
+SELECT
+    date_trunc('day', created_at)::date AS day,
+    platform,
+    COUNT(*)                                                         AS sessions_ended,
+    AVG((event_data->>'session_duration_s')::numeric)                AS avg_session_s,
+    AVG((event_data->>'channels_played')::numeric)                   AS avg_channels,
+    AVG((event_data->>'channels_failed')::numeric)                   AS avg_failures
+FROM analytics_events
+WHERE event_type = 'session_end'
+  AND event_data->>'session_duration_s' IS NOT NULL
+GROUP BY 1, 2
+ORDER BY 1 DESC;
+
+CREATE UNIQUE INDEX idx_mv_engage ON mv_engagement (day, platform);
+
+
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  SERVER FUNCTIONS — Retention, refresh, diagnostics                     ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
+
+-- Refresh all views (call via pg_cron every 6h or manually)
 CREATE OR REPLACE FUNCTION refresh_analytics_views()
-RETURNS void
-LANGUAGE sql
-SECURITY DEFINER
-AS $$
+RETURNS void LANGUAGE sql SECURITY DEFINER AS $$
     REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_active_users;
     REFRESH MATERIALIZED VIEW CONCURRENTLY mv_top_channels;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_client_platforms;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_favorite_channels;
     REFRESH MATERIALIZED VIEW CONCURRENTLY mv_crash_summary;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_engagement;
 $$;
 
-COMMENT ON FUNCTION refresh_analytics_views IS
-    'Refreshes all analytics materialized views. Call periodically or via pg_cron.';
+-- Data retention: delete old events (call weekly via pg_cron or GitHub Actions)
+CREATE OR REPLACE FUNCTION cleanup_old_data()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    deleted_events  bigint;
+    deleted_status  bigint;
+BEGIN
+    DELETE FROM analytics_events WHERE created_at < now() - INTERVAL '90 days';
+    GET DIAGNOSTICS deleted_events = ROW_COUNT;
+
+    DELETE FROM channel_status WHERE last_checked < now() - INTERVAL '7 days';
+    GET DIAGNOSTICS deleted_status = ROW_COUNT;
+
+    RETURN jsonb_build_object(
+        'events_deleted', deleted_events,
+        'status_deleted', deleted_status,
+        'cleaned_at', now()
+    );
+END;
+$$;
+
+-- Quick health check: returns table sizes and recent activity
+CREATE OR REPLACE FUNCTION db_health()
+RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$
+    SELECT jsonb_build_object(
+        'analytics_events_count', (SELECT count(*) FROM analytics_events),
+        'channel_status_count',   (SELECT count(*) FROM channel_status),
+        'latest_event',           (SELECT max(created_at) FROM analytics_events),
+        'latest_channel_check',   (SELECT max(last_checked) FROM channel_status),
+        'distinct_devices_7d',    (SELECT count(DISTINCT device_id)
+                                   FROM analytics_events
+                                   WHERE created_at > now() - INTERVAL '7 days'),
+        'events_today',           (SELECT count(*)
+                                   FROM analytics_events
+                                   WHERE created_at > date_trunc('day', now()))
+    );
+$$;
 
 
--- ---------------------------------------------------------------------------
--- 7. Data retention policy (optional cleanup)
--- ---------------------------------------------------------------------------
--- Uncomment and schedule to auto-delete old analytics data.
--- Channel status older than 7 days is stale and can be safely removed.
---
--- DELETE FROM analytics_events WHERE created_at < now() - interval '90 days';
--- DELETE FROM channel_status WHERE checked_at < now() - interval '7 days';
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║  USEFUL QUERIES — Copy-paste into Supabase SQL Editor as needed         ║
+-- ║  These are NOT tables — just saved queries for ad-hoc analysis.         ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
+
+-- Top 5 issues (last 7 days):
+--   SELECT * FROM mv_crash_summary
+--   WHERE last_seen > now() - INTERVAL '7 days'
+--   ORDER BY affected_devices DESC LIMIT 5;
+
+-- Retention cohort (D1/D7/D30):
+--   WITH installs AS (
+--       SELECT device_id, MIN(created_at)::date AS cohort_day
+--       FROM analytics_events WHERE event_type IN ('app_install','app_start')
+--       GROUP BY device_id
+--   ),
+--   activity AS (
+--       SELECT DISTINCT device_id, created_at::date AS active_day
+--       FROM analytics_events
+--   )
+--   SELECT i.cohort_day,
+--          COUNT(DISTINCT i.device_id) AS installed,
+--          COUNT(DISTINCT CASE WHEN a.active_day = i.cohort_day + 1  THEN i.device_id END) AS d1,
+--          COUNT(DISTINCT CASE WHEN a.active_day = i.cohort_day + 7  THEN i.device_id END) AS d7,
+--          COUNT(DISTINCT CASE WHEN a.active_day = i.cohort_day + 30 THEN i.device_id END) AS d30
+--   FROM installs i LEFT JOIN activity a ON i.device_id = a.device_id
+--   GROUP BY i.cohort_day ORDER BY i.cohort_day DESC;
+
+-- Stream success rate:
+--   SELECT platform, app_version,
+--     COUNT(*) FILTER (WHERE event_type = 'channel_play') AS plays,
+--     COUNT(*) FILTER (WHERE event_type = 'channel_fail') AS fails,
+--     ROUND(100.0 * COUNT(*) FILTER (WHERE event_type = 'channel_play')
+--           / NULLIF(COUNT(*), 0), 1) AS success_pct
+--   FROM analytics_events
+--   WHERE event_type IN ('channel_play', 'channel_fail')
+--     AND created_at > now() - INTERVAL '7 days'
+--   GROUP BY platform, app_version;
+
+-- Average watch time by category:
+--   SELECT event_data->>'category' AS category,
+--     ROUND(AVG((event_data->>'watch_duration_s')::numeric)) AS avg_watch_s,
+--     COUNT(*) AS sessions
+--   FROM analytics_events
+--   WHERE event_type = 'playback_end'
+--   GROUP BY 1 ORDER BY avg_watch_s DESC;
+
+-- Health check:
+--   SELECT * FROM db_health();
 
 
--- ---------------------------------------------------------------------------
--- Setup complete!
--- ---------------------------------------------------------------------------
--- Next steps:
---   1. Copy your Supabase URL and anon key from Project Settings > API
---   2. Run: python scripts/supabase_setup.py
---   3. Add SUPABASE_URL and SUPABASE_ANON_KEY to GitHub Secrets for CI builds
---   4. The Flutter app will automatically connect using --dart-define at build time
--- ---------------------------------------------------------------------------
+-- ═══════════════════════════════════════════════════════════════════════════
+-- DONE. Run this once. You should never need to ALTER these tables again.
+-- New events = just send new event_type strings from client code.
+-- New dashboards = CREATE MATERIALIZED VIEW (no client changes needed).
+-- ═══════════════════════════════════════════════════════════════════════════

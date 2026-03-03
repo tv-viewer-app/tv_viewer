@@ -1138,9 +1138,15 @@ class MainWindow:
         channel = self._find_channel_by_name(item['values'][1])
         
         if channel:
-            self._play_channel(channel)
+            # Find index in displayed list for next/prev navigation
+            idx = None
+            for i, ch in enumerate(self._displayed_channels):
+                if ch.get('url') == channel.get('url') and ch.get('name') == channel.get('name'):
+                    idx = i
+                    break
+            self._play_channel(channel, channel_index=idx)
     
-    def _play_channel(self, channel: Dict[str, Any]):
+    def _play_channel(self, channel: Dict[str, Any], channel_index: Optional[int] = None):
         """Open player for channel. Boosts scan priority for channel's country."""
         track_channel_play(channel)
         # Boost scan priority for this channel's country and URL
@@ -1164,7 +1170,11 @@ class MainWindow:
             self.player_window.on_playback_confirmed = _on_playback_confirmed
             self.player_window.set_channel(channel)
         else:
-            self.player_window = PlayerWindow(self.root, channel)
+            self.player_window = PlayerWindow(
+                self.root, channel,
+                channel_list=self._displayed_channels if self._displayed_channels else None,
+                channel_index=channel_index,
+            )
             self.player_window.on_playback_confirmed = _on_playback_confirmed
     
     def _on_channels_loaded(self, count: int):

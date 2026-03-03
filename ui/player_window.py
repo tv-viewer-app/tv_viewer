@@ -100,11 +100,17 @@ def get_vlc_hardware_acceleration_args() -> list:
 class PlayerWindow(tk.Toplevel):
     """Separate window for video playback with controls."""
     
-    def __init__(self, parent, channel: Dict[str, Any]):
+    def __init__(self, parent, channel: Dict[str, Any],
+                 channel_list: Optional[List[Dict[str, Any]]] = None,
+                 channel_index: Optional[int] = None,
+                 on_channel_change: Optional[Callable] = None):
         super().__init__(parent)
         
         self.channel = channel
         self.parent = parent
+        self.channel_list = channel_list
+        self.channel_index = channel_index
+        self._on_channel_change = on_channel_change
         self.player: Optional[vlc.MediaPlayer] = None
         self.instance: Optional[vlc.Instance] = None
         self.is_playing = False
@@ -195,6 +201,31 @@ class PlayerWindow(tk.Toplevel):
         )
         self.stop_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.stop_btn, "Stop playback")
+        
+        # Previous channel button
+        if self.channel_list and len(self.channel_list) > 1:
+            self.prev_btn = ttk.Button(
+                self.controls_frame,
+                text="⏮",
+                width=3,
+                command=self._previous_channel,
+                bootstyle="secondary",
+                state="normal" if self.channel_index and self.channel_index > 0 else "disabled"
+            )
+            self.prev_btn.pack(side=tk.LEFT, padx=2)
+            add_tooltip(self.prev_btn, "Previous channel")
+            
+            # Next channel button
+            self.next_btn = ttk.Button(
+                self.controls_frame,
+                text="⏭",
+                width=3,
+                command=self._next_channel,
+                bootstyle="secondary",
+                state="normal" if self.channel_index is not None and self.channel_index < len(self.channel_list) - 1 else "disabled"
+            )
+            self.next_btn.pack(side=tk.LEFT, padx=2)
+            add_tooltip(self.next_btn, "Next channel")
         
         # Time label
         self.time_label = ttk.Label(
@@ -582,6 +613,59 @@ class PlayerWindow(tk.Toplevel):
         logger.info(f"User selected source #{idx+1} for {self.channel.get('name', '?')}")
         self.channel['working_url_index'] = idx
         self.play()
+    
+    def _previous_channel(self):
+        """Switch to the previous channel in the list."""
+        if not self.channel_list or self.channel_index is None or self.channel_index <= 0:
+            return
+        new_idx = self.channel_index - 1
+        self._switch_channel(new_idx)
+    
+    def _next_channel(self):
+        """Switch to the next channel in the list."""
+        if not self.channel_list or self.channel_index is None:
+            return
+        if self.channel_index >= len(self.channel_list) - 1:
+            return
+        new_idx = self.channel_index + 1
+        self._switch_channel(new_idx)
+    
+    def _switch_channel(self, new_index: int):
+        """Switch to a different channel by index in the list."""
+        if not self.channel_list or new_index < 0 or new_index >= len(self.channel_list):
+            return
+        self.stop()
+        self.channel = self.channel_list[new_index]
+        self.channel_index = new_index
+        
+        # Update window title
+        channel_name = self.channel.get('name', 'Unknown Channel')
+        self.title(f"{config.APP_NAME} - {channel_name}")
+        
+        # Update prev/next button states
+        if hasattr(self, 'prev_btn'):
+            self.prev_btn.configure(state="normal" if new_index > 0 else "disabled")
+        if hasattr(self, 'next_btn'):
+            self.next_btn.configure(
+                state="normal" if new_index < len(self.channel_list) - 1 else "disabled")
+        
+        # Update source selector if present
+        if hasattr(self, '_source_combo'):
+            urls = self.channel.get('urls', [self.channel.get('url', '')])
+            values = [f"#{i+1}" for i in range(len(urls))]
+            self._source_combo.configure(values=values)
+            widx = self.channel.get('working_url_index', 0)
+            self._source_var.set(f"#{widx + 1}")
+        
+        logger.info(f"Switched to channel [{new_index}]: {channel_name}")
+        self.play()
+        
+        # Notify parent if callback provided
+        if self._on_channel_change:
+            try:
+                self._on_channel_change(self.channel, new_index)
+            except Exception:
+                pass
     
     def _report_channel_health(self, url: str, is_working: bool, error: str = ""):
         """Report channel health to analytics (async-safe from UI thread)."""

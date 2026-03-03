@@ -5,6 +5,8 @@ Tracks anonymous, aggregate usage patterns:
 - Channel plays (country, category — NO channel names or URLs)
 - Channel failures (country, category, error type)
 - Feature usage (map, scan, search, favorites, fullscreen)
+- Favorites (add/remove with hashed URL)
+- Session end (duration, engagement depth)
 
 Privacy guarantees:
 - No PII: no usernames, IPs, emails, or device identifiers
@@ -13,7 +15,7 @@ Privacy guarantees:
 - User can opt out via config (TELEMETRY_ENABLED = False)
 - Fire-and-forget: never blocks UI, silently drops on failure
 
-Supabase table: app_telemetry
+Supabase table: analytics_events
   id (uuid, auto), event_type (text), event_data (jsonb),
   app_version (text), platform (text), created_at (timestamptz)
 """
@@ -49,7 +51,7 @@ except (ImportError, AttributeError):
     _SUPABASE_KEY = ''
     _APP_VERSION = 'unknown'
 
-_TABLE = 'app_telemetry'
+_TABLE = 'analytics_events'
 _PLATFORM = 'windows' if sys.platform == 'win32' else sys.platform
 _DEVICE_ID_FILE = os.path.join(
     os.path.expanduser('~'), '.tv_viewer_device_id'
@@ -208,4 +210,24 @@ def track_scan_complete(total: int, working: int, duration_sec: float = 0):
         'working': working,
         'failed': total - working,
         'duration_sec': round(duration_sec, 1),
+    })
+
+
+def track_favorite(channel: Dict[str, Any], action: str = 'add'):
+    """Track favorite add/remove (NO name or URL — only hashed URL)."""
+    track('favorite', {
+        'url_hash': _hash(channel.get('url', '')),
+        'action': action,
+        'country': channel.get('country', 'Unknown'),
+        'category': channel.get('category', 'Other'),
+    })
+
+
+def track_session_end(duration_sec: float = 0, channels_played: int = 0,
+                      channels_failed: int = 0):
+    """Track session end with engagement depth."""
+    track('session_end', {
+        'session_duration_s': round(duration_sec),
+        'channels_played': channels_played,
+        'channels_failed': channels_failed,
     })
