@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-03-04
+
+### Added
+- **Adult content filter** — Adult/NSFW channels are hidden by default on both Windows and Android. Toggle in settings to enable (Windows: `SHOW_ADULT_CONTENT` in config.py; Android: SharedPreferences toggle). Adult sources (xxx.m3u, index.nsfw.m3u, adultiptv) are not even fetched unless enabled.
+- **9 new channel sources** — Added apsattv.com (xumo, lg, rok, redbox, xiaomi, tablo, vizio, firetv, klowd), Free2ViewTV, and iptv-org xxx/nsfw indices
+- **Supabase RLS fix** — Added `ae_anon_select` policy to `supabase_setup.sql` for analytics_events table
+
+### Changed
+- **Source consolidation** — Removed 75+ redundant iptv-org M3U URLs. `index.m3u` already contains all category and country subsets. Flutter: 28→15 repos, Windows: 98→21 repos. Faster scanning, less bandwidth.
+
+### Fixed
+- **CI Flutter analyze** — Moved dead-code files (fmstream_integration_example, feedback_screen, external_player_service, integration test) out of analysis scope to fix persistent build failures
+
 ## [2.1.7] - 2026-03-04
 
 ### Fixed

@@ -164,7 +164,7 @@ Future<void> exampleAppInitialization() async {
   await analyticsService.trackAppLaunch();
 
   // Set initial crash context
-  await crashlytics.setCustomKey('app_version', '2.1.7');
+  await crashlytics.setCustomKey('app_version', '2.2.0');
   await crashlytics.setCustomKey('environment', 'production');
 }
 
