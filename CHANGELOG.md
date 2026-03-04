@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-03-04
+
+### Fixed
+- **Issue #61**: Source selector now visible on channel error screen — users can switch sources when playback fails
+- **Channel consolidation**: Channels with same name (e.g., Kan 11, כאן 11) merged into single multi-URL entries with failover
+- **Android settings**: Added adult content toggle to Help & Settings screen (was missing in v2.2.0)
+
+### Changed
+- Flutter M3U service: Name-based channel consolidation (strips quality suffixes, handles Hebrew/Latin aliases)
+- Reduced duplicate channels across sources (Kan 11/כאן merged, quality variants consolidated)
+
 ## [2.2.0] - 2026-03-04
 
 ### Added

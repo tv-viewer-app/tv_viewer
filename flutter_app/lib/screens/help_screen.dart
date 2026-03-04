@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import '../providers/channel_provider.dart';
 import '../services/onboarding_service.dart';
 import 'package:package_info_plus/package_info_plus.dart' show PackageInfo;
 import '../utils/logger_service.dart';
@@ -31,7 +33,7 @@ class _HelpScreenState extends State<HelpScreen> {
       });
     } catch (e) {
       setState(() {
-        _appVersion = '2.2.0+17'; // Fallback to hardcoded version
+        _appVersion = '2.2.1+17'; // Fallback to hardcoded version
       });
     }
   }
@@ -306,6 +308,25 @@ class _HelpScreenState extends State<HelpScreen> {
             ),
             title: const Text('App Version'),
             subtitle: Text(_appVersion),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Settings Section
+          _buildSectionHeader('Settings'),
+          Consumer<ChannelProvider>(
+            builder: (context, provider, _) {
+              return SwitchListTile(
+                secondary: Icon(
+                  Icons.eighteen_up_rating,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Show Adult Content'),
+                subtitle: const Text('Include adult/NSFW channels in scan results'),
+                value: provider.showAdultContent,
+                onChanged: (_) => provider.toggleAdultContent(),
+              );
+            },
           ),
 
           const SizedBox(height: 16),

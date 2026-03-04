@@ -95,7 +95,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.0'},
+        headers: {'User-Agent': 'TV Viewer/2.2.1'},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -304,7 +304,83 @@ class M3UService {
       throw error;
     }
     
-    return allChannels;
+    // Consolidate channels with same normalized name into multi-URL entries
+    final consolidated = _consolidateChannels(allChannels);
+    logger.info('Consolidated ${allChannels.length} → ${consolidated.length} channels');
+    
+    return consolidated;
+  }
+
+  /// Quality/variant suffixes to strip when normalizing channel names
+  static final _qualitySuffixPattern = RegExp(
+    r'\s*[\(\[](720p|1080p|480p|360p|4k|hd|sd|fhd|uhd|h\.?265|h\.?264|hevc|'
+    r'alt|backup|sub|subtitled|כתוביות|mirror|low|high|multi)[)\]]'
+    r'|\s+(720p|1080p|480p|360p|4k|hd|sd|fhd|uhd|h\.?265|h\.?264|hevc)$',
+    caseSensitive: false,
+  );
+
+  /// Normalize a channel name for grouping (strip quality/variant suffixes)
+  /// Handles Hebrew/Arabic aliases separated by dash (e.g., "כאן 11 - Kan 11")
+  static String _normalizeNameForGrouping(String name) {
+    String normalized = name.trim();
+    // Multi-pass strip quality suffixes
+    for (int i = 0; i < 3; i++) {
+      final before = normalized;
+      normalized = normalized.replaceAll(_qualitySuffixPattern, '').trim();
+      if (normalized == before) break;
+    }
+    // Handle " - " separator: keep Latin-dominant part (like Python version)
+    if (normalized.contains(' - ')) {
+      final parts = normalized.split(RegExp(r'\s+[-–—]\s+'));
+      if (parts.length >= 2) {
+        // Pick the part with more Latin characters
+        String? bestLatin;
+        for (final part in parts) {
+          final stripped = part.trim();
+          if (stripped.isEmpty) continue;
+          final latinChars = stripped.codeUnits.where((c) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122)).length;
+          final alphaChars = stripped.runes.where((r) => String.fromCharCode(r).contains(RegExp(r'[\p{L}]', unicode: true))).length;
+          if (alphaChars > 0 && latinChars / alphaChars > 0.5) {
+            bestLatin ??= stripped;
+          }
+        }
+        if (bestLatin != null) normalized = bestLatin;
+      }
+    }
+    return normalized.toLowerCase().trim();
+  }
+
+  /// Consolidate channels: merge entries with same normalized name + country
+  /// into single multi-URL Channel objects for failover
+  static List<Channel> _consolidateChannels(List<Channel> channels) {
+    // Group by normalized name + country
+    final groups = <String, List<Channel>>{};
+    for (final ch in channels) {
+      final key = '${_normalizeNameForGrouping(ch.name)}|${(ch.country ?? '').toLowerCase()}';
+      groups.putIfAbsent(key, () => []).add(ch);
+    }
+
+    final result = <Channel>[];
+    for (final group in groups.values) {
+      if (group.length == 1) {
+        result.add(group.first);
+        continue;
+      }
+      // Merge all URLs, preserving order (first seen = primary)
+      final allUrls = <String>[];
+      final seenUrls = <String>{};
+      for (final ch in group) {
+        for (final url in ch.urls) {
+          if (seenUrls.add(url)) {
+            allUrls.add(url);
+          }
+        }
+      }
+      // Use first channel's metadata as canonical, with all URLs
+      final primary = group.first;
+      result.add(primary.copyWith(urls: allUrls));
+    }
+    return result;
   }
 
   /// Check if a stream URL is accessible
@@ -314,7 +390,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.0'},
+        headers: {'User-Agent': 'TV Viewer/2.2.1'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||

@@ -177,7 +177,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.2.0'},
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.2.1'},
         );
 
         await _videoController!.initialize().timeout(
@@ -379,7 +379,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     try {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(streamUrl),
-        httpHeaders: const {'User-Agent': 'TV Viewer/2.2.0'},
+        httpHeaders: const {'User-Agent': 'TV Viewer/2.2.1'},
       );
       
       await controller.initialize();
@@ -1038,6 +1038,55 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                   fontFamily: 'monospace',
                 ),
               ),
+              // Issue #61: Source selector on error screen
+              if (widget.channel.urls.length > 1) ...[
+                const SizedBox(height: 20),
+                const Text(
+                  'Try a different source:',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 36,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.channel.urls.length,
+                    itemBuilder: (context, index) {
+                      final isCurrent = index == _currentUrlIndex;
+                      final isFailed = _failedIndices.contains(index);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: isFailed ? null : () => _switchSource(index),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isCurrent
+                                  ? Colors.blue
+                                  : isFailed
+                                      ? Colors.red.withOpacity(0.3)
+                                      : Colors.white12,
+                              borderRadius: BorderRadius.circular(18),
+                              border: isCurrent ? null : Border.all(
+                                color: isFailed ? Colors.red.withOpacity(0.5) : Colors.white24,
+                              ),
+                            ),
+                            child: Text(
+                              'Source #${index + 1}${isFailed ? ' ✗' : ''}',
+                              style: TextStyle(
+                                color: isFailed ? Colors.white38 : Colors.white,
+                                fontSize: 13,
+                                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
