@@ -82,7 +82,7 @@ void main() {
 
     group('Media Type Filtering', () {
       test('FC-2.1: Default "All" filter shows both TV and Radio', () {
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 5);
         expect(filtered.where((ch) => ch.mediaType == 'TV').length, 4);
@@ -91,7 +91,7 @@ void main() {
 
       test('FC-2.2: Filter TV channels only', () {
         provider.setMediaType('TV');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 4);
         expect(filtered.every((ch) => ch.mediaType == 'TV'), true);
@@ -99,7 +99,7 @@ void main() {
 
       test('FC-2.3: Filter Radio channels only', () {
         provider.setMediaType('Radio');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered.every((ch) => ch.mediaType == 'Radio'), true);
@@ -108,22 +108,22 @@ void main() {
 
       test('FC-2.4: Toggle back to All from TV', () {
         provider.setMediaType('TV');
-        expect(provider.filteredChannels.length, 4);
+        expect(provider.channels.length, 4);
         
         provider.setMediaType('All');
-        expect(provider.filteredChannels.length, 5);
+        expect(provider.channels.length, 5);
       });
     });
 
     group('Category Filtering', () {
       test('FC-3.2: Default "All Categories" shows all channels', () {
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         expect(filtered.length, 5);
       });
 
       test('FC-3.3: Select specific category "News"', () {
         provider.setCategory('News');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 3);
         expect(filtered.every((ch) => ch.category == 'News'), true);
@@ -131,7 +131,7 @@ void main() {
 
       test('FC-3.3: Select specific category "Sports"', () {
         provider.setCategory('Sports');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered[0].name, 'ESPN Sports');
@@ -139,10 +139,10 @@ void main() {
 
       test('FC-3.5: Reset category filter', () {
         provider.setCategory('News');
-        expect(provider.filteredChannels.length, 3);
+        expect(provider.channels.length, 3);
         
         provider.setCategory('All Categories');
-        expect(provider.filteredChannels.length, 5);
+        expect(provider.channels.length, 5);
       });
 
       test('FC-3.1: Categories list populated correctly', () {
@@ -156,7 +156,7 @@ void main() {
 
       test('EC-2.1: Category with zero results', () {
         provider.setCategory('NonExistentCategory');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.isEmpty, true);
       });
@@ -164,13 +164,13 @@ void main() {
 
     group('Country Filtering', () {
       test('FC-4.2: Default "All Countries" shows all channels', () {
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         expect(filtered.length, 5);
       });
 
       test('FC-4.3: Select specific country "US"', () {
         provider.setCountry('US');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 2);
         expect(filtered.every((ch) => ch.country == 'US'), true);
@@ -178,7 +178,7 @@ void main() {
 
       test('FC-4.3: Select specific country "UK"', () {
         provider.setCountry('UK');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 2);
         expect(filtered.every((ch) => ch.country == 'UK'), true);
@@ -186,10 +186,10 @@ void main() {
 
       test('FC-4.5: Reset country filter', () {
         provider.setCountry('US');
-        expect(provider.filteredChannels.length, 2);
+        expect(provider.channels.length, 2);
         
         provider.setCountry('All Countries');
-        expect(provider.filteredChannels.length, 5);
+        expect(provider.channels.length, 5);
       });
 
       test('FC-4.1: Countries list populated correctly', () {
@@ -212,7 +212,7 @@ void main() {
     group('Search Functionality', () {
       test('FC-5.2: Search by channel name', () {
         provider.setSearchQuery('CNN');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered[0].name, 'CNN International');
@@ -220,18 +220,18 @@ void main() {
 
       test('FC-5.3: Case-insensitive search', () {
         provider.setSearchQuery('cnn');
-        expect(provider.filteredChannels.length, 1);
+        expect(provider.channels.length, 1);
         
         provider.setSearchQuery('CNN');
-        expect(provider.filteredChannels.length, 1);
+        expect(provider.channels.length, 1);
         
         provider.setSearchQuery('CnN');
-        expect(provider.filteredChannels.length, 1);
+        expect(provider.channels.length, 1);
       });
 
       test('FC-5.7: Partial match search', () {
         provider.setSearchQuery('BBC');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         // Should match both "BBC World News" and "BBC Radio 1"
         expect(filtered.length, 2);
@@ -240,22 +240,22 @@ void main() {
 
       test('FC-5.5: Clear search', () {
         provider.setSearchQuery('CNN');
-        expect(provider.filteredChannels.length, 1);
+        expect(provider.channels.length, 1);
         
         provider.setSearchQuery('');
-        expect(provider.filteredChannels.length, 5);
+        expect(provider.channels.length, 5);
       });
 
       test('FC-5.6: Search with no results', () {
         provider.setSearchQuery('XYZ123NotFound');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.isEmpty, true);
       });
 
       test('EC-2.2: Search with only spaces', () {
         provider.setSearchQuery('   ');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         // Should either show all or none based on trim logic
         expect(filtered.length, anyOf(0, 5));
@@ -263,7 +263,7 @@ void main() {
 
       test('EC-2.3: Search with special characters', () {
         provider.setSearchQuery(r'!@#$%');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         // Should not crash, returns no matches
         expect(filtered.isEmpty, true);
@@ -274,7 +274,7 @@ void main() {
       test('FC-6.1: Media type + Category', () {
         provider.setMediaType('TV');
         provider.setCategory('News');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 3);
         expect(filtered.every((ch) => ch.mediaType == 'TV' && ch.category == 'News'), true);
@@ -283,7 +283,7 @@ void main() {
       test('FC-6.2: Media type + Country', () {
         provider.setMediaType('Radio');
         provider.setCountry('UK');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered[0].name, 'BBC Radio 1');
@@ -292,7 +292,7 @@ void main() {
       test('FC-6.3: Category + Country', () {
         provider.setCategory('News');
         provider.setCountry('US');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered[0].name, 'CNN International');
@@ -302,7 +302,7 @@ void main() {
         provider.setMediaType('TV');
         provider.setCategory('News');
         provider.setCountry('US');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered[0].name, 'CNN International');
@@ -312,7 +312,7 @@ void main() {
         provider.setMediaType('TV');
         provider.setCategory('News');
         provider.setSearchQuery('BBC');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.length, 1);
         expect(filtered[0].name, 'BBC World News');
@@ -324,20 +324,20 @@ void main() {
         provider.setCategory('News');
         provider.setCountry('US');
         provider.setSearchQuery('CNN');
-        expect(provider.filteredChannels.length, 1);
+        expect(provider.channels.length, 1);
         
         // Clear all
         provider.setMediaType('All');
         provider.setCategory('All Categories');
         provider.setCountry('All Countries');
         provider.setSearchQuery('');
-        expect(provider.filteredChannels.length, 5);
+        expect(provider.channels.length, 5);
       });
 
       test('EC-2.1: Combined filters with zero results', () {
         provider.setMediaType('Radio');
         provider.setCategory('Sports');
-        final filtered = provider.filteredChannels;
+        final filtered = provider.channels;
         
         expect(filtered.isEmpty, true);
       });
@@ -401,14 +401,14 @@ void main() {
         }
         
         // Should complete without errors
-        expect(provider.filteredChannels, isNotEmpty);
+        expect(provider.channels, isNotEmpty);
       });
 
       test('EC-DATA-1: Empty channel list', () {
         provider.setChannelsForTesting([]);
         
         expect(provider.channels.isEmpty, true);
-        expect(provider.filteredChannels.isEmpty, true);
+        expect(provider.channels.isEmpty, true);
         expect(provider.categories.isEmpty, true);
         expect(provider.countries.isEmpty, true);
       });
@@ -417,7 +417,7 @@ void main() {
         provider.setChannelsForTesting([sampleChannels[0]]);
         
         expect(provider.channels.length, 1);
-        expect(provider.filteredChannels.length, 1);
+        expect(provider.channels.length, 1);
       });
 
       test('EC-1.10: Very large channel list (10000+)', () {
@@ -439,7 +439,7 @@ void main() {
         stopwatch.stop();
         
         expect(stopwatch.elapsedMilliseconds, lessThan(200));
-        expect(provider.filteredChannels.length, 1000);
+        expect(provider.channels.length, 1000);
       });
     });
 
