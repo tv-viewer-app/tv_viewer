@@ -36,6 +36,7 @@ class M3UService {
     'https://www.apsattv.com/firetv.m3u',
     'https://od.lk/s/MzJfMTY2NzU4NDVf/Free2ViewTV-2021-Master.m3u',
     'https://www.apsattv.com/klowd.m3u',
+    'https://iptv-org.github.io/iptv/categories/xxx.m3u',
   ];
 
   /// Custom Israeli channels with verified working CDN URLs
