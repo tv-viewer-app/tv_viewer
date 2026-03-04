@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.7] - 2026-03-04
+
+### Fixed
+- **CI Flutter analyze pipeline** — Fixed 431+ errors across 5 iterations:
+  - Wrong package imports (`package:flutter_app/` and `package:tv_viewer_project/` → `package:tv_viewer/`)
+  - API mismatch: `filteredChannels` → `channels` getter in ChannelProvider tests
+  - Removed non-existent `FeedbackSubmissionResult` test group
+  - Suppressed expected warnings in test stubs (`unused_local_variable`, `unused_field`)
+- **CI `flutter analyze` warnings treated as fatal** — Added `--no-fatal-warnings` flag; errors remain fatal
+- **Android version mismatch** — `local.properties` was stuck at v1.9.0 while pubspec was 2.1.6
+
+### Added
+- **Comprehensive release process** — `docs/RELEASE_PROCESS.md` with 8-phase mandatory checklist covering security, code review, version bump, issue triage, workflow verification, and post-release gates
+
 ## [2.1.6] - 2026-03-03
 
 ### Fixed
