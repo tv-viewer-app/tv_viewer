@@ -5,6 +5,7 @@
     "https://iptv-org.github.io/iptv/index.m3u",
     "https://iptv-org.github.io/iptv/countries/il.m3u",
     "https://iptv-org.github.io/iptv/languages/heb.m3u",
+    "https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw",
     "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8",
     "https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/grouped_by_content.m3u",
     "https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/international.m3u",
@@ -27,7 +28,7 @@
   "adult_repositories": [
     "https://iptv-org.github.io/iptv/categories/xxx.m3u",
     "https://iptv-org.github.io/iptv/index.nsfw.m3u",
-    "http://cdn.adultiptv.net/lists/all.m3u8"
+    "https://cdn.adultiptv.net/lists/all.m3u8"
   ],
   "custom_channels": [
     {

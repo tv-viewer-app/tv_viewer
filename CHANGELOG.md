@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-03-04
+
+### Fixed
+- **Issue #61**: Source selector on error screen now allows retrying any source (previously all sources were disabled after auto-failover exhausted them)
+- **Categories showing countries**: Removed `cat.length <= 3` filter that let country codes (UK, USA) appear as content categories
+- **Adult content toggle**: Fixed HTTP→HTTPS for adult source URL (Android blocks cleartext), added 'Adult' to known categories
+- **Reshet channels missing**: Added Reshet 13 Comedy, Nofesh, Reality, Subtitled, and Big Brother Israel to Flutter custom channels
+- **Player rotation**: Allow auto-rotation (portrait + landscape) instead of forcing landscape-only
+
+### Added
+- New Israeli channel source from gist (serginholssfilmes) with 50+ Israeli channels
+- Explicit channel alias mapping: Kan 11/News/Subtitled/4K merged as multi-URL, Kan Kids/Educational merged, Reshet 13/Alt/Subtitled merged
+- Standalone "alt" suffix stripping in channel name normalization
+
+### Changed
+- Channel consolidation now uses alias groups for known channels (Kan, Reshet) while preserving distinct content variants (Comedy, Nofesh, Reality)
+
 ## [2.2.1] - 2026-03-04
 
 ### Fixed

@@ -12,6 +12,7 @@ class M3UService {
     // Israeli priority sources
     'https://iptv-org.github.io/iptv/countries/il.m3u',
     'https://iptv-org.github.io/iptv/languages/heb.m3u',
+    'https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw',
     // Community sources (unique channels not in iptv-org)
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
     'https://www.apsattv.com/xumo.m3u',
@@ -30,7 +31,7 @@ class M3UService {
   static const List<String> adultRepositories = [
     'https://iptv-org.github.io/iptv/categories/xxx.m3u',
     'https://iptv-org.github.io/iptv/index.nsfw.m3u',
-    'http://cdn.adultiptv.net/lists/all.m3u8',
+    'https://cdn.adultiptv.net/lists/all.m3u8',
   ];
 
   /// Custom Israeli channels with verified working CDN URLs
@@ -42,6 +43,11 @@ class M3UService {
     {'name': 'Makan 33', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/makan/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Arabic'},
     {'name': 'Reshet 13', 'url': 'https://reshet.g-mana.live/media/87f59c77-03f6-4bad-a648-897e095e7360/mainManifest.m3u8', 'group': 'General', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Reshet 13 Alt', 'url': 'https://d18b0e6mopany4.cloudfront.net/out/v1/2f2bc414a3db4698a8e94b89eaf2da2a/index.m3u8', 'group': 'General', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': 'Reshet 13 Subtitled', 'url': 'https://reshet.g-mana.live/media/4607e158-e4d4-4e18-9160-3dc3ea9bc677/mainManifest.m3u8', 'group': 'General', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': 'Reshet 13 Comedy', 'url': 'https://d15ds134q59udk.cloudfront.net/out/v1/fbba879221d045598540ee783b140fe2/index.m3u8', 'group': 'Entertainment', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': 'Reshet 13 Nofesh', 'url': 'https://d1yd8hohnldm33.cloudfront.net/out/v1/19dee23c2cc24f689bd4e1288661ee0c/index.m3u8', 'group': 'Entertainment', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': 'Reshet 13 Reality', 'url': 'https://d2dffl3588mvfk.cloudfront.net/out/v1/d8e15050ca4148aab0ee387a5e2eb46b/index.m3u8', 'group': 'Entertainment', 'country': 'Israel', 'language': 'Hebrew'},
+    {'name': 'Big Brother Israel', 'url': 'https://d2lckchr9cxrss.cloudfront.net/out/v1/c73af7694cce4767888c08a7534b503c/index.m3u8', 'group': 'Entertainment', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Channel 14', 'url': 'https://ch14channel14.encoders.immergo.tv/app/2/streamPlaylist.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Channel 14 Alt', 'url': 'https://r.il.cdn-redge.media/livehls/oil/ch14/live/ch14/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Channel 10 Business', 'url': 'https://r.il.cdn-redge.media/livehls/oil/calcala-live/live/channel10/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
@@ -95,7 +101,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.1'},
+        headers: {'User-Agent': 'TV Viewer/2.2.2'},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -315,9 +321,32 @@ class M3UService {
   static final _qualitySuffixPattern = RegExp(
     r'\s*[\(\[](720p|1080p|480p|360p|4k|hd|sd|fhd|uhd|h\.?265|h\.?264|hevc|'
     r'alt|backup|sub|subtitled|כתוביות|mirror|low|high|multi)[)\]]'
-    r'|\s+(720p|1080p|480p|360p|4k|hd|sd|fhd|uhd|h\.?265|h\.?264|hevc)$',
+    r'|\s+(720p|1080p|480p|360p|4k|hd|sd|fhd|uhd|h\.?265|h\.?264|hevc)$'
+    r'|\s+alt$',
     caseSensitive: false,
   );
+
+  /// Explicit alias groups: channels that should merge into one multi-URL entry.
+  /// Key = canonical name, values = alternative names (case-insensitive).
+  static const Map<String, List<String>> _channelAliases = {
+    'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11'],
+    'kan kids / educational': ['kan kids', 'kan educational', 'kan edu', 'כאן חינוכית'],
+    'reshet 13': ['reshet 13 alt', 'reshet 13 subtitled'],
+  };
+
+  /// Build reverse lookup: alias → canonical name
+  static Map<String, String>? _aliasLookup;
+  static Map<String, String> _getAliasLookup() {
+    if (_aliasLookup != null) return _aliasLookup!;
+    _aliasLookup = {};
+    for (final entry in _channelAliases.entries) {
+      _aliasLookup![entry.key] = entry.key;
+      for (final alias in entry.value) {
+        _aliasLookup![alias] = entry.key;
+      }
+    }
+    return _aliasLookup!;
+  }
 
   /// Normalize a channel name for grouping (strip quality/variant suffixes)
   /// Handles Hebrew/Arabic aliases separated by dash (e.g., "כאן 11 - Kan 11")
@@ -330,10 +359,9 @@ class M3UService {
       if (normalized == before) break;
     }
     // Handle " - " separator: keep Latin-dominant part (like Python version)
-    if (normalized.contains(' - ')) {
+    if (normalized.contains(' - ') || normalized.contains(' – ') || normalized.contains(' — ')) {
       final parts = normalized.split(RegExp(r'\s+[-–—]\s+'));
       if (parts.length >= 2) {
-        // Pick the part with more Latin characters
         String? bestLatin;
         for (final part in parts) {
           final stripped = part.trim();
@@ -347,7 +375,10 @@ class M3UService {
         if (bestLatin != null) normalized = bestLatin;
       }
     }
-    return normalized.toLowerCase().trim();
+    final key = normalized.toLowerCase().trim();
+    // Check explicit alias mapping
+    final lookup = _getAliasLookup();
+    return lookup[key] ?? key;
   }
 
   /// Consolidate channels: merge entries with same normalized name + country
@@ -390,7 +421,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.1'},
+        headers: {'User-Agent': 'TV Viewer/2.2.2'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||

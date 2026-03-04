@@ -722,7 +722,7 @@ class ChannelProvider extends ChangeNotifier {
     'Culture', 'Documentary', 'Education', 'Entertainment', 'Family',
     'General', 'Kids', 'Legislative', 'Lifestyle', 'Movies', 'Music',
     'News', 'Outdoor', 'Radio', 'Relax', 'Religious', 'Science',
-    'Series', 'Shop', 'Sports', 'Travel', 'Weather', 'Xxx', 'Other',
+    'Series', 'Shop', 'Sports', 'Travel', 'Weather', 'Xxx', 'Adult', 'Other',
     'Undefined', 'Fiction', 'Food', 'Health', 'History', 'Nature',
     'Technology', 'Gaming', 'Drama', 'Crime', 'Reality', 'Talk',
   };
@@ -736,10 +736,7 @@ class ChannelProvider extends ChangeNotifier {
 
     // Only include known content categories; filter out country names
     _categories = rawCategories.where((cat) {
-      return _knownCategories.contains(cat) ||
-          // Keep it if it's NOT a recognized country in our countries set
-          // (short names < 4 chars are likely codes, keep them)
-          cat.length <= 3;
+      return _knownCategories.contains(cat);
     }).toSet();
 
     // If very few categories matched, fall back to all (some playlists use custom names)

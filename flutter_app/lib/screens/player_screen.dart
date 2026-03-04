@@ -67,8 +67,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _initializeWakeLock();
     _initializePip();
     
-    // Lock to landscape for video
+    // Allow auto-rotation (portrait + landscape) for video playback
     SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
@@ -177,7 +179,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.2.1'},
+          httpHeaders: const {'User-Agent': 'TV Viewer/2.2.2'},
         );
 
         await _videoController!.initialize().timeout(
@@ -379,7 +381,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     try {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(streamUrl),
-        httpHeaders: const {'User-Agent': 'TV Viewer/2.2.1'},
+        httpHeaders: const {'User-Agent': 'TV Viewer/2.2.2'},
       );
       
       await controller.initialize();
@@ -1054,30 +1056,31 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                     itemCount: widget.channel.urls.length,
                     itemBuilder: (context, index) {
                       final isCurrent = index == _currentUrlIndex;
-                      final isFailed = _failedIndices.contains(index);
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: GestureDetector(
-                          onTap: isFailed ? null : () => _switchSource(index),
+                          onTap: isCurrent ? null : () {
+                            // Clear failed state and try this source
+                            _failedIndices.clear();
+                            _switchSource(index);
+                          },
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                             decoration: BoxDecoration(
                               color: isCurrent
-                                  ? Colors.blue
-                                  : isFailed
-                                      ? Colors.red.withOpacity(0.3)
-                                      : Colors.white12,
+                                  ? Colors.red.withOpacity(0.3)
+                                  : Colors.white12,
                               borderRadius: BorderRadius.circular(18),
-                              border: isCurrent ? null : Border.all(
-                                color: isFailed ? Colors.red.withOpacity(0.5) : Colors.white24,
+                              border: Border.all(
+                                color: isCurrent ? Colors.red.withOpacity(0.5) : Colors.white24,
                               ),
                             ),
                             child: Text(
-                              'Source #${index + 1}${isFailed ? ' ✗' : ''}',
+                              'Source #${index + 1}${isCurrent ? ' (failed)' : ''}',
                               style: TextStyle(
-                                color: isFailed ? Colors.white38 : Colors.white,
+                                color: isCurrent ? Colors.white38 : Colors.white,
                                 fontSize: 13,
-                                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ),
