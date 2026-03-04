@@ -10,10 +10,10 @@ import 'package:provider/provider.dart';
 // ✅ ADD: Import the DI setup
 import 'package:tv_viewer/di/injection.dart';
 
-import 'screens/home_screen.dart';
-import 'providers/channel_provider.dart';
-import 'utils/logger_service.dart';
-import 'utils/error_handler.dart';
+import 'package:tv_viewer/screens/home_screen.dart';
+import 'package:tv_viewer/providers/channel_provider.dart';
+import 'package:tv_viewer/utils/logger_service.dart';
+import 'package:tv_viewer/utils/error_handler.dart';
 
 /// Updated main() with dependency injection
 void main() async {

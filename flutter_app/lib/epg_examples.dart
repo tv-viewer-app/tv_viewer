@@ -239,21 +239,21 @@ class ChannelListWithEpgExample extends StatelessWidget {
         url: 'http://example.com/cnn.m3u8',
         category: 'News',
         logo: 'http://example.com/cnn.png',
-        tvgId: 'cnn',
+        country: 'US',
       ),
       Channel(
         name: 'BBC World News',
         url: 'http://example.com/bbc.m3u8',
         category: 'News',
         logo: 'http://example.com/bbc.png',
-        tvgId: 'bbc-world',
+        country: 'UK',
       ),
       Channel(
         name: 'ESPN',
         url: 'http://example.com/espn.m3u8',
         category: 'Sports',
         logo: 'http://example.com/espn.png',
-        tvgId: 'espn',
+        country: 'US',
       ),
     ];
 
@@ -314,9 +314,9 @@ class ChannelListWithEpgExample extends StatelessWidget {
                                     color: Colors.grey.shade600,
                                   ),
                                 ),
-                              if (channel.tvgId != null)
+                              if (channel.country != null)
                                 Text(
-                                  'EPG ID: ${channel.tvgId}',
+                                  'Country: ${channel.country}',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey.shade500,
