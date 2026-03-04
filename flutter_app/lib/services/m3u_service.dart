@@ -26,6 +26,7 @@ class M3UService {
     'https://iptv-org.github.io/iptv/languages/heb.m3u',
     // Community sources
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+    'https://www.apsattv.com/xumo.m3u',
   ];
 
   /// Custom Israeli channels with verified working CDN URLs

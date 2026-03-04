@@ -84,7 +84,8 @@
     "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/il.m3u",
     "https://de1.api.radio-browser.info/m3u/stations/bycountry/israel",
     "https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20states",
-    "https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20kingdom"
+    "https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20kingdom",
+    "https://www.apsattv.com/xumo.m3u"
   ],
   "custom_channels": [
     {
