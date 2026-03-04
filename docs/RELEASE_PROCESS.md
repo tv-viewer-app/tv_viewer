@@ -1,359 +1,215 @@
-# Automated Release Process
+# TV Viewer — Release Process
 
-This document explains how to use the automated release workflow for the TV Viewer project.
+**Copilot and developer checklist for every release.**
+Every step is mandatory. Do not skip phases or reorder gates.
 
-## Overview
+---
 
-The release workflow automatically:
-1. ✅ Parses conventional commits since the last release
-2. 📝 Generates categorized changelog/release notes
-3. 🪟 Builds Windows EXE executable
-4. 🤖 Builds Android APK
-5. 🚀 Creates GitHub release with all assets attached
+## Phase 0: Pre-Flight (Before Any Code Changes)
 
-## Triggering a Release
+| # | Step | Tool / Command | Gate |
+|---|------|---------------|------|
+| 0.1 | **Verify master is clean** | `git status` — no uncommitted changes | ✅ Clean working tree |
+| 0.2 | **Pull latest** | `git pull origin master` | ✅ Up to date |
+| 0.3 | **Check CI is green** | GitHub API: `list_workflow_runs` for ci.yml, confirm latest `conclusion: success` | ✅ CI passing |
+| 0.4 | **Review open GitHub Issues** | `list_issues` state=OPEN — note which are fixed in this release | List captured |
 
-### Method 1: Push a Version Tag (Recommended)
+---
 
-```bash
-# Tag the current commit with version
-git tag v1.9.0
+## Phase 1: Security Review
 
-# Push the tag to GitHub
-git push origin v1.9.0
+| # | Step | Tool / Command | Gate |
+|---|------|---------------|------|
+| 1.1 | **Python dependency audit** | `pip-audit -r requirements.txt` | ✅ No known CVEs |
+| 1.2 | **Secret detection** | `grep -rn` for API keys, tokens, passwords in tracked files | ✅ No secrets in code |
+| 1.3 | **Bandit security scan** | `bandit -r core/ ui/ utils/ -ll` | ✅ No HIGH/CRITICAL findings |
+| 1.4 | **Flutter analyze** | `cd flutter_app && flutter analyze --no-fatal-infos` | ✅ 0 errors, 0 warnings |
+| 1.5 | **Review Supabase RLS** | Verify anon key can only INSERT (not read/update/delete sensitive data) | ✅ Policies unchanged |
+
+---
+
+## Phase 2: Code & Performance Review
+
+| # | Step | Tool / Command | Gate |
+|---|------|---------------|------|
+| 2.1 | **Run Python tests** | `python -m pytest tests/ -v` | ✅ All tests pass |
+| 2.2 | **Run build validation** | `python tests/validate_build.py` | ✅ Exit code 0 |
+| 2.3 | **Flake8 lint** | `flake8 core/ ui/ utils/ --select=E9,F63,F7,F82` | ✅ No fatal errors |
+| 2.4 | **Build Windows EXE** | `python build.py` | ✅ EXE created in dist/ |
+| 2.5 | **Smoke test Windows app** | Launch EXE, verify channel list loads, play one stream | ✅ App functional |
+| 2.6 | **Performance spot-check** | Scroll channel list (14k+ channels), verify responsive (5-line scroll) | ✅ No lag |
+| 2.7 | **Code review (if changes > 100 lines)** | Launch `code-review` agent on staged changes | ✅ No blocking issues |
+
+---
+
+## Phase 3: Version Bump
+
+**All version references must be updated atomically in a single commit.**
+
+| # | File | Field | Example |
+|---|------|-------|---------|
+| 3.1 | `config.py` | `APP_VERSION` | `"2.1.7"` |
+| 3.2 | `flutter_app/pubspec.yaml` | `version` | `2.1.7+17` |
+| 3.3 | `flutter_app/android/local.properties` | `flutter.versionName` / `flutter.versionCode` | `2.1.7` / `17` |
+| 3.4 | **7 Dart files** (hardcoded User-Agent) | `'TV Viewer/X.Y.Z'` | `'TV Viewer/2.1.7'` |
+| 3.5 | `CHANGELOG.md` | Add `## [X.Y.Z] - YYYY-MM-DD` section under `[Unreleased]` | Follows Keep a Changelog |
+
+### Dart files with hardcoded versions (update ALL):
+```
+flutter_app/lib/screens/diagnostics_screen.dart
+flutter_app/lib/screens/help_screen.dart
+flutter_app/lib/screens/home_screen.dart
+flutter_app/lib/screens/player_screen.dart        (2 occurrences)
+flutter_app/lib/services/firebase_services_examples.dart
+flutter_app/lib/services/fmstream_service.dart     (2 occurrences)
+flutter_app/lib/services/m3u_service.dart          (2 occurrences)
 ```
 
-This automatically triggers the release workflow.
+### Batch update command (PowerShell):
+```powershell
+# Replace OLD → NEW across all Dart files + pubspec + local.properties
+$old = "2.1.6"; $new = "2.1.7"; $oldBuild = "16"; $newBuild = "17"
+Get-ChildItem flutter_app -Recurse -Include *.dart,pubspec.yaml |
+  ForEach-Object {
+    (Get-Content $_.FullName -Raw) -replace [regex]::Escape($old), $new |
+    Set-Content $_.FullName -NoNewline
+  }
+# local.properties separately
+(Get-Content flutter_app/android/local.properties -Raw) `
+  -replace "versionName=$old","versionName=$new" `
+  -replace "versionCode=$oldBuild","versionCode=$newBuild" |
+  Set-Content flutter_app/android/local.properties -NoNewline
+```
 
-### Method 2: Manual Workflow Dispatch
+---
 
-1. Go to **Actions** tab in GitHub
-2. Select **Release Build** workflow
-3. Click **Run workflow**
-4. Enter the version tag (e.g., `v1.9.0`)
-5. Click **Run workflow**
+## Phase 4: Issue Triage & Documentation
+
+| # | Step | Tool / Command | Gate |
+|---|------|---------------|------|
+| 4.1 | **Close fixed issues** | For each issue fixed in this release: `close issue` via GitHub API with comment referencing the version | ✅ All resolved issues closed |
+| 4.2 | **Update issue labels** | Add version label (e.g., `v2.1.7`) to closed issues if applicable | Done |
+| 4.3 | **Review open issues** | Confirm no P0/blocking issues remain open that should block release | ✅ No blockers |
+| 4.4 | **Update docs if needed** | If architecture/API/config changed: update ARCHITECTURE.md, API.md, SUPPORT_GUIDE.md, README.md | Docs current |
+| 4.5 | **Verify CHANGELOG.md** | Confirm all user-facing changes are documented with correct date | ✅ Complete |
+
+---
+
+## Phase 5: Commit, Tag, Push
+
+| # | Step | Command | Gate |
+|---|------|---------|------|
+| 5.1 | **Stage all changes** | `git add -A` | Staged |
+| 5.2 | **Commit with conventional format** | `git commit -m "vX.Y.Z: <summary>\n\n<details>\n\nCo-authored-by: Copilot <...>"` | Committed |
+| 5.3 | **Create annotated tag** | `git tag vX.Y.Z` | Tagged |
+| 5.4 | **Push commit + tag** | `git push origin master && git push origin vX.Y.Z` | Pushed |
+
+---
+
+## Phase 6: Workflow Verification
+
+| # | Step | Tool / Command | Gate |
+|---|------|---------------|------|
+| 6.1 | **Monitor CI workflow** | `list_workflow_runs` for ci.yml — wait for `conclusion: success` | ✅ CI green |
+| 6.2 | **If CI fails** | `get_job_logs` → read errors → fix → commit → push → re-check | ✅ Fixed |
+| 6.3 | **Monitor Release workflow** | `list_workflow_runs` for release.yml — wait for `conclusion: success` | ✅ Release green |
+| 6.4 | **Verify both build jobs** | Check `Build Windows EXE` ✅ and `Build Android APK` ✅ | Both pass |
+| 6.5 | **If Release fails** | Get logs, diagnose (usually Flutter compile error or artifact naming), fix, re-tag if needed | ✅ Fixed |
+
+---
+
+## Phase 7: Post-Release Verification
+
+| # | Step | Tool / Command | Gate |
+|---|------|---------------|------|
+| 7.1 | **Verify GitHub Release exists** | Check releases page — title, tag, date correct | ✅ Release page live |
+| 7.2 | **Verify Windows EXE attached** | `TV_Viewer_vX.Y.Z_Windows.exe` present in release assets | ✅ Binary attached |
+| 7.3 | **Verify Android APK attached** | `TV_Viewer_vX.Y.Z_Android.apk` present in release assets | ✅ Binary attached |
+| 7.4 | **Verify release notes** | CHANGELOG content extracted correctly into release body | ✅ Notes correct |
+| 7.5 | **Update any remaining issues** | Add release version comment to related issues | Done |
+| 7.6 | **Report to user** | Summary: version, what's included, links to release + binaries | ✅ Reported |
+
+---
+
+## Quick Reference: Semver Rules
+
+| Change Type | Bump | Example |
+|-------------|------|---------|
+| Breaking API change | MAJOR | 2.0.0 → 3.0.0 |
+| New feature (backward compatible) | MINOR | 2.1.6 → 2.2.0 |
+| Bug fix (backward compatible) | PATCH | 2.1.6 → 2.1.7 |
+
+---
 
 ## Conventional Commit Format
-
-The workflow parses commits following the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
 ```
 <type>[optional scope]: <description>
 
 [optional body]
 
-[optional footer(s)]
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
-### Supported Types
-
-| Type | Category | Description | Example |
-|------|----------|-------------|---------|
-| `feat` | ✨ New Features | New features | `feat: add dark mode toggle` |
-| `fix` | 🐛 Bug Fixes | Bug fixes | `fix: resolve crash on startup` |
-| `perf` | ⚡ Performance | Performance improvements | `perf: optimize video buffering` |
-| `refactor` | ♻️ Refactoring | Code refactoring | `refactor: simplify channel loader` |
-| `docs` | 📚 Documentation | Documentation changes | `docs: update installation guide` |
-| `style` | 💄 Style | Code style/formatting | `style: format with black` |
-| `test` | ✅ Tests | Test additions/updates | `test: add unit tests for player` |
-| `build` | 🔧 Build System | Build system changes | `build: update PyInstaller config` |
-| `ci` | 👷 CI/CD | CI/CD changes | `ci: add release workflow` |
-| `chore` | 📦 Chores | Maintenance tasks | `chore: update dependencies` |
-
-### Breaking Changes
-
-To mark breaking changes:
-
-```bash
-# Using ! suffix
-git commit -m "feat!: redesign settings API"
-
-# Or in commit body
-git commit -m "feat: redesign settings API
-
-BREAKING CHANGE: Settings API changed from dict to class-based"
-```
-
-Breaking changes appear in a special section at the top of release notes.
-
-### Commit Examples
-
-```bash
-# Feature with scope
-git commit -m "feat(ui): add channel search functionality"
-
-# Bug fix
-git commit -m "fix: prevent duplicate channel entries"
-
-# Performance improvement
-git commit -m "perf(player): reduce memory usage by 30%"
-
-# Documentation
-git commit -m "docs: add troubleshooting section to README"
-
-# Multiple changes
-git commit -m "feat: add EPG support
-
-- Fetch program guide from API
-- Display current/next programs
-- Add schedule view"
-```
-
-## Release Notes Structure
-
-The generated release notes include:
-
-```markdown
-# 📺 TV Viewer v1.9.0
-
-Release built on 2024-01-15
-
-## ⚠️ Breaking Changes
-(if any)
-
-## ✨ New Features
-- Feature 1
-- Feature 2
-
-## 🐛 Bug Fixes
-- Fix 1
-- Fix 2
-
-## ⚡ Performance Improvements
-...
-
-## ♻️ Code Refactoring
-...
-
-## 📚 Documentation
-...
-
-## 🔧 Build System
-...
-
-## 👷 CI/CD
-...
-
-## ✅ Tests
-...
-
-## 📦 Other Changes
-(non-conventional commits)
+| Type | Category | Example |
+|------|----------|---------|
+| `feat` | ✨ New Features | `feat: add dark mode toggle` |
+| `fix` | 🐛 Bug Fixes | `fix: resolve crash on startup` |
+| `perf` | ⚡ Performance | `perf: optimize video buffering` |
+| `security` | 🔒 Security | `security: tighten RLS policies` |
+| `docs` | 📚 Documentation | `docs: update architecture guide` |
+| `test` | ✅ Tests | `test: add Supabase contract tests` |
+| `ci` | 👷 CI/CD | `ci: fix Flutter analyze step` |
+| `refactor` | ♻️ Refactoring | `refactor: consolidate telemetry` |
 
 ---
 
-## 📥 Installation
+## Workflow Architecture
 
-### Windows
-1. Download TV_Viewer_v1.9.0_Windows.exe
-2. Install VLC Media Player
-3. Run the executable
+```
+git push origin master ──→ ci.yml (4 jobs)
+                              ├── Detect changes (paths-filter)
+                              ├── Python checks (flake8, bandit, pytest)
+                              ├── Flutter checks (flutter analyze)
+                              └── Dependency audit (pip-audit, secret scan)
 
-### Android
-1. Download TV_Viewer_v1.9.0_Android.apk
-2. Enable installation from unknown sources
-3. Install the APK
-
-## 📋 Requirements
-
-**Windows:**
-- Windows 10/11 (64-bit)
-- VLC Media Player 3.0+
-
-**Android:**
-- Android 8.0 (API 26) or higher
+git push origin vX.Y.Z ──→ release.yml
+                              ├── build.yml (reusable, 2 parallel jobs)
+                              │   ├── Build Windows EXE (PyInstaller)
+                              │   └── Build Android APK (Flutter)
+                              └── Create GitHub Release
+                                  ├── Download artifacts
+                                  ├── Rename with version
+                                  ├── Extract CHANGELOG notes
+                                  └── gh release create
 ```
 
-## Workflow Jobs
-
-### 1. Generate Release Notes
-- Fetches full git history
-- Parses commits since last tag
-- Categorizes by conventional commit type
-- Generates formatted release notes
-- Outputs release notes for use by other jobs
-
-### 2. Build Windows EXE
-- Sets up Python 3.11
-- Installs dependencies
-- Runs PyInstaller build
-- Verifies executable creation
-- Renames with version
-- Uploads as artifact
-
-### 3. Build Android APK
-- Sets up Java 17 and Flutter 3.19.0
-- Gets Flutter dependencies
-- Builds release APK
-- Verifies APK creation
-- Renames with version
-- Uploads as artifact
-
-### 4. Create GitHub Release
-- Downloads all artifacts
-- Creates GitHub release
-- Attaches all assets:
-  - Windows EXE
-  - Android APK
-  - Release notes (RELEASE_NOTES.md)
-- Publishes release (not draft)
-
-## Release Assets
-
-Each release includes:
-
-| Asset | Description |
-|-------|-------------|
-| `TV_Viewer_vX.Y.Z_Windows.exe` | Windows executable (standalone) |
-| `TV_Viewer_vX.Y.Z_Android.apk` | Android APK (signed release) |
-| `RELEASE_NOTES.md` | Detailed release notes (markdown) |
-
-## Versioning Strategy
-
-Follow [Semantic Versioning](https://semver.org/):
-
-- **MAJOR** (v2.0.0): Breaking changes
-- **MINOR** (v1.9.0): New features (backward compatible)
-- **PATCH** (v1.9.1): Bug fixes (backward compatible)
-
-### Version Bumping
-
-Before creating a release, update version in:
-
-1. **Python app**: `config.py`
-   ```python
-   APP_VERSION = "1.9.0"
-   ```
-
-2. **Flutter app**: `flutter_app/pubspec.yaml`
-   ```yaml
-   version: 1.9.0+19
-   ```
-
-Note: The workflow reads version from the git tag, not from files.
-
-## Best Practices
-
-### 1. Commit Frequently with Conventional Commits
-```bash
-# Do this
-git commit -m "feat: add channel favorites"
-git commit -m "fix: resolve video stuttering"
-git commit -m "docs: update README"
-
-# Not this
-git commit -m "made changes"
-git commit -m "work in progress"
-```
-
-### 2. Create Descriptive Release Tags
-```bash
-# Good tags
-v1.9.0    # New minor version
-v1.9.1    # Patch release
-v2.0.0    # Major version
-
-# Avoid
-release-1
-version_1.9.0
-```
-
-### 3. Test Before Releasing
-```bash
-# Run tests locally
-pytest tests/
-
-# Build locally to verify
-python build.py
-cd flutter_app && flutter build apk --release
-```
-
-### 4. Review Generated Release Notes
-After workflow completes:
-1. Check the GitHub release page
-2. Review the generated notes
-3. Edit if needed to add context
-4. Verify all assets are attached
+---
 
 ## Troubleshooting
 
-### Build Fails - Windows
-- Check Python version (3.11 required)
-- Verify all dependencies install correctly
-- Check PyInstaller compatibility
-- Review build logs in Actions
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| CI Flutter analyze fails | Wrong package imports in test files | Fix `package:` imports to match `pubspec.yaml` name |
+| CI Python checks fail | Flake8 or Bandit finding | Fix the code issue, not the linter config |
+| Release APK build fails | Dart compile error or version mismatch | Check `flutter analyze` locally, fix Dart errors |
+| Release EXE build fails | Missing hidden import | Add to `build.py` hidden_imports list |
+| Release notes empty | Version not in CHANGELOG.md | Ensure `## [X.Y.Z]` header exists before tagging |
+| Assets not attached | Artifact name mismatch | Check build.yml output names match release.yml download names |
 
-### Build Fails - Android
-- Check Flutter version (3.19.0)
-- Verify Java 17 is installed
-- Check Gradle configuration
-- Review signing configuration
-
-### Release Notes Empty
-- Ensure commits follow conventional format
-- Check that previous tag exists
-- Verify git history is fetched (`fetch-depth: 0`)
-
-### Assets Not Attached
-- Check artifact upload succeeded
-- Verify artifact download paths
-- Review file naming matches pattern
-
-## Manual Release Edits
-
-After automatic release creation, you can:
-
-1. Go to the release page
-2. Click **Edit release**
-3. Modify description
-4. Add additional context
-5. Upload extra assets
-6. Save changes
-
-## Security Notes
-
-- Workflow uses `GITHUB_TOKEN` (automatic, no setup needed)
-- Windows EXE is unsigned (users may see security warnings)
-- Android APK is signed (requires signing key in repo secrets)
-- All builds run in isolated GitHub Actions runners
-
-## Example Workflow Run
-
-```
-1. Developer pushes tag: git push origin v1.9.0
-2. Workflow triggers automatically
-3. Job 1: Generate release notes (30s)
-   - Parses 15 commits since v1.8.0
-   - Categories: 5 features, 3 fixes, 2 docs
-4. Job 2: Build Windows EXE (3min)
-   - Installs dependencies
-   - PyInstaller build succeeds
-   - Uploads TV_Viewer_v1.9.0_Windows.exe
-5. Job 3: Build Android APK (4min)
-   - Sets up Flutter
-   - Gradle build succeeds
-   - Uploads TV_Viewer_v1.9.0_Android.apk
-6. Job 4: Create release (15s)
-   - Downloads all artifacts
-   - Creates GitHub release
-   - Attaches 3 assets
-   - Release published: https://github.com/user/repo/releases/tag/v1.9.0
-```
-
-Total time: ~7-8 minutes
+---
 
 ## Related Files
 
-- `.github/workflows/release.yml` - Main release workflow
-- `.github/workflows/android-build.yml` - Android build workflow (separate)
-- `build.py` - Python build script
-- `requirements.txt` - Python dependencies
-- `flutter_app/pubspec.yaml` - Flutter configuration
-
-## Support
-
-For issues with the release process:
-1. Check workflow logs in Actions tab
-2. Review this documentation
-3. Create an issue with logs attached
-4. Tag with `ci/cd` label
+| File | Purpose |
+|------|---------|
+| `.github/workflows/ci.yml` | CI pipeline (lint, test, analyze, audit) |
+| `.github/workflows/build.yml` | Reusable build (Windows + Android) |
+| `.github/workflows/release.yml` | Tag-triggered release creation |
+| `build.py` | PyInstaller build script |
+| `TV_Viewer.spec` | PyInstaller configuration |
+| `tests/test_core.py` | Python unit tests (31 tests) |
+| `tests/validate_build.py` | Post-build validation |
+| `config.py` | App version + configuration |
+| `flutter_app/pubspec.yaml` | Flutter version + dependencies |
+| `CHANGELOG.md` | Release history |
