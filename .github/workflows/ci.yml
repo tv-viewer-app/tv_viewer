@@ -181,7 +181,15 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: |
+          flutter analyze --no-fatal-infos 2>&1 | tee /tmp/analyze.txt || true
+          # Fail only on error-level issues (not infos/warnings)
+          if grep -qP '^\s*error\s+•' /tmp/analyze.txt; then
+            echo "❌ Errors found:"
+            grep -P '^\s*error\s+•' /tmp/analyze.txt
+            exit 1
+          fi
+          echo "✅ No errors in flutter analyze"
 
   # ---------------------------------------------------------------------------
   # Job 3: Security — pip-audit dependency vulnerability scan
