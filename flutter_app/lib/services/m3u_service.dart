@@ -27,6 +27,15 @@ class M3UService {
     // Community sources
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
     'https://www.apsattv.com/xumo.m3u',
+    'https://www.apsattv.com/lg.m3u',
+    'https://www.apsattv.com/rok.m3u',
+    'https://www.apsattv.com/redbox.m3u',
+    'https://www.apsattv.com/xiaomi.m3u',
+    'https://www.apsattv.com/tablo.m3u',
+    'https://www.apsattv.com/vizio.m3u',
+    'https://www.apsattv.com/firetv.m3u',
+    'https://od.lk/s/MzJfMTY2NzU4NDVf/Free2ViewTV-2021-Master.m3u',
+    'https://www.apsattv.com/klowd.m3u',
   ];
 
   /// Custom Israeli channels with verified working CDN URLs
