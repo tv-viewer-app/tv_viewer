@@ -418,8 +418,8 @@ class M3UService {
   /// Explicit alias groups: channels that should merge into one multi-URL entry.
   /// Key = canonical name, values = alternative names (case-insensitive).
   static const Map<String, List<String>> _channelAliases = {
-    'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11'],
-    'kan kids / educational': ['kan kids', 'kan educational', 'kan edu', 'כאן חינוכית'],
+    'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11', 'kan 11 israel'],
+    'kan kids': ['kan kids / kan educational', 'kan kids / educational', 'kan educational', 'kan edu', 'כאן חינוכית'],
     'reshet 13': ['reshet 13 alt', 'reshet 13 subtitled'],
   };
 

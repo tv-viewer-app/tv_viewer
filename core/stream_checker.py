@@ -186,6 +186,47 @@ class StreamChecker:
             )
         return result
     
+    @staticmethod
+    def _reorder_urls_by_health(
+        channels: List[Dict[str, Any]],
+        cache: Dict,
+        shared_db,
+    ):
+        """Reorder each channel's URLs so known-working sources come first.
+        
+        Uses shared health cache to move working URLs to the front of each
+        channel's 'urls' list and update 'working_url_index' accordingly.
+        """
+        reordered = 0
+        for ch in channels:
+            urls = ch.get('urls', [])
+            if len(urls) <= 1:
+                continue
+            
+            # Score each URL: working=0, unchecked=1, failed=2
+            scored = []
+            for i, url in enumerate(urls):
+                cached = shared_db.get_cached_status(url, cache) if shared_db else None
+                if cached and cached.status:
+                    score = 0  # working
+                elif cached and not cached.status:
+                    score = 2  # failed
+                else:
+                    score = 1  # unchecked
+                scored.append((score, i, url))
+            
+            scored.sort(key=lambda x: x[0])
+            new_urls = [s[2] for s in scored]
+            
+            if new_urls != urls:
+                ch['urls'] = new_urls
+                ch['url'] = new_urls[0]
+                ch['working_url_index'] = 0
+                reordered += 1
+        
+        if reordered:
+            logger.info(f"Reordered URLs by health for {reordered} multi-source channels")
+
     async def check_stream(
         self, 
         channel: Dict[str, Any],
@@ -375,6 +416,7 @@ class StreamChecker:
         
         # --- SharedDb: Fetch cached results to skip recently-validated channels ---
         shared_db = None
+        shared_db_cache = {}
         channels_to_validate = channels
         try:
             if SharedDbService is not None:
@@ -403,6 +445,8 @@ class StreamChecker:
                                 f"SharedDb: Skipped {skipped}/{total} channels "
                                 f"with cached working status"
                             )
+                        # Sort multi-URL channels: put known-working URLs first
+                        self._reorder_urls_by_health(channels_to_validate, shared_db_cache, shared_db)
         except Exception as e:
             logger.warning(f"SharedDb: Failed to fetch cached results: {e}")
             channels_to_validate = channels

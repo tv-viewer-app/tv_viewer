@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-03-04
+
+### Added
+- **Smart URL health ordering**: Both platforms now reorder channel URLs by known health status before scanning — working URLs are tried first, reducing scan time for multi-source channels
+- **Channel sources migration SQL**: New `channel_sources` table schema for per-URL reliability tracking with crowd-sourced health scoring (`scripts/supabase_migration_v2.3.0.sql`)
+- **Python Supabase channel fetch/contribute**: `shared_db.py` now supports `fetch_channels()` and `contribute_channels()` for unified data access
+- **Database cleanup support**: Migration includes DELETE RLS policy on channels table and `truncate_channels()` function for clean repopulation
+
+### Fixed
+- **Kan 11 consolidation**: Fixed Python alias mapping — "Kan 11 News", "Kan 11 Subtitled", "Kan 11 4K", "כאן 11" now properly merge into single "Kan 11" entry with multiple source URLs
+- **Kan Kids consolidation**: Fixed alias mismatch — "Kan Kids / Kan Educational" and "Kan Kids" now merge correctly under "Kan Kids"
+- **Flutter alias alignment**: Updated Flutter `_channelAliases` to match Python aliases (added 'kan 11 israel', fixed Kan Kids canonical name)
+- **Stale DB entries**: Added `--clean` flag to populate script to remove old unconsolidated entries before repopulation
+
+### Changed
+- **SharedDbService.hashUrl** made public in Flutter for URL health lookups across components
+- **Populate script**: Now supports `--clean` flag for fresh repopulation (deletes all channels before uploading)
+- **Supabase channels**: 13,353 properly consolidated channels (down from 15,924 with stale duplicates)
+
 ## [2.2.4] - 2026-03-04
 
 ### Added

@@ -108,6 +108,24 @@ async def check_stream(session: aiohttp.ClientSession, url: str) -> Dict:
 
 async def upload_channels(session: aiohttp.ClientSession, channels: List[Dict]) -> int:
     """Upload consolidated channels to Supabase channels table."""
+    from core.channel_manager import _normalize_name_for_grouping
+    
+    # Check which columns exist by doing a test query
+    test_url = f'{SUPABASE_URL}/rest/v1/channels?select=url_hash&limit=0'
+    has_new_cols = False
+    try:
+        async with session.get(test_url, headers=headers()) as r:
+            pass
+        # Try with new columns
+        test_url2 = f'{SUPABASE_URL}/rest/v1/channels?select=normalized_name&limit=0'
+        async with session.get(test_url2, headers=headers()) as r2:
+            has_new_cols = r2.status == 200
+    except Exception:
+        pass
+    
+    # Adult keywords for is_adult flag
+    adult_kw = {'xxx', 'adult', 'porn', 'nsfw', '18+', 'erotic'}
+    
     payload = []
     for ch in channels:
         primary_url = ch.get('url', '')
@@ -124,17 +142,31 @@ async def upload_channels(session: aiohttp.ClientSession, channels: List[Dict]) 
         if primary_url not in urls:
             urls = [primary_url] + urls
 
-        payload.append({
+        name = (ch.get('name') or '')[:200]
+        country = ch.get('country', 'Unknown') or 'Unknown'
+        category = ch.get('category', 'Other') or 'Other'
+        
+        row = {
             'url_hash': hash_url(primary_url),
-            'name': (ch.get('name') or '')[:200],
+            'name': name,
             'urls': urls,
-            'category': ch.get('category', 'Other'),
-            'country': ch.get('country', 'Unknown'),
+            'category': category,
+            'country': country,
             'logo': (ch.get('logo') or '')[:500],
             'media_type': ch.get('media_type'),
             'source': ch.get('source', 'iptv-org'),
             'updated_at': datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        
+        # Add enrichment columns if migration has been applied
+        if has_new_cols:
+            norm = _normalize_name_for_grouping(name, country)
+            check_str = f"{name} {category}".lower()
+            is_adult = any(kw in check_str for kw in adult_kw) or category.lower() == 'adult'
+            row['normalized_name'] = norm
+            row['is_adult'] = is_adult
+        
+        payload.append(row)
 
     uploaded = 0
     batch_size = 500
@@ -178,6 +210,64 @@ async def upload_status(session: aiohttp.ClientSession, statuses: List[Dict]) ->
     return uploaded
 
 
+async def upload_sources(
+    session: aiohttp.ClientSession,
+    channels: List[Dict],
+    health_map: Dict[str, Dict],
+) -> int:
+    """Populate channel_sources table with per-URL entries linked to channels."""
+    payload = []
+    for ch in channels:
+        primary_url = ch.get('url', '')
+        urls = ch.get('urls', [primary_url])
+        if not urls:
+            continue
+        channel_hash = hash_url(urls[0] if urls else primary_url)
+        
+        for i, u in enumerate(urls):
+            if not u:
+                continue
+            uh = hash_url(u)
+            h = health_map.get(uh, {})
+            payload.append({
+                'channel_hash': channel_hash,
+                'url': u,
+                'url_hash': uh,
+                'priority': i * 10,  # first URL = 0, second = 10, etc.
+                'status': h.get('status', 'unchecked'),
+                'last_checked': h.get('last_checked'),
+                'response_time_ms': h.get('response_time_ms'),
+                'success_count': 1 if h.get('status') == 'working' else 0,
+                'fail_count': 1 if h.get('status') == 'failed' else 0,
+                'reliability': 1.0 if h.get('status') == 'working' else (
+                    0.0 if h.get('status') == 'failed' else 0.5),
+                'checked_by': 1 if h.get('status') else 0,
+                'source_origin': 'populate_script',
+            })
+
+    uploaded = 0
+    batch_size = 500
+    for i in range(0, len(payload), batch_size):
+        batch = payload[i:i + batch_size]
+        url = f'{SUPABASE_URL}/rest/v1/channel_sources'
+        try:
+            async with session.post(url, json=batch, headers=headers(upsert=True),
+                                    timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status in (200, 201):
+                    uploaded += len(batch)
+                    print(f"  ✓ Uploaded sources batch {i//batch_size + 1}: {len(batch)} rows")
+                else:
+                    body = await resp.text()
+                    if '42P01' in body:  # relation does not exist
+                        print(f"  ⚠ channel_sources table not yet created. Run migration SQL first.")
+                        return 0
+                    print(f"  ✗ Sources batch failed: {resp.status} - {body[:200]}")
+        except Exception as e:
+            print(f"  ✗ Sources batch error: {e}")
+
+    return uploaded
+
+
 async def main():
     skip_health = '--skip-health' in sys.argv
     dry_run = '--dry-run' in sys.argv
@@ -185,6 +275,25 @@ async def main():
     print("=" * 60)
     print("TV Viewer — Supabase Channel Population Script")
     print("=" * 60)
+
+    # 0. Clean stale data if --clean flag
+    if '--clean' in sys.argv:
+        print("\n[0] Cleaning channels table for fresh re-population...")
+        async with aiohttp.ClientSession() as session:
+            # Delete all rows (Supabase REST: DELETE with no filter deletes all)
+            url = f'{SUPABASE_URL}/rest/v1/channels'
+            hdrs = headers()
+            # Need a filter that matches everything
+            async with session.delete(
+                url, headers=hdrs,
+                params={'url_hash': 'neq.IMPOSSIBLE_VALUE_THAT_NEVER_EXISTS'},
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as resp:
+                if resp.status in (200, 204):
+                    print("  ✓ Channels table cleaned")
+                else:
+                    body = await resp.text()
+                    print(f"  ✗ Clean failed: {resp.status} - {body[:200]}")
 
     # 1. Load repos and custom channels
     repos, custom_channels = load_repos()
@@ -243,14 +352,16 @@ async def main():
         return
 
     # 4. Upload channels to Supabase
-    print(f"\n[4/5] Uploading {len(consolidated)} channels to Supabase...")
+    print(f"\n[4/6] Uploading {len(consolidated)} channels to Supabase...")
     async with aiohttp.ClientSession() as session:
         uploaded_ch = await upload_channels(session, consolidated)
     print(f"  Uploaded: {uploaded_ch} channels")
 
     # 5. Health check + upload status
+    health_map = {}  # url_hash → {status, last_checked, response_time_ms}
+    uploaded_st = 0
     if skip_health:
-        print(f"\n[5/5] Skipping health checks (--skip-health)")
+        print(f"\n[5/6] Skipping health checks (--skip-health)")
     else:
         # Collect all unique URLs for health checking
         all_urls = set()
@@ -260,7 +371,7 @@ async def main():
                 if u:
                     all_urls.add(u)
 
-        print(f"\n[5/5] Checking health of {len(all_urls)} unique URLs...")
+        print(f"\n[5/6] Checking health of {len(all_urls)} unique URLs...")
         statuses = []
         sem = asyncio.Semaphore(50)  # 50 concurrent health checks
 
@@ -277,20 +388,31 @@ async def main():
             for r in results:
                 if isinstance(r, dict):
                     statuses.append(r)
+                    health_map[r['url_hash']] = r
 
             working = sum(1 for s in statuses if s['status'] == 'working')
             failed = sum(1 for s in statuses if s['status'] == 'failed')
             print(f"  Health results: {working} working, {failed} failed")
 
-            # Upload status
+            # Upload to channel_status (backward compat)
             uploaded_st = await upload_status(session, statuses)
             print(f"  Uploaded: {uploaded_st} status records")
+
+    # 6. Populate channel_sources table
+    print(f"\n[6/6] Populating channel_sources table...")
+    async with aiohttp.ClientSession() as session:
+        uploaded_src = await upload_sources(session, consolidated, health_map)
+    if uploaded_src > 0:
+        print(f"  Uploaded: {uploaded_src} source entries")
+    elif uploaded_src == 0 and not health_map:
+        print(f"  ⚠ No health data; sources uploaded with 'unchecked' status")
 
     print("\n" + "=" * 60)
     print("✓ Population complete!")
     print(f"  Channels: {uploaded_ch}")
     if not skip_health:
         print(f"  Health records: {uploaded_st}")
+    print(f"  Sources: {uploaded_src}")
     print("=" * 60)
 
 

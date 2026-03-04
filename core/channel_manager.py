@@ -169,6 +169,24 @@ _SCRIPT_SEPARATOR = re.compile(
 )
 _DASH_SPLIT = re.compile(r'\s+[-–—]\s+')  # " - ", " – ", " — "
 
+# Explicit alias groups: channels that should merge into one multi-URL entry.
+# Key = canonical name (lowercase), values = alternative names (lowercase).
+# Must match Flutter's _channelAliases in m3u_service.dart.
+_CHANNEL_ALIASES: Dict[str, List[str]] = {
+    'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11',
+               'kan 11 israel'],
+    'kan kids': ['kan kids / kan educational', 'kan kids / educational',
+                 'kan educational', 'kan edu', 'כאן חינוכית'],
+    'reshet 13': ['reshet 13 alt', 'reshet 13 subtitled'],
+}
+
+# Build reverse lookup: alias → canonical name
+_ALIAS_LOOKUP: Dict[str, str] = {}
+for _canonical, _aliases in _CHANNEL_ALIASES.items():
+    _ALIAS_LOOKUP[_canonical] = _canonical
+    for _alias in _aliases:
+        _ALIAS_LOOKUP[_alias] = _canonical
+
 
 def _normalize_channel_name(name: str) -> str:
     """Strip quality/variant suffixes to get a canonical channel name for grouping.
@@ -243,6 +261,11 @@ def _normalize_name_for_grouping(name: str, country: str) -> str:
     
     # Step 4: re-run quality stripping in case country removal exposed suffixes
     base = _normalize_channel_name(base)
+    
+    # Step 5: check alias mapping for explicit merge groups
+    key = base.strip().lower()
+    if key in _ALIAS_LOOKUP:
+        return _ALIAS_LOOKUP[key]
     
     return base.strip() if base.strip() else _normalize_channel_name(name)
 

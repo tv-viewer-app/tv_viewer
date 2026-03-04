@@ -34,7 +34,7 @@ class SharedDbService {
   static const Duration _cacheDuration = Duration(hours: 24);
   
   /// Hash a URL with SHA256 for privacy
-  static String _hashUrl(String url) {
+  static String hashUrl(String url) {
     final bytes = utf8.encode(url);
     final digest = sha256.convert(bytes);
     return digest.toString();
@@ -128,7 +128,7 @@ class SharedDbService {
       
       // Prepare batch payload
       final payload = results.map((result) => {
-        'url_hash': _hashUrl(result.url),
+        'url_hash': hashUrl(result.url),
         'status': result.isWorking ? 'working' : 'failed',
         'last_checked': result.lastChecked.toUtc().toIso8601String(),
         'response_time_ms': result.responseTimeMs,
@@ -225,7 +225,7 @@ class SharedDbService {
         }
 
         payload.add({
-          'url_hash': _hashUrl(primaryUrl),
+          'url_hash': hashUrl(primaryUrl),
           'name': (ch['name'] as String? ?? '').substring(
               0, (ch['name'] as String? ?? '').length.clamp(0, 200)),
           'urls': urls,
@@ -284,7 +284,7 @@ class SharedDbService {
     String url,
     Map<String, ChannelStatusResult> cache,
   ) async {
-    final urlHash = _hashUrl(url);
+    final urlHash = hashUrl(url);
     return cache[urlHash];
   }
   
@@ -295,7 +295,7 @@ class SharedDbService {
     String url,
     Map<String, ChannelStatusResult> cache,
   ) {
-    final urlHash = _hashUrl(url);
+    final urlHash = hashUrl(url);
     final cached = cache[urlHash];
     
     if (cached == null) return false;

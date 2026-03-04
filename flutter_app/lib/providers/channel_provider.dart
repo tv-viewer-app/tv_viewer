@@ -427,6 +427,49 @@ class ChannelProvider extends ChangeNotifier {
     return [...priorityChannels, ...otherChannels];
   }
 
+  /// Reorder each channel's URLs so known-working sources come first
+  void _reorderUrlsByHealth(
+    List<Channel> channels,
+    Map<String, ChannelStatusResult> cache,
+  ) {
+    if (cache.isEmpty) return;
+    int reordered = 0;
+    for (int i = 0; i < channels.length; i++) {
+      final ch = channels[i];
+      if (ch.urls.length <= 1) continue;
+
+      final scored = <MapEntry<int, String>>[];
+      for (final url in ch.urls) {
+        final hash = SharedDbService.hashUrl(url);
+        final cached = cache[hash];
+        int score;
+        if (cached != null && cached.status) {
+          score = 0; // working
+        } else if (cached != null && !cached.status) {
+          score = 2; // failed
+        } else {
+          score = 1; // unchecked
+        }
+        scored.add(MapEntry(score, url));
+      }
+
+      scored.sort((a, b) => a.key.compareTo(b.key));
+      final newUrls = scored.map((e) => e.value).toList();
+
+      if (newUrls.first != ch.urls.first) {
+        channels[i] = ch.copyWith(
+          urls: newUrls,
+          url: newUrls.first,
+          workingUrlIndex: 0,
+        );
+        reordered++;
+      }
+    }
+    if (reordered > 0) {
+      logger.info('Reordered URLs by health for $reordered multi-source channels');
+    }
+  }
+
   Future<void> validateChannels() async {
     if (_isScanning) return;
 
@@ -448,9 +491,10 @@ class ChannelProvider extends ChangeNotifier {
     // --- SharedDb: Fetch cached results to skip recently-validated channels ---
     final sharedDb = SharedDbService();
     final Set<String> skippedUrls = {};
+    Map<String, ChannelStatusResult> sharedDbCache = {};
     try {
       if (SharedDbService.isConfigured) {
-        final sharedDbCache = await sharedDb.fetchRecentResults();
+        sharedDbCache = await sharedDb.fetchRecentResults();
         if (sharedDbCache.isNotEmpty) {
           for (int j = 0; j < _channels.length; j++) {
             if (sharedDb.shouldSkipValidation(_channels[j].url, sharedDbCache)) {
@@ -483,6 +527,11 @@ class ChannelProvider extends ChangeNotifier {
     var channelsToValidate = skippedUrls.isNotEmpty
         ? _channels.where((c) => !skippedUrls.contains(c.url)).toList()
         : List<Channel>.from(_channels);
+    
+    // Reorder multi-URL channels: put known-working URLs first
+    if (sharedDbCache.isNotEmpty) {
+      _reorderUrlsByHealth(channelsToValidate, sharedDbCache);
+    }
     
     // Apply priority ordering (user's country first)
     channelsToValidate = _prioritizeForScan(channelsToValidate);

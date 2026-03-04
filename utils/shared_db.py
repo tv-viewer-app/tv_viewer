@@ -381,6 +381,145 @@ class SharedDbService:
         age = datetime.now(timezone.utc) - cached.last_checked
         return cached.status and age < timedelta(hours=CACHE_DURATION_HOURS)
 
+    async def fetch_channels(self) -> List[Dict]:
+        """Fetch consolidated channels from Supabase channels table.
+        
+        Returns a list of channel dicts compatible with ChannelManager format.
+        Fetches all channels in batches (Supabase default limit is 1000).
+        
+        Returns:
+            List of channel dicts, or empty list on failure.
+        """
+        if not self.is_configured:
+            return []
+        
+        try:
+            all_channels = []
+            offset = 0
+            batch_size = 1000
+            
+            async with aiohttp.ClientSession() as session:
+                while True:
+                    url = (
+                        f'{self.supabase_url}/rest/v1/channels'
+                        f'?select=name,urls,category,country,logo,media_type,url_hash'
+                        f'&order=name.asc'
+                        f'&offset={offset}&limit={batch_size}'
+                    )
+                    headers = {
+                        'apikey': self.supabase_key,
+                        'Authorization': f'Bearer {self.supabase_key}',
+                    }
+                    
+                    async with session.get(
+                        url, headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=30),
+                    ) as resp:
+                        if resp.status != 200:
+                            logger.warning(f'SharedDb: fetch_channels failed: {resp.status}')
+                            break
+                        
+                        data = await resp.json()
+                        if not data:
+                            break
+                        
+                        for row in data:
+                            urls = row.get('urls', [])
+                            ch = {
+                                'name': row.get('name', ''),
+                                'url': urls[0] if urls else '',
+                                'urls': urls,
+                                'category': row.get('category', ''),
+                                'country': row.get('country', ''),
+                                'logo': row.get('logo', ''),
+                                'media_type': row.get('media_type', ''),
+                                'status': 'unchecked',
+                                'working_url_index': 0,
+                            }
+                            if ch['url']:
+                                all_channels.append(ch)
+                        
+                        if len(data) < batch_size:
+                            break
+                        offset += batch_size
+            
+            logger.info(f'SharedDb: fetched {len(all_channels)} channels from Supabase')
+            return all_channels
+        except Exception as e:
+            logger.warning(f'SharedDb: fetch_channels error: {e}')
+            return []
+
+    async def contribute_channels(
+        self, channels: List[Dict], batch_size: int = 500
+    ) -> bool:
+        """Upload new/updated channels back to Supabase channels table.
+        
+        Uses upsert on url_hash to avoid duplicates.
+        
+        Args:
+            channels: List of channel dicts with name, urls, category, etc.
+            batch_size: Number of channels per upload batch.
+            
+        Returns:
+            True if upload succeeded, False otherwise.
+        """
+        if not self.is_configured or not channels:
+            return False
+        
+        try:
+            success = True
+            async with aiohttp.ClientSession() as session:
+                for i in range(0, len(channels), batch_size):
+                    batch = channels[i:i + batch_size]
+                    payload = []
+                    for ch in batch:
+                        urls = ch.get('urls', [])
+                        if not urls:
+                            url_val = ch.get('url', '')
+                            urls = [url_val] if url_val else []
+                        if not urls:
+                            continue
+                        payload.append({
+                            'url_hash': self._hash_url(urls[0]),
+                            'name': ch.get('name', ''),
+                            'urls': urls,
+                            'category': ch.get('category', ''),
+                            'country': ch.get('country', ''),
+                            'logo': ch.get('logo', ''),
+                            'media_type': ch.get('media_type', ''),
+                        })
+                    
+                    if not payload:
+                        continue
+                    
+                    url = f'{self.supabase_url}/rest/v1/channels'
+                    headers = {
+                        'apikey': self.supabase_key,
+                        'Authorization': f'Bearer {self.supabase_key}',
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates',
+                    }
+                    
+                    async with session.post(
+                        url, headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30),
+                    ) as resp:
+                        if resp.status not in (200, 201):
+                            body = await resp.text()
+                            logger.warning(
+                                f'SharedDb: contribute_channels batch failed: '
+                                f'{resp.status} - {body[:200]}'
+                            )
+                            success = False
+            
+            if success:
+                logger.info(f'SharedDb: contributed {len(channels)} channels')
+            return success
+        except Exception as e:
+            logger.warning(f'SharedDb: contribute_channels error: {e}')
+            return False
+
 
 # Example usage
 if __name__ == '__main__':
