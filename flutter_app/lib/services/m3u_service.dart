@@ -10,12 +10,25 @@ class M3UService {
   static const List<String> defaultRepositories = [
     // Primary comprehensive index (contains all non-NSFW channels)
     'https://iptv-org.github.io/iptv/index.m3u',
-    // Israeli priority sources
+    // Country-specific priority sources
     'https://iptv-org.github.io/iptv/countries/il.m3u',
+    'https://iptv-org.github.io/iptv/countries/us.m3u',
+    'https://iptv-org.github.io/iptv/countries/gb.m3u',
     'https://iptv-org.github.io/iptv/languages/heb.m3u',
     'https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw',
-    // Community sources (unique channels not in iptv-org)
+    // Free-TV curated playlists (quality-focused, HD where possible)
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_usa.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_uk.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_israel.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_france.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_germany.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_spain.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_italy.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_en.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_movies.m3u8',
+    'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_en.m3u8',
+    // Community sources
     'https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/grouped_by_content.m3u',
     'https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/international.m3u',
     'https://raw.githubusercontent.com/RokuIL/Live-From-Israel/master/NextPVRChannels.m3u8',
@@ -23,6 +36,7 @@ class M3UService {
     'https://de1.api.radio-browser.info/m3u/stations/bycountry/israel',
     'https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20states',
     'https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20kingdom',
+    // Smart TV platform channels
     'https://www.apsattv.com/xumo.m3u',
     'https://www.apsattv.com/lg.m3u',
     'https://www.apsattv.com/rok.m3u',
@@ -32,6 +46,9 @@ class M3UService {
     'https://www.apsattv.com/vizio.m3u',
     'https://www.apsattv.com/firetv.m3u',
     'https://www.apsattv.com/klowd.m3u',
+    'https://www.apsattv.com/samsung.m3u',
+    'https://www.apsattv.com/plex.m3u',
+    'https://www.apsattv.com/pluto.m3u',
   ];
 
   /// Adult/NSFW repositories — only fetched when adult content is enabled

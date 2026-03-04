@@ -21,6 +21,7 @@ Thread Safety:
 
 import threading
 import gc
+import hashlib
 from typing import List, Dict, Any, Optional, Callable, Set
 from collections import defaultdict
 
@@ -820,6 +821,18 @@ class ChannelManager:
         except Exception as e:
             logger.warning(f"Supabase fetch failed, falling back to M3U: {e}")
         
+        # Step 1b: Fetch cached health data from SharedDb
+        health_cache = {}
+        try:
+            from utils.shared_db import SharedDbService
+            shared_db = SharedDbService()
+            if shared_db.is_configured:
+                health_cache = await shared_db.fetch_recent_results()
+                if health_cache:
+                    logger.info(f"Fetched {len(health_cache)} cached health results from SharedDb")
+        except Exception as e:
+            logger.debug(f"SharedDb health fetch failed (non-blocking): {e}")
+        
         # Step 2: Fetch from M3U repositories (always, to find new channels)
         try:
             m3u_chs = await self.repository_handler.fetch_all_repositories(progress)
@@ -853,7 +866,23 @@ class ChannelManager:
                         ch['is_working'] = ex.get('is_working')
                         ch['scan_status'] = ex.get('scan_status', 'pending')
                     else:
-                        ch['scan_status'] = 'pending'
+                        # Check health cache for this channel's URLs
+                        if health_cache:
+                            ch_urls = ch.get('urls', [ch.get('url', '')])
+                            found_health = False
+                            for u in ch_urls:
+                                url_hash = hashlib.sha256(u.encode('utf-8')).hexdigest()
+                                cached = health_cache.get(url_hash)
+                                if cached:
+                                    ch['is_working'] = cached.status
+                                    ch['scan_status'] = 'scanned'
+                                    ch['last_scanned'] = cached.last_checked.isoformat()
+                                    found_health = True
+                                    break
+                            if not found_health:
+                                ch['scan_status'] = 'pending'
+                        else:
+                            ch['scan_status'] = 'pending'
                     merged_channels.append(ch)
                 
                 # Priority 2: M3U channels (supplement)
@@ -868,7 +897,23 @@ class ChannelManager:
                         channel['scan_status'] = existing.get('scan_status', 'pending')
                         channel['min_age'] = existing.get('min_age')
                     else:
-                        channel['scan_status'] = 'pending'
+                        # Check health cache for this channel's URLs
+                        if health_cache:
+                            ch_urls = channel.get('urls', [channel.get('url', '')])
+                            found_health = False
+                            for u in ch_urls:
+                                url_hash = hashlib.sha256(u.encode('utf-8')).hexdigest()
+                                cached = health_cache.get(url_hash)
+                                if cached:
+                                    channel['is_working'] = cached.status
+                                    channel['scan_status'] = 'scanned'
+                                    channel['last_scanned'] = cached.last_checked.isoformat()
+                                    found_health = True
+                                    break
+                            if not found_health:
+                                channel['scan_status'] = 'pending'
+                        else:
+                            channel['scan_status'] = 'pending'
                     merged_channels.append(channel)
                 
                 # Priority 3: Cached channels not in either source
@@ -941,8 +986,8 @@ class ChannelManager:
                     pass
                 if callback:
                     callback()
-                # Start validation after fetching
-                self.validate_channels_async()
+                # Start validation after fetching (only unscanned channels)
+                self.validate_channels_async(rescan_all=False)
         
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()

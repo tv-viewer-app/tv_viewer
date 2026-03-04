@@ -780,6 +780,9 @@ class MainWindow:
         # Bulk insert — build values list first, then insert
         for channel in visible_channels:
             name = channel.get('name', 'Unknown')
+            urls = channel.get('urls', [])
+            if len(urls) > 1:
+                name = f"{name}  [{len(urls)} sources]"
             category = channel.get('category', 'Other')
             country = channel.get('country', '')
             min_age = channel.get('min_age', 7)
@@ -978,7 +981,13 @@ class MainWindow:
     
     def _find_channel_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         """Find a channel by name using O(1) index lookup."""
+        # Strip source count suffix from display name (e.g. "BBC One  [3 sources]")
+        import re
+        clean_name = re.sub(r'\s+\[\d+ sources\]$', '', name)
+        
         # Use name index for O(1) lookup
+        if clean_name in self._displayed_channel_names:
+            return self._displayed_channel_names[clean_name]
         if name in self._displayed_channel_names:
             return self._displayed_channel_names[name]
         
@@ -991,7 +1000,7 @@ class MainWindow:
             channels = self.channel_manager.channels
         
         for ch in channels:
-            if ch.get('name') == name:
+            if ch.get('name') == clean_name or ch.get('name') == name:
                 return ch
         return None
     
@@ -1107,6 +1116,20 @@ class MainWindow:
         menu.add_separator()
         menu.add_command(label="▶ Play", command=self._play_selected_channel)
         
+        # Source selector option
+        urls = channel.get('urls', [])
+        if len(urls) > 1:
+            menu.add_separator()
+            source_menu = tk.Menu(menu, tearoff=0)
+            for i, src_url in enumerate(urls):
+                # Show truncated URL
+                label = f"Source #{i+1}: {src_url[:60]}..."
+                source_menu.add_command(
+                    label=label,
+                    command=lambda ch=channel, idx=i: self._play_channel_with_source(ch, idx)
+                )
+            menu.add_cascade(label=f"📡 Sources ({len(urls)})", menu=source_menu)
+        
         # Channel info/description option
         description = get_description(str(channel_name))
         if description:
@@ -1201,6 +1224,19 @@ class MainWindow:
                 channel_index=channel_index,
             )
             self.player_window.on_playback_confirmed = _on_playback_confirmed
+    
+    def _play_channel_with_source(self, channel: Dict[str, Any], source_index: int):
+        """Play channel using a specific source URL."""
+        urls = channel.get('urls', [])
+        if 0 <= source_index < len(urls):
+            channel['working_url_index'] = source_index
+            channel['url'] = urls[source_index]
+        idx = None
+        for i, ch in enumerate(self._displayed_channels):
+            if ch.get('url') == channel.get('url') and ch.get('name') == channel.get('name'):
+                idx = i
+                break
+        self._play_channel(channel, channel_index=idx)
     
     def _on_channels_loaded(self, count: int):
         """Callback when channels loaded."""
@@ -2015,7 +2051,7 @@ class MainWindow:
             
             self._set_status(f"Loaded {cached_count} cached channels ({working} working)")
             
-            self.root.after(500, lambda: self.channel_manager.validate_channels_async(rescan_all=False))
+            # Validation will be triggered by fetch_channels_async after fetch completes
             self.root.after(2000, self.channel_manager.fetch_channels_async)
             self._scan_running = True
             self._start_scan_polling()

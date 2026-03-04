@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-03-04
+
+### Fixed
+- **Smart startup scan**: Windows client no longer scans all 13k+ channels on start — health data from SharedDb is fetched during startup and used to pre-mark channels as working/failed, skipping them from the scan queue
+- **Double validation removed**: Eliminated redundant `validate_channels_async()` call at 500ms that caused a duplicate scan before fetch completed
+- **Channel name lookup**: Fixed display name with source count suffix not matching internal channel name for clicks/right-clicks
+
+### Added
+- **Source count indicator**: Channel names in the list now show `[N sources]` when a channel has multiple stream URLs
+- **Source selector context menu**: Right-click a channel to see "📡 Sources (N)" submenu — pick any source URL to play directly
+- **Play with specific source**: New `_play_channel_with_source()` method enables direct source selection before playback
+
 ## [2.3.0] - 2026-03-04
 
 ### Added
