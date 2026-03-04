@@ -1660,6 +1660,15 @@ class MainWindow:
         # ── 3. Display Settings ──────────────────────────────────────────
         r = _section(content, "🎨  Display Settings", r)
 
+        # Adult content toggle
+        adult_var = tk.BooleanVar(value=config.SHOW_ADULT_CONTENT)
+        adult_cb = ttk.Checkbutton(
+            content, text="Show adult/NSFW channels",
+            variable=adult_var,
+        )
+        adult_cb.grid(row=r, column=0, columnspan=3, sticky="w")
+        r += 1
+
         # Default group mode
         ttk.Label(content, text="Default group by:", font=FONT
                   ).grid(row=r, column=0, sticky="w", padx=(0, 8))
@@ -1729,6 +1738,21 @@ class MainWindow:
                 return
 
             # -- Display settings --
+            # Adult content toggle
+            new_adult = adult_var.get()
+            if new_adult != config.SHOW_ADULT_CONTENT:
+                config.SHOW_ADULT_CONTENT = new_adult
+                # Persist to channels_config.json
+                try:
+                    save_data['show_adult_content'] = new_adult
+                    with open(config_path, 'w', encoding='utf-8') as f:
+                        _json.dump(save_data, f, indent=2, ensure_ascii=False)
+                except Exception as e:
+                    logger.warning(f"Settings: failed to persist adult pref: {e}")
+                logger.info(f"Settings: adult content {'enabled' if new_adult else 'disabled'}")
+                # Re-filter channels to show/hide adult content
+                self.root.after(0, self._filter_channels)
+
             new_group = group_mode_var.get()
             if new_group.lower() != self.group_by_mode:
                 self._on_group_by_change(new_group)

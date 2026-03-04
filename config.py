@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.2.2"
+APP_VERSION = "2.2.3"
 
 # =============================================================================
 # File Paths
@@ -97,6 +97,7 @@ SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY',
 
 def load_external_config():
     """Load repositories and custom channels from external JSON file."""
+    global SHOW_ADULT_CONTENT
     default_repos = [
         "https://iptv-org.github.io/iptv/index.m3u",
         "https://iptv-org.github.io/iptv/index.country.m3u",
@@ -111,6 +112,9 @@ def load_external_config():
                 repos = data.get('repositories', default_repos)
                 custom = data.get('custom_channels', default_custom)
                 adult = data.get('adult_repositories', default_adult)
+                # Load persisted adult content preference
+                if 'show_adult_content' in data:
+                    SHOW_ADULT_CONTENT = bool(data['show_adult_content'])
                 # Only include adult sources when enabled
                 if SHOW_ADULT_CONTENT and adult:
                     repos = repos + adult

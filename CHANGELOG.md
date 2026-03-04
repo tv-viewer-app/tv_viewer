@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-03-04
+
+### Fixed
+- **Windows adult content toggle**: Added checkbox to Settings dialog (Display Settings section) — persists to channels_config.json and re-filters channels immediately
+
 ## [2.2.2] - 2026-03-04
 
 ### Fixed

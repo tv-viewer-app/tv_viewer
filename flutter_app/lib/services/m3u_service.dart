@@ -101,7 +101,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.2'},
+        headers: {'User-Agent': 'TV Viewer/2.2.3'},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -421,7 +421,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.2'},
+        headers: {'User-Agent': 'TV Viewer/2.2.3'},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||
