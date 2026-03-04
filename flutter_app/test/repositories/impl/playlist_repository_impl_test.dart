@@ -10,6 +10,7 @@ import 'package:tv_viewer/repositories/impl/playlist_repository_impl.dart';
 /// - Exporting to M3U format
 void main() {
   group('PlaylistRepositoryImpl', () {
+    // ignore: unused_local_variable
     late PlaylistRepositoryImpl repository;
 
     setUp(() {

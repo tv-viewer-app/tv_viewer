@@ -330,6 +330,7 @@ class ExampleM3UService {
 
 /// Example: How to use in a widget
 class ExamplePlayerWidget {
+  // ignore: unused_field
   AppError? _error;
   
   Future<void> initializePlayer(String url) async {

@@ -10,6 +10,7 @@ import 'package:tv_viewer/screens/feedback_screen.dart';
 void main() {
   group('StarRating Widget Tests', () {
     testWidgets('renders with initial rating', (WidgetTester tester) async {
+      // ignore: unused_local_variable
       int selectedRating = 0;
 
       await tester.pumpWidget(

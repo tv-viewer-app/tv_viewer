@@ -10,6 +10,7 @@ import 'package:tv_viewer/repositories/impl/channel_repository_impl.dart';
 /// - Stream validation
 void main() {
   group('ChannelRepositoryImpl', () {
+    // ignore: unused_local_variable
     late ChannelRepositoryImpl repository;
 
     setUp(() {
