@@ -825,6 +825,7 @@ class MainWindow:
         """Filter channels based on current filter settings."""
         show_favorites_only = self.show_favorites_var.get()
         result = []
+        _adult_keywords = {'xxx', 'adult', 'porn', 'nsfw'}
         for ch in channels:
             is_working = ch.get('is_working')
             
@@ -834,6 +835,12 @@ class MainWindow:
                 continue
             if show_favorites_only and not self.favorites_manager.is_favorite(ch.get('url', '')):
                 continue
+            # Hide adult channels unless enabled in config
+            if not config.SHOW_ADULT_CONTENT:
+                cat = (ch.get('category') or '').lower()
+                name = (ch.get('name') or '').lower()
+                if cat in _adult_keywords or any(kw in name for kw in _adult_keywords):
+                    continue
             
             result.append(ch)
         return result

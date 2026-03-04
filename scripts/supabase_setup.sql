@@ -132,8 +132,9 @@ ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE channel_status   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE channels         ENABLE ROW LEVEL SECURITY;
 
--- analytics_events: anon INSERT only (write-only telemetry)
+-- analytics_events: anon INSERT + SELECT (telemetry + client verification)
 CREATE POLICY "ae_anon_insert"   ON analytics_events FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "ae_anon_select"   ON analytics_events FOR SELECT TO anon USING (true);
 CREATE POLICY "ae_service_read"  ON analytics_events FOR SELECT TO service_role USING (true);
 
 -- channel_status: anon read + write (shared health data)

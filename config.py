@@ -81,6 +81,12 @@ PLAYER_WIDTH = 800
 PLAYER_HEIGHT = 500
 
 # =============================================================================
+# Content Filtering
+# =============================================================================
+# Adult/NSFW channels are hidden by default. Set to True to include them.
+SHOW_ADULT_CONTENT = False
+
+# =============================================================================
 # Supabase Analytics & Shared DB (anon key — public, protected by RLS)
 # =============================================================================
 SUPABASE_URL = os.environ.get('SUPABASE_URL',
@@ -96,6 +102,7 @@ def load_external_config():
         "https://iptv-org.github.io/iptv/index.country.m3u",
     ]
     default_custom = []
+    default_adult = []
     
     if os.path.exists(CHANNELS_CONFIG_FILE):
         try:
@@ -103,6 +110,10 @@ def load_external_config():
                 data = json.load(f)
                 repos = data.get('repositories', default_repos)
                 custom = data.get('custom_channels', default_custom)
+                adult = data.get('adult_repositories', default_adult)
+                # Only include adult sources when enabled
+                if SHOW_ADULT_CONTENT and adult:
+                    repos = repos + adult
                 print(f"Loaded external config: {len(repos)} repositories, {len(custom)} custom channels")
                 return repos, custom
         except Exception as e:

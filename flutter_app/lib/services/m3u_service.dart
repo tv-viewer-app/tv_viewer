@@ -7,24 +7,12 @@ import 'fmstream_service.dart';
 /// Service for fetching and parsing M3U playlists
 class M3UService {
   static const List<String> defaultRepositories = [
-    // Main indices
+    // Primary comprehensive index (contains all non-NSFW channels)
     'https://iptv-org.github.io/iptv/index.m3u',
-    'https://iptv-org.github.io/iptv/index.category.m3u',
-    'https://iptv-org.github.io/iptv/index.country.m3u',
-    'https://iptv-org.github.io/iptv/index.language.m3u',
-    // Categories
-    'https://iptv-org.github.io/iptv/categories/news.m3u',
-    'https://iptv-org.github.io/iptv/categories/sports.m3u',
-    'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
-    'https://iptv-org.github.io/iptv/categories/movies.m3u',
-    'https://iptv-org.github.io/iptv/categories/music.m3u',
-    'https://iptv-org.github.io/iptv/categories/kids.m3u',
-    'https://iptv-org.github.io/iptv/categories/documentary.m3u',
-    'https://iptv-org.github.io/iptv/categories/general.m3u',
-    // Country-specific
+    // Israeli priority sources
     'https://iptv-org.github.io/iptv/countries/il.m3u',
     'https://iptv-org.github.io/iptv/languages/heb.m3u',
-    // Community sources
+    // Community sources (unique channels not in iptv-org)
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
     'https://www.apsattv.com/xumo.m3u',
     'https://www.apsattv.com/lg.m3u',
@@ -34,9 +22,15 @@ class M3UService {
     'https://www.apsattv.com/tablo.m3u',
     'https://www.apsattv.com/vizio.m3u',
     'https://www.apsattv.com/firetv.m3u',
-    'https://od.lk/s/MzJfMTY2NzU4NDVf/Free2ViewTV-2021-Master.m3u',
     'https://www.apsattv.com/klowd.m3u',
+    'https://od.lk/s/MzJfMTY2NzU4NDVf/Free2ViewTV-2021-Master.m3u',
+  ];
+
+  /// Adult/NSFW repositories — only fetched when adult content is enabled
+  static const List<String> adultRepositories = [
     'https://iptv-org.github.io/iptv/categories/xxx.m3u',
+    'https://iptv-org.github.io/iptv/index.nsfw.m3u',
+    'http://cdn.adultiptv.net/lists/all.m3u8',
   ];
 
   /// Custom Israeli channels with verified working CDN URLs
@@ -215,18 +209,23 @@ class M3UService {
   /// Fetch channels from all default repositories
   static Future<List<Channel>> fetchAllChannels({
     void Function(int current, int total)? onProgress,
+    bool includeAdult = false,
   }) async {
-    logger.info('Fetching channels from ${defaultRepositories.length} repositories');
+    final repos = [...defaultRepositories];
+    if (includeAdult) {
+      repos.addAll(adultRepositories);
+    }
+
+    logger.info('Fetching channels from ${repos.length} repositories (adult: $includeAdult)');
     
     final allChannels = <Channel>[];
     final seenUrls = <String>{};
     final errors = <String, AppError>{};
 
-    for (int i = 0; i < defaultRepositories.length; i++) {
-      onProgress?.call(i, defaultRepositories.length);
-      
-      final repoUrl = defaultRepositories[i];
-      logger.info('Fetching from repository ${i + 1}/${defaultRepositories.length}: $repoUrl');
+    for (int i = 0; i < repos.length; i++) {
+      onProgress?.call(i, repos.length);
+      final repoUrl = repos[i];
+      logger.info('Fetching from repository ${i + 1}/${repos.length}: $repoUrl');
 
       try {
         final channels = await fetchFromUrl(repoUrl);
@@ -252,7 +251,7 @@ class M3UService {
       }
     }
 
-    onProgress?.call(defaultRepositories.length, defaultRepositories.length);
+    onProgress?.call(repos.length, repos.length);
     
     // Add custom Israeli channels (verified working CDN URLs)
     for (final custom in customChannels) {
@@ -290,7 +289,7 @@ class M3UService {
     }
     
     // Log summary
-    logger.info('Fetch complete: ${allChannels.length} total channels from ${defaultRepositories.length - errors.length}/${defaultRepositories.length} repositories');
+    logger.info('Fetch complete: ${allChannels.length} total channels from ${repos.length - errors.length}/${repos.length} repositories');
     if (errors.isNotEmpty) {
       logger.warning('Failed repositories: ${errors.keys.join(', ')}');
     }
@@ -299,7 +298,7 @@ class M3UService {
     if (allChannels.isEmpty) {
       final error = ErrorHandler.m3uError(
         'no_channels',
-        'Failed to fetch channels from all ${defaultRepositories.length} repositories. Errors: ${errors.values.map((e) => e.code).join(', ')}',
+        'Failed to fetch channels from all ${repos.length} repositories. Errors: ${errors.values.map((e) => e.code).join(', ')}',
       );
       logger.error('All repositories failed: ${error.getDetailedLog()}');
       throw error;

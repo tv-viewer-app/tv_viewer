@@ -185,6 +185,7 @@ class ChannelProvider extends ChangeNotifier {
   bool _isScanning = false;
   bool _isOffline = false; // #41: Offline state tracking
   bool _showFavoritesOnly = false; // Dedicated favorites toggle
+  bool _showAdultContent = false; // Adult content toggle (default OFF)
   String _errorMessage = ''; // #41: User-facing error message
   int _scanProgress = 0;
   int _scanTotal = 0;
@@ -198,6 +199,7 @@ class ChannelProvider extends ChangeNotifier {
   List<String> get languages => ['All', ..._languages.toList()..sort()]; // BL-017
   List<String> get mediaTypes => ['All', 'TV', 'Radio'];
   List<String> get statusOptions => ['All', 'Working', 'Failed', 'Unchecked'];
+  bool get showAdultContent => _showAdultContent;
   String get selectedCategory => _selectedCategory;
   String get selectedCountry => _selectedCountry;
   String get selectedLanguage => _selectedLanguage; // BL-017
@@ -246,8 +248,9 @@ class ChannelProvider extends ChangeNotifier {
     _errorMessage = '';
     notifyListeners();
 
-    // Load favorites first
+    // Load preferences
     await _loadFavorites();
+    await _loadAdultContentPref();
 
     // Try to load from cache first
     final cached = await _loadFromCache();
@@ -313,6 +316,7 @@ class ChannelProvider extends ChangeNotifier {
           onProgress: (current, total) {
             // Could add progress indicator here
           },
+          includeAdult: _showAdultContent,
         );
       }
 
@@ -660,6 +664,27 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle adult content visibility. Persisted in SharedPreferences.
+  /// When toggled ON, triggers a full re-fetch to include adult sources.
+  Future<void> toggleAdultContent() async {
+    _showAdultContent = !_showAdultContent;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('show_adult_content', _showAdultContent);
+    if (_showAdultContent) {
+      // Re-fetch to include adult repositories
+      await fetchChannels();
+    } else {
+      _applyFilters();
+      notifyListeners();
+    }
+  }
+
+  /// Load adult content preference from SharedPreferences.
+  Future<void> _loadAdultContentPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    _showAdultContent = prefs.getBool('show_adult_content') ?? false;
+  }
+
   /// Set search query
   void setSearchQuery(String query) {
     _searchQuery = query;
@@ -733,8 +758,22 @@ class ChannelProvider extends ChangeNotifier {
         .toSet();
   }
 
+  /// Category names that indicate adult/NSFW content
+  static const _adultCategories = {'Xxx', 'XXX', 'xxx', 'Adult', 'adult', 'NSFW', 'nsfw'};
+
   void _applyFilters() {
     _filteredChannels = _channels.where((channel) {
+      // Adult content filter — hide adult channels unless enabled
+      if (!_showAdultContent) {
+        final cat = channel.category ?? '';
+        if (_adultCategories.contains(cat)) return false;
+        final nameLower = channel.name.toLowerCase();
+        if (nameLower.contains('xxx') || nameLower.contains('adult') ||
+            nameLower.contains('porn') || nameLower.contains('nsfw')) {
+          return false;
+        }
+      }
+
       // Favorites toggle (dedicated button)
       if (_showFavoritesOnly) {
         if (!_favoriteUrls.contains(channel.url)) {
