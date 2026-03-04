@@ -3,6 +3,7 @@ import '../models/channel.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
 import 'fmstream_service.dart';
+import 'shared_db_service.dart';
 
 /// Service for fetching and parsing M3U playlists
 class M3UService {
@@ -15,6 +16,13 @@ class M3UService {
     'https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw',
     // Community sources (unique channels not in iptv-org)
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+    'https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/grouped_by_content.m3u',
+    'https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/international.m3u',
+    'https://raw.githubusercontent.com/RokuIL/Live-From-Israel/master/NextPVRChannels.m3u8',
+    'https://raw.githubusercontent.com/iptv-org/iptv/master/streams/il.m3u',
+    'https://de1.api.radio-browser.info/m3u/stations/bycountry/israel',
+    'https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20states',
+    'https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20kingdom',
     'https://www.apsattv.com/xumo.m3u',
     'https://www.apsattv.com/lg.m3u',
     'https://www.apsattv.com/rok.m3u',
@@ -24,7 +32,6 @@ class M3UService {
     'https://www.apsattv.com/vizio.m3u',
     'https://www.apsattv.com/firetv.m3u',
     'https://www.apsattv.com/klowd.m3u',
-    'https://od.lk/s/MzJfMTY2NzU4NDVf/Free2ViewTV-2021-Master.m3u',
   ];
 
   /// Adult/NSFW repositories — only fetched when adult content is enabled
@@ -217,6 +224,32 @@ class M3UService {
     void Function(int current, int total)? onProgress,
     bool includeAdult = false,
   }) async {
+    // Try Supabase shared database first for unified channel list
+    final sharedDb = SharedDbService();
+    List<Channel> supabaseChannels = [];
+    try {
+      final dbChannels = await sharedDb.fetchChannels();
+      if (dbChannels.isNotEmpty) {
+        for (final ch in dbChannels) {
+          final urls = ch['urls'];
+          final urlList = urls is List ? urls.cast<String>() : <String>[];
+          if (urlList.isEmpty) continue;
+          supabaseChannels.add(Channel(
+            name: ch['name'] as String? ?? '',
+            url: urlList.first,
+            urls: urlList,
+            category: ch['category'] as String? ?? 'Other',
+            country: ch['country'] as String?,
+            logo: ch['logo'] as String?,
+            mediaType: (ch['media_type'] as String?) ?? 'TV',
+          ));
+        }
+        logger.info('Loaded ${supabaseChannels.length} channels from Supabase');
+      }
+    } catch (e) {
+      logger.warning('Supabase channel fetch failed (falling back to M3U): $e');
+    }
+
     final repos = [...defaultRepositories];
     if (includeAdult) {
       repos.addAll(adultRepositories);
@@ -300,8 +333,8 @@ class M3UService {
       logger.warning('Failed repositories: ${errors.keys.join(', ')}');
     }
     
-    // If no channels at all, throw an error
-    if (allChannels.isEmpty) {
+    // If no channels at all (from both Supabase and M3U), throw an error
+    if (allChannels.isEmpty && supabaseChannels.isEmpty) {
       final error = ErrorHandler.m3uError(
         'no_channels',
         'Failed to fetch channels from all ${repos.length} repositories. Errors: ${errors.values.map((e) => e.code).join(', ')}',
@@ -311,10 +344,66 @@ class M3UService {
     }
     
     // Consolidate channels with same normalized name into multi-URL entries
-    final consolidated = _consolidateChannels(allChannels);
-    logger.info('Consolidated ${allChannels.length} → ${consolidated.length} channels');
+    // Merge Supabase channels with freshly-fetched M3U channels
+    final mergedChannels = <Channel>[];
+    final mergedUrls = <String>{};
+    
+    // Start with Supabase channels (authoritative, already consolidated)
+    for (final ch in supabaseChannels) {
+      for (final u in ch.urls) {
+        mergedUrls.add(u);
+      }
+      mergedChannels.add(ch);
+    }
+    
+    // Add M3U channels not already in Supabase
+    for (final ch in allChannels) {
+      if (!mergedUrls.contains(ch.url)) {
+        mergedUrls.add(ch.url);
+        mergedChannels.add(ch);
+      }
+    }
+    
+    final consolidated = _consolidateChannels(mergedChannels);
+    logger.info('Consolidated ${mergedChannels.length} → ${consolidated.length} channels (${supabaseChannels.length} from Supabase)');
+    
+    // Contribute newly discovered channels back to Supabase
+    if (allChannels.length > supabaseChannels.length) {
+      _contributeNewChannels(sharedDb, allChannels, supabaseChannels);
+    }
     
     return consolidated;
+  }
+
+  /// Fire-and-forget: contribute newly discovered M3U channels to Supabase
+  static void _contributeNewChannels(
+    SharedDbService sharedDb,
+    List<Channel> m3uChannels,
+    List<Channel> supabaseChannels,
+  ) {
+    final existingUrls = <String>{};
+    for (final ch in supabaseChannels) {
+      for (final u in ch.urls) {
+        existingUrls.add(u);
+      }
+    }
+    final newChannels = m3uChannels
+        .where((ch) => !existingUrls.contains(ch.url))
+        .map((ch) => <String, dynamic>{
+              'name': ch.name,
+              'url': ch.url,
+              'urls': ch.urls,
+              'category': ch.category,
+              'country': ch.country ?? 'Unknown',
+              'logo': ch.logo ?? '',
+              'media_type': ch.mediaType,
+              'source': 'flutter-m3u',
+            })
+        .toList();
+    if (newChannels.isNotEmpty) {
+      logger.info('Contributing ${newChannels.length} new channels to Supabase');
+      sharedDb.contributeChannels(newChannels);
+    }
   }
 
   /// Quality/variant suffixes to strip when normalizing channel names

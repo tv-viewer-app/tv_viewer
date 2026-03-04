@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-03-04
+
+### Added
+- **Unified Supabase channel database**: Both Windows and Android now read from the same Supabase `channels` table (13,789 channels with multi-source URLs)
+- **Flutter → Supabase channel contribution**: Android app now contributes newly discovered channels back to the shared database (was read-only before)
+- **Population script**: `scripts/populate_supabase.py` for batch channel fetch, consolidation, health check, and Supabase upload
+- **7 additional repos in Android**: Aligned Flutter repo list with Windows (djthawks, RokuIL, iptv-org/streams/il, radio-browser Israel/US/UK)
+
+### Fixed
+- **Removed dead source**: Removed od.lk/Free2ViewTV link (HTTP 404) from both platforms
+- **Channel count parity**: Both platforms now see the same 13,789 consolidated channels from the shared database
+
+### Changed
+- **Channel fetch flow (Android)**: Now fetches from Supabase first, supplements with M3U repos, contributes new channels back
+- **Health status populated**: 15,946 URLs health-checked and uploaded to `channel_status` table (7,625 working, 8,321 failed)
+
 ## [2.2.3] - 2026-03-04
 
 ### Fixed

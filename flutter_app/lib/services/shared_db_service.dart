@@ -161,6 +161,122 @@ class SharedDbService {
     }
   }
   
+  /// Fetch consolidated channels from shared Supabase database
+  /// 
+  /// Returns channels with name, urls (multi-source), category, country, etc.
+  /// Both platforms share this same database for consistent channel lists.
+  Future<List<Map<String, dynamic>>> fetchChannels({int limit = 20000}) async {
+    if (!isConfigured) {
+      logger.debug('SharedDbService: Service not configured for channels fetch');
+      return [];
+    }
+
+    try {
+      logger.info('Fetching channels from shared database...');
+
+      final url = Uri.parse('$_supabaseUrl/rest/v1/channels')
+          .replace(queryParameters: {
+        'select': 'url_hash,name,urls,category,country,logo,media_type,source',
+        'limit': '$limit',
+      });
+
+      final response = await http.get(
+        url,
+        headers: {
+          'apikey': _supabaseAnonKey,
+          'Authorization': 'Bearer $_supabaseAnonKey',
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        final channels = data.cast<Map<String, dynamic>>();
+        logger.info('Fetched ${channels.length} channels from shared database');
+        return channels;
+      } else {
+        logger.warning('Failed to fetch channels: ${response.statusCode}');
+        return [];
+      }
+    } catch (e, stackTrace) {
+      logger.error('Error fetching channels from shared database', e, stackTrace);
+      return [];
+    }
+  }
+
+  /// Contribute discovered channels back to the shared database
+  /// 
+  /// Performs upsert so existing channels get updated, new ones added.
+  Future<int> contributeChannels(List<Map<String, dynamic>> channels) async {
+    if (!isConfigured || channels.isEmpty) return 0;
+
+    try {
+      final payload = <Map<String, dynamic>>[];
+      for (final ch in channels) {
+        final primaryUrl = ch['url'] as String? ?? '';
+        if (primaryUrl.isEmpty) continue;
+
+        var urls = ch['urls'];
+        if (urls is String) {
+          urls = json.decode(urls);
+        }
+        urls ??= [primaryUrl];
+        if (urls is List && !urls.contains(primaryUrl)) {
+          urls = [primaryUrl, ...urls];
+        }
+
+        payload.add({
+          'url_hash': _hashUrl(primaryUrl),
+          'name': (ch['name'] as String? ?? '').substring(
+              0, (ch['name'] as String? ?? '').length.clamp(0, 200)),
+          'urls': urls,
+          'category': ch['category'] ?? 'Other',
+          'country': ch['country'] ?? 'Unknown',
+          'logo': (ch['logo'] as String? ?? '').substring(
+              0, (ch['logo'] as String? ?? '').length.clamp(0, 500)),
+          'media_type': ch['media_type'],
+          'source': ch['source'] ?? 'flutter-app',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      if (payload.isEmpty) return 0;
+
+      int contributed = 0;
+      const batchSize = 500;
+      for (int i = 0; i < payload.length; i += batchSize) {
+        final batch = payload.sublist(
+            i, (i + batchSize).clamp(0, payload.length));
+        final url = Uri.parse('$_supabaseUrl/rest/v1/channels');
+
+        final response = await http.post(
+          url,
+          headers: {
+            'apikey': _supabaseAnonKey,
+            'Authorization': 'Bearer $_supabaseAnonKey',
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates',
+          },
+          body: json.encode(batch),
+        ).timeout(const Duration(seconds: 30));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          contributed += batch.length;
+        } else {
+          logger.warning(
+              'Channel contribute batch failed: ${response.statusCode}');
+        }
+      }
+
+      if (contributed > 0) {
+        logger.info('Contributed $contributed channels to shared database');
+      }
+      return contributed;
+    } catch (e, stackTrace) {
+      logger.error('Error contributing channels', e, stackTrace);
+      return 0;
+    }
+  }
+
   /// Get cached status for a specific URL
   /// 
   /// Returns the cached status if available and recent, null otherwise
