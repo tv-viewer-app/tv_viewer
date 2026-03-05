@@ -8,6 +8,7 @@
 /// is a random UUID generated per install and stored in shared_preferences.
 
 import 'package:flutter/material.dart';
+import 'package:tv_viewer/constants.dart';
 import 'package:tv_viewer/services/analytics_service.dart';
 import 'package:tv_viewer/services/crashlytics_service.dart';
 import 'package:tv_viewer/di/service_locator.dart';
@@ -164,7 +165,7 @@ Future<void> exampleAppInitialization() async {
   await analyticsService.trackAppLaunch();
 
   // Set initial crash context
-  await crashlytics.setCustomKey('app_version', '2.2.3');
+  await crashlytics.setCustomKey('app_version', appVersion);
   await crashlytics.setCustomKey('environment', 'production');
 }
 

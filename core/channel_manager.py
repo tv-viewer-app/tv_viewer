@@ -170,15 +170,28 @@ _SCRIPT_SEPARATOR = re.compile(
 )
 _DASH_SPLIT = re.compile(r'\s+[-–—]\s+')  # " - ", " – ", " — "
 
+# Common country name prefixes that appear as "Country: Channel Name" in M3U sources
+_COUNTRY_PREFIXES = {
+    'israel', 'usa', 'uk', 'france', 'germany', 'spain', 'italy',
+    'brazil', 'india', 'china', 'japan', 'korea', 'russia', 'turkey',
+    'mexico', 'canada', 'australia', 'netherlands', 'portugal', 'greece',
+    'poland', 'romania', 'hungary', 'chile', 'argentina', 'colombia',
+}
+
 # Explicit alias groups: channels that should merge into one multi-URL entry.
 # Key = canonical name (lowercase), values = alternative names (lowercase).
 # Must match Flutter's _channelAliases in m3u_service.dart.
 _CHANNEL_ALIASES: Dict[str, List[str]] = {
     'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11',
-               'kan 11 israel'],
+               'kan 11 israel', 'israel kan 11'],
     'kan kids': ['kan kids / kan educational', 'kan kids / educational',
                  'kan educational', 'kan edu', 'כאן חינוכית'],
+    'kan bet': ['kan reshet bet', 'kan bet / reshet bet',
+                'kan israel reshet bet'],
+    'kan moreshet': ['kan israel reshet moreshet 92.5 fm',
+                     'kan israel moreshet'],
     'reshet 13': ['reshet 13 alt', 'reshet 13 subtitled'],
+    'keshet 12': ['super channel 12', 'channel 12'],
 }
 
 # Build reverse lookup: alias → canonical name
@@ -223,6 +236,19 @@ def _normalize_name_for_grouping(name: str, country: str) -> str:
     base = _normalize_channel_name(name)
     if not base:
         return ''
+    
+    # Step 1b: strip common country-code prefixes like "IL: Kan 11" or "US: CNN"
+    prefix_match = re.match(r'^([A-Z]{2,3}):\s+(.+)$', base)
+    if prefix_match:
+        base = prefix_match.group(2).strip()
+    # Also strip full country name prefixes like "Israel: Kan 11"
+    prefix_match2 = re.match(r'^([A-Za-z]+):\s+(.+)$', base)
+    if prefix_match2:
+        prefix_word = prefix_match2.group(1).lower()
+        if country and prefix_word == country.lower():
+            base = prefix_match2.group(2).strip()
+        elif prefix_word in _COUNTRY_PREFIXES:
+            base = prefix_match2.group(2).strip()
     
     # Step 2: if name has " - " separator, check for non-Latin/Latin halves
     parts = _DASH_SPLIT.split(base)
@@ -297,6 +323,23 @@ def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         base_name = _normalize_name_for_grouping(name, country)
         # Group key: case-insensitive base name + normalized country
         group_key = f"{base_name.lower()}|{country.lower()}"
+        
+        # Cross-country merge: merge "Unknown" country with same-named known country
+        if group_key not in groups:
+            name_lower = base_name.lower()
+            if country.lower() == 'unknown':
+                # Unknown country -> find existing group with same name + any country
+                for existing_key in groups:
+                    if existing_key.startswith(name_lower + '|'):
+                        group_key = existing_key
+                        break
+            else:
+                # Known country -> absorb existing "unknown" country group
+                unknown_key = f"{name_lower}|unknown"
+                if unknown_key in groups:
+                    # Move unknown group to known-country key
+                    groups[group_key] = groups.pop(unknown_key)
+                    groups[group_key]['country'] = country
         
         url = ch.get('url', '')
         if not url:

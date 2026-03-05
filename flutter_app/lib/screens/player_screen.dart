@@ -13,6 +13,7 @@ import '../widgets/live_badge.dart';
 import '../widgets/quality_badge.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
+import '../constants.dart';
 
 class PlayerScreen extends StatefulWidget {
   final Channel channel;
@@ -179,7 +180,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _disposeController();
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(streamUrl),
-          httpHeaders: const {'User-Agent': 'TV Viewer/2.2.3'},
+          httpHeaders: const {'User-Agent': appUserAgent},
         );
 
         await _videoController!.initialize().timeout(
@@ -381,7 +382,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     try {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(streamUrl),
-        httpHeaders: const {'User-Agent': 'TV Viewer/2.2.3'},
+        httpHeaders: const {'User-Agent': appUserAgent},
       );
       
       await controller.initialize();

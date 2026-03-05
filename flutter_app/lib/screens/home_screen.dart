@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/channel_provider.dart';
 import '../models/channel.dart';
 import '../services/feedback_service.dart';
@@ -566,11 +567,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showAboutDialog() {
+  void _showAboutDialog() async {
+    String version = '2.3.2';
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      version = packageInfo.version;
+    } catch (_) {}
+    if (!mounted) return;
     showAboutDialog(
       context: context,
       applicationName: 'TV Viewer',
-      applicationVersion: '2.2.3',
+      applicationVersion: version,
       applicationIcon: const Icon(Icons.tv, size: 48),
       children: [
         const Text(

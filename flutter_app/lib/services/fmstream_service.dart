@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import '../constants.dart';
 import '../models/channel.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
@@ -22,7 +23,7 @@ class FMStreamService {
       final response = await http.get(
         Uri.parse(fmstreamDirectoryUrl),
         headers: {
-          'User-Agent': 'TV Viewer/2.2.3',
+          'User-Agent': appUserAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       ).timeout(const Duration(seconds: 30));
@@ -712,7 +713,7 @@ class FMStreamService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.3'},
+        headers: {'User-Agent': appUserAgent},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||

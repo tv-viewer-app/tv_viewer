@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.3] - 2026-03-05
+
+### Fixed
+- **Android version display**: Fixed 10 hardcoded "2.2.3" version strings across Flutter app (about dialog, help screen, diagnostics, user-agent headers, player, M3U service, FMStream service)
+- **Centralized version constant**: Created `constants.dart` with `appVersion` and `appUserAgent` — all version references now use the central constant
+- **About dialog dynamic version**: About dialog now reads version from `PackageInfo.fromPlatform()` instead of hardcoded string
+- **Country prefix stripping**: Channel names like "IL: Kan 11" and "Israel: Kan 11" are now normalized to "Kan 11" for proper consolidation (both Python and Flutter)
+- **Cross-country channel merging**: Channels with "Unknown" country now merge with same-named channels from known countries, preventing duplicates (e.g., "kan 11" from Unknown + "Israel: Kan 11" from Israel → single entry)
+
+### Added
+- **Channel alias groups**: Added Kan Bet, Kan Moreshet, Keshet 12 to consolidation alias mapping (both Python and Flutter)
+- **Country prefix set**: 26 common country names recognized as M3U source prefixes for automatic stripping
+
 ## [2.3.2] - 2026-03-05
 
 ### Fixed

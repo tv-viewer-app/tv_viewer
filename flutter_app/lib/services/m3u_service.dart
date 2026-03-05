@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import '../constants.dart';
 import '../models/channel.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
@@ -122,7 +123,7 @@ class M3UService {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.3'},
+        headers: {'User-Agent': appUserAgent},
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -429,12 +430,23 @@ class M3UService {
     caseSensitive: false,
   );
 
+  /// Common country name prefixes in M3U sources (lowercase)
+  static const Set<String> _countryPrefixes = {
+    'israel', 'usa', 'uk', 'france', 'germany', 'spain', 'italy',
+    'brazil', 'india', 'china', 'japan', 'korea', 'russia', 'turkey',
+    'mexico', 'canada', 'australia', 'netherlands', 'portugal', 'greece',
+    'poland', 'romania', 'hungary', 'chile', 'argentina', 'colombia',
+  };
+
   /// Explicit alias groups: channels that should merge into one multi-URL entry.
   /// Key = canonical name, values = alternative names (case-insensitive).
   static const Map<String, List<String>> _channelAliases = {
-    'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11', 'kan 11 israel'],
+    'kan 11': ['kan 11 news', 'kan 11 subtitled', 'kan 11 4k', 'כאן 11', 'kan 11 israel', 'israel kan 11'],
     'kan kids': ['kan kids / kan educational', 'kan kids / educational', 'kan educational', 'kan edu', 'כאן חינוכית'],
+    'kan bet': ['kan reshet bet', 'kan bet / reshet bet', 'kan israel reshet bet'],
+    'kan moreshet': ['kan israel reshet moreshet 92.5 fm', 'kan israel moreshet'],
     'reshet 13': ['reshet 13 alt', 'reshet 13 subtitled'],
+    'keshet 12': ['super channel 12', 'channel 12'],
   };
 
   /// Build reverse lookup: alias → canonical name
@@ -453,8 +465,25 @@ class M3UService {
 
   /// Normalize a channel name for grouping (strip quality/variant suffixes)
   /// Handles Hebrew/Arabic aliases separated by dash (e.g., "כאן 11 - Kan 11")
+  /// Strips country-code prefixes like "IL: Kan 11" or "Israel: Kan 11"
   static String _normalizeNameForGrouping(String name) {
     String normalized = name.trim();
+    
+    // Strip country-code prefixes: "IL: Kan 11" -> "Kan 11"
+    final prefixMatch = RegExp(r'^[A-Z]{2,3}:\s+(.+)$').firstMatch(normalized);
+    if (prefixMatch != null) {
+      normalized = prefixMatch.group(1)!.trim();
+    } else {
+      // Strip full country name prefixes: "Israel: Kan 11" -> "Kan 11"
+      final countryPrefixMatch = RegExp(r'^([A-Za-z]+):\s+(.+)$').firstMatch(normalized);
+      if (countryPrefixMatch != null) {
+        final prefix = countryPrefixMatch.group(1)!.toLowerCase();
+        if (_countryPrefixes.contains(prefix)) {
+          normalized = countryPrefixMatch.group(2)!.trim();
+        }
+      }
+    }
+    
     // Multi-pass strip quality suffixes
     for (int i = 0; i < 3; i++) {
       final before = normalized;
@@ -487,10 +516,30 @@ class M3UService {
   /// Consolidate channels: merge entries with same normalized name + country
   /// into single multi-URL Channel objects for failover
   static List<Channel> _consolidateChannels(List<Channel> channels) {
-    // Group by normalized name + country
+    // Group by normalized name + country, with cross-country Unknown merging
     final groups = <String, List<Channel>>{};
     for (final ch in channels) {
-      final key = '${_normalizeNameForGrouping(ch.name)}|${(ch.country ?? '').toLowerCase()}';
+      final normalizedName = _normalizeNameForGrouping(ch.name);
+      final country = (ch.country ?? '').toLowerCase();
+      var key = '$normalizedName|$country';
+      
+      if (!groups.containsKey(key)) {
+        if (country == '' || country == 'unknown') {
+          // Unknown country: find existing group with same name
+          final match = groups.keys.where((k) => k.startsWith('$normalizedName|')).firstOrNull;
+          if (match != null) key = match;
+        } else {
+          // Known country: absorb existing unknown group
+          final unknownKey = '$normalizedName|unknown';
+          final emptyKey = '$normalizedName|';
+          if (groups.containsKey(unknownKey)) {
+            groups[key] = groups.remove(unknownKey)!;
+          } else if (groups.containsKey(emptyKey)) {
+            groups[key] = groups.remove(emptyKey)!;
+          }
+        }
+      }
+      
       groups.putIfAbsent(key, () => []).add(ch);
     }
 
@@ -524,7 +573,7 @@ class M3UService {
       
       final response = await http.head(
         Uri.parse(url),
-        headers: {'User-Agent': 'TV Viewer/2.2.3'},
+        headers: {'User-Agent': appUserAgent},
       ).timeout(const Duration(seconds: 5));
 
       final isAccessible = response.statusCode == 200 ||
