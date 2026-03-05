@@ -16,19 +16,20 @@
 name: Build
 
 on:
-  push:
-    branches: [master]
-    tags-ignore:
-      - 'v*'
-    paths:
-      - 'flutter_app/**'
-      - 'core/**'
-      - 'ui/**'
-      - 'utils/**'
-      - '*.py'
-      - 'requirements.txt'
-      - 'TV_Viewer.spec'
-      - '!**/*.md'
+  # DISABLED auto-trigger to save Actions storage (0.5GB limit reached)
+  # push:
+  #   branches: [master]
+  #   tags-ignore:
+  #     - 'v*'
+  #   paths:
+  #     - 'flutter_app/**'
+  #     - 'core/**'
+  #     - 'ui/**'
+  #     - 'utils/**'
+  #     - '*.py'
+  #     - 'requirements.txt'
+  #     - 'TV_Viewer.spec'
+  #     - '!**/*.md'
   workflow_dispatch:
   workflow_call:
     # Expose artifact names so the caller (release.yml) knows what to download
@@ -106,7 +107,7 @@ jobs:
         with:
           name: windows-exe
           path: dist/TV_Viewer.exe
-          retention-days: 30
+          retention-days: 3
           if-no-files-found: error
 
   # ===========================================================================
@@ -182,5 +183,4 @@ jobs:
         with:
           name: android-apk
           path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
-          if-no-files-found: error
+          retention-days: 3

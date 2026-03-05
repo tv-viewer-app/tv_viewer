@@ -13,10 +13,11 @@
 name: CI
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+  # DISABLED auto-trigger to save Actions storage (0.5GB limit reached)
+  # push:
+  #   branches: [master]
+  # pull_request:
+  #   branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -145,7 +146,7 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
-          retention-days: 14
+          retention-days: 3
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------

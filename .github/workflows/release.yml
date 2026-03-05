@@ -14,8 +14,9 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  # DISABLED auto-trigger to save Actions storage (0.5GB limit reached)
+  # push:
+  #   tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
