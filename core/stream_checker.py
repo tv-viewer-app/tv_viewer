@@ -40,8 +40,12 @@ except ImportError:
     SharedDbService = None
     ChannelResult = None
 
-# Get module logger
-logger = logging.getLogger(__name__)
+# Get module logger (use utils.logger for proper file handler)
+try:
+    from utils.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 # Platform-specific thread priority
 if sys.platform == 'win32':
@@ -384,7 +388,8 @@ class StreamChecker:
     async def check_streams_batch(
         self,
         channels: List[Dict[str, Any]],
-        on_channel_checked: Optional[Callable[[Dict[str, Any], int, int], None]] = None
+        on_channel_checked: Optional[Callable[[Dict[str, Any], int, int], None]] = None,
+        prefetched_health_cache: Optional[Dict] = None
     ) -> List[Dict[str, Any]]:
         """Check multiple streams with smart priority ordering.
         
@@ -397,6 +402,7 @@ class StreamChecker:
         Args:
             channels: List of channel dictionaries to validate
             on_channel_checked: Optional callback(channel, current, total) for progress
+            prefetched_health_cache: Optional pre-fetched SharedDb cache to avoid double fetch
             
         Returns:
             Same list of channels with 'is_working' status updated in-place
@@ -422,7 +428,12 @@ class StreamChecker:
             if SharedDbService is not None:
                 shared_db = SharedDbService()
                 if shared_db.is_configured:
-                    shared_db_cache = await shared_db.fetch_recent_results()
+                    # Reuse prefetched cache if available, otherwise fetch fresh
+                    if prefetched_health_cache:
+                        shared_db_cache = prefetched_health_cache
+                        logger.info(f"SharedDb: Reusing {len(shared_db_cache)} prefetched health results")
+                    else:
+                        shared_db_cache = await shared_db.fetch_recent_results()
                     if shared_db_cache:
                         channels_to_validate = []
                         skipped = 0
@@ -505,8 +516,8 @@ class StreamChecker:
                 if shared_db is not None and shared_db.is_configured:
                     try:
                         await shared_db.upload_batch_inline(batch, session)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"SharedDb: Upload batch failed: {e}")
                 
                 gc.collect(0)
                 
@@ -525,7 +536,8 @@ class StreamChecker:
         self,
         channels: List[Dict[str, Any]],
         on_channel_checked: Optional[Callable[[Dict[str, Any], int, int], None]] = None,
-        on_complete: Optional[Callable[[List[Dict[str, Any]]], None]] = None
+        on_complete: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
+        prefetched_health_cache: Optional[Dict] = None
     ):
         """Start checking streams in a background thread with low priority.
         
@@ -536,6 +548,7 @@ class StreamChecker:
             channels: List of channel dictionaries to validate
             on_channel_checked: Optional callback(channel, current, total) per channel
             on_complete: Optional callback(results) when validation finishes
+            prefetched_health_cache: Optional pre-fetched SharedDb cache to avoid double fetch
         """
         if self._running:
             logger.debug("Stream checker already running")
@@ -556,7 +569,10 @@ class StreamChecker:
                 
                 # Run the async batch check
                 results = self._loop.run_until_complete(
-                    self.check_streams_batch(channels, on_channel_checked)
+                    self.check_streams_batch(
+                        channels, on_channel_checked,
+                        prefetched_health_cache=prefetched_health_cache
+                    )
                 )
                 
                 # Call completion callback if not stopped

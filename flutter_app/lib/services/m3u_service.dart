@@ -13,7 +13,7 @@ class M3UService {
     // Country-specific priority sources
     'https://iptv-org.github.io/iptv/countries/il.m3u',
     'https://iptv-org.github.io/iptv/countries/us.m3u',
-    'https://iptv-org.github.io/iptv/countries/gb.m3u',
+    'https://iptv-org.github.io/iptv/countries/uk.m3u',
     'https://iptv-org.github.io/iptv/languages/heb.m3u',
     'https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw',
     // Free-TV curated playlists (quality-focused, HD where possible)
@@ -46,9 +46,6 @@ class M3UService {
     'https://www.apsattv.com/vizio.m3u',
     'https://www.apsattv.com/firetv.m3u',
     'https://www.apsattv.com/klowd.m3u',
-    'https://www.apsattv.com/samsung.m3u',
-    'https://www.apsattv.com/plex.m3u',
-    'https://www.apsattv.com/pluto.m3u',
   ];
 
   /// Adult/NSFW repositories — only fetched when adult content is enabled

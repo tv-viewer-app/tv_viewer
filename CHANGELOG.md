@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-03-05
+
+### Fixed
+- **Health cache pagination**: Supabase health cache fetch now properly paginates using limit/offset (was only returning 1000 of 19k+ rows due to server-side limit)
+- **Health cache after consolidation**: Health cache status is now applied AFTER channel consolidation, preventing `consolidate_channels()` from overwriting health-cached status with new dict copies
+- **Consolidation preserves scan_status**: `consolidate_channels()` now transfers `scan_status='scanned'` and `last_scanned` from merged channels to the primary channel
+- **Health cache timestamp**: Health-cached channels get `last_scanned=NOW` instead of stale `last_checked` from Supabase, preventing immediate re-scan
+- **Double health cache fetch eliminated**: Stream checker now reuses the prefetched health cache from channel manager instead of re-fetching from Supabase
+- **Stream checker logging**: Fixed `stream_checker.py` using bare `logging.getLogger()` instead of `utils.logger.get_logger()`, so SharedDb skip/upload messages now appear in logs
+- **Silent upload failures logged**: Supabase batch upload errors are now logged as warnings instead of silently swallowed
+
+### Changed
+- **Health cache fetches working results only**: Reduced fetch from ~19k total rows to ~10k working rows, halving pagination time (~5s vs ~10s)
+- **Removed dead M3U sources**: Removed samsung.m3u, plex.m3u, pluto.m3u (all returning 404) from both Python and Flutter configs
+- **Fixed gb.m3u URL**: Corrected gb.m3u → uk.m3u in channels_config.json and m3u_service.dart (33 repos, down from 36)
+
+### Performance
+- **56% scan reduction on startup**: 9,201 of 16,397 channels skipped via SharedDb health cache
+- **Startup scan time**: ~25 seconds from fetch start to scan queue (was 30s+ scanning everything)
+- **Health cache fetch**: 10,048 working results in ~5 seconds (10 paginated requests)
+
 ## [2.3.1] - 2026-03-04
 
 ### Fixed

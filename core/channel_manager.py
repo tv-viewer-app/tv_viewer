@@ -342,6 +342,12 @@ def consolidate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]
             if ch.get('is_working') and not existing.get('is_working'):
                 existing['is_working'] = True
             
+            # Prefer scanned status over pending
+            if ch.get('scan_status') == 'scanned' and existing.get('scan_status') != 'scanned':
+                existing['scan_status'] = 'scanned'
+                if ch.get('last_scanned'):
+                    existing['last_scanned'] = ch['last_scanned']
+            
             # Fill in missing metadata
             if not existing.get('logo') and ch.get('logo'):
                 existing['logo'] = ch['logo']
@@ -407,7 +413,8 @@ class ChannelManager:
     __slots__ = ('channels', 'categories', 'countries', 'repository_handler', 
                  'stream_checker', '_lock', 'group_by', 'media_type_filter', '_url_to_index',
                  '_on_channels_loaded', '_on_channel_validated', 
-                 '_on_validation_complete', '_on_fetch_progress', '_non_working_urls')
+                 '_on_validation_complete', '_on_fetch_progress', '_non_working_urls',
+                 '_health_cache')
     
     def __init__(self):
         """Initialize ChannelManager with empty state."""
@@ -421,6 +428,7 @@ class ChannelManager:
         self.media_type_filter = 'All'
         self._url_to_index: Dict[str, int] = {}  # O(1) URL lookups
         self._non_working_urls: Set[str] = set()  # URLs known to be non-working
+        self._health_cache: Dict = {}  # SharedDb health cache from last fetch
         
         # Callbacks for UI updates
         self._on_channels_loaded: Optional[Callable[[int], None]] = None
@@ -830,6 +838,7 @@ class ChannelManager:
                 health_cache = await shared_db.fetch_recent_results()
                 if health_cache:
                     logger.info(f"Fetched {len(health_cache)} cached health results from SharedDb")
+                    self._health_cache = health_cache  # Cache for stream_checker reuse
         except Exception as e:
             logger.debug(f"SharedDb health fetch failed (non-blocking): {e}")
         
@@ -866,23 +875,7 @@ class ChannelManager:
                         ch['is_working'] = ex.get('is_working')
                         ch['scan_status'] = ex.get('scan_status', 'pending')
                     else:
-                        # Check health cache for this channel's URLs
-                        if health_cache:
-                            ch_urls = ch.get('urls', [ch.get('url', '')])
-                            found_health = False
-                            for u in ch_urls:
-                                url_hash = hashlib.sha256(u.encode('utf-8')).hexdigest()
-                                cached = health_cache.get(url_hash)
-                                if cached:
-                                    ch['is_working'] = cached.status
-                                    ch['scan_status'] = 'scanned'
-                                    ch['last_scanned'] = cached.last_checked.isoformat()
-                                    found_health = True
-                                    break
-                            if not found_health:
-                                ch['scan_status'] = 'pending'
-                        else:
-                            ch['scan_status'] = 'pending'
+                        ch['scan_status'] = 'pending'
                     merged_channels.append(ch)
                 
                 # Priority 2: M3U channels (supplement)
@@ -897,23 +890,7 @@ class ChannelManager:
                         channel['scan_status'] = existing.get('scan_status', 'pending')
                         channel['min_age'] = existing.get('min_age')
                     else:
-                        # Check health cache for this channel's URLs
-                        if health_cache:
-                            ch_urls = channel.get('urls', [channel.get('url', '')])
-                            found_health = False
-                            for u in ch_urls:
-                                url_hash = hashlib.sha256(u.encode('utf-8')).hexdigest()
-                                cached = health_cache.get(url_hash)
-                                if cached:
-                                    channel['is_working'] = cached.status
-                                    channel['scan_status'] = 'scanned'
-                                    channel['last_scanned'] = cached.last_checked.isoformat()
-                                    found_health = True
-                                    break
-                            if not found_health:
-                                channel['scan_status'] = 'pending'
-                        else:
-                            channel['scan_status'] = 'pending'
+                        channel['scan_status'] = 'pending'
                     merged_channels.append(channel)
                 
                 # Priority 3: Cached channels not in either source
@@ -941,6 +918,49 @@ class ChannelManager:
                 logger.debug(f"Merged channels: {len(self.channels)}")
                 self._organize_channels()
                 logger.debug("Channels organized")
+                
+                # Apply health cache AFTER consolidation
+                # Health cache only contains working channels (failed are always rescanned)
+                # - New/pending channels: mark as working + scanned
+                # - Already working channels confirmed by cache: refresh last_scanned
+                #   so needs_rescan() skips them (no need to re-validate crowd-confirmed channels)
+                # - Failed channels: leave for rescan (may have recovered)
+                if health_cache:
+                    now_iso = datetime.now().isoformat()
+                    new_marked = 0
+                    refreshed = 0
+                    for ch in self.channels:
+                        ch_urls = ch.get('urls', [ch.get('url', '')])
+                        found_working = False
+                        for u in ch_urls:
+                            url_hash = hashlib.sha256(u.encode('utf-8')).hexdigest()
+                            if url_hash in health_cache:
+                                found_working = True
+                                break
+                        
+                        if not found_working:
+                            continue
+                        
+                        if ch.get('scan_status') != 'scanned':
+                            # New/pending channel confirmed working
+                            ch['is_working'] = True
+                            ch['scan_status'] = 'scanned'
+                            ch['last_scanned'] = now_iso
+                            new_marked += 1
+                        elif ch.get('is_working'):
+                            # Already working + confirmed by cache — refresh timestamp
+                            ch['last_scanned'] = now_iso
+                            refreshed += 1
+                        else:
+                            # Was failed locally but working in cache — update
+                            ch['is_working'] = True
+                            ch['last_scanned'] = now_iso
+                            refreshed += 1
+                    logger.info(
+                        f"Health cache: {new_marked} new channels marked, "
+                        f"{refreshed} working channels refreshed "
+                        f"(out of {len(self.channels)} total)"
+                    )
         except Exception as e:
             logger.debug(f"Error merging channels: {e}")
             return
@@ -1130,7 +1150,8 @@ class ChannelManager:
         self.stream_checker.start_background_check(
             channels_to_check,
             on_channel_checked=on_checked,
-            on_complete=on_complete
+            on_complete=on_complete,
+            prefetched_health_cache=self._health_cache or None
         )
     
     def search_channels(self, query: str) -> List[Dict[str, Any]]:

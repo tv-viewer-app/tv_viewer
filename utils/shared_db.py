@@ -47,8 +47,12 @@ except ImportError:
     aiohttp = None
     logging.warning("aiohttp not installed - shared database features will be disabled")
 
-# Get module logger
-logger = logging.getLogger(__name__)
+# Get module logger (use utils.logger for proper file handler)
+try:
+    from utils.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 # Supabase configuration — imported from config.py which has hardcoded defaults
 try:
@@ -154,9 +158,11 @@ class SharedDbService:
         )
     
     async def fetch_recent_results(self) -> Dict[str, ChannelStatusResult]:
-        """Fetch recent channel validation results from shared database.
+        """Fetch recent working channel results from shared database.
         
-        Fetches all channel statuses that were checked within the last 24 hours.
+        Fetches only working channel statuses from the last 24 hours.
+        Failed channels aren't needed since they'll be rescanned anyway.
+        Uses limit/offset pagination (Supabase max 1000 per request).
         
         Returns:
             Dictionary mapping url_hash to ChannelStatusResult
@@ -169,57 +175,63 @@ class SharedDbService:
         try:
             logger.info('Fetching recent channel results from shared database...')
             
-            # Calculate timestamp for 24 hours ago
             cutoff_time = (
                 datetime.now(timezone.utc) - timedelta(hours=CACHE_DURATION_HOURS)
             ).isoformat()
             
-            # Build query URL
-            url = f'{self.supabase_url}/rest/v1/{self.table_name}'
-            params = {
-                'last_checked': f'gte.{cutoff_time}',
-                'select': 'url_hash,status,last_checked,response_time_ms',
-            }
-            
+            base_url = f'{self.supabase_url}/rest/v1/{self.table_name}'
             headers = {
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
             }
             
+            results = {}
+            page_size = 1000
+            offset = 0
+            max_pages = 30  # Safety cap: max 30k results
+            
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url,
-                    params=params,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
+                for _ in range(max_pages):
+                    params = {
+                        'last_checked': f'gte.{cutoff_time}',
+                        'status': 'eq.working',  # Only working — failed will be rescanned
+                        'select': 'url_hash,status,last_checked,response_time_ms',
+                        'limit': str(page_size),
+                        'offset': str(offset),
+                        'order': 'url_hash',
+                    }
+                    
+                    async with session.get(
+                        base_url, params=params, headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        if response.status != 200:
+                            logger.warning(
+                                f'SharedDb health fetch page failed: {response.status}'
+                            )
+                            break
+                        
                         data = await response.json()
-                        results = {}
+                        if not data:
+                            break
                         
                         for item in data:
-                            url_hash = item['url_hash']
-                            status = item['status'] == 'working'
-                            last_checked = datetime.fromisoformat(
-                                item['last_checked'].replace('Z', '+00:00')
-                            )
-                            response_time_ms = item.get('response_time_ms')
-                            
-                            results[url_hash] = ChannelStatusResult(
-                                status=status,
-                                last_checked=last_checked,
-                                response_time_ms=response_time_ms,
+                            results[item['url_hash']] = ChannelStatusResult(
+                                status=True,  # We only fetch working
+                                last_checked=datetime.fromisoformat(
+                                    item['last_checked'].replace('Z', '+00:00')
+                                ),
+                                response_time_ms=item.get('response_time_ms'),
                             )
                         
-                        logger.info(
-                            f'Fetched {len(results)} recent channel results from shared database'
-                        )
-                        return results
-                    else:
-                        logger.warning(
-                            f'Failed to fetch shared database results: {response.status}'
-                        )
-                        return {}
+                        offset += page_size
+                        if len(data) < page_size:
+                            break
+            
+            logger.info(
+                f'Fetched {len(results)} working channel results from shared database'
+            )
+            return results
                         
         except Exception as e:
             logger.error(f'Error fetching from shared database: {e}', exc_info=True)
@@ -327,13 +339,13 @@ class SharedDbService:
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 if resp.status in (200, 201):
-                    logger.debug(f'SharedDb: streamed {len(payload)} results')
+                    logger.info(f'SharedDb: streamed {len(payload)} results')
                     return True
                 else:
-                    logger.debug(f'SharedDb: batch upload {resp.status}')
+                    logger.warning(f'SharedDb: batch upload {resp.status}')
                     return False
         except Exception as e:
-            logger.debug(f'SharedDb: batch upload error: {e}')
+            logger.warning(f'SharedDb: batch upload error: {e}')
             return False
     
     def get_cached_status(
