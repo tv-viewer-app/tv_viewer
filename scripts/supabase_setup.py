@@ -135,10 +135,10 @@ def _headers(key: str) -> dict:
 
 
 def test_connectivity(url: str, key: str) -> tuple[bool, str]:
-    """Basic connectivity test — hit the REST API root."""
+    """Basic connectivity test — query a table with limit=0 (root endpoint deprecated)."""
     try:
         resp = requests.get(
-            f"{url}/rest/v1/",
+            f"{url}/rest/v1/channels?select=id&limit=0",
             headers=_headers(key),
             timeout=10,
         )
