@@ -5,6 +5,7 @@ import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
 import 'fmstream_service.dart';
 import 'shared_db_service.dart';
+import 'repository_service.dart';
 
 /// Service for fetching and parsing M3U playlists
 class M3UService {
@@ -234,7 +235,7 @@ class M3UService {
     }
   }
 
-  /// Fetch channels from all default repositories
+  /// Fetch channels from all configured repositories
   static Future<List<Channel>> fetchAllChannels({
     void Function(int current, int total)? onProgress,
     bool includeAdult = false,
@@ -265,7 +266,8 @@ class M3UService {
       logger.warning('Supabase channel fetch failed (falling back to M3U): $e');
     }
 
-    final repos = [...defaultRepositories];
+    // Load repositories from user configuration
+    final repos = await RepositoryService.loadRepositories();
     if (includeAdult) {
       repos.addAll(adultRepositories);
     }

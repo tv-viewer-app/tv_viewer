@@ -14,6 +14,7 @@ import 'diagnostics_screen.dart';
 import 'help_screen.dart';
 import 'map_screen.dart';
 import 'player_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -163,7 +164,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'help') {
+              if (value == 'settings') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
+              } else if (value == 'help') {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -186,6 +194,17 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings),
+                    SizedBox(width: 8),
+                    Text('Channel Sources'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'help',
                 child: Row(
@@ -513,11 +532,38 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Icon(Icons.tv_off, size: 64, color: Colors.grey),
                         const SizedBox(height: 16),
                         const Text('No channels found'),
+                        const SizedBox(height: 8),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            'Try changing your channel sources or refresh to try again',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ),
                         const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () => provider.fetchChannels(),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Refresh'),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () => provider.fetchChannels(),
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Refresh'),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const SettingsScreen(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.source),
+                              label: const Text('Change Source'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
