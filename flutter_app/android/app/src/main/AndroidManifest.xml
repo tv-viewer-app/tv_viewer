@@ -28,6 +28,7 @@
         android:label="TV Viewer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config">
         

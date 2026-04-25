@@ -11,6 +11,7 @@ body:
         - Channel not playing / buffering forever
         - Channel shows wrong content
         - Channel name or category is wrong
+        - Channel has wrong country assigned
         - Channel missing from the list
         - Channel should be removed
     validations:
@@ -36,6 +37,12 @@ body:
     id: details
     attributes:
       label: Additional details
-      description: When did it stop working? Any error messages?
+      description: |
+        For broken channels: When did it stop working? Any error messages?
+        For wrong info: What's the correct country, category, or name?
+      placeholder: |
+        e.g. This channel is listed as Israeli but it's actually from the US.
+        Correct country: United States
+        Correct category: Entertainment
     validations:
       required: false

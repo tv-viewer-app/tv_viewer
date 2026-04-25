@@ -300,13 +300,14 @@ def show_settings_dialog(parent_window):
     # ── 3. Display Settings ──────────────────────────────────────────
     r = _section(content, "🎨  Display Settings", r)
 
-    # Adult content toggle
+    # Adult content toggle (initially hidden; shown only when over-18 is checked)
     adult_var = tk.BooleanVar(value=config.SHOW_ADULT_CONTENT)
     adult_cb = ttk.Checkbutton(
         content, text="Show adult/NSFW channels",
         variable=adult_var,
     )
-    adult_cb.grid(row=r, column=0, columnspan=3, sticky="w")
+    # Will be shown/hidden dynamically via _on_over18_changed trace below
+    r_adult_content = r
     r += 1
 
     # Default group mode
@@ -413,24 +414,26 @@ def show_settings_dialog(parent_window):
                         ).grid(row=idx // 3, column=idx % 3, sticky="w", padx=(0, 12))
     r += 1
 
-    # Age rating slider
-    ttk.Label(content, text="Max age rating:", font=FONT
-              ).grid(row=r, column=0, sticky="w", padx=(0, 8))
-    age_var = tk.IntVar(value=parent_window.parental_controls.min_age)
-    age_scale = ttk.Scale(
-        content, from_=0, to=18, variable=age_var,
-        command=lambda v: age_val_lbl.configure(
-            text="Off" if int(float(v)) == 0 else f"{int(float(v))}+"
-        ),
+    # Over-18 confirmation checkbox (replaces the old age-rating slider)
+    over18_var = tk.BooleanVar(value=parent_window.parental_controls.is_over_18)
+    over18_cb = ttk.Checkbutton(
+        content, text="I confirm I am 18 or older",
+        variable=over18_var,
     )
-    age_scale.grid(row=r, column=1, sticky="ew")
-    age_val_lbl = ttk.Label(
-        content,
-        text="Off" if age_var.get() == 0 else f"{age_var.get()}+",
-        font=FONT_SMALL, foreground=CD.TEXT_SECONDARY,
-    )
-    age_val_lbl.grid(row=r, column=2, sticky="w", padx=4)
+    over18_cb.grid(row=r, column=0, columnspan=3, sticky="w")
     r += 1
+
+    # Dynamically show/hide the adult-content checkbox based on over-18 state
+    def _on_over18_changed(*_args):
+        if over18_var.get():
+            adult_cb.grid(row=r_adult_content, column=0, columnspan=3, sticky="w")
+        else:
+            adult_cb.grid_remove()
+            adult_var.set(False)
+
+    over18_var.trace_add("write", _on_over18_changed)
+    # Trigger once to set initial visibility
+    _on_over18_changed()
 
     # ── 5. Privacy Settings (Issues #65, #79, #114) ─────────────────
     r = _section(content, "🔒  Privacy", r)
@@ -486,6 +489,20 @@ def show_settings_dialog(parent_window):
         command=lambda: _webbrowser.open("https://buymeacoffee.com/tvviewer"),
     )
     beer_btn.pack(side="left")
+
+    request_btn = tk.Button(
+        support_btn_frame,
+        text="📺 Request Channels",
+        font=("Segoe UI", 10),
+        bg="#1E3A5F", fg="#58A6FF",
+        activebackground="#264F78", activeforeground="#79C0FF",
+        relief="flat", borderwidth=0, cursor="hand2",
+        padx=14, pady=6,
+        command=lambda: _webbrowser.open(
+            "https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_request.yml"
+        ),
+    )
+    request_btn.pack(side="left", padx=(12, 0))
     r += 1
 
     # ── Bottom button bar ────────────────────────────────────────────
@@ -562,7 +579,7 @@ def show_settings_dialog(parent_window):
         parent_window.parental_controls.enabled = parental_enabled_var.get()
         new_blocked = [cat for cat, var in cat_vars.items() if var.get()]
         parent_window.parental_controls.set_blocked_categories(new_blocked)
-        parent_window.parental_controls.set_min_age(int(age_var.get()))
+        parent_window.parental_controls.set_over_18(bool(over18_var.get()))
         parent_window.parental_controls.save()
         # Re-filter to apply parental control changes immediately
         if parent_window.current_group:

@@ -15,7 +15,10 @@ class ParentalControlsService extends ChangeNotifier {
   static const String _keyEnabled = 'parental_enabled';
   static const String _keyPinHash = 'parental_pin_hash';
   static const String _keyBlockedCategories = 'parental_blocked_categories';
-  static const String _keyMinAge = 'parental_min_age';
+  static const String _keyIsOver18 = 'user_is_over_18';
+
+  /// Legacy key – used only for backward-compatible migration.
+  static const String _legacyKeyMinAge = 'parental_min_age';
 
   // Lockout configuration
   static const int maxFailedAttempts = 3;
@@ -25,7 +28,7 @@ class ParentalControlsService extends ChangeNotifier {
   bool _enabled = false;
   String? _pinHash;
   List<String> _blockedCategories = [];
-  int _minAge = 0;
+  bool _isOver18 = false;
 
   // Lockout state (not persisted)
   int _failedAttempts = 0;
@@ -35,7 +38,7 @@ class ParentalControlsService extends ChangeNotifier {
   bool get enabled => _enabled;
   bool get hasPin => _pinHash != null;
   List<String> get blockedCategories => List.unmodifiable(_blockedCategories);
-  int get minAge => _minAge;
+  bool get isOver18 => _isOver18;
   int get failedAttempts => _failedAttempts;
 
   /// Singleton instance
@@ -58,7 +61,7 @@ class ParentalControlsService extends ChangeNotifier {
     await _load();
     logger.info(
       'Parental controls initialized (enabled=$_enabled, '
-      'categories=${_blockedCategories.length}, min_age=$_minAge)',
+      'categories=${_blockedCategories.length}, isOver18=$_isOver18)',
     );
   }
 
@@ -172,17 +175,22 @@ class ParentalControlsService extends ChangeNotifier {
   // Channel filtering
   // ------------------------------------------------------------------
 
+  /// Category names that indicate adult/NSFW content.
+  static const _adultCategories = {
+    'Xxx', 'XXX', 'xxx', 'Adult', 'adult', 'NSFW', 'nsfw',
+  };
+
   /// Return `true` if a channel should be hidden/blocked.
   ///
   /// A channel is blocked when **any** of the following apply
   /// (and parental controls are enabled):
   /// 1. Its category is in [blockedCategories] (case-insensitive).
-  /// 2. Its minimum_age exceeds [minAge] (when minAge > 0).
+  /// 2. The user is NOT over 18 and the channel has an adult-flagged category.
   ///
-  /// [channel] should be a Map with keys: 'category', 'minimum_age'.
-  /// This also accepts the Channel model fields directly via named params.
+  /// [category] is the channel's group/category string.
   bool isChannelBlocked({
     String? category,
+    // Kept for API compatibility; no longer used for filtering.
     int minimumAge = 0,
   }) {
     if (!_enabled) return false;
@@ -200,9 +208,11 @@ class ParentalControlsService extends ChangeNotifier {
       }
     }
 
-    // Age-rating check
-    if (_minAge > 0 && minimumAge > _minAge) {
-      return true;
+    // Adult-content check: block adult categories when user is not over 18
+    if (!_isOver18 && category != null) {
+      if (_adultCategories.contains(category.trim())) {
+        return true;
+      }
     }
 
     return false;
@@ -220,12 +230,12 @@ class ParentalControlsService extends ChangeNotifier {
     logger.info('Blocked categories updated: $_blockedCategories');
   }
 
-  /// Set the minimum age threshold (clamped 0–18) and persist.
-  Future<void> setMinAge(int age) async {
-    _minAge = age.clamp(0, 18);
+  /// Set whether the user is 18 or older, persist, and notify listeners.
+  Future<void> setOver18(bool value) async {
+    _isOver18 = value;
     await _save();
     notifyListeners();
-    logger.info('Min age rating set to $_minAge');
+    logger.info('User over-18 flag set to $_isOver18');
   }
 
   /// Enable or disable parental controls (requires PIN to be set).
@@ -245,7 +255,7 @@ class ParentalControlsService extends ChangeNotifier {
     _enabled = false;
     _pinHash = null;
     _blockedCategories = [];
-    _minAge = 0;
+    _isOver18 = false;
     _failedAttempts = 0;
     _lockoutUntil = null;
     await _save();
@@ -268,7 +278,7 @@ class ParentalControlsService extends ChangeNotifier {
         await prefs.remove(_keyPinHash);
       }
       await prefs.setStringList(_keyBlockedCategories, _blockedCategories);
-      await prefs.setInt(_keyMinAge, _minAge);
+      await prefs.setBool(_keyIsOver18, _isOver18);
       logger.debug('Parental settings saved');
     } catch (e, stackTrace) {
       logger.error('Failed to save parental settings', e, stackTrace);
@@ -281,7 +291,19 @@ class ParentalControlsService extends ChangeNotifier {
       _enabled = prefs.getBool(_keyEnabled) ?? false;
       _pinHash = prefs.getString(_keyPinHash);
       _blockedCategories = prefs.getStringList(_keyBlockedCategories) ?? [];
-      _minAge = prefs.getInt(_keyMinAge) ?? 0;
+
+      // Load new boolean key; fall back to legacy int key for migration.
+      if (prefs.containsKey(_keyIsOver18)) {
+        _isOver18 = prefs.getBool(_keyIsOver18) ?? false;
+      } else if (prefs.containsKey(_legacyKeyMinAge)) {
+        // Backward compatibility: old parental_min_age == 18 → over 18.
+        _isOver18 = (prefs.getInt(_legacyKeyMinAge) ?? 0) >= 18;
+        // Persist as new key so next load is clean.
+        await prefs.setBool(_keyIsOver18, _isOver18);
+        await prefs.remove(_legacyKeyMinAge);
+      } else {
+        _isOver18 = false;
+      }
     } catch (e, stackTrace) {
       logger.error('Failed to load parental settings', e, stackTrace);
     }

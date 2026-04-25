@@ -41,16 +41,18 @@ class ParentalControls:
     Attributes:
         enabled:              Whether parental controls are active.
         blocked_categories:   Category names whose channels are hidden.
-        min_age:              Channels with ``minimum_age`` > this value are blocked.
-                              0 means no age restriction.
+        is_over_18:           When ``False``, channels with adult categories are blocked.
     """
+
+    # Category keywords that indicate adult content (case-insensitive)
+    _ADULT_CATEGORY_KEYWORDS = {'xxx', 'adult', 'nsfw'}
 
     def __init__(self, settings_path: Optional[str] = None):
         self._settings_path = settings_path or _SETTINGS_FILE
         self.enabled: bool = False
         self._pin_hash: Optional[str] = None
         self.blocked_categories: List[str] = []
-        self.min_age: int = 0
+        self.is_over_18: bool = False
 
         # Lockout state (not persisted)
         self._failed_attempts: int = 0
@@ -140,21 +142,22 @@ class ParentalControls:
         (and parental controls are enabled):
 
         1. Its ``category`` is in :attr:`blocked_categories` (case-insensitive).
-        2. Its ``minimum_age`` exceeds :attr:`min_age` (when min_age > 0).
+        2. The user has **not** confirmed they are 18+ and the channel's
+           category matches an adult keyword (``xxx``, ``adult``, ``nsfw``).
         """
         if not self.enabled:
             return False
 
         # Category check (case-insensitive)
+        cat = (channel.get("category") or "").strip().lower()
+
         if self.blocked_categories:
-            cat = (channel.get("category") or "").strip().lower()
             if cat and cat in {c.lower() for c in self.blocked_categories}:
                 return True
 
-        # Age-rating check
-        if self.min_age > 0:
-            channel_age = channel.get("minimum_age", 0)
-            if isinstance(channel_age, (int, float)) and channel_age > self.min_age:
+        # Adult-content check: block if user is NOT over 18
+        if not self.is_over_18 and cat:
+            if any(kw in cat for kw in self._ADULT_CATEGORY_KEYWORDS):
                 return True
 
         return False
@@ -165,11 +168,11 @@ class ParentalControls:
         self.save()
         logger.info("Blocked categories updated: %s", self.blocked_categories)
 
-    def set_min_age(self, age: int) -> None:
-        """Set the minimum-age threshold and persist."""
-        self.min_age = max(0, min(18, int(age)))
+    def set_over_18(self, value: bool) -> None:
+        """Set the over-18 confirmation flag and persist."""
+        self.is_over_18 = bool(value)
         self.save()
-        logger.info("Min age rating set to %d", self.min_age)
+        logger.info("Over-18 flag set to %s", self.is_over_18)
 
     # ------------------------------------------------------------------
     # Reset
@@ -182,7 +185,7 @@ class ParentalControls:
         self.enabled = False
         self._pin_hash = None
         self.blocked_categories = []
-        self.min_age = 0
+        self.is_over_18 = False
         self._failed_attempts = 0
         self._lockout_until = 0.0
         self.save()
@@ -199,7 +202,7 @@ class ParentalControls:
             "enabled": self.enabled,
             "pin_hash": self._pin_hash,
             "blocked_categories": self.blocked_categories,
-            "min_age": self.min_age,
+            "is_over_18": self.is_over_18,
         }
         try:
             with open(self._settings_path, "w", encoding="utf-8") as fh:
@@ -218,12 +221,21 @@ class ParentalControls:
             self.enabled = bool(data.get("enabled", False))
             self._pin_hash = data.get("pin_hash")
             self.blocked_categories = list(data.get("blocked_categories", []))
-            self.min_age = int(data.get("min_age", 0))
+
+            # New key — preferred
+            if "is_over_18" in data:
+                self.is_over_18 = bool(data["is_over_18"])
+            # Backward compat: migrate legacy min_age setting
+            elif "min_age" in data:
+                self.is_over_18 = int(data["min_age"]) >= 18
+            else:
+                self.is_over_18 = False
+
             logger.info(
-                "Parental settings loaded (enabled=%s, categories=%d, min_age=%d)",
+                "Parental settings loaded (enabled=%s, categories=%d, is_over_18=%s)",
                 self.enabled,
                 len(self.blocked_categories),
-                self.min_age,
+                self.is_over_18,
             )
         except Exception as exc:
             logger.error("Failed to load parental settings: %s", exc)

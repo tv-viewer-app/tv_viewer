@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/channel_provider.dart';
 import '../services/onboarding_service.dart';
 import '../services/feedback_service.dart';
+import '../services/parental_controls_service.dart';
 import 'package:package_info_plus/package_info_plus.dart' show PackageInfo;
 import '../utils/logger_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -412,22 +413,102 @@ class _HelpScreenState extends State<HelpScreen> {
 
           const SizedBox(height: 16),
 
+          // Request Channels Section
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.blue.shade700, width: 1),
+            ),
+            color: Colors.blue.shade900.withValues(alpha: 0.3),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Icon(Icons.live_tv, size: 36, color: Colors.lightBlueAccent),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Missing channels from your country?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        try {
+                          await launchUrl(
+                            Uri.parse('https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_request.yml'),
+                            mode: LaunchMode.externalApplication,
+                          );
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Could not open the link')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Request Channels'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.lightBlueAccent,
+                        side: const BorderSide(color: Colors.lightBlueAccent),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Our bot will find and add them automatically!',
+                    style: TextStyle(fontSize: 12, color: Colors.white38),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
           // Settings Section
           _buildSectionHeader('Settings'),
-          Consumer<ChannelProvider>(
-            builder: (context, provider, _) {
-              return SwitchListTile(
-                secondary: Icon(
-                  Icons.eighteen_up_rating,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                title: const Text('Show Adult Content'),
-                subtitle: const Text('Include adult/NSFW channels in scan results'),
-                value: provider.showAdultContent,
-                onChanged: (_) => provider.toggleAdultContent(),
-              );
-            },
-          ),
+          // Only show adult content toggle if user confirmed they are over 18
+          if (ParentalControlsService.instance.isOver18)
+            Consumer<ChannelProvider>(
+              builder: (context, provider, _) {
+                return SwitchListTile(
+                  secondary: Icon(
+                    Icons.eighteen_up_rating,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: const Text('Show Adult Content'),
+                  subtitle: const Text('Include adult/NSFW channels in scan results'),
+                  value: provider.showAdultContent,
+                  onChanged: (_) => provider.toggleAdultContent(),
+                );
+              },
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Adult content settings require age verification in Parental Controls',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.5),
+                      fontStyle: FontStyle.italic,
+                    ),
+              ),
+            ),
 
           const SizedBox(height: 16),
 

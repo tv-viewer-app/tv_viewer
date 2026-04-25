@@ -1,0 +1,57 @@
+name: 📺 Request Channels
+description: Request TV channels for a specific country or genre — our bot will find and add them
+title: "[Channel Request] "
+labels: ["channel-request", "community"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 📡 Channel Request
+        Tell us what channels or country you'd like added. You don't need to know stream URLs — our automated agent will search public IPTV databases and create a pull request with matching channels.
+
+  - type: input
+    id: country
+    attributes:
+      label: Country / Region
+      description: Which country's channels are you looking for?
+      placeholder: "e.g. United Kingdom, Brazil, India, Japan"
+    validations:
+      required: true
+
+  - type: textarea
+    id: channels
+    attributes:
+      label: Channels you'd like added
+      description: List specific channel names (one per line), or leave blank to get all available channels for the country
+      placeholder: |
+        BBC One
+        ITV
+        Channel 4
+        Sky News
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: genres
+    attributes:
+      label: Genres you're interested in
+      description: Select genres to help narrow the search (optional)
+      options:
+        - label: "📰 News"
+        - label: "⚽ Sports"
+        - label: "🎭 Entertainment"
+        - label: "👶 Kids / Cartoons"
+        - label: "🎵 Music"
+        - label: "📚 Documentary"
+        - label: "🎬 Movies"
+        - label: "🙏 Religious"
+        - label: "🌐 General / Other"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Any preferences (HD, specific language, etc.)
+      placeholder: "e.g. Prefer HD streams, looking for Hindi language channels"
+    validations:
+      required: false

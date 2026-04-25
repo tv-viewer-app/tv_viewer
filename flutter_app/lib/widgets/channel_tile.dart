@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/channel_descriptions.dart';
 import '../models/channel.dart';
 import '../models/epg_info.dart';
@@ -240,10 +241,22 @@ class ChannelTile extends StatelessWidget {
             ],
           ),
         ),
+        const PopupMenuItem(
+          value: 'misclassified',
+          child: Row(
+            children: [
+              Icon(Icons.label_off, color: Colors.orange, size: 20),
+              SizedBox(width: 8),
+              Text('Wrong Info 🏷️'),
+            ],
+          ),
+        ),
       ],
     ).then((value) {
       if (value == 'report') {
         _reportBrokenChannel(context);
+      } else if (value == 'misclassified') {
+        _reportMisclassified(context);
       }
     });
   }
@@ -265,6 +278,168 @@ class ChannelTile extends StatelessWidget {
           duration: const Duration(seconds: 3),
         ),
       );
+  }
+
+  /// Show a dialog to report misclassified channel info (wrong country, category, etc.)
+  void _reportMisclassified(BuildContext context) {
+    String selectedField = 'Country';
+    final correctionController = TextEditingController();
+    final fields = ['Country', 'Category', 'Name', 'Language', 'Other'];
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final currentValue = selectedField == 'Country'
+                ? (channel.country ?? 'Unknown')
+                : selectedField == 'Category'
+                    ? (channel.category ?? 'Unknown')
+                    : selectedField == 'Name'
+                        ? channel.name
+                        : selectedField == 'Language'
+                            ? (channel.language ?? 'Unknown')
+                            : '';
+
+            return AlertDialog(
+              title: const Text('Report Wrong Info'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      channel.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('What\'s wrong?', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: fields.map((f) => ChoiceChip(
+                        label: Text(f),
+                        selected: selectedField == f,
+                        onSelected: (_) => setDialogState(() => selectedField = f),
+                      )).toList(),
+                    ),
+                    if (currentValue.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'Current: $currentValue',
+                        style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: correctionController,
+                      decoration: InputDecoration(
+                        labelText: 'Correct value (optional)',
+                        hintText: selectedField == 'Country'
+                            ? 'e.g. United States'
+                            : selectedField == 'Category'
+                                ? 'e.g. Sports'
+                                : 'Leave blank for "doesn\'t belong"',
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _submitMisclassificationReport(
+                      context,
+                      selectedField,
+                      correctionController.text.trim(),
+                    );
+                  },
+                  icon: const Icon(Icons.send, size: 18),
+                  label: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Submit the misclassification report as a GitHub issue.
+  void _submitMisclassificationReport(
+    BuildContext context,
+    String field,
+    String correction,
+  ) {
+    final currentValue = field == 'Country'
+        ? (channel.country ?? 'Unknown')
+        : field == 'Category'
+            ? (channel.category ?? 'Unknown')
+            : field == 'Name'
+                ? channel.name
+                : field == 'Language'
+                    ? (channel.language ?? 'Unknown')
+                    : 'N/A';
+
+    final correctionText = correction.isEmpty
+        ? "doesn't belong to this $field"
+        : correction;
+
+    final title = Uri.encodeComponent(
+      '[Channel] ${channel.name} — wrong $field',
+    );
+    final body = Uri.encodeComponent(
+      '### Issue type\n\nChannel name or category is wrong\n\n'
+      '### Channel name\n\n${channel.name}\n\n'
+      '### Country / Region\n\n${channel.country ?? "Unknown"}\n\n'
+      '### Additional details\n\n'
+      '**Field:** $field\n'
+      '**Current value:** $currentValue\n'
+      '**Suggested correction:** $correctionText\n\n'
+      '_Reported from TV Viewer app_',
+    );
+
+    final url = Uri.parse(
+      'https://github.com/tv-viewer-app/tv_viewer/issues/new'
+      '?title=$title&body=$body&labels=channel-issue,community',
+    );
+
+    launchUrl(url, mode: LaunchMode.externalApplication).then((_) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Opening GitHub to submit report... 📝'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+    }).catchError((_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: const Text('Could not open browser. Report at github.com/tv-viewer-app/tv_viewer'),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+      }
+    });
   }
 
   /// Show a SnackBar with the channel's description.

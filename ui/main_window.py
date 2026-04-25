@@ -1336,6 +1336,10 @@ class MainWindow:
             label="Report Broken 🔴",
             command=lambda ch=channel: self._report_broken_channel(ch),
         )
+        menu.add_command(
+            label="Wrong Info 🏷️",
+            command=lambda ch=channel: self._report_misclassified(ch),
+        )
         
         try:
             menu.tk_popup(event.x_root, event.y_root)
@@ -1418,6 +1422,91 @@ class MainWindow:
 
         import threading as _thr
         _thr.Thread(target=_run, daemon=True).start()
+
+    def _report_misclassified(self, channel: Dict[str, Any]):
+        """Show a dialog to report wrong channel info, then open GitHub issue."""
+        import webbrowser
+        from urllib.parse import quote
+
+        name = channel.get('name', 'Unknown')
+        country = channel.get('country', 'Unknown')
+        category = channel.get('category', 'Unknown')
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"Report Wrong Info — {name}")
+        dlg.geometry("420x340")
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        frame = ttk.Frame(dlg, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(frame, text=name, font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="What's wrong with this channel?",
+                  font=("Segoe UI", 10)).pack(anchor="w", pady=(8, 4))
+
+        field_var = tk.StringVar(value="Country")
+        fields = ["Country", "Category", "Name", "Language", "Other"]
+        field_frame = ttk.Frame(frame)
+        field_frame.pack(anchor="w", pady=4)
+        for f in fields:
+            ttk.Radiobutton(field_frame, text=f, variable=field_var, value=f).pack(
+                side="left", padx=(0, 8))
+
+        current_lbl = ttk.Label(frame, text=f"Current: {country}", font=("Segoe UI", 9))
+        current_lbl.pack(anchor="w", pady=(4, 0))
+
+        def _update_current(*_args):
+            val = field_var.get()
+            current = {"Country": country, "Category": category,
+                        "Name": name, "Language": channel.get('language', 'Unknown'),
+                        "Other": ""}.get(val, "")
+            current_lbl.configure(text=f"Current: {current}" if current else "")
+        field_var.trace_add("write", _update_current)
+
+        ttk.Label(frame, text="Correct value (optional):",
+                  font=("Segoe UI", 10)).pack(anchor="w", pady=(12, 4))
+        correction_var = tk.StringVar()
+        correction_entry = ttk.Entry(frame, textvariable=correction_var, width=50)
+        correction_entry.pack(anchor="w")
+        ttk.Label(frame, text="Leave blank for \"doesn't belong to this field\"",
+                  font=("Segoe UI", 8), foreground="#8b949e").pack(anchor="w")
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(anchor="e", pady=(16, 0))
+
+        def _submit():
+            field = field_var.get()
+            correction = correction_var.get().strip()
+            current_map = {"Country": country, "Category": category,
+                           "Name": name, "Language": channel.get('language', 'Unknown'),
+                           "Other": "N/A"}
+            current_val = current_map.get(field, "")
+            correction_text = correction if correction else f"doesn't belong to this {field}"
+
+            title = quote(f"[Channel] {name} — wrong {field}")
+            body = quote(
+                f"### Issue type\n\nChannel name or category is wrong\n\n"
+                f"### Channel name\n\n{name}\n\n"
+                f"### Country / Region\n\n{country}\n\n"
+                f"### Additional details\n\n"
+                f"**Field:** {field}\n"
+                f"**Current value:** {current_val}\n"
+                f"**Suggested correction:** {correction_text}\n\n"
+                f"_Reported from TV Viewer desktop app_"
+            )
+            url = (f"https://github.com/tv-viewer-app/tv_viewer/issues/new"
+                   f"?title={title}&body={body}&labels=channel-issue,community")
+            webbrowser.open(url)
+            dlg.destroy()
+            self.toast.show_success(f"Opening GitHub to report \"{name}\"")
+            track_feature("channel_reported_misclassified")
+
+        ttk.Button(btn_frame, text="Cancel", command=dlg.destroy).pack(side="left", padx=4)
+        tk.Button(btn_frame, text="📝 Submit Report", font=("Segoe UI", 10, "bold"),
+                  bg="#F59E0B", fg="#1E1E1E", relief="flat", cursor="hand2",
+                  padx=12, pady=4, command=_submit).pack(side="left", padx=4)
 
     def _show_contribute_dialog(self):
         """Open the channel contribution dialog."""

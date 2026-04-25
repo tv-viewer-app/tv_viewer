@@ -59,7 +59,7 @@ class TestDefaults:
         assert pc.enabled is False
         assert pc.has_pin() is False
         assert pc.blocked_categories == []
-        assert pc.min_age == 0
+        assert pc.is_over_18 is False
 
     def test_load_missing_file_keeps_defaults(self, tmp_path):
         path = str(tmp_path / "nonexistent.json")
@@ -208,38 +208,53 @@ class TestCategoryBlocking:
 # Channel blocking — age rating
 # ---------------------------------------------------------------------------
 
-class TestAgeBlocking:
-    def test_block_high_age(self, pc):
+class TestOver18Blocking:
+    def test_not_over_18_blocks_adult(self, pc):
+        """When is_over_18=False, channels with adult categories are blocked."""
         pc.setup_pin("1234")
-        pc.set_min_age(12)
-        assert pc.is_channel_blocked({"minimum_age": 18}) is True
+        pc.set_over_18(False)
+        assert pc.is_channel_blocked({"category": "XXX"}) is True
+        assert pc.is_channel_blocked({"category": "Adult"}) is True
+        assert pc.is_channel_blocked({"category": "NSFW"}) is True
 
-    def test_allow_equal_age(self, pc):
+    def test_not_over_18_blocks_adult_case_insensitive(self, pc):
+        """Adult keyword matching is case-insensitive."""
         pc.setup_pin("1234")
-        pc.set_min_age(18)
-        assert pc.is_channel_blocked({"minimum_age": 18}) is False
+        pc.set_over_18(False)
+        assert pc.is_channel_blocked({"category": "xxx"}) is True
+        assert pc.is_channel_blocked({"category": "Xxx"}) is True
+        assert pc.is_channel_blocked({"category": "ADULT"}) is True
+        assert pc.is_channel_blocked({"category": "Nsfw"}) is True
 
-    def test_allow_lower_age(self, pc):
+    def test_not_over_18_allows_non_adult(self, pc):
+        """Non-adult categories are not blocked by the over-18 check."""
         pc.setup_pin("1234")
-        pc.set_min_age(18)
-        assert pc.is_channel_blocked({"minimum_age": 12}) is False
-
-    def test_zero_min_age_no_restriction(self, pc):
-        pc.setup_pin("1234")
-        pc.set_min_age(0)
-        assert pc.is_channel_blocked({"minimum_age": 18}) is False
-
-    def test_missing_age_field_not_blocked(self, pc):
-        pc.setup_pin("1234")
-        pc.set_min_age(12)
+        pc.set_over_18(False)
         assert pc.is_channel_blocked({"category": "News"}) is False
+        assert pc.is_channel_blocked({"category": "Sports"}) is False
 
-    def test_min_age_clamped(self, pc):
+    def test_over_18_allows_adult(self, pc):
+        """When is_over_18=True, adult channels are not blocked by the over-18 check."""
         pc.setup_pin("1234")
-        pc.set_min_age(99)
-        assert pc.min_age == 18
-        pc.set_min_age(-5)
-        assert pc.min_age == 0
+        pc.set_over_18(True)
+        assert pc.is_channel_blocked({"category": "XXX"}) is False
+        assert pc.is_channel_blocked({"category": "Adult"}) is False
+        assert pc.is_channel_blocked({"category": "NSFW"}) is False
+
+    def test_over_18_toggle(self, pc):
+        """Toggling is_over_18 changes blocking behaviour."""
+        pc.setup_pin("1234")
+        pc.set_over_18(False)
+        assert pc.is_channel_blocked({"category": "XXX"}) is True
+        pc.set_over_18(True)
+        assert pc.is_channel_blocked({"category": "XXX"}) is False
+
+    def test_missing_category_not_blocked(self, pc):
+        """Channels without a category are never blocked by the adult check."""
+        pc.setup_pin("1234")
+        pc.set_over_18(False)
+        assert pc.is_channel_blocked({"category": ""}) is False
+        assert pc.is_channel_blocked({}) is False
 
 
 # ---------------------------------------------------------------------------
@@ -247,16 +262,23 @@ class TestAgeBlocking:
 # ---------------------------------------------------------------------------
 
 class TestCombinedBlocking:
-    def test_both_category_and_age(self, pc):
+    def test_both_category_block_and_over18(self, pc):
+        pc.setup_pin("1234")
+        pc.set_blocked_categories(["Sports"])
+        pc.set_over_18(False)
+        # Blocked by explicit category list
+        assert pc.is_channel_blocked({"category": "Sports"}) is True
+        # Blocked by adult keyword (user not over 18)
+        assert pc.is_channel_blocked({"category": "XXX"}) is True
+        # Neither
+        assert pc.is_channel_blocked({"category": "News"}) is False
+
+    def test_over18_does_not_override_category_block(self, pc):
         pc.setup_pin("1234")
         pc.set_blocked_categories(["Adult"])
-        pc.set_min_age(12)
-        # Blocked by category
-        assert pc.is_channel_blocked({"category": "Adult", "minimum_age": 0}) is True
-        # Blocked by age
-        assert pc.is_channel_blocked({"category": "News", "minimum_age": 18}) is True
-        # Neither
-        assert pc.is_channel_blocked({"category": "News", "minimum_age": 7}) is False
+        pc.set_over_18(True)
+        # Still blocked by explicit category list even though user is 18+
+        assert pc.is_channel_blocked({"category": "Adult"}) is True
 
 
 # ---------------------------------------------------------------------------
@@ -267,12 +289,12 @@ class TestReset:
     def test_reset_with_correct_pin(self, pc):
         pc.setup_pin("1234")
         pc.set_blocked_categories(["XXX"])
-        pc.set_min_age(12)
+        pc.set_over_18(True)
         assert pc.reset("1234") is True
         assert pc.enabled is False
         assert pc.has_pin() is False
         assert pc.blocked_categories == []
-        assert pc.min_age == 0
+        assert pc.is_over_18 is False
 
     def test_reset_with_wrong_pin(self, pc):
         pc.setup_pin("1234")
@@ -289,14 +311,14 @@ class TestPersistence:
         pc1 = ParentalControls(settings_path=tmp_settings)
         pc1.setup_pin("4321")
         pc1.set_blocked_categories(["XXX", "Adult"])
-        pc1.set_min_age(16)
+        pc1.set_over_18(True)
 
         # Create a fresh instance from the same file
         pc2 = ParentalControls(settings_path=tmp_settings)
         assert pc2.enabled is True
         assert pc2.verify_pin("4321") is True
         assert set(pc2.blocked_categories) == {"XXX", "Adult"}
-        assert pc2.min_age == 16
+        assert pc2.is_over_18 is True
 
     def test_corrupted_file_keeps_defaults(self, tmp_settings):
         with open(tmp_settings, "w") as f:
@@ -314,7 +336,7 @@ class TestPersistence:
         pc = ParentalControls(settings_path=tmp_settings)
         pc.setup_pin("1234")
         pc.set_blocked_categories(["XXX"])
-        pc.set_min_age(12)
+        pc.set_over_18(True)
 
         with open(tmp_settings, "r") as f:
             data = json.load(f)
@@ -322,10 +344,38 @@ class TestPersistence:
         assert "enabled" in data
         assert "pin_hash" in data
         assert "blocked_categories" in data
-        assert "min_age" in data
+        assert "is_over_18" in data
         assert data["enabled"] is True
         assert isinstance(data["blocked_categories"], list)
-        assert data["min_age"] == 12
+        assert data["is_over_18"] is True
+
+    def test_backward_compat_min_age_18(self, tmp_settings):
+        """Loading a legacy settings file with min_age >= 18 sets is_over_18=True."""
+        legacy_data = {
+            "enabled": True,
+            "pin_hash": _hash_pin("1234"),
+            "blocked_categories": [],
+            "min_age": 18,
+        }
+        with open(tmp_settings, "w") as f:
+            json.dump(legacy_data, f)
+
+        pc = ParentalControls(settings_path=tmp_settings)
+        assert pc.is_over_18 is True
+
+    def test_backward_compat_min_age_below_18(self, tmp_settings):
+        """Loading a legacy settings file with min_age < 18 sets is_over_18=False."""
+        legacy_data = {
+            "enabled": True,
+            "pin_hash": _hash_pin("1234"),
+            "blocked_categories": [],
+            "min_age": 12,
+        }
+        with open(tmp_settings, "w") as f:
+            json.dump(legacy_data, f)
+
+        pc = ParentalControls(settings_path=tmp_settings)
+        assert pc.is_over_18 is False
 
 
 # ---------------------------------------------------------------------------
@@ -366,9 +416,9 @@ class TestEdgeCases:
 
     def test_is_channel_blocked_with_non_int_age(self, pc):
         pc.setup_pin("1234")
-        pc.set_min_age(12)
-        # String age should not crash
-        assert pc.is_channel_blocked({"minimum_age": "eighteen"}) is False
+        pc.set_over_18(False)
+        # Channel with string category that is not adult should not crash or block
+        assert pc.is_channel_blocked({"category": "eighteen"}) is False
 
     def test_multiple_failed_then_success_resets_counter(self, pc):
         pc.setup_pin("1234")

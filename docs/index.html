@@ -398,29 +398,34 @@
                 </ul>
                 <h3 style="margin-top: 24px;">Contribute via GitHub</h3>
                 <p>For bulk submissions or detailed reports, open an issue with our channel report template.</p>
-                <a href="https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_report.yml" class="btn btn-secondary" style="margin-top: 8px;">
-                    📺 Submit Channels on GitHub
-                </a>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                    <a href="https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_request.yml" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+                        📺 Request Channels
+                    </a>
+                    <a href="https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_report.yml" class="btn btn-secondary">
+                        🔧 Report Broken Channel
+                    </a>
+                </div>
             </div>
             <div class="community-visual">
                 <div class="flow-item">
                     <span class="emoji">👤</span>
-                    <span>User reports "BBC News" stream is broken</span>
+                    <span>User requests "UK channels" via form</span>
                 </div>
                 <div class="flow-arrow">↓</div>
                 <div class="flow-item">
-                    <span class="emoji">📡</span>
-                    <span>Health database updated — channel flagged</span>
-                </div>
-                <div class="flow-arrow">↓</div>
-                <div class="flow-item">
-                    <span class="emoji">🔄</span>
-                    <span>Auto-scanner checks alternative sources</span>
+                    <span class="emoji">🤖</span>
+                    <span>Channel Agent searches public IPTV databases</span>
                 </div>
                 <div class="flow-arrow">↓</div>
                 <div class="flow-item">
                     <span class="emoji">✅</span>
-                    <span>Working stream restored for all users</span>
+                    <span>Health-checked channels added via pull request</span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-item">
+                    <span class="emoji">📺</span>
+                    <span>New channels available in the next release</span>
                 </div>
             </div>
         </div>

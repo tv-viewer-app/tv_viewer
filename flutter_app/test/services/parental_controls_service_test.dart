@@ -168,30 +168,47 @@ void main() {
       );
     });
 
-    test('isChannelBlocked checks age rating', () async {
+    test('isChannelBlocked checks age-based adult filtering', () async {
       await service.setupPin('1234');
-      await service.setMinAge(12);
 
+      // User is NOT over 18 — adult categories should be blocked
       expect(
-        service.isChannelBlocked(minimumAge: 16),
+        service.isChannelBlocked(category: 'Adult'),
         isTrue,
       );
       expect(
-        service.isChannelBlocked(minimumAge: 12),
-        isFalse,
+        service.isChannelBlocked(category: 'XXX'),
+        isTrue,
       );
       expect(
-        service.isChannelBlocked(minimumAge: 8),
+        service.isChannelBlocked(category: 'NSFW'),
+        isTrue,
+      );
+
+      // Non-adult category is not blocked by age filter
+      expect(
+        service.isChannelBlocked(category: 'News'),
+        isFalse,
+      );
+
+      // Confirm over 18 — adult categories no longer blocked (unless explicitly in blockedCategories)
+      await service.setOver18(true);
+      expect(
+        service.isChannelBlocked(category: 'XXX'),
         isFalse,
       );
     });
 
-    test('isChannelBlocked with age 0 means no restriction', () async {
+    test('isChannelBlocked allows adult when over 18', () async {
       await service.setupPin('1234');
-      await service.setMinAge(0);
+      await service.setOver18(true);
 
       expect(
-        service.isChannelBlocked(minimumAge: 18),
+        service.isChannelBlocked(category: 'Adult'),
+        isFalse,
+      );
+      expect(
+        service.isChannelBlocked(category: 'NSFW'),
         isFalse,
       );
     });
@@ -226,17 +243,14 @@ void main() {
       expect(service.blockedCategories.length, equals(3));
     });
 
-    test('setMinAge clamps to 0-18 range', () async {
+    test('setOver18 persists correctly', () async {
       await service.setupPin('1234');
 
-      await service.setMinAge(-5);
-      expect(service.minAge, equals(0));
+      await service.setOver18(true);
+      expect(service.isOver18, isTrue);
 
-      await service.setMinAge(25);
-      expect(service.minAge, equals(18));
-
-      await service.setMinAge(12);
-      expect(service.minAge, equals(12));
+      await service.setOver18(false);
+      expect(service.isOver18, isFalse);
     });
 
     test('setEnabled requires PIN to be set', () async {
@@ -265,7 +279,7 @@ void main() {
       await service1.initialize();
       await service1.setupPin('4321');
       await service1.setBlockedCategories(['Adult', 'Horror']);
-      await service1.setMinAge(16);
+      await service1.setOver18(true);
 
       // Create new instance and load (simulates app restart)
       final service2 = ParentalControlsService.forTesting();
@@ -275,7 +289,34 @@ void main() {
       expect(service2.hasPin, isTrue);
       expect(service2.verifyPin('4321'), isTrue);
       expect(service2.blockedCategories, containsAll(['Adult', 'Horror']));
-      expect(service2.minAge, equals(16));
+      expect(service2.isOver18, isTrue);
+    });
+
+    test('legacy parental_min_age=18 migrates to isOver18=true', () async {
+      // Simulate old preferences with legacy key
+      SharedPreferences.setMockInitialValues({
+        'parental_enabled': true,
+        'parental_pin_hash': 'dummy_hash',
+        'parental_blocked_categories': <String>[],
+        'parental_min_age': 18,
+      });
+      final legacyService = ParentalControlsService.forTesting();
+      await legacyService.initialize();
+
+      expect(legacyService.isOver18, isTrue);
+    });
+
+    test('legacy parental_min_age<18 migrates to isOver18=false', () async {
+      SharedPreferences.setMockInitialValues({
+        'parental_enabled': true,
+        'parental_pin_hash': 'dummy_hash',
+        'parental_blocked_categories': <String>[],
+        'parental_min_age': 12,
+      });
+      final legacyService = ParentalControlsService.forTesting();
+      await legacyService.initialize();
+
+      expect(legacyService.isOver18, isFalse);
     });
   });
 
@@ -283,7 +324,7 @@ void main() {
     test('reset clears all settings with valid PIN', () async {
       await service.setupPin('1234');
       await service.setBlockedCategories(['Adult']);
-      await service.setMinAge(12);
+      await service.setOver18(true);
 
       final result = await service.reset('1234');
 
@@ -291,7 +332,7 @@ void main() {
       expect(service.enabled, isFalse);
       expect(service.hasPin, isFalse);
       expect(service.blockedCategories, isEmpty);
-      expect(service.minAge, equals(0));
+      expect(service.isOver18, isFalse);
     });
 
     test('reset fails with incorrect PIN', () async {

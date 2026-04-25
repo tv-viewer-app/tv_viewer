@@ -850,8 +850,18 @@ class ChannelProvider extends ChangeNotifier {
 
   /// Toggle adult content visibility. Persisted in SharedPreferences.
   /// When toggled ON, triggers a full re-fetch to include adult sources.
+  /// Guarded: only allows enabling if the user confirmed they are over 18.
   Future<void> toggleAdultContent() async {
-    _showAdultContent = !_showAdultContent;
+    final wantsOn = !_showAdultContent;
+
+    // Guard: don't allow enabling adult content if user is not over 18
+    if (wantsOn && !ParentalControlsService.instance.isOver18) {
+      _showAdultContent = false;
+      notifyListeners();
+      return;
+    }
+
+    _showAdultContent = wantsOn;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('show_adult_content', _showAdultContent);
     if (_showAdultContent) {
@@ -951,13 +961,19 @@ class ChannelProvider extends ChangeNotifier {
     final parentalService = ParentalControlsService.instance;
 
     _filteredChannels = _channels.where((channel) {
-      // Adult content filter — hide adult channels unless enabled
-      if (!_showAdultContent) {
-        final cat = channel.category ?? '';
-        if (_adultCategories.contains(cat)) return false;
-        final nameLower = channel.name.toLowerCase();
-        if (nameLower.contains('xxx') || nameLower.contains('adult') ||
-            nameLower.contains('porn') || nameLower.contains('nsfw')) {
+      // Adult content filter
+      // If user is NOT over 18, always hide adult channels regardless of toggle.
+      // If user IS over 18, hide adult channels only when toggle is off.
+      final cat = channel.category ?? '';
+      final nameLower = channel.name.toLowerCase();
+      final isAdult = _adultCategories.contains(cat) ||
+          nameLower.contains('xxx') ||
+          nameLower.contains('adult') ||
+          nameLower.contains('porn') ||
+          nameLower.contains('nsfw');
+
+      if (isAdult) {
+        if (!ParentalControlsService.instance.isOver18 || !_showAdultContent) {
           return false;
         }
       }

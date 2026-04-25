@@ -8,7 +8,7 @@ import '../widgets/pin_dialog.dart';
 /// - Enable/disable parental controls
 /// - Set or change the 4-digit PIN
 /// - Select blocked content categories
-/// - Adjust the age rating slider (0–18)
+/// - Confirm age (over/under 18) for adult content access
 class ParentalSettingsScreen extends StatefulWidget {
   const ParentalSettingsScreen({super.key});
 
@@ -41,13 +41,11 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
   ];
 
   late Set<String> _selectedCategories;
-  late double _ageSliderValue;
 
   @override
   void initState() {
     super.initState();
     _selectedCategories = _service.blockedCategories.toSet();
-    _ageSliderValue = _service.minAge.toDouble();
   }
 
   @override
@@ -85,8 +83,8 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
                 _buildCategorySection(theme),
                 const SizedBox(height: 16),
 
-                // Age rating slider
-                _buildAgeRatingSection(theme),
+                // Over-18 toggle
+                _buildOver18Section(theme),
                 const SizedBox(height: 24),
 
                 // Reset button
@@ -131,7 +129,7 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
                   Text(
                     isActive
                         ? '${_service.blockedCategories.length} categories blocked • '
-                            'Age limit: ${_service.minAge > 0 ? "${_service.minAge}+" : "None"}'
+                            'Over 18: ${_service.isOver18 ? "Yes" : "No"}'
                         : 'Set up a PIN to restrict content',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -262,7 +260,7 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
     );
   }
 
-  Widget _buildAgeRatingSection(ThemeData theme) {
+  Widget _buildOver18Section(ThemeData theme) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -271,10 +269,10 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.child_care, color: theme.colorScheme.primary),
+                Icon(Icons.eighteen_up_rating, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Age Rating Limit',
+                  'Age Verification',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -283,49 +281,27 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Block channels rated above this age',
+              'Confirm your age to access adult content settings',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('0'),
-                Expanded(
-                  child: Slider(
-                    value: _ageSliderValue,
-                    min: 0,
-                    max: 18,
-                    divisions: 18,
-                    label: _ageSliderValue == 0
-                        ? 'No limit'
-                        : '${_ageSliderValue.round()}+',
-                    onChanged: (value) {
-                      setState(() {
-                        _ageSliderValue = value;
-                      });
-                    },
-                    onChangeEnd: (value) {
-                      _service.setMinAge(value.round());
-                    },
-                  ),
-                ),
-                const Text('18'),
-              ],
-            ),
-            Center(
-              child: Text(
-                _ageSliderValue == 0
-                    ? 'No age restriction'
-                    : 'Block content rated ${_ageSliderValue.round()}+',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: _ageSliderValue > 0
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('I confirm I am 18 or older'),
+              subtitle: _service.isOver18
+                  ? Text(
+                      'This enables access to adult content settings',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    )
+                  : null,
+              value: _service.isOver18,
+              onChanged: (value) async {
+                await _service.setOver18(value);
+              },
             ),
           ],
         ),
@@ -479,12 +455,11 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
 
     // We already verified the PIN above, so directly clear settings
     await _service.setBlockedCategories([]);
-    await _service.setMinAge(0);
+    await _service.setOver18(false);
     await _service.setEnabled(false);
 
     setState(() {
       _selectedCategories = {};
-      _ageSliderValue = 0;
     });
 
     if (mounted) {
