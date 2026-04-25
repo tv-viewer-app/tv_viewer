@@ -581,6 +581,22 @@
       "country": "Israel",
       "language": "Hebrew",
       "media_type": "Radio"
+    },
+    {
+      "name": "SBT Sinop",
+      "url": "https://video09.logicahost.com.br/sbtsinop/sbtsinop/playlist.m3u8",
+      "category": "Undefined",
+      "country": "Brazil",
+      "language": "",
+      "min_age": 0
+    },
+    {
+      "name": "RedeTV! Parana",
+      "url": "https://tv01.zas.media:1936/redetvparana/redetvparana/playlist.m3u8",
+      "category": "Undefined",
+      "country": "Brazil",
+      "language": "",
+      "min_age": 0
     }
   ],
   "show_adult_content": true
