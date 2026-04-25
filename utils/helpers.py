@@ -14,6 +14,43 @@ from .channel_lookup import (
 )
 
 
+def fix_mojibake(text: str) -> str:
+    """Fix UTF-8 text that was incorrectly decoded as Latin-1/CP1252.
+    
+    Detects the classic mojibake pattern (e.g. '×§×× ×¤×××' instead of 'קול פליי')
+    where UTF-8 bytes were interpreted as Latin-1, producing characters like × § ¨ etc.
+    Attempts to reverse the damage by re-encoding as Latin-1 and decoding as UTF-8.
+    Returns the original text if repair fails or isn't needed.
+    """
+    if not text or not isinstance(text, str):
+        return text
+    # Quick check: if no characters in the Latin-1 supplement range (0x80-0xFF),
+    # text is plain ASCII or already valid Unicode — skip.
+    if not any('\x80' <= c <= '\xff' for c in text):
+        return text
+    try:
+        repaired = text.encode('latin-1').decode('utf-8')
+        # Verify the result has actual non-ASCII Unicode chars (Hebrew, Arabic, etc.)
+        if any(ord(c) > 0xFF for c in repaired):
+            return repaired
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        pass
+    return text
+
+
+def repair_channel_text(channel: Dict[str, Any]) -> bool:
+    """Repair mojibake in channel text fields. Returns True if any field was changed."""
+    changed = False
+    for field in ('name', 'country', 'category', 'language'):
+        val = channel.get(field)
+        if val and isinstance(val, str):
+            fixed = fix_mojibake(val)
+            if fixed != val:
+                channel[field] = fixed
+                changed = True
+    return changed
+
+
 def parse_m3u(content: str) -> List[Dict[str, Any]]:
     """
     Parse M3U playlist content and extract channel information.

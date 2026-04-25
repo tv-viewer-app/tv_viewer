@@ -25,7 +25,7 @@ import hashlib
 from typing import List, Dict, Any, Optional, Callable, Set
 from collections import defaultdict
 
-from utils.helpers import load_json_file, save_json_file, categorize_channel, get_channel_country, get_minimum_age, detect_media_type
+from utils.helpers import load_json_file, save_json_file, categorize_channel, get_channel_country, get_minimum_age, detect_media_type, repair_channel_text
 from utils.logger import get_logger, redact_url
 from utils import supabase_channels
 from .repository import RepositoryHandler
@@ -564,6 +564,10 @@ class ChannelManager:
                         logger.info(f"Removed {deduped} duplicate channels from cache")
                     
                     self.channels = unique_channels
+                    # Repair mojibake in channel names (UTF-8 decoded as Latin-1)
+                    repaired = sum(1 for ch in self.channels if repair_channel_text(ch))
+                    if repaired > 0:
+                        logger.info(f"Repaired mojibake text in {repaired} channels")
                     # Migrate channels to multi-URL format (v2.1.0)
                     for ch in self.channels:
                         _migrate_channel_urls(ch)
@@ -958,6 +962,9 @@ class ChannelManager:
         try:
             m3u_chs = await self.repository_handler.fetch_all_repositories(progress)
             logger.debug(f"M3U fetch complete, got {len(m3u_chs)} channels")
+            # Repair mojibake in freshly fetched channel names
+            for ch in m3u_chs:
+                repair_channel_text(ch)
         except Exception as e:
             logger.error(f"Error fetching M3U repositories: {e}")
         
