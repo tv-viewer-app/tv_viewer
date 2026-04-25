@@ -581,6 +581,38 @@
       "country": "Israel",
       "language": "Hebrew",
       "media_type": "Radio"
+    },
+    {
+      "name": "Zee News (1080p)",
+      "url": "https://dknttpxmr0dwf.cloudfront.net/index_57.m3u8",
+      "category": "News",
+      "country": "India",
+      "language": "",
+      "min_age": 0
+    },
+    {
+      "name": "ABP News (1080p)",
+      "url": "https://d2l4ar6y3mrs4k.cloudfront.net/live-streaming/abpnews-livetv/master.m3u8",
+      "category": "News",
+      "country": "India",
+      "language": "",
+      "min_age": 0
+    },
+    {
+      "name": "India TV (720p)",
+      "url": "https://pl-indiatvnews.akamaized.net/out/v1/db79179b608641ceaa5a4d0dd0dca8da/index.m3u8",
+      "category": "News",
+      "country": "India",
+      "language": "",
+      "min_age": 0
+    },
+    {
+      "name": "Republic Bharat (1080p) [Geo-blocked]",
+      "url": "https://vg-republictvlive.akamaized.net/v1/master/611d79b11b77e2f571934fd80ca1413453772ac7/vglive-sk-275673/main.m3u8",
+      "category": "News",
+      "country": "India",
+      "language": "",
+      "min_age": 0
     }
   ],
   "show_adult_content": true
