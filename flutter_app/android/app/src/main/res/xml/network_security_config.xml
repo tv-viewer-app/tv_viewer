@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SEC-007: Restrict cleartext traffic to known streaming CDN domains only -->
+<network-security-config>
+    <!-- Default: require HTTPS for all traffic -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Allow cleartext (HTTP) only for known streaming CDN domains -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Israeli streaming CDNs that serve HTTP streams -->
+        <domain includeSubdomains="true">kancdn.medonecdn.net</domain>
+        <domain includeSubdomains="true">cdn-redge.media</domain>
+        <domain includeSubdomains="true">g-mana.live</domain>
+        <domain includeSubdomains="true">bynetcdn.com</domain>
+        <domain includeSubdomains="true">cybercdn.live</domain>
+        <!-- IPTV streams use HTTP on CDN domains — these cannot be narrowed further
+             because stream URLs are dynamically discovered from M3U playlists.
+             This is an accepted risk for an IPTV streaming application. -->
+        <domain includeSubdomains="true">akamaized.net</domain>
+        <domain includeSubdomains="true">akamaihd.net</domain>
+        <domain includeSubdomains="true">cloudfront.net</domain>
+    </domain-config>
+</network-security-config>

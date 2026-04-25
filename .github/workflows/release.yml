@@ -1,0 +1,193 @@
+# =============================================================================
+# Release — Tag-triggered release with cross-platform binaries
+# =============================================================================
+# Reuses build.yml via workflow_call so we never duplicate build logic.
+#
+# Flow:
+#   1. Push tag v* (or manual dispatch with version input)
+#   2. build.yml runs in parallel (Windows EXE + Android APK)
+#   3. This workflow downloads both artifacts
+#   4. Extracts release notes from CHANGELOG.md
+#   5. Creates a GitHub Release with both binaries attached
+# =============================================================================
+
+name: Release
+
+on:
+  # DISABLED auto-trigger to save Actions storage (0.5GB limit reached)
+  # push:
+  #   tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v2.0.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  # ===========================================================================
+  # Job 1: Delegate to build.yml (produces windows-exe + android-apk artifacts)
+  # ===========================================================================
+  build:
+    name: Build all platforms
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ inputs.version || github.ref_name }}
+    secrets: inherit  # Pass SUPABASE_URL / SUPABASE_ANON_KEY to build-android
+
+  # ===========================================================================
+  # Job 2: Create the GitHub Release with both binaries
+  # ===========================================================================
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog + tag resolution
+
+      # --- Resolve version string ---
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual dispatch: use the input (strip leading 'v' if present)
+            RAW="${{ github.event.inputs.version }}"
+            VERSION="${RAW#v}"
+          else
+            # Tag push: extract from ref
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          TAG="v${VERSION}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "📌 Version: $VERSION  Tag: $TAG"
+
+      # --- Download build artifacts (optional — builds upload directly to release) ---
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: windows-exe
+          path: release-assets
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: android-apk
+          path: release-assets
+
+      - name: Download Ubuntu artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ubuntu-binary
+          path: release-assets
+
+      # --- Rename binaries with version for the release (skip missing files) ---
+      - name: Rename artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ -f "release-assets/TV_Viewer.exe" ]; then
+            mv "release-assets/TV_Viewer.exe" \
+               "release-assets/TV_Viewer_v${VERSION}_Windows.exe"
+          fi
+          if [ -f "release-assets/app-release.apk" ]; then
+            mv "release-assets/app-release.apk" \
+               "release-assets/TV_Viewer_v${VERSION}_Android.apk"
+          fi
+          echo "📦 Release assets:"
+          ls -lh release-assets/ 2>/dev/null || echo "(no artifacts downloaded — builds uploaded directly)"
+
+      # --- Extract release notes from CHANGELOG.md ---
+      - name: Extract release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Grab everything between ## [VERSION] and the next ## [ header
+          NOTES=$(sed -n "/^## \[${VERSION}\]/,/^## \[/p" CHANGELOG.md | head -n -1) || true
+
+          # Fallback if the version isn't in CHANGELOG yet
+          if [ -z "$NOTES" ]; then
+            NOTES="## TV Viewer v${VERSION}
+
+          Release built on $(date +'%Y-%m-%d').
+
+          ### 📥 Installation
+
+          **Windows**
+          1. Download \`TV_Viewer_v${VERSION}_Windows.exe\`
+          2. Install [VLC Media Player](https://www.videolan.org/vlc/)
+          3. Run the executable
+
+          **Android**
+          1. Download \`TV_Viewer_v${VERSION}_Android.apk\`
+          2. Enable *Install from unknown sources*
+          3. Install the APK"
+          fi
+
+          # Write to file (used by gh release create --notes-file)
+          echo "$NOTES" > release_notes.md
+          cat release_notes.md
+
+      # --- Create the GitHub Release (builds may have already uploaded binaries) ---
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          # Create the tag if it doesn't exist yet (manual dispatch case)
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+          # Collect any assets that were downloaded via artifacts
+          ASSETS=()
+          for f in release-assets/TV_Viewer_v${VERSION}_*; do
+            [ -f "$f" ] && ASSETS+=("$f")
+          done
+
+          if [ ${#ASSETS[@]} -gt 0 ]; then
+            gh release create "$TAG" \
+              --title "TV Viewer $TAG" \
+              --notes-file release_notes.md \
+              "${ASSETS[@]}" || \
+            # Release may already exist from build job uploads — just update notes
+            gh release edit "$TAG" \
+              --title "TV Viewer $TAG" \
+              --notes-file release_notes.md
+          else
+            # No artifacts — release already has binaries from build jobs
+            gh release create "$TAG" \
+              --title "TV Viewer $TAG" \
+              --notes-file release_notes.md 2>/dev/null || \
+            gh release edit "$TAG" \
+              --title "TV Viewer $TAG" \
+              --notes-file release_notes.md
+          fi
+
+      # --- Summary ---
+      - name: Release summary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          echo "## 🎉 Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $TAG" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Assets" >> $GITHUB_STEP_SUMMARY
+          echo "- \`TV_Viewer_v${VERSION}_Windows.exe\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`TV_Viewer_v${VERSION}_Android.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`TV_Viewer_v${VERSION}_linux_x86_64\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View release](${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG)" >> $GITHUB_STEP_SUMMARY

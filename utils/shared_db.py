@@ -1,0 +1,711 @@
+"""Shared database service for syncing channel validation results.
+
+This module provides Supabase integration for sharing channel validation results
+across platforms (Android Flutter + Windows Python).
+
+Features:
+    - Anonymous access (no user accounts required)
+    - Privacy-first: URLs are hashed with SHA256
+    - Cross-platform compatibility
+    - Efficient: Batch operations and 24h cache to skip re-scanning
+
+Database Schema:
+    - url_hash (TEXT, PRIMARY KEY): SHA256 hash of channel URL
+    - status (TEXT): 'working' or 'failed'
+    - last_checked (TIMESTAMP): Last validation timestamp
+    - response_time_ms (INTEGER): Response time in milliseconds
+
+Usage:
+    # Fetch recent results before scanning
+    db = SharedDbService()
+    cache = await db.fetch_recent_results()
+    
+    # Check if channel should be skipped
+    if db.should_skip_validation(channel_url, cache):
+        # Skip validation, use cached result
+        pass
+    
+    # Upload results after scanning
+    results = [
+        ChannelResult(url='http://...', is_working=True, response_time_ms=150),
+        ChannelResult(url='http://...', is_working=False),
+    ]
+    await db.upload_results(results)
+"""
+
+import hashlib
+import json
+import logging
+import os
+import ssl
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, NamedTuple
+from dataclasses import dataclass, asdict
+
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
+    logging.warning("aiohttp not installed - shared database features will be disabled")
+
+try:
+    import certifi
+except ImportError:
+    certifi = None
+
+# Get module logger (use utils.logger for proper file handler)
+try:
+    from utils.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
+
+# Supabase configuration — imported from config.py which has hardcoded defaults
+try:
+    import config as _cfg
+    SUPABASE_URL = _cfg.SUPABASE_URL
+    SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY
+except (ImportError, AttributeError):
+    SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+    SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+
+TABLE_NAME = 'channel_status'
+
+# Respects TELEMETRY_ENABLED from config (Issues #65, #79, #114)
+try:
+    _telemetry_on = getattr(_cfg, 'TELEMETRY_ENABLED', False)
+except Exception:
+    _telemetry_on = False
+ENABLED = bool(SUPABASE_URL and SUPABASE_ANON_KEY and _telemetry_on)
+
+
+def _get_ssl_context() -> ssl.SSLContext:
+    """Create SSL context with system CA bundle for Supabase connections."""
+    if certifi is not None:
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    else:
+        ssl_ctx = ssl.create_default_context()
+    return ssl_ctx
+
+
+# Cache duration- only fetch results checked within last 24 hours
+CACHE_DURATION_HOURS = 24
+
+# Local health cache file — fallback when Supabase is unavailable
+try:
+    import config as _cfg_path
+    HEALTH_CACHE_FILE = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'channel_health_cache.json'
+    )
+except Exception:
+    HEALTH_CACHE_FILE = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..', 'channel_health_cache.json'
+    )
+
+
+@dataclass
+class ChannelResult:
+    """Result of a channel validation check."""
+    url: str
+    is_working: bool
+    last_checked: datetime
+    response_time_ms: Optional[int] = None
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'url': self.url,
+            'is_working': self.is_working,
+            'last_checked': self.last_checked.isoformat(),
+            'response_time_ms': self.response_time_ms,
+        }
+
+
+@dataclass
+class ChannelStatusResult:
+    """Cached channel status from shared database."""
+    status: bool
+    last_checked: datetime
+    response_time_ms: Optional[int] = None
+
+
+class SharedDbService:
+    """Service for syncing channel validation results with Supabase.
+    
+    This service provides methods to fetch and upload channel validation results
+    to a shared Supabase database for cross-platform synchronization.
+    
+    Attributes:
+        supabase_url: Supabase project URL
+        supabase_key: Supabase anonymous API key
+        table_name: Name of the database table
+        enabled: Whether the service is enabled
+    """
+    
+    def __init__(
+        self,
+        supabase_url: str = SUPABASE_URL,
+        supabase_key: str = SUPABASE_ANON_KEY,
+        table_name: str = TABLE_NAME,
+        enabled: bool = ENABLED,
+    ):
+        """Initialize the SharedDbService.
+        
+        Args:
+            supabase_url: Supabase project URL
+            supabase_key: Supabase anonymous API key
+            table_name: Database table name
+            enabled: Whether the service is enabled
+        """
+        self.supabase_url = supabase_url
+        self.supabase_key = supabase_key
+        self.table_name = table_name
+        self.enabled = enabled
+        
+    @staticmethod
+    def _hash_url(url: str) -> str:
+        """Hash a URL with SHA256 for privacy.
+        
+        Args:
+            url: The URL to hash
+            
+        Returns:
+            Hexadecimal SHA256 hash string
+        """
+        return hashlib.sha256(url.encode('utf-8')).hexdigest()
+    
+    @property
+    def is_configured(self) -> bool:
+        """Check if the service is properly configured.
+        
+        Returns:
+            True if configured and enabled, False otherwise
+        """
+        return (
+            self.enabled and
+            aiohttp is not None and
+            self.supabase_url != 'YOUR_SUPABASE_PROJECT_URL' and
+            self.supabase_key != 'YOUR_SUPABASE_ANON_KEY'
+        )
+
+    @staticmethod
+    def save_local_cache(cache: Dict[str, 'ChannelStatusResult']) -> None:
+        """Save health cache to local JSON file for offline fallback.
+        
+        Silently ignores any I/O errors — local cache is best-effort.
+        """
+        try:
+            data = {}
+            for url_hash, result in cache.items():
+                data[url_hash] = {
+                    'status': result.status,
+                    'last_checked': result.last_checked.isoformat(),
+                    'response_time_ms': result.response_time_ms,
+                }
+            with open(HEALTH_CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, separators=(',', ':'))
+            logger.info(f"Saved {len(data)} health entries to local cache")
+        except Exception as e:
+            logger.debug(f"Failed to save local health cache: {e}")
+
+    @staticmethod
+    def load_local_cache() -> Dict[str, 'ChannelStatusResult']:
+        """Load health cache from local JSON file.
+        
+        Returns empty dict if file doesn't exist or is corrupted.
+        Only returns entries checked within CACHE_DURATION_HOURS.
+        """
+        try:
+            if not os.path.exists(HEALTH_CACHE_FILE):
+                return {}
+            with open(HEALTH_CACHE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=CACHE_DURATION_HOURS)
+            cache = {}
+            for url_hash, entry in data.items():
+                try:
+                    last_checked = datetime.fromisoformat(
+                        entry['last_checked'].replace('Z', '+00:00')
+                    )
+                    if last_checked > cutoff:
+                        cache[url_hash] = ChannelStatusResult(
+                            status=entry.get('status', True),
+                            last_checked=last_checked,
+                            response_time_ms=entry.get('response_time_ms'),
+                        )
+                except (KeyError, ValueError, TypeError):
+                    continue
+            logger.info(f"Loaded {len(cache)} health entries from local cache")
+            return cache
+        except Exception as e:
+            logger.debug(f"Failed to load local health cache: {e}")
+            return {}
+
+    @staticmethod
+    def report_channel_failure(channel_url: str) -> None:
+        """Report a playback failure to Supabase (fire-and-forget, daemon thread).
+        
+        Never blocks. Never crashes. Runs in a background daemon thread.
+        """
+        try:
+            if not ENABLED or not SUPABASE_URL or not SUPABASE_ANON_KEY:
+                return
+
+            import threading
+            import requests
+
+            def _report():
+                try:
+                    url_hash = hashlib.sha256(channel_url.encode('utf-8')).hexdigest()
+                    headers = {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': f'Bearer {SUPABASE_ANON_KEY}',
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates',
+                    }
+                    payload = {
+                        'url_hash': url_hash,
+                        'status': 'failed',
+                        'last_checked': datetime.now(timezone.utc).isoformat(),
+                    }
+                    requests.post(
+                        f'{SUPABASE_URL}/rest/v1/{TABLE_NAME}',
+                        json=payload,
+                        headers=headers,
+                        timeout=5,
+                    )
+                except Exception:
+                    pass  # Fire and forget
+
+            threading.Thread(target=_report, daemon=True).start()
+        except Exception:
+            pass
+    
+    async def fetch_recent_results(self) -> Dict[str, ChannelStatusResult]:
+        """Fetch recent working channel results from shared database.
+        
+        Fetches only working channel statuses from the last 24 hours.
+        Failed channels aren't needed since they'll be rescanned anyway.
+        Uses limit/offset pagination (Supabase max 1000 per request).
+        
+        Returns:
+            Dictionary mapping url_hash to ChannelStatusResult
+            Returns empty dict if service is disabled or fetch fails
+        """
+        if not self.is_configured:
+            logger.debug('SharedDbService: Service not configured, trying local cache')
+            return self.load_local_cache()
+        
+        try:
+            logger.info('Fetching recent channel results from shared database...')
+            
+            cutoff_time = (
+                datetime.now(timezone.utc) - timedelta(hours=CACHE_DURATION_HOURS)
+            ).isoformat()
+            
+            base_url = f'{self.supabase_url}/rest/v1/{self.table_name}'
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+            }
+            
+            results = {}
+            page_size = 1000
+            offset = 0
+            max_pages = 30  # Safety cap: max 30k results
+            
+            ssl_ctx = _get_ssl_context()
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                for _ in range(max_pages):
+                    params = {
+                        'last_checked': f'gte.{cutoff_time}',
+                        'status': 'eq.working',  # Only working — failed will be rescanned
+                        'select': 'url_hash,status,last_checked,response_time_ms',
+                        'limit': str(page_size),
+                        'offset': str(offset),
+                        'order': 'url_hash',
+                    }
+                    
+                    async with session.get(
+                        base_url, params=params, headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        if response.status != 200:
+                            logger.warning(
+                                f'SharedDb health fetch page failed: {response.status}'
+                            )
+                            break
+                        
+                        data = await response.json()
+                        if not data:
+                            break
+                        
+                        for item in data:
+                            results[item['url_hash']] = ChannelStatusResult(
+                                status=True,  # We only fetch working
+                                last_checked=datetime.fromisoformat(
+                                    item['last_checked'].replace('Z', '+00:00')
+                                ),
+                                response_time_ms=item.get('response_time_ms'),
+                            )
+                        
+                        offset += page_size
+                        if len(data) < page_size:
+                            break
+            
+            logger.info(
+                f'Fetched {len(results)} working channel results from shared database'
+            )
+            # Save to local file for offline fallback
+            self.save_local_cache(results)
+            return results
+                        
+        except Exception as e:
+            logger.info(f'Supabase unavailable, trying local cache: {e}')
+            local = self.load_local_cache()
+            if local:
+                logger.info(f'Using {len(local)} entries from local health cache')
+                return local
+            return {}
+    
+    async def upload_results(self, results: List[ChannelResult]) -> bool:
+        """Upload channel validation results to shared database.
+        
+        Performs a batch upsert operation (insert or update on conflict).
+        
+        Args:
+            results: List of ChannelResult objects to upload
+            
+        Returns:
+            True if upload succeeded, False otherwise
+        """
+        if not self.is_configured:
+            logger.debug('SharedDbService: Service not configured or disabled')
+            return False
+        
+        if not results:
+            logger.debug('SharedDbService: No results to upload')
+            return True
+        
+        try:
+            logger.info(f'Uploading {len(results)} channel results to shared database...')
+            
+            # Prepare batch payload
+            payload = [
+                {
+                    'url_hash': self._hash_url(result.url),
+                    'status': 'working' if result.is_working else 'failed',
+                    'last_checked': result.last_checked.isoformat(),
+                    'response_time_ms': result.response_time_ms,
+                }
+                for result in results
+            ]
+            
+            # Upsert to Supabase (insert or update on conflict)
+            url = f'{self.supabase_url}/rest/v1/{self.table_name}'
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates',  # Upsert on conflict
+            }
+            
+            ssl_ctx = _get_ssl_context()
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    if response.status in (200, 201):
+                        logger.info(
+                            f'Successfully uploaded {len(results)} channel results'
+                        )
+                        return True
+                    else:
+                        error_body = await response.text()
+                        logger.warning(
+                            f'Failed to upload results: {response.status} - {error_body}'
+                        )
+                        return False
+                        
+        except Exception as e:
+            logger.error(f'Error uploading to shared database: {e}', exc_info=True)
+            return False  # Don't block on upload failure
+
+    async def upload_batch_inline(
+        self, channels: List[Dict], session: 'aiohttp.ClientSession'
+    ) -> bool:
+        """Upload a batch of checked channels using an existing aiohttp session.
+        
+        Called per-batch during scanning so results stream to Supabase
+        incrementally instead of waiting for the full scan to finish.
+        """
+        if not self.is_configured:
+            return False
+        
+        payload = []
+        for ch in channels:
+            ch_url = ch.get('url', '')
+            if ch_url and ch_url.startswith(('http://', 'https://')):
+                payload.append({
+                    'url_hash': self._hash_url(ch_url),
+                    'status': 'working' if ch.get('is_working', False) else 'failed',
+                    'last_checked': datetime.now(timezone.utc).isoformat(),
+                    'response_time_ms': None,
+                })
+        if not payload:
+            return True
+        
+        try:
+            url = f'{self.supabase_url}/rest/v1/{self.table_name}'
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates',
+            }
+            async with session.post(
+                url, json=payload, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status in (200, 201):
+                    logger.info(f'SharedDb: streamed {len(payload)} results')
+                    return True
+                else:
+                    logger.warning(f'SharedDb: batch upload {resp.status}')
+                    return False
+        except Exception as e:
+            logger.warning(f'SharedDb: batch upload error: {e}')
+            return False
+    
+    def get_cached_status(
+        self,
+        url: str,
+        cache: Dict[str, ChannelStatusResult]
+    ) -> Optional[ChannelStatusResult]:
+        """Get cached status for a specific URL.
+        
+        Args:
+            url: The channel URL to look up
+            cache: Dictionary of cached results from fetch_recent_results()
+            
+        Returns:
+            ChannelStatusResult if available and recent, None otherwise
+        """
+        url_hash = self._hash_url(url)
+        return cache.get(url_hash)
+    
+    def should_skip_validation(
+        self,
+        url: str,
+        cache: Dict[str, ChannelStatusResult]
+    ) -> bool:
+        """Check if a channel should be skipped based on cached results.
+        
+        Only skips validation if:
+        - Channel is in cache
+        - Status is 'working'
+        - Last checked within CACHE_DURATION_HOURS
+        
+        Args:
+            url: The channel URL to check
+            cache: Dictionary of cached results from fetch_recent_results()
+            
+        Returns:
+            True if validation should be skipped, False otherwise
+        """
+        cached = self.get_cached_status(url, cache)
+        
+        if cached is None:
+            return False
+        
+        # Only skip if it's working and recently checked
+        age = datetime.now(timezone.utc) - cached.last_checked
+        return cached.status and age < timedelta(hours=CACHE_DURATION_HOURS)
+
+    async def fetch_channels(self) -> List[Dict]:
+        """Fetch consolidated channels from Supabase channels table.
+        
+        Returns a list of channel dicts compatible with ChannelManager format.
+        Fetches all channels in batches (Supabase default limit is 1000).
+        
+        Returns:
+            List of channel dicts, or empty list on failure.
+        """
+        if not self.is_configured:
+            return []
+        
+        try:
+            all_channels = []
+            offset = 0
+            batch_size = 1000
+            
+            ssl_ctx = _get_ssl_context()
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                while True:
+                    url = (
+                        f'{self.supabase_url}/rest/v1/channels'
+                        f'?select=name,urls,category,country,logo,media_type,url_hash'
+                        f'&order=name.asc'
+                        f'&offset={offset}&limit={batch_size}'
+                    )
+                    headers = {
+                        'apikey': self.supabase_key,
+                        'Authorization': f'Bearer {self.supabase_key}',
+                    }
+                    
+                    async with session.get(
+                        url, headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=30),
+                    ) as resp:
+                        if resp.status != 200:
+                            logger.warning(f'SharedDb: fetch_channels failed: {resp.status}')
+                            break
+                        
+                        data = await resp.json()
+                        if not data:
+                            break
+                        
+                        for row in data:
+                            urls = row.get('urls', [])
+                            ch = {
+                                'name': row.get('name', ''),
+                                'url': urls[0] if urls else '',
+                                'urls': urls,
+                                'category': row.get('category', ''),
+                                'country': row.get('country', ''),
+                                'logo': row.get('logo', ''),
+                                'media_type': row.get('media_type', ''),
+                                'status': 'unchecked',
+                                'working_url_index': 0,
+                            }
+                            if ch['url']:
+                                all_channels.append(ch)
+                        
+                        if len(data) < batch_size:
+                            break
+                        offset += batch_size
+            
+            logger.info(f'SharedDb: fetched {len(all_channels)} channels from Supabase')
+            return all_channels
+        except Exception as e:
+            logger.warning(f'SharedDb: fetch_channels error: {e}')
+            return []
+
+    async def contribute_channels(
+        self, channels: List[Dict], batch_size: int = 500
+    ) -> bool:
+        """Upload new/updated channels back to Supabase channels table.
+        
+        Uses upsert on url_hash to avoid duplicates.
+        
+        Args:
+            channels: List of channel dicts with name, urls, category, etc.
+            batch_size: Number of channels per upload batch.
+            
+        Returns:
+            True if upload succeeded, False otherwise.
+        """
+        if not self.is_configured or not channels:
+            return False
+        
+        try:
+            success = True
+            ssl_ctx = _get_ssl_context()
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                for i in range(0, len(channels), batch_size):
+                    batch = channels[i:i + batch_size]
+                    payload = []
+                    for ch in batch:
+                        urls = ch.get('urls', [])
+                        if not urls:
+                            url_val = ch.get('url', '')
+                            urls = [url_val] if url_val else []
+                        if not urls:
+                            continue
+                        payload.append({
+                            'url_hash': self._hash_url(urls[0]),
+                            'name': ch.get('name', ''),
+                            'urls': urls,
+                            'category': ch.get('category', ''),
+                            'country': ch.get('country', ''),
+                            'logo': ch.get('logo', ''),
+                            'media_type': ch.get('media_type', ''),
+                        })
+                    
+                    if not payload:
+                        continue
+                    
+                    url = f'{self.supabase_url}/rest/v1/channels'
+                    headers = {
+                        'apikey': self.supabase_key,
+                        'Authorization': f'Bearer {self.supabase_key}',
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates',
+                    }
+                    
+                    async with session.post(
+                        url, headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30),
+                    ) as resp:
+                        if resp.status not in (200, 201):
+                            body = await resp.text()
+                            logger.warning(
+                                f'SharedDb: contribute_channels batch failed: '
+                                f'{resp.status} - {body[:200]}'
+                            )
+                            success = False
+            
+            if success:
+                logger.info(f'SharedDb: contributed {len(channels)} channels')
+            return success
+        except Exception as e:
+            logger.warning(f'SharedDb: contribute_channels error: {e}')
+            return False
+
+
+# Example usage
+if __name__ == '__main__':
+    import asyncio
+    
+    async def main():
+        """Example usage of SharedDbService."""
+        db = SharedDbService()
+        
+        if not db.is_configured:
+            print("Service not configured. Please set SUPABASE_URL, SUPABASE_ANON_KEY, and ENABLED=True")
+            return
+        
+        # Fetch recent results
+        print("Fetching recent results...")
+        cache = await db.fetch_recent_results()
+        print(f"Found {len(cache)} cached results")
+        
+        # Example: Upload results
+        test_results = [
+            ChannelResult(
+                url='http://example.com/stream1.m3u8',
+                is_working=True,
+                last_checked=datetime.now(timezone.utc),
+                response_time_ms=150,
+            ),
+            ChannelResult(
+                url='http://example.com/stream2.m3u8',
+                is_working=False,
+                last_checked=datetime.now(timezone.utc),
+            ),
+        ]
+        
+        print(f"Uploading {len(test_results)} test results...")
+        success = await db.upload_results(test_results)
+        print(f"Upload {'succeeded' if success else 'failed'}")
+    
+    asyncio.run(main())

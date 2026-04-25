@@ -1,0 +1,23 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Run every 5 days to prevent Supabase free tier 7-day inactivity pause
+    - cron: '0 8 */5 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Simple SELECT to keep the project active
+          curl -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/analytics_events?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" | \
+            grep -q "200\|406" && echo "✅ Supabase is alive" || echo "⚠️ Supabase may be paused"

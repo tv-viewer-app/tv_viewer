@@ -1,0 +1,160 @@
+"""IPTV Repository handler for fetching channel lists."""
+
+import asyncio
+import aiohttp
+from typing import List, Dict, Any, Optional, Callable
+from utils.helpers import parse_m3u
+from utils.logger import get_logger
+import config
+
+logger = get_logger(__name__)
+
+
+class RepositoryHandler:
+    """Handles fetching and parsing IPTV repository playlists."""
+    
+    # Allowed URL schemes for security
+    ALLOWED_SCHEMES = ('http://', 'https://')
+    
+    def __init__(self):
+        self.repositories = config.IPTV_REPOSITORIES.copy()
+        self._session: Optional[aiohttp.ClientSession] = None
+    
+    def _validate_url(self, url: str) -> bool:
+        """Validate URL for security, including SSRF protection."""
+        if not url:
+            return False
+        url_lower = url.lower().strip()
+        if not url_lower.startswith(self.ALLOWED_SCHEMES):
+            return False
+        # Apply full SSRF validation (blocks private/reserved IPs and DNS)
+        from utils.helpers import _is_valid_stream_url
+        return _is_valid_stream_url(url)
+    
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create aiohttp session."""
+        if self._session is None or self._session.closed:
+            timeout = aiohttp.ClientTimeout(total=config.REQUEST_TIMEOUT)
+            # Security: Enable SSL verification for HTTPS connections
+            connector = aiohttp.TCPConnector(limit=10)
+            self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
+        return self._session
+    
+    async def close(self):
+        """Close the aiohttp session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+    
+    async def fetch_repository(self, url: str) -> List[Dict[str, Any]]:
+        """
+        Fetch and parse a single repository URL.
+        
+        Args:
+            url: M3U playlist URL
+            
+        Returns:
+            List of channel dictionaries
+        """
+        # Security: Validate URL
+        if not self._validate_url(url):
+            logger.debug(f"Invalid or unsafe URL: {url}")
+            return []
+        
+        try:
+            session = await self._get_session()
+            async with session.get(url) as response:
+                if response.status == 200:
+                    # Security: Reject responses with clearly non-text Content-Type
+                    content_type = (response.content_type or '').lower()
+                    if content_type and any(
+                        content_type.startswith(t) for t in (
+                            'image/', 'audio/', 'video/', 'application/zip',
+                            'application/octet-stream', 'application/pdf',
+                        )
+                    ):
+                        logger.debug(f"Rejected non-text Content-Type '{content_type}' from {url}")
+                        return []
+                    # Bug #66: Stream the download and check size incrementally
+                    # to avoid OOM on huge playlists before a size check fires.
+                    MAX_SIZE = 50 * 1024 * 1024  # 50 MB
+                    chunks = []
+                    total = 0
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        total += len(chunk)
+                        if total > MAX_SIZE:
+                            logger.debug(f"Content too large from {url} (>{MAX_SIZE} bytes), aborting")
+                            return []
+                        chunks.append(chunk)
+                    content = b''.join(chunks).decode('utf-8', errors='replace')
+                    channels = parse_m3u(content)
+                    logger.debug(f"Fetched {len(channels)} channels from {url}")
+                    return channels
+                else:
+                    logger.debug(f"Failed to fetch {url}: HTTP {response.status}")
+        except asyncio.TimeoutError:
+            logger.debug(f"Timeout fetching {url}")
+        except aiohttp.ClientError as e:
+            logger.debug(f"Error fetching {url}: {e}")
+        except Exception as e:
+            logger.debug(f"Unexpected error fetching {url}: {e}")
+        
+        return []
+    
+    async def fetch_all_repositories(
+        self, 
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch channels from all configured repositories concurrently.
+        
+        Uses asyncio.gather with a semaphore to fetch up to 10 repos in parallel,
+        dramatically reducing total fetch time compared to sequential fetching.
+        
+        Args:
+            progress_callback: Optional callback(current, total) for progress updates
+            
+        Returns:
+            Combined list of all channels (with duplicates removed)
+        """
+        all_channels = []
+        seen_urls: set = set()
+        total = len(self.repositories)
+        completed = 0
+        sem = asyncio.Semaphore(10)
+        
+        async def _fetch_one(repo_url: str) -> List[Dict[str, Any]]:
+            nonlocal completed
+            async with sem:
+                channels = await self.fetch_repository(repo_url)
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total)
+                return channels
+        
+        try:
+            results = await asyncio.gather(
+                *[_fetch_one(url) for url in self.repositories],
+                return_exceptions=True
+            )
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.debug(f"Repo fetch error: {result}")
+                    continue
+                for channel in result:
+                    url = channel.get('url', '')
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        all_channels.append(channel)
+        finally:
+            await self.close()
+        
+        logger.debug(f"Total unique channels fetched: {len(all_channels)}")
+        return all_channels
+
+    async def fetch_single_repository(self, url: str) -> List[Dict[str, Any]]:
+        """Fetch channels from a single M3U URL (for custom imports)."""
+        try:
+            channels = await self.fetch_repository(url)
+            return channels
+        finally:
+            await self.close()

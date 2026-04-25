@@ -1,0 +1,62 @@
+name: Build APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Flutter APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+
+      - name: Install dependencies
+        run: cd flutter_app && flutter pub get
+
+      - name: Build release APK
+        run: cd flutter_app && flutter build apk --release
+
+      # --- Tag push: create a GitHub Release with the APK attached ---
+      - name: Rename APK for release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
+             flutter_app/build/app/outputs/flutter-apk/tv-viewer-${{ github.ref_name }}.apk
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            flutter_app/build/app/outputs/flutter-apk/tv-viewer-${{ github.ref_name }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Manual dispatch: upload APK as a workflow artifact ---
+      - name: Upload APK artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tv-viewer-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk

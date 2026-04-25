@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Viewer — Community-Powered Live TV • Free Forever</title>
+    <meta name="description" content="Community-powered IPTV player with 8000+ crowdsourced channels. Free, open-source, cross-platform. Android, Windows, Linux.">
+    <meta name="keywords" content="IPTV, live TV, free TV, open source, crowdsourced, Android, Windows, Linux">
+    <meta property="og:title" content="TV Viewer — Community-Powered Live TV">
+    <meta property="og:description" content="8000+ crowdsourced channels. Free forever. No account needed.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://tv-viewer-app.github.io/tv_viewer/">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --green: #3fb950;
+            --orange: #d29922;
+            --amber: #f0a500;
+            --amber-glow: rgba(240, 165, 0, 0.15);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+        a:hover { color: var(--accent-hover); }
+
+        /* ── Navigation ── */
+        .nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+        }
+        .nav-inner {
+            max-width: 1100px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 60px;
+        }
+        .nav-logo { font-size: 20px; font-weight: 700; color: var(--text); }
+        .nav-logo span { color: var(--accent); }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a { color: var(--text-muted); font-size: 14px; font-weight: 500; }
+        .nav-links a:hover { color: var(--text); }
+        .nav-github {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: var(--surface); border: 1px solid var(--border);
+            padding: 6px 14px; border-radius: 6px; font-size: 13px;
+            color: var(--text); font-weight: 600; transition: border-color 0.2s;
+        }
+        .nav-github:hover { border-color: var(--accent); color: var(--text); }
+        .nav-github svg { width: 16px; height: 16px; fill: currentColor; }
+        .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 24px; cursor: pointer; }
+
+        /* ── Container ── */
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+        section { padding: 100px 0; }
+
+        /* ── Section Headers ── */
+        .section-tag {
+            display: inline-block; font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 2px;
+            color: var(--accent); margin-bottom: 12px;
+        }
+        .section-title { font-size: 36px; font-weight: 700; margin-bottom: 16px; line-height: 1.2; }
+        .section-subtitle { font-size: 18px; color: var(--text-muted); max-width: 640px; }
+
+        /* ── Hero ── */
+        .hero {
+            padding: 140px 0 100px; text-align: center;
+            background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(88, 166, 255, 0.08) 0%, transparent 60%);
+        }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 24px; padding: 6px 18px; font-size: 13px;
+            color: var(--green); margin-bottom: 28px; font-weight: 600;
+        }
+        .hero h1 { font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 20px; }
+        .hero h1 .highlight { color: var(--accent); }
+        .hero .tagline {
+            font-size: 22px; color: var(--text-muted); max-width: 600px;
+            margin: 0 auto 44px; line-height: 1.5;
+        }
+        .hero-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;
+            transition: all 0.2s; border: none; cursor: pointer; text-decoration: none;
+        }
+        .btn:hover { text-decoration: none; }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); color: #fff; transform: translateY(-1px); }
+        .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--text); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+        .btn-outline:hover { border-color: var(--text-muted); color: var(--text); }
+        .btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+        /* ── How It Works ── */
+        .how-it-works { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; margin-top: 48px; text-align: center; position: relative; }
+        .step { position: relative; }
+        .step-num {
+            width: 64px; height: 64px; border-radius: 50%;
+            background: var(--bg); border: 2px solid var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; margin: 0 auto 20px;
+        }
+        .step h3 { font-size: 20px; margin-bottom: 8px; }
+        .step p { color: var(--text-muted); font-size: 15px; max-width: 280px; margin: 0 auto; }
+        .step-connector {
+            position: absolute; top: 32px; left: calc(50% + 48px); width: calc(100% - 96px);
+            height: 2px; background: var(--border);
+        }
+        .step:last-child .step-connector { display: none; }
+
+        /* ── Features Grid ── */
+        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; }
+        .feature-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 28px;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .feature-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .feature-icon { font-size: 32px; margin-bottom: 14px; display: block; }
+        .feature-card h3 { font-size: 17px; margin-bottom: 8px; font-weight: 600; }
+        .feature-card p { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+
+        /* ── Community ── */
+        .community { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .community-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 48px; align-items: center; }
+        .community-text h3 { font-size: 22px; margin-bottom: 12px; }
+        .community-text p { color: var(--text-muted); font-size: 15px; margin-bottom: 16px; line-height: 1.6; }
+        .community-text ul { list-style: none; }
+        .community-text li { padding: 6px 0; font-size: 15px; color: var(--text-muted); }
+        .community-text li::before { content: "✅ "; }
+        .community-visual {
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 12px; padding: 32px; text-align: center;
+        }
+        .community-visual .flow-item {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 14px 20px; margin: 10px 0;
+            display: flex; align-items: center; gap: 12px;
+            font-size: 14px;
+        }
+        .community-visual .flow-item .emoji { font-size: 22px; flex-shrink: 0; }
+        .flow-arrow { color: var(--accent); font-size: 20px; }
+
+        /* ── Platforms ── */
+        .platform-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+        .platform-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 14px; padding: 32px; text-align: center;
+            transition: border-color 0.2s;
+        }
+        .platform-card:hover { border-color: var(--accent); }
+        .platform-icon { font-size: 48px; margin-bottom: 16px; display: block; }
+        .platform-card h3 { font-size: 20px; margin-bottom: 8px; }
+        .platform-card p { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+        .platform-card .btn { width: 100%; justify-content: center; padding: 12px 20px; }
+        .platform-badge {
+            display: inline-block; background: rgba(63, 185, 80, 0.15);
+            color: var(--green); font-size: 11px; font-weight: 600;
+            padding: 2px 10px; border-radius: 12px; margin-top: 10px;
+        }
+
+        /* ── Beer Donation ── */
+        .beer {
+            background: linear-gradient(135deg, rgba(240, 165, 0, 0.06) 0%, rgba(240, 165, 0, 0.02) 100%);
+            border-top: 1px solid rgba(240, 165, 0, 0.2);
+            border-bottom: 1px solid rgba(240, 165, 0, 0.2);
+            text-align: center;
+        }
+        .beer .section-title { color: var(--amber); }
+        .beer .section-subtitle { margin: 0 auto 40px; }
+        .beer-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+        .btn-beer {
+            background: linear-gradient(135deg, #f0a500, #e09200);
+            color: #1a1200; font-weight: 700; font-size: 16px;
+            padding: 16px 32px; border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(240, 165, 0, 0.25);
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;
+            text-decoration: none; border: none; cursor: pointer;
+        }
+        .btn-beer:hover { transform: translateY(-2px); box-shadow: 0 6px 32px rgba(240, 165, 0, 0.35); color: #1a1200; text-decoration: none; }
+        .btn-sponsor {
+            background: transparent; border: 2px solid rgba(240, 165, 0, 0.4);
+            color: var(--amber); font-weight: 600; font-size: 16px;
+            padding: 14px 32px; border-radius: 12px; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 8px;
+            text-decoration: none; cursor: pointer;
+        }
+        .btn-sponsor:hover { border-color: var(--amber); background: var(--amber-glow); color: var(--amber); text-decoration: none; }
+        .beer-note { color: var(--text-muted); font-size: 13px; margin-top: 20px; }
+
+        /* ── Open Source ── */
+        .open-source { text-align: center; }
+        .open-source-badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+        .os-badge {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px 24px;
+            display: inline-flex; align-items: center; gap: 8px;
+            color: var(--text-muted); font-size: 14px; font-weight: 500;
+            transition: border-color 0.2s;
+        }
+        .os-badge:hover { border-color: var(--accent); color: var(--text); }
+        .os-badge svg { width: 18px; height: 18px; fill: currentColor; }
+
+        /* ── Footer ── */
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 40px 0; text-align: center;
+        }
+        .footer-links { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
+        .footer-links a { color: var(--text-muted); font-size: 14px; }
+        .footer-links a:hover { color: var(--text); }
+        .footer-copy { color: var(--text-muted); font-size: 13px; }
+
+        /* ── Scroll animation ── */
+        .fade-in {
+            opacity: 0; transform: translateY(24px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+        /* ── Mobile ── */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .nav-links.open {
+                display: flex; flex-direction: column; position: absolute;
+                top: 60px; left: 0; right: 0; background: var(--bg);
+                border-bottom: 1px solid var(--border); padding: 20px 24px; gap: 16px;
+            }
+            .hamburger { display: block; }
+            .hero { padding: 120px 0 80px; }
+            .hero h1 { font-size: 34px; }
+            .hero .tagline { font-size: 17px; }
+            .hero-buttons { flex-direction: column; align-items: center; }
+            .steps { grid-template-columns: 1fr; gap: 32px; }
+            .step-connector { display: none !important; }
+            .features-grid { grid-template-columns: 1fr; }
+            .community-grid { grid-template-columns: 1fr; }
+            .platform-cards { grid-template-columns: 1fr; }
+            .section-title { font-size: 28px; }
+            .beer-buttons { flex-direction: column; align-items: center; }
+        }
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .features-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════ Navigation ═══════════════ -->
+<nav class="nav">
+    <div class="nav-inner">
+        <a href="#" class="nav-logo">📺 TV <span>Viewer</span></a>
+        <div class="nav-links" id="navLinks">
+            <a href="#how-it-works">How It Works</a>
+            <a href="#features">Features</a>
+            <a href="#community">Community</a>
+            <a href="#platforms">Download</a>
+            <a href="#support">Support Us</a>
+        </div>
+        <a href="https://github.com/tv-viewer-app/tv_viewer" class="nav-github">
+            <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            GitHub
+        </a>
+        <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    </div>
+</nav>
+
+<!-- ═══════════════ Hero ═══════════════ -->
+<section class="hero" id="hero">
+    <div class="container">
+        <div class="hero-badge">🆓 Free &amp; Open Source — Always</div>
+        <h1>
+            📺 TV <span class="highlight">Viewer</span>
+        </h1>
+        <p class="tagline">
+            Community-Powered Live TV&ensp;•&ensp;8000+ Channels&ensp;•&ensp;Free Forever
+        </p>
+        <div class="hero-buttons">
+            <a href="https://github.com/tv-viewer-app/tv_viewer/releases/latest" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17.523 2H6.477L2 6.477v11.046L6.477 22h11.046L22 17.523V6.477L17.523 2zM12 17.5l-5.5-5.5h3.5V7h4v5h3.5L12 17.5z"/></svg>
+                Android APK
+            </a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/releases/latest" class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 12l1.5-9h15L21 12H3zm0 0v8a2 2 0 002 2h14a2 2 0 002-2v-8H3zm9-3a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+                Windows EXE
+            </a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer#from-source-windowslinux" class="btn btn-outline">
+                🐧 Linux (from source)
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ How It Works ═══════════════ -->
+<section class="how-it-works" id="how-it-works">
+    <div class="container">
+        <div class="section-tag">Simple as 1-2-3</div>
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-subtitle">TV Viewer is powered by its community. Everyone watches, everyone contributes.</p>
+        <div class="steps">
+            <div class="step fade-in">
+                <div class="step-num">📥</div>
+                <h3>Install</h3>
+                <p>Download for Android, Windows, or build from source on Linux. No account, no sign-up — just install and go.</p>
+                <div class="step-connector"></div>
+            </div>
+            <div class="step fade-in">
+                <div class="step-num">📺</div>
+                <h3>Watch</h3>
+                <p>Browse 8000+ channels from around the world. Search, filter, favorite. Enjoy live TV in a beautiful player with EPG.</p>
+                <div class="step-connector"></div>
+            </div>
+            <div class="step fade-in">
+                <div class="step-num">🤝</div>
+                <h3>Contribute</h3>
+                <p>Report broken channels, submit new ones, rate stream quality. Your feedback makes the list better for everyone.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ Features ═══════════════ -->
+<section class="features" id="features">
+    <div class="container">
+        <div class="section-tag">What you get</div>
+        <h2 class="section-title">Everything You Need to Watch Live TV</h2>
+        <p class="section-subtitle">A full-featured IPTV player built by the community, for the community.</p>
+        <div class="features-grid">
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🌍</span>
+                <h3>8000+ Channels Worldwide</h3>
+                <p>News, sports, entertainment, music, kids, documentaries — from every corner of the globe. Aggregated from 80+ sources and growing daily.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">👥</span>
+                <h3>Crowdsourced Quality</h3>
+                <p>Users report broken streams and submit new channels. Community health data ensures you only see what actually works.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">📱</span>
+                <h3>Cross-Platform</h3>
+                <p>Native apps for Android and Windows. Run from source on Linux. Same great experience everywhere.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🔒</span>
+                <h3>Privacy First</h3>
+                <p>No tracking by default. No account required. Optional anonymous analytics (opt-in only). GDPR compliant. Open source — audit it yourself.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">⚡</span>
+                <h3>Offline Mode</h3>
+                <p>Channel list cached locally. Works without internet from the last known good state. Syncs when you reconnect.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🎨</span>
+                <h3>Beautiful Player</h3>
+                <p>EPG program guide, favorites, watch history, parental controls with PIN lock, advanced search with filters, and more.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ Community ═══════════════ -->
+<section class="community" id="community">
+    <div class="container">
+        <div class="section-tag">Built together</div>
+        <h2 class="section-title">Help Build the Best Channel List</h2>
+        <p class="section-subtitle">TV Viewer's channel database is maintained by its users. Here's how the crowdsource model works.</p>
+        <div class="community-grid fade-in">
+            <div class="community-text">
+                <h3>Contribute via the App</h3>
+                <p>The easiest way to help — no GitHub account needed. Just use the app normally and participate when you see something.</p>
+                <ul>
+                    <li>Tap "Report Broken" on any dead channel</li>
+                    <li>Submit new channel URLs you discover</li>
+                    <li>Rate stream quality to help others</li>
+                    <li>Health data syncs anonymously to the shared database</li>
+                </ul>
+                <h3 style="margin-top: 24px;">Contribute via GitHub</h3>
+                <p>For bulk submissions or detailed reports, open an issue with our channel report template.</p>
+                <a href="https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_report.yml" class="btn btn-secondary" style="margin-top: 8px;">
+                    📺 Submit Channels on GitHub
+                </a>
+            </div>
+            <div class="community-visual">
+                <div class="flow-item">
+                    <span class="emoji">👤</span>
+                    <span>User reports "BBC News" stream is broken</span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-item">
+                    <span class="emoji">📡</span>
+                    <span>Health database updated — channel flagged</span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-item">
+                    <span class="emoji">🔄</span>
+                    <span>Auto-scanner checks alternative sources</span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-item">
+                    <span class="emoji">✅</span>
+                    <span>Working stream restored for all users</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ Platforms ═══════════════ -->
+<section class="platforms" id="platforms">
+    <div class="container">
+        <div class="section-tag">Get it now</div>
+        <h2 class="section-title">Available on Every Platform</h2>
+        <p class="section-subtitle">Download once, watch everywhere. All platforms get the same channel database.</p>
+        <div class="platform-cards">
+            <div class="platform-card fade-in">
+                <span class="platform-icon">📱</span>
+                <h3>Android</h3>
+                <p>Android 7.0+ (API 24). Material Design UI with gesture controls and picture-in-picture.</p>
+                <a href="https://github.com/tv-viewer-app/tv_viewer/releases/latest" class="btn btn-primary">Download APK</a>
+                <div class="platform-badge">Play Store — coming soon</div>
+            </div>
+            <div class="platform-card fade-in">
+                <span class="platform-icon">🪟</span>
+                <h3>Windows</h3>
+                <p>Windows 10/11. Fluent Design dark theme. Requires VLC media player installed.</p>
+                <a href="https://github.com/tv-viewer-app/tv_viewer/releases/latest" class="btn btn-secondary">Download EXE</a>
+            </div>
+            <div class="platform-card fade-in">
+                <span class="platform-icon">🐧</span>
+                <h3>Linux</h3>
+                <p>Ubuntu, Debian, Fedora, Arch. Run from source with Python 3.12+ and VLC.</p>
+                <a href="https://github.com/tv-viewer-app/tv_viewer#from-source-windowslinux" class="btn btn-secondary">Build Instructions</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ Beer Donation ═══════════════ -->
+<section class="beer" id="support">
+    <div class="container">
+        <h2 class="section-title">Love TV Viewer? 🍺</h2>
+        <p class="section-subtitle">
+            TV Viewer is free and always will be. But if it saves you a cable bill or just makes your day better, consider buying the devs a beer. Every contribution fuels late-night coding sessions.
+        </p>
+        <div class="beer-buttons">
+            <a href="https://buymeacoffee.com/tvviewer" class="btn-beer" target="_blank" rel="noopener">
+                🍺 Buy Me a Beer
+            </a>
+        </div>
+        <p class="beer-note">100% goes to development and server costs. No corporate overhead.</p>
+    </div>
+</section>
+
+<!-- ═══════════════ Open Source ═══════════════ -->
+<section class="open-source" id="open-source">
+    <div class="container fade-in">
+        <div class="section-tag">Transparent</div>
+        <h2 class="section-title">Built in the Open</h2>
+        <p class="section-subtitle" style="margin: 0 auto 12px;">
+            TV Viewer is MIT licensed. Every line of code is public. Fork it, modify it, learn from it, contribute to it.
+        </p>
+        <div class="open-source-badges">
+            <a href="https://github.com/tv-viewer-app/tv_viewer" class="os-badge">
+                <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+                Source Code
+            </a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/blob/main/LICENSE" class="os-badge">
+                📄 MIT License
+            </a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/blob/main/CONTRIBUTING.md" class="os-badge">
+                🤝 Contributing Guide
+            </a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/issues" class="os-badge">
+                🐛 Report Issues
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ Footer ═══════════════ -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-links">
+            <a href="https://github.com/tv-viewer-app/tv_viewer">GitHub</a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/issues">Issues</a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/releases">Releases</a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/blob/main/PRIVACY_POLICY.md">Privacy Policy</a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/blob/main/LICENSE">License</a>
+            <a href="https://github.com/tv-viewer-app/tv_viewer/blob/main/CONTRIBUTING.md">Contributing</a>
+        </div>
+        <p class="footer-copy">
+            TV Viewer is free and open source software, licensed under MIT.
+            <br>Made with ❤️ by the TV Viewer community.
+        </p>
+    </div>
+</footer>
+
+<!-- ═══════════════ Scripts ═══════════════ -->
+<script>
+    // Mobile hamburger menu toggle
+    document.getElementById('hamburger').addEventListener('click', function() {
+        document.getElementById('navLinks').classList.toggle('open');
+    });
+    // Close mobile menu when a link is clicked
+    document.querySelectorAll('.nav-links a').forEach(function(link) {
+        link.addEventListener('click', function() {
+            document.getElementById('navLinks').classList.remove('open');
+        });
+    });
+
+    // Scroll-triggered fade-in animation
+    (function() {
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+        document.querySelectorAll('.fade-in').forEach(function(el) {
+            observer.observe(el);
+        });
+    })();
+</script>
+
+</body>
+</html>

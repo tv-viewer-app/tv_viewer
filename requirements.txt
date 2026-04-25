@@ -1,0 +1,13 @@
+# TV Viewer Project Dependencies
+python-vlc>=3.0.18122
+requests>=2.31.0
+aiohttp>=3.9.0
+certifi>=2023.7.22   # CA certificate bundle for SSL pinning (Issue #97)
+pychromecast>=13.0.0  # Google Cast support (optional)
+customtkinter>=5.2.0  # Modern Fluent-style widgets (used by UI components)
+ttkbootstrap>=1.10.0  # Fast themed ttk widgets
+tkintermapview>=1.29  # OpenStreetMap map widget
+Pillow>=10.0.0  # Image processing for thumbnails
+
+# Build dependencies (for packaging)
+pyinstaller>=6.0.0  # For creating standalone executables

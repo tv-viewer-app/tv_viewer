@@ -1,0 +1,41 @@
+name: 📺 Channel Issue
+description: Report a broken, missing, or mislabeled channel
+title: "[Channel] "
+labels: ["channel-issue"]
+body:
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue type
+      options:
+        - Channel not playing / buffering forever
+        - Channel shows wrong content
+        - Channel name or category is wrong
+        - Channel missing from the list
+        - Channel should be removed
+    validations:
+      required: true
+
+  - type: input
+    id: channel_name
+    attributes:
+      label: Channel name
+      placeholder: "e.g. Channel 12 News"
+    validations:
+      required: true
+
+  - type: input
+    id: country
+    attributes:
+      label: Country / Region
+      placeholder: "e.g. Israel, US, UK"
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional details
+      description: When did it stop working? Any error messages?
+    validations:
+      required: false

@@ -1,0 +1,28 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = '../build'
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+subprojects {
+    project.evaluationDependsOn(':app')
+    // Force compileSdk 34 on all plugin subprojects (fixes floating lStar)
+    if (project.name != 'app') {
+        afterEvaluate {
+            if (project.hasProperty('android')) {
+                project.android.compileSdkVersion 35
+            }
+        }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

@@ -1,0 +1,587 @@
+{
+  "_comment": "TV Viewer External Configuration - Edit this file to add/remove repositories and custom channels",
+  "_instructions": "Restart the app after editing this file for changes to take effect",
+  "repositories": [
+    "https://iptv-org.github.io/iptv/index.m3u",
+    "https://iptv-org.github.io/iptv/countries/il.m3u",
+    "https://iptv-org.github.io/iptv/countries/us.m3u",
+    "https://iptv-org.github.io/iptv/countries/uk.m3u",
+    "https://iptv-org.github.io/iptv/languages/heb.m3u",
+    "https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_usa.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_uk.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_israel.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_france.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_germany.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_spain.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_italy.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_en.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_movies.m3u8",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_en.m3u8",
+    "https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/grouped_by_content.m3u",
+    "https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/international.m3u",
+    "https://raw.githubusercontent.com/RokuIL/Live-From-Israel/master/NextPVRChannels.m3u8",
+    "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/il.m3u",
+    "https://de1.api.radio-browser.info/m3u/stations/bycountry/israel",
+    "https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20states",
+    "https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20kingdom",
+    "https://www.apsattv.com/xumo.m3u",
+    "https://www.apsattv.com/lg.m3u",
+    "https://www.apsattv.com/rok.m3u",
+    "https://www.apsattv.com/redbox.m3u",
+    "https://www.apsattv.com/xiaomi.m3u",
+    "https://www.apsattv.com/tablo.m3u",
+    "https://www.apsattv.com/vizio.m3u",
+    "https://www.apsattv.com/firetv.m3u",
+    "https://www.apsattv.com/klowd.m3u"
+  ],
+  "adult_repositories": [
+    "https://iptv-org.github.io/iptv/categories/xxx.m3u",
+    "https://iptv-org.github.io/iptv/index.nsfw.m3u",
+    "https://cdn.adultiptv.net/lists/all.m3u8"
+  ],
+  "custom_channels": [
+    {
+      "name": "Channel 10 Economic News (Israel)",
+      "url": "https://r.il.cdn-redge.media/livehls/oil/calcala-live/live/channel10/live.livx/playlist.m3u8",
+      "category": "News",
+      "country": "Israel",
+      "language": "Hebrew",
+      "min_age": 7
+    },
+    {
+      "name": "100FM Radius (Israel)",
+      "url": "https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio",
+      "min_age": 7
+    },
+    {
+      "name": "Galgalatz (Israel)",
+      "url": "https://glzwizzlv.bynetcdn.com/glglz_mp3",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio",
+      "min_age": 7
+    },
+    {
+      "name": "Reshet Bet (Israel)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reshet_bet/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio",
+      "min_age": 7
+    },
+    {
+      "name": "Kan 11 News (Israel)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8",
+      "category": "News",
+      "country": "Israel",
+      "language": "Hebrew",
+      "min_age": 7
+    },
+    {
+      "name": "Kan 11 4K (כאן 11 4K)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11_4k/live.livx/playlist.m3u8",
+      "category": "General",
+      "country": "Israel"
+    },
+    {
+      "name": "Kan 11 Subtitled (כאן 11 כתוביות)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11_subs/live.livx/playlist.m3u8",
+      "category": "General",
+      "country": "Israel"
+    },
+    {
+      "name": "Kan Kids / Kan Educational (כאן חינוכית)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan_edu/live.livx/playlist.m3u8",
+      "category": "Kids",
+      "country": "Israel"
+    },
+    {
+      "name": "Makan 33 (מכאן 33)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/makan/live.livx/playlist.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Reshet 13 (רשת 13)",
+      "url": "https://reshet.g-mana.live/media/87f59c77-03f6-4bad-a648-897e095e7360/mainManifest.m3u8",
+      "category": "General",
+      "country": "Israel"
+    },
+    {
+      "name": "Reshet 13 Alt",
+      "url": "https://d18b0e6mopany4.cloudfront.net/out/v1/2f2bc414a3db4698a8e94b89eaf2da2a/index.m3u8",
+      "category": "General",
+      "country": "Israel"
+    },
+    {
+      "name": "Reshet 13 Subtitled",
+      "url": "https://reshet.g-mana.live/media/4607e158-e4d4-4e18-9160-3dc3ea9bc677/mainManifest.m3u8",
+      "category": "General",
+      "country": "Israel"
+    },
+    {
+      "name": "Reshet 13 Comedy",
+      "url": "https://d15ds134q59udk.cloudfront.net/out/v1/fbba879221d045598540ee783b140fe2/index.m3u8",
+      "category": "Entertainment",
+      "country": "Israel"
+    },
+    {
+      "name": "Reshet 13 Nofesh",
+      "url": "https://d1yd8hohnldm33.cloudfront.net/out/v1/19dee23c2cc24f689bd4e1288661ee0c/index.m3u8",
+      "category": "Entertainment",
+      "country": "Israel"
+    },
+    {
+      "name": "Reshet 13 Reality",
+      "url": "https://d2dffl3588mvfk.cloudfront.net/out/v1/d8e15050ca4148aab0ee387a5e2eb46b/index.m3u8",
+      "category": "Entertainment",
+      "country": "Israel"
+    },
+    {
+      "name": "Big Brother Israel",
+      "url": "https://d2lckchr9cxrss.cloudfront.net/out/v1/c73af7694cce4767888c08a7534b503c/index.m3u8",
+      "category": "Entertainment",
+      "country": "Israel"
+    },
+    {
+      "name": "Channel 14 (ערוץ 14)",
+      "url": "https://ch14channel14.encoders.immergo.tv/app/2/streamPlaylist.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Channel 14 Alt",
+      "url": "https://r.il.cdn-redge.media/livehls/oil/ch14/live/ch14/live.livx/playlist.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Channel 10 Business (כלכלה)",
+      "url": "https://r.il.cdn-redge.media/livehls/oil/calcala-live/live/channel10/live.livx/playlist.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "i24NEWS Hebrew",
+      "url": "https://video.i24news.tv/live/i24news-he/index.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "i24NEWS English",
+      "url": "https://video.i24news.tv/live/i24news-en/index.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "i24NEWS French",
+      "url": "https://video.i24news.tv/live/i24news-fr/index.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "i24NEWS Arabic",
+      "url": "https://video.i24news.tv/live/i24news-ar/index.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Sport 5 Studio",
+      "url": "https://rgelive.akamaized.net/hls/live/2043095/live3/playlist.m3u8",
+      "category": "Sports",
+      "country": "Israel"
+    },
+    {
+      "name": "Ynet Live",
+      "url": "https://hls-video-ynet.ynethd.com/0323/7a92522310b049209122e2ffbd920508/master.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Knesset Channel (ערוץ הכנסת)",
+      "url": "https://kneset.gostreaming.tv/p2-kneset/_definst_/myStream/index.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Knesset Channel Accessible",
+      "url": "https://kneset.gostreaming.tv/p2-Accessibility/_definst_/myStream/index.m3u8",
+      "category": "News",
+      "country": "Israel"
+    },
+    {
+      "name": "Kabbalah TV Hebrew",
+      "url": "https://edge3.uk.kab.tv/live/tv66-heb-high/playlist.m3u8",
+      "category": "Religious",
+      "country": "Israel"
+    },
+    {
+      "name": "Kabbalah TV Russian",
+      "url": "https://edge3.uk.kab.tv/live/tv66-rus-high/playlist.m3u8",
+      "category": "Religious",
+      "country": "Israel"
+    },
+    {
+      "name": "Hala TV (هلا)",
+      "url": "https://gstream4.panet.co.il/edge/halaTV/chunks.m3u8",
+      "category": "General",
+      "country": "Israel",
+      "language": "Arabic"
+    },
+    {
+      "name": "100FM TV",
+      "url": "https://cdn.cybercdn.live/Radios_100FM/Video/playlist.m3u8",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Kan Bet / Reshet Bet (כאן ב)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reshet_bet/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Kan Gimel (כאן ג)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_gimel/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Kan Tarbut (כאן תרבות)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_tarbut/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Kan 88 (כאן 88)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_88/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Kan Moreshet (כאן מורשת)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_moreshet/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Kan Kol HaMusica (כאן קול המוסיקה)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_kol_hamuzika/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Kan Reka (כאן רקע)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/kan_reka/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Makan Radio (מכאן רדיו)",
+      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/radio/radio_makan/live.livx/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "media_type": "Radio"
+    },
+    {
+      "name": "Galei Zahal (גלי צה\"ל)",
+      "url": "http://glzwizzlv.bynetcdn.com/glz_mp3",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Galgalatz (גלגלצ)",
+      "url": "http://glzwizzlv.bynetcdn.com/glglz_mp3",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Radio 5 Live (רדיו 5)",
+      "url": "https://rgelive.akamaized.net/hls/live/2043150/radio5/playlist.m3u8",
+      "category": "Sports",
+      "country": "Israel"
+    },
+    {
+      "name": "100FM Radio",
+      "url": "https://cdn.cybercdn.live/Radios_100FM/Audio/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "106.4FM",
+      "url": "https://cdna.streamgates.net/TheBest/live/playlist.m3u8",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "91FM",
+      "url": "https://cdn.cybercdn.live/Lev_Hamedina/Audio/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "97FM Darom",
+      "url": "https://cdn.cybercdn.live/Darom_97FM/Live/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "102FM Eilat",
+      "url": "https://cdn.cybercdn.live/Eilat_Radio/Live/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "107.5FM Haifa",
+      "url": "https://1075.livecdn.biz/radiohaifa",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Kol Hai (קול חי)",
+      "url": "https://media2.93fm.co.il/live-new",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Kol Hai Music (קול חי מוזיקה)",
+      "url": "https://media2.93fm.co.il/livemusic",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Kol Barama (קול ברמה)",
+      "url": "https://cdn.cybercdn.live/Kol_Barama/Live_Audio/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Kol Play (קול פליי)",
+      "url": "https://cdn.cybercdn.live/Kol_Barama/Music/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Galei Israel (גלי ישראל)",
+      "url": "https://cdn.cybercdn.live/Galei_Israel/Live/icecast.audio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Mizrahit FM",
+      "url": "https://mzr.mediacast.co.il/mzradio",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "99.5FM",
+      "url": "https://995.livecdn.biz/995fm",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "99FM Eco",
+      "url": "http://eco-live.mediacast.co.il/99fm_aac",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "Diki Radio",
+      "url": "https://diki.mediacast.co.il/diki",
+      "category": "Music",
+      "country": "Israel"
+    },
+    {
+      "name": "103FM Radio",
+      "url": "https://cdn.cybercdn.live/103FM/Live/icecast.audio",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "103FM Radio HLS",
+      "url": "https://cdn.cybercdn.live/103FM/Live/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Radio HLS",
+      "url": "https://cdn.cybercdn.live/Radios_100FM/Audio/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Hits",
+      "url": "https://gb25.streamgates.net/radios-audio/100Hits/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Hip Hop",
+      "url": "https://gb25.streamgates.net/radios-audio/100Hiphop/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Dance",
+      "url": "https://gb25.streamgates.net/radios-audio/100Dance/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Trance",
+      "url": "https://gb25.streamgates.net/radios-audio/100Trance/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Club",
+      "url": "https://gb25.streamgates.net/radios-audio/100Club/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Top 40",
+      "url": "https://gb25.streamgates.net/radios-audio/100Top40/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM 90s",
+      "url": "https://gb25.streamgates.net/radios-audio/10090s/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM 80s",
+      "url": "https://gb25.streamgates.net/radios-audio/10080s/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Workout",
+      "url": "https://gb25.streamgates.net/radios-audio/100Workout/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Chillout",
+      "url": "https://gb25.streamgates.net/radios-audio/100Chillout/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Retro",
+      "url": "https://gb25.streamgates.net/radios-audio/100Retro/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Latin",
+      "url": "https://gb25.streamgates.net/radios-audio/100Latin/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Jazz",
+      "url": "https://gb25.streamgates.net/radios-audio/100Jazz/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Deep",
+      "url": "https://gb25.streamgates.net/radios-audio/100Deep/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Classic Rock",
+      "url": "https://gb25.streamgates.net/radios-audio/100ClassicRock/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM TikTok",
+      "url": "https://gb25.streamgates.net/radios-audio/100Tiktok/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM DJ Set",
+      "url": "https://gb25.streamgates.net/radios-audio/100Djset/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM K-Pop",
+      "url": "https://gb25.streamgates.net/radios-audio/100kpop/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    },
+    {
+      "name": "100FM Mizrachit",
+      "url": "https://gb25.streamgates.net/radios-audio/100Mizrachit/playlist.m3u8",
+      "category": "Radio",
+      "country": "Israel",
+      "language": "Hebrew",
+      "media_type": "Radio"
+    }
+  ],
+  "show_adult_content": true
+}

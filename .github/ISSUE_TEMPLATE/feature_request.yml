@@ -1,0 +1,40 @@
+name: 💡 Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like?
+      description: Describe the feature or improvement
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Why is this useful?
+      description: How would this help you or other users?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Which platform?
+      options:
+        - All platforms
+        - Windows (Desktop)
+        - Linux (Desktop)
+        - Android
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you found any workarounds?
+    validations:
+      required: false

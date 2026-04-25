@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Dark gradient background for Prism Play icon -->
+    <path
+        android:fillColor="#0C0C14"
+        android:pathData="M0,0h108v108h-108z"/>
+    <!-- Rainbow beam: Red -->
+    <path android:fillColor="#FF3232" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,30 L108,38 Z"/>
+    <!-- Rainbow beam: Orange -->
+    <path android:fillColor="#FF8C00" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,36 L108,44 Z"/>
+    <!-- Rainbow beam: Yellow -->
+    <path android:fillColor="#FFDC00" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,42 L108,50 Z"/>
+    <!-- Rainbow beam: Green -->
+    <path android:fillColor="#00DC64" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,50 L108,58 Z"/>
+    <!-- Rainbow beam: Blue -->
+    <path android:fillColor="#0096FF" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,58 L108,66 Z"/>
+    <!-- Rainbow beam: Indigo -->
+    <path android:fillColor="#6432FF" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,66 L108,74 Z"/>
+    <!-- Rainbow beam: Violet -->
+    <path android:fillColor="#B432FF" android:fillAlpha="0.5"
+        android:pathData="M62,54 L108,72 L108,80 Z"/>
+</vector>

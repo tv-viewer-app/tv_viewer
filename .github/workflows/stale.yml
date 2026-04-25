@@ -1,0 +1,40 @@
+# =============================================================================
+# Stale Issue Bot — Auto-close inactive issues and PRs
+# =============================================================================
+# Keeps the issue tracker clean by marking issues stale after 60 days of
+# inactivity, then closing them after 14 more days if no response.
+# =============================================================================
+
+name: Stale Issues
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has not had
+            recent activity. It will be closed in 14 days if no further activity occurs.
+            If this is still relevant, please comment or remove the stale label.
+          stale-pr-message: >
+            This PR has been automatically marked as stale because it has not had
+            recent activity. It will be closed in 14 days if no further activity occurs.
+          close-issue-message: >
+            This issue was closed because it has been stale for 14 days with no activity.
+            Feel free to reopen if this is still relevant.
+          days-before-stale: 60
+          days-before-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: 'pinned,good first issue,help wanted,enhancement'
+          exempt-pr-labels: 'pinned'

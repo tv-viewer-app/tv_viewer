@@ -1,0 +1,277 @@
+# =============================================================================
+# Build — Parallel platform builds (Windows EXE + Android APK)
+# =============================================================================
+# Replaces: android-build.yml, build-windows.yml, build-ubuntu.yml,
+#           build-release.yml
+#
+# Triggers:
+#   - Push to master (when source files change, not docs)
+#   - Manual dispatch
+#   - Called by release.yml via workflow_call
+#
+# Produces named artifacts that release.yml downloads.
+# Does NOT commit binaries back to the repo (avoids repo bloat + push races).
+# =============================================================================
+
+name: Build
+
+on:
+  # DISABLED auto-trigger to save Actions storage (0.5GB limit reached)
+  # push:
+  #   branches: [master]
+  #   tags-ignore:
+  #     - 'v*'
+  #   paths:
+  #     - 'flutter_app/**'
+  #     - 'core/**'
+  #     - 'ui/**'
+  #     - 'utils/**'
+  #     - '*.py'
+  #     - 'requirements.txt'
+  #     - 'TV_Viewer.spec'
+  #     - '!**/*.md'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to upload assets to (e.g., v2.4.0)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version tag to upload assets to (e.g., v2.4.0)'
+        required: false
+        type: string
+    # Expose artifact names so the caller (release.yml) knows what to download
+    outputs:
+      windows-artifact:
+        description: Name of the Windows artifact
+        value: windows-exe
+      android-artifact:
+        description: Name of the Android artifact
+        value: android-apk
+
+permissions:
+  contents: write
+
+# ---------------------------------------------------------------------------
+# Cancel redundant builds on the same branch
+# ---------------------------------------------------------------------------
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===========================================================================
+  # Job 1: Windows — PyInstaller → TV_Viewer.exe
+  # ===========================================================================
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'  # Caches pip download dir keyed on requirements.txt hash
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # PyInstaller with the same flags as TV_Viewer.spec.
+      # Using CLI flags rather than the .spec so we have full visibility in CI.
+      - name: Build executable
+        run: |
+          python -m PyInstaller --name TV_Viewer --onefile --windowed --icon tv_viewer.ico `
+            --hidden-import vlc --hidden-import aiohttp --hidden-import asyncio `
+            --hidden-import tkinter --hidden-import tkinter.ttk `
+            --hidden-import ttkbootstrap --hidden-import ttkbootstrap.themes `
+            --hidden-import ttkbootstrap.style --hidden-import json `
+            --hidden-import threading --hidden-import queue `
+            --hidden-import pychromecast --hidden-import zeroconf `
+            --hidden-import PIL --hidden-import PIL.Image --hidden-import PIL.ImageTk `
+            --exclude-module matplotlib --exclude-module numpy --exclude-module pandas `
+            --exclude-module scipy --exclude-module cv2 --exclude-module tensorflow `
+            --exclude-module torch --exclude-module sklearn `
+            --add-data "config.py;." --add-data "channels.json;." `
+            main.py
+
+      - name: Verify build
+        shell: pwsh
+        run: |
+          if (Test-Path "dist\TV_Viewer.exe") {
+            $size = (Get-Item "dist\TV_Viewer.exe").Length / 1MB
+            Write-Host "✅ Build successful — $([math]::Round($size, 2)) MB"
+          } else {
+            Write-Error "❌ dist\TV_Viewer.exe not found"
+            exit 1
+          }
+
+      - name: Upload to Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ inputs.version || github.ref_name }}"
+          if ($version) {
+            gh release upload $version dist/TV_Viewer.exe --clobber
+          }
+        shell: pwsh
+
+      # Keep artifact upload as fallback but don't fail on quota
+      - name: Upload artifact (optional)
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: windows-exe
+          path: dist/TV_Viewer.exe
+          retention-days: 1
+
+  # ===========================================================================
+  # Job 2: Android — Flutter → app-release.apk
+  # ===========================================================================
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Java 17 (required by AGP / Gradle) ---
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # --- Flutter SDK (cached between runs) ---
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: stable
+          cache: true
+
+      # --- Gradle cache (wrapper + dependency jars) ---
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('flutter_app/android/**/*.gradle*', 'flutter_app/pubspec.lock') }}
+          restore-keys: gradle-
+
+      # --- Pub cache ---
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ hashFiles('flutter_app/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      # Build with Supabase secrets injected via --dart-define.
+      # Secrets are stored in GitHub repo Settings → Secrets.
+      - name: Build APK
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Verify APK
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          if [ -f "$APK" ]; then
+            SIZE=$(du -h "$APK" | cut -f1)
+            echo "✅ APK build successful — $SIZE"
+          else
+            echo "❌ APK not found at $APK"
+            exit 1
+          fi
+
+      - name: Upload to Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          APK_PATH=$(find build/app/outputs -name "*.apk" | head -1)
+          if [ -n "$VERSION" ] && [ -n "$APK_PATH" ]; then
+            gh release upload "$VERSION" "$APK_PATH#TV_Viewer_${VERSION}_Android.apk" --clobber
+          fi
+
+      # Keep artifact upload as fallback but don't fail on quota
+      - name: Upload artifact (optional)
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: android-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 1
+
+  # ===========================================================================
+  # Job 3: Ubuntu — PyInstaller → TV_Viewer (Linux binary)
+  # ===========================================================================
+  build-ubuntu:
+    name: Build Ubuntu Binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build executable
+        run: python build.py --onefile
+
+      - name: Verify build
+        run: |
+          if [ -f "dist/TV_Viewer" ]; then
+            SIZE=$(du -h "dist/TV_Viewer" | cut -f1)
+            echo "✅ Build successful — $SIZE"
+          else
+            echo "❌ dist/TV_Viewer not found"
+            exit 1
+          fi
+
+      - name: Upload to Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          if [ -n "$VERSION" ]; then
+            mv dist/TV_Viewer "dist/TV_Viewer_${VERSION}_linux_x86_64"
+            gh release upload "$VERSION" "dist/TV_Viewer_${VERSION}_linux_x86_64" --clobber
+          fi
+
+      # Keep artifact upload as fallback but don't fail on quota
+      - name: Upload artifact (optional)
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ubuntu-binary
+          path: dist/TV_Viewer*
+          retention-days: 1

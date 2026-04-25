@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# Manual test scripts (manual_*.py) are excluded by the test_*.py pattern above.
+# Deprecated stubs (test_feedback_manual.py, test_fmstream.py, validate_build.py)
+# contain no test functions and are safely ignored by pytest.
