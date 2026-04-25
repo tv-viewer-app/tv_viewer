@@ -581,6 +581,30 @@
       "country": "Israel",
       "language": "Hebrew",
       "media_type": "Radio"
+    },
+    {
+      "name": "BBC Two (1080p) [Geo-blocked]",
+      "url": "https://rdmedia.api.bbc.co.uk/ll-trial/mpd/bbc_two_england/manifest.mpd",
+      "category": "General",
+      "country": "United Kingdom",
+      "language": "",
+      "min_age": 0
+    },
+    {
+      "name": "ITV (480p)",
+      "url": "https://cdn10.live-tv.cloud/itvrv/abr-lq/playlist.m3u8",
+      "category": "General",
+      "country": "United Kingdom",
+      "language": "",
+      "min_age": 0
+    },
+    {
+      "name": "Sky News Arabia (1080p)",
+      "url": "https://live-stream.skynewsarabia.com/c-horizontal-channel/horizontal-stream/index.m3u8",
+      "category": "News",
+      "country": "United Kingdom",
+      "language": "",
+      "min_age": 0
     }
   ],
   "show_adult_content": true
