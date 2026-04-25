@@ -90,12 +90,6 @@ PLAYER_WIDTH = 800
 PLAYER_HEIGHT = 500
 
 # =============================================================================
-# Content Filtering
-# =============================================================================
-# Adult/NSFW channels are hidden by default. Set to True to include them.
-SHOW_ADULT_CONTENT = False
-
-# =============================================================================
 # Telemetry & Analytics  (Issues #65, #79, #114)
 # =============================================================================
 # Telemetry is OFF by default.  It can be turned on in three ways:
@@ -118,8 +112,12 @@ SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 
 
 def load_external_config():
-    """Load repositories and custom channels from external JSON file."""
-    global SHOW_ADULT_CONTENT
+    """Load repositories and custom channels from external JSON file.
+    
+    Adult repositories are loaded but only included at runtime based on
+    parental controls (is_over_18). The ``include_adult`` parameter lets
+    callers decide at fetch-time.
+    """
     default_repos = [
         "https://iptv-org.github.io/iptv/index.m3u",
         "https://iptv-org.github.io/iptv/index.country.m3u",
@@ -134,12 +132,8 @@ def load_external_config():
                 repos = data.get('repositories', default_repos)
                 custom = data.get('custom_channels', default_custom)
                 adult = data.get('adult_repositories', default_adult)
-                # Load persisted adult content preference
-                if 'show_adult_content' in data:
-                    SHOW_ADULT_CONTENT = bool(data['show_adult_content'])
-                # Only include adult sources when enabled
-                if SHOW_ADULT_CONTENT and adult:
-                    repos = repos + adult
+                # Adult repos are stored but NOT merged here — callers use
+                # parental_controls.is_over_18 to decide at runtime.
                 print(f"Loaded external config: {len(repos)} repositories, {len(custom)} custom channels")
                 return repos, custom
         except Exception as e:

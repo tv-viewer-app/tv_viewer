@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _filterAreaKey = GlobalKey();
   
   bool _hasShownOnboarding = false;
+  bool _filtersCollapsed = false;
   int _currentTooltipIndex = 0;
   List<String> _tooltipsToShow = [];
   
@@ -762,6 +763,55 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildScanProgress(),
         _buildErrorBanner(),
         _buildSearchBar(),
+        // Collapsible filter header
+        InkWell(
+          onTap: () => setState(() => _filtersCollapsed = !_filtersCollapsed),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+            child: Row(
+              children: [
+                Icon(
+                  _filtersCollapsed ? Icons.expand_more : Icons.expand_less,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Filters',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Consumer<ChannelProvider>(
+                  builder: (context, provider, _) {
+                    if (provider.hasActiveFilters) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Active',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Filters section — collapsible
+        if (!_filtersCollapsed) ...[
         Consumer<ChannelProvider>(
           builder: (context, provider, _) {
             return _buildFilters(provider, false);
@@ -789,6 +839,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return const SizedBox.shrink();
           },
         ),
+        ],
         _buildStatsBar(),
         // Recently Played Section
         if (_recentChannels.isNotEmpty)
@@ -985,6 +1036,54 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildScanProgress(),
         _buildErrorBanner(),
         _buildSearchBar(),
+        // Collapsible filter header (tablet portrait)
+        InkWell(
+          onTap: () => setState(() => _filtersCollapsed = !_filtersCollapsed),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+            child: Row(
+              children: [
+                Icon(
+                  _filtersCollapsed ? Icons.expand_more : Icons.expand_less,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Filters',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Consumer<ChannelProvider>(
+                  builder: (context, provider, _) {
+                    if (provider.hasActiveFilters) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Active',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (!_filtersCollapsed) ...[
         Consumer<ChannelProvider>(
           builder: (context, provider, _) {
             return _buildFilters(provider, false);
@@ -1012,6 +1111,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return const SizedBox.shrink();
           },
         ),
+        ],
         _buildStatsBar(),
         // Recently Played Section
         if (_recentChannels.isNotEmpty)

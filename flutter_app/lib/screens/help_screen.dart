@@ -479,36 +479,6 @@ class _HelpScreenState extends State<HelpScreen> {
 
           // Settings Section
           _buildSectionHeader('Settings'),
-          // Only show adult content toggle if user confirmed they are over 18
-          if (ParentalControlsService.instance.isOver18)
-            Consumer<ChannelProvider>(
-              builder: (context, provider, _) {
-                return SwitchListTile(
-                  secondary: Icon(
-                    Icons.eighteen_up_rating,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  title: const Text('Show Adult Content'),
-                  subtitle: const Text('Include adult/NSFW channels in scan results'),
-                  value: provider.showAdultContent,
-                  onChanged: (_) => provider.toggleAdultContent(),
-                );
-              },
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Adult content settings require age verification in Parental Controls',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(0.5),
-                      fontStyle: FontStyle.italic,
-                    ),
-              ),
-            ),
 
           const SizedBox(height: 16),
 

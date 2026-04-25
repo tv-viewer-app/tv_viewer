@@ -993,8 +993,8 @@ class MainWindow:
                 continue
             if show_favorites_only and not self.favorites_manager.is_favorite(ch.get('url', '')):
                 continue
-            # Hide adult channels unless enabled in config
-            if not config.SHOW_ADULT_CONTENT:
+            # Hide adult channels unless user confirmed over-18
+            if not self.parental_controls.is_over_18:
                 cat = (ch.get('category') or '').lower()
                 name = (ch.get('name') or '').lower()
                 if cat in _adult_keywords or any(kw in name for kw in _adult_keywords):

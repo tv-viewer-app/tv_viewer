@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/channel_provider.dart';
 import '../services/parental_controls_service.dart';
 import '../widgets/pin_dialog.dart';
 
@@ -301,6 +303,9 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
               value: _service.isOver18,
               onChanged: (value) async {
                 await _service.setOver18(value);
+                if (mounted) {
+                  context.read<ChannelProvider>().refreshAfterParentalChange();
+                }
               },
             ),
           ],

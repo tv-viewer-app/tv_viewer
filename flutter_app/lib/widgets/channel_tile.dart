@@ -48,7 +48,27 @@ class ChannelTile extends StatelessWidget {
         final currentProgram = provider.getCurrentProgram(channel.name);
         final hasEpg = provider.hasEpgData(channel.name);
 
-        return ListTile(
+        return Dismissible(
+          key: ValueKey('dismiss_${channel.url}'),
+          direction: DismissDirection.endToStart,
+          confirmDismiss: (_) async {
+            _reportBrokenChannel(context);
+            return false; // don't remove the tile
+          },
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: Colors.red.shade700,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Report Broken', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                SizedBox(width: 8),
+                Icon(Icons.report_problem, color: Colors.white),
+              ],
+            ),
+          ),
+          child: ListTile(
           dense: compact,
           visualDensity: compact ? VisualDensity.compact : null,
           leading: _buildLeading(),
@@ -67,6 +87,7 @@ class ChannelTile extends StatelessWidget {
           trailing: _buildTrailing(context, provider, hasEpg),
           onTap: onTap,
           onLongPress: () => _showChannelContextMenu(context),
+          ),
         );
       },
     );
@@ -232,16 +253,6 @@ class ChannelTile extends StatelessWidget {
       ),
       items: [
         const PopupMenuItem(
-          value: 'report',
-          child: Row(
-            children: [
-              Icon(Icons.report_problem, color: Colors.red, size: 20),
-              SizedBox(width: 8),
-              Text('Report Broken 🔴'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
           value: 'misclassified',
           child: Row(
             children: [
@@ -253,9 +264,7 @@ class ChannelTile extends StatelessWidget {
         ),
       ],
     ).then((value) {
-      if (value == 'report') {
-        _reportBrokenChannel(context);
-      } else if (value == 'misclassified') {
+      if (value == 'misclassified') {
         _reportMisclassified(context);
       }
     });

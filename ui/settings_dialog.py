@@ -300,16 +300,6 @@ def show_settings_dialog(parent_window):
     # ── 3. Display Settings ──────────────────────────────────────────
     r = _section(content, "🎨  Display Settings", r)
 
-    # Adult content toggle (initially hidden; shown only when over-18 is checked)
-    adult_var = tk.BooleanVar(value=config.SHOW_ADULT_CONTENT)
-    adult_cb = ttk.Checkbutton(
-        content, text="Show adult/NSFW channels",
-        variable=adult_var,
-    )
-    # Will be shown/hidden dynamically via _on_over18_changed trace below
-    r_adult_content = r
-    r += 1
-
     # Default group mode
     ttk.Label(content, text="Default group by:", font=FONT
               ).grid(row=r, column=0, sticky="w", padx=(0, 8))
@@ -423,18 +413,6 @@ def show_settings_dialog(parent_window):
     over18_cb.grid(row=r, column=0, columnspan=3, sticky="w")
     r += 1
 
-    # Dynamically show/hide the adult-content checkbox based on over-18 state
-    def _on_over18_changed(*_args):
-        if over18_var.get():
-            adult_cb.grid(row=r_adult_content, column=0, columnspan=3, sticky="w")
-        else:
-            adult_cb.grid_remove()
-            adult_var.set(False)
-
-    over18_var.trace_add("write", _on_over18_changed)
-    # Trigger once to set initial visibility
-    _on_over18_changed()
-
     # ── 5. Privacy Settings (Issues #65, #79, #114) ─────────────────
     r = _section(content, "🔒  Privacy", r)
 
@@ -547,21 +525,6 @@ def show_settings_dialog(parent_window):
             return
 
         # -- Display settings --
-        # Adult content toggle
-        new_adult = adult_var.get()
-        if new_adult != config.SHOW_ADULT_CONTENT:
-            config.SHOW_ADULT_CONTENT = new_adult
-            # Persist to channels_config.json
-            try:
-                save_data['show_adult_content'] = new_adult
-                with open(config_path, 'w', encoding='utf-8') as f:
-                    _json.dump(save_data, f, indent=2, ensure_ascii=False)
-            except Exception as e:
-                logger.warning(f"Settings: failed to persist adult pref: {e}")
-            logger.info(f"Settings: adult content {'enabled' if new_adult else 'disabled'}")
-            # Re-filter channels to show/hide adult content (Bug #71: use _apply_filters, not _filter_channels)
-            parent_window.root.after(0, parent_window._apply_filters)
-
         new_group = group_mode_var.get()
         if new_group.lower() != parent_window.group_by_mode:
             parent_window._on_group_by_change(new_group)

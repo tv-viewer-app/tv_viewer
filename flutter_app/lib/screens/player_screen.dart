@@ -847,6 +847,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                                         color: Colors.white,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
+                                        fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -1318,6 +1319,71 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     }
 
     if (_videoController != null && _videoController!.value.isInitialized) {
+      // Radio channels: show channel name + radio icon instead of black video
+      if (widget.channel.mediaType == 'Radio') {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isPlaying ? Icons.radio : Icons.radio_outlined,
+                  size: 72,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  widget.channel.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (widget.channel.country != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  widget.channel.country!,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (_isPlaying)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(5, (i) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Container(
+                      width: 4,
+                      height: 12.0 + (i % 3) * 8,
+                      decoration: BoxDecoration(
+                        color: Colors.white54,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  )),
+                ),
+            ],
+          ),
+        );
+      }
+
       return AspectRatio(
         aspectRatio: _videoController!.value.aspectRatio,
         child: VideoPlayer(_videoController!),

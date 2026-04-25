@@ -186,7 +186,7 @@ class ChannelProvider extends ChangeNotifier {
   bool _isScanning = false;
   bool _isOffline = false; // #41: Offline state tracking
   bool _showFavoritesOnly = false; // Dedicated favorites toggle
-  bool _showAdultContent = false; // Adult content toggle (default OFF)
+  // Adult content visibility is controlled solely by ParentalControlsService.isOver18
   String _errorMessage = ''; // #41: User-facing error message
   int _scanProgress = 0;
   int _scanTotal = 0;
@@ -204,7 +204,6 @@ class ChannelProvider extends ChangeNotifier {
   List<String> get languages => ['All', ..._languages.toList()..sort()]; // BL-017
   List<String> get mediaTypes => ['All', 'TV', 'Radio'];
   List<String> get statusOptions => ['All', 'Working', 'Failed', 'Unchecked'];
-  bool get showAdultContent => _showAdultContent;
   String get selectedCategory => _selectedCategory;
   String get selectedCountry => _selectedCountry;
   String get selectedLanguage => _selectedLanguage; // BL-017
@@ -255,7 +254,6 @@ class ChannelProvider extends ChangeNotifier {
 
     // Load preferences
     await _loadFavorites();
-    await _loadAdultContentPref();
 
     // Try to load from cache first
     final cached = await _loadFromCache();
@@ -372,7 +370,7 @@ class ChannelProvider extends ChangeNotifier {
           onProgress: (current, total) {
             // Could add progress indicator here
           },
-          includeAdult: _showAdultContent,
+          includeAdult: ParentalControlsService.instance.isOver18,
         );
       }
 
@@ -848,40 +846,10 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Toggle adult content visibility. Persisted in SharedPreferences.
-  /// When toggled ON, triggers a full re-fetch to include adult sources.
-  /// Guarded: only allows enabling if the user confirmed they are over 18.
-  Future<void> toggleAdultContent() async {
-    final wantsOn = !_showAdultContent;
-
-    // Guard: don't allow enabling adult content if user is not over 18
-    if (wantsOn && !ParentalControlsService.instance.isOver18) {
-      _showAdultContent = false;
-      notifyListeners();
-      return;
-    }
-
-    _showAdultContent = wantsOn;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_adult_content', _showAdultContent);
-    if (_showAdultContent) {
-      // Re-fetch to include adult repositories
-      await fetchChannels();
-    } else {
-      _applyFilters();
-      notifyListeners();
-    }
-  }
-
-  /// Load adult content preference from SharedPreferences.
-  Future<void> _loadAdultContentPref() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _showAdultContent = prefs.getBool('show_adult_content') ?? false;
-    } catch (e, stackTrace) {
-      logger.error('Error loading adult content preference (using default)', e, stackTrace);
-      _showAdultContent = false;
-    }
+  /// Re-fetch channels after parental controls change (e.g. over-18 toggle).
+  /// Called when the user changes their age confirmation in Parental Settings.
+  Future<void> refreshAfterParentalChange() async {
+    await fetchChannels();
   }
 
   /// Set search query
@@ -961,9 +929,8 @@ class ChannelProvider extends ChangeNotifier {
     final parentalService = ParentalControlsService.instance;
 
     _filteredChannels = _channels.where((channel) {
-      // Adult content filter
-      // If user is NOT over 18, always hide adult channels regardless of toggle.
-      // If user IS over 18, hide adult channels only when toggle is off.
+      // Adult content filter — controlled solely by the over-18 toggle
+      // in Parental Controls. No separate "show adult" toggle.
       final cat = channel.category ?? '';
       final nameLower = channel.name.toLowerCase();
       final isAdult = _adultCategories.contains(cat) ||
@@ -972,10 +939,8 @@ class ChannelProvider extends ChangeNotifier {
           nameLower.contains('porn') ||
           nameLower.contains('nsfw');
 
-      if (isAdult) {
-        if (!ParentalControlsService.instance.isOver18 || !_showAdultContent) {
-          return false;
-        }
+      if (isAdult && !ParentalControlsService.instance.isOver18) {
+        return false;
       }
 
       // Parental controls category filter — hide channels in blocked categories

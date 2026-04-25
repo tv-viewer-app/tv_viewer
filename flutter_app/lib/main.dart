@@ -84,7 +84,9 @@ class TVViewerApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      textTheme: GoogleFonts.interTextTheme(),
+      textTheme: GoogleFonts.interTextTheme().apply(
+        fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
+      ),
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
@@ -138,7 +140,9 @@ class TVViewerApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
+        fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
+      ),
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,

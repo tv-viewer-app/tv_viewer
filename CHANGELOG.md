@@ -11,9 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Channel request automation** (#131-#137): Users can request channels via GitHub issue form; bot auto-searches IPTV databases, health-checks streams, and creates PRs
 - **Misclassification reporting**: Long-press/right-click "Wrong Info" option to report incorrect channel metadata (country, category, name, language) — submits as GitHub issue
 - **Request Channels button**: In-app and landing page CTAs to request new channels from the community
+- **Swipe-to-report broken channel**: Swipe a channel tile left to report it as broken (replaces long-press for this action)
+- **Collapsible filters**: Tap the "Filters" header arrow to collapse/expand the filter section for a full-screen channel list; shows "Active" badge when filters are applied
+- **Radio player display**: Radio channels now show the station name, country, and audio visualizer icon instead of a black video area
 
 ### Changed
 - **Age gate simplified**: Replaced min-age slider (0–18) with simple "I am over 18" toggle; under-18 users cannot see adult content toggle at all
+- **Adult content controls consolidated**: Removed the separate "Show Adult Content" toggle — adult visibility is now controlled entirely by the over-18 age confirmation in Parental Controls
+- **Hebrew font support**: Added font family fallback chain (Roboto → Noto Sans → Noto Sans Hebrew) so Hebrew channel names render correctly instead of garbled text
 - **Landing page updated**: Added Request Channels and Report Broken Channel buttons with community workflow visual
 
 ### Fixed
