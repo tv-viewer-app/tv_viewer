@@ -5,6 +5,20 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3] - 2026-04-25
+
+### Added
+- **Swipe-to-report broken channel**: Swipe a channel tile left to report it as broken (replaces long-press)
+- **Collapsible filters**: Tap the "Filters" arrow to collapse/expand for full-screen channel list; shows "Active" badge
+- **Radio player display**: Radio channels show station name, country, and audio icon instead of black video
+
+### Changed
+- **Adult content consolidated**: Single over-18 toggle in Parental Controls replaces the separate "Show Adult Content" toggle
+- **Hebrew font support**: Added Roboto/Noto Sans Hebrew fallback chain so Hebrew channel names render correctly
+
+### Fixed
+- **Font rendering**: Inter font now falls back to system fonts for non-Latin scripts (Hebrew, Arabic, etc.)
+
 ## [2.6.2] - 2026-04-25
 
 ### Added

@@ -9,7 +9,9 @@
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android-green.svg)
 
-> **TV Viewer** is a free, open-source IPTV player where the community maintains the channel list. Users report broken streams, submit new channels, and rate quality — making the experience better for everyone. No account needed. No ads. No tracking.
+> **🌐 [Visit the TV Viewer Landing Page →](https://tv-viewer-app.github.io/tv_viewer/)**
+
+**TV Viewer** is a free, open-source IPTV player where the community maintains the channel list. Users report broken streams, submit new channels, and rate quality — making the experience better for everyone. No account needed. No ads. No tracking.
 
 ## Buy Me a Beer 🍺
 
@@ -17,27 +19,34 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://buymeacoffee.com/tvviewer"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Beer-🍺-f0a500?style=for-the-badge" alt="Buy Me a Beer"></a>
 
+## ✨ What's New in v2.6.3
+
+- **📻 Radio player** — Radio channels now show station name, country, and audio icon instead of a blank screen
+- **👆 Swipe to report** — Swipe any channel left to report it as broken (Android)
+- **🔽 Collapsible filters** — Tap the Filters arrow to collapse and get a full-screen channel list
+- **🔤 Hebrew font support** — Hebrew channel names now render correctly (was showing garbled text)
+- **🔒 Simplified parental controls** — Single over-18 toggle controls adult content visibility
+
 ## Features
 
 - 🌍 **8000+ Channels Worldwide** — Aggregated from 80+ configurable sources, growing daily
 - 👥 **Crowdsourced Quality** — Users report broken streams and submit new channels via app or GitHub
 - 🇮🇱 **Israeli channels included** — KAN 11, Reshet 13, Channel 14, i24NEWS, Makan 33, Kan Kids, and 50+ more
 - ✅ **Background channel validation** — Concurrent stream checking with smart priority queue
-- 📂 **Categorized channel list** — Channels organized by category, country, or language
-- 📺 **Media type filtering** — Filter by TV, Radio, or All
+- 📂 **Categorized channel list** — Filter by category, country, language, or media type (TV/Radio)
+- 📻 **Radio support** — Dedicated radio player with station name display and audio visualizer
 - 🎬 **Embedded video player** — VLC-powered (Windows) / native player (Android)
 - 🔀 **Source selector** — Switch between alternative stream sources without leaving the player
 - 💾 **Offline mode** — Persistent local cache works without internet
 - 🧹 **Channel consolidation** — Multi-pass name normalization eliminates duplicates across sources
 - 🎨 **Windows 11 Fluent Design** — Modern dark theme with ttkbootstrap
-- 📱 **Android app** — Flutter-based with Material Design
+- 📱 **Android app** — Flutter-based with Material Design and gesture controls
 - 🌐 **Shared health database** — Supabase-backed health sharing surfaces working streams community-wide
 - 📊 **Privacy-first telemetry** — Opt-in anonymous usage analytics with no PII collection
 - 🔒 **No login required** — Just start and watch
 - 📺 **EPG Program Guide** — XMLTV-based Now/Next display with live progress bar
-- 🔔 **Toast notifications** — Non-blocking popup alerts for scan events and errors
 - ⏱ **Watch history** — Recently played channels with play counts
-- 🔐 **Parental controls** — PIN-locked category blocking and age rating filter
+- 🔐 **Parental controls** — PIN-locked category blocking and over-18 age gate
 - 🔍 **Advanced search** — Prefix filters (`country:US`, `category:news`, `working:`) with fuzzy matching
 - 🛡️ **SSRF protection** — Server-side request forgery guards on all outbound URL fetches
 
@@ -46,16 +55,15 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 The heart of TV Viewer is its crowdsourced channel database. Help make it better:
 
 ### Via the App (Easiest)
-- **Report broken channels** — Long-press (Android) or right-click (Windows) any channel → "Report Broken"
+- **Report broken channels** — Swipe left on any channel (Android) or right-click (Windows) → "Report Broken"
+- **Report wrong info** — Long-press (Android) or right-click (Windows) → "Wrong Info" to fix misclassified channels
 - **Submit new channels** — Settings → "Add Channel" with a stream URL you've discovered
 - **Rate quality** — Health data syncs anonymously to the shared database
 
 ### Via GitHub
-1. Open a [Channel Report](https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_report.yml) issue
-2. Provide: channel name, country, stream URL, category
-3. Maintainers verify and merge working channels
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+1. Open a [Channel Request](https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_request.yml) — our bot will auto-search IPTV databases and create a PR
+2. Open a [Channel Report](https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_report.yml) — report broken or misclassified channels
+3. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide
 
 ## Downloads
 
@@ -101,6 +109,7 @@ python main.py
 
 | Document | Description |
 |----------|-------------|
+| [🌐 Landing Page](https://tv-viewer-app.github.io/tv_viewer/) | Project homepage with screenshots and downloads |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute channels, bugs, and code |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and design |
@@ -141,7 +150,9 @@ tv_viewer_project/
 ├── core/                   # Channel manager, repo handler, stream checker
 ├── ui/                     # Windows UI (main window, player, toast, tooltips)
 ├── utils/                  # Helpers, EPG, history, parental, logger, thumbnails
-├── tests/                  # Automated tests
+├── tests/                  # Automated tests (255+ tests)
+├── docs/                   # Documentation + landing page
+│   └── index.html          # GitHub Pages landing page
 └── .github/workflows/      # CI/CD (6 workflows)
 ```
 
@@ -184,7 +195,7 @@ See [SUPPORT_GUIDE.md](docs/SUPPORT_GUIDE.md) for detailed troubleshooting.
 | Duplicate channels | Clear cache — channels consolidate automatically on next load |
 | Stream not playing | Use the source selector in the player to try an alternative stream |
 | Supabase unavailable | App works fully offline; health sharing resumes when connectivity returns |
-| App crashes on Windows | Ensure ttkbootstrap and Pillow are installed |
+| Hebrew/RTL text garbled | Update to v2.6.3+ which includes proper font fallback |
 
 ## License
 
