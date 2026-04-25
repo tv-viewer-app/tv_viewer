@@ -1,7 +1,7 @@
 -- =============================================================================
 -- TV Viewer — Supabase Security Hardening
 -- =============================================================================
--- Run in Supabase SQL Editor: https://supabase.com/dashboard/project/cdtxpefohpwtusmqengu/sql
+-- Run in Supabase SQL Editor: https://supabase.com/dashboard/project/YOUR_PROJECT_REF/sql
 --
 -- Fixes identified by Supabase Security Advisor + manual audit (2026-03-11):
 --

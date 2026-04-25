@@ -419,7 +419,7 @@ class _HelpScreenState extends State<HelpScreen> {
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(color: Colors.blue.shade700, width: 1),
             ),
-            color: Colors.blue.shade900.withValues(alpha: 0.3),
+            color: Colors.blue.shade900.withOpacity(0.3),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(

@@ -29,7 +29,7 @@ def get_service_key():
         print("\nTo run this script, you need the service_role key (not anon key).")
         print("The anon key cannot execute DDL statements.\n")
         print("RECOMMENDED APPROACH:")
-        print("  1. Open Supabase SQL Editor: https://cdtxpefohpwtusmqengu.supabase.co/project/cdtxpefohpwtusmqengu/sql")
+        print("  1. Open Supabase SQL Editor: https://supabase.com/dashboard/project/YOUR_PROJECT_REF/sql")
         print("  2. Copy/paste contents of scripts/supabase_security_fix.sql")
         print("  3. Run the migration")
         print("\nIf you have the service_role key:")

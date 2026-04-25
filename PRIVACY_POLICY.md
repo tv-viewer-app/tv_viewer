@@ -27,6 +27,18 @@ If you opt in to anonymous analytics, we collect:
 - Your location (beyond the country from your locale setting)
 - Your contacts, photos, files, or any other device data
 
+## Android Permissions
+
+TV Viewer requests only the minimum permissions needed to function:
+
+| Permission | Why It's Needed |
+|-----------|-----------------|
+| `INTERNET` | Streaming live TV channels over the network |
+| `ACCESS_NETWORK_STATE` | Detecting connectivity to enable offline mode gracefully |
+| `WAKE_LOCK` | Preventing the screen from sleeping during video playback |
+
+No camera, microphone, location, contacts, storage, or other sensitive permissions are requested.
+
 ## Data Storage
 
 Analytics data, when opted in, is stored in a Supabase database with:

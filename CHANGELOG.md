@@ -5,6 +5,21 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-04-25
+
+### Added
+- **Channel request automation** (#131-#137): Users can request channels via GitHub issue form; bot auto-searches IPTV databases, health-checks streams, and creates PRs
+- **Misclassification reporting**: Long-press/right-click "Wrong Info" option to report incorrect channel metadata (country, category, name, language) — submits as GitHub issue
+- **Request Channels button**: In-app and landing page CTAs to request new channels from the community
+
+### Changed
+- **Age gate simplified**: Replaced min-age slider (0–18) with simple "I am over 18" toggle; under-18 users cannot see adult content toggle at all
+- **Landing page updated**: Added Request Channels and Report Broken Channel buttons with community workflow visual
+
+### Fixed
+- **Android adaptive icon**: Created `mipmap-anydpi-v26/` XML wrappers so the Prism Play icon displays correctly on Android 8+ (was falling back to old PNG)
+- **AndroidManifest roundIcon**: Added `android:roundIcon` attribute for devices that use round icons
+
 ## [2.6.1] - 2026-04-22
 
 ### Security

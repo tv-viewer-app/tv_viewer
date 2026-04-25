@@ -232,12 +232,12 @@ Required for all apps. Based on our implementation:
 3. Upload the `.aab` file
 4. Add release notes:
    ```
-   What's new in v2.6.1:
-   • Privacy-first: Analytics off by default, consent dialog on first launch
-   • Security hardening: SSL verification, atomic file operations
-   • Improved stability: Refactored player and settings modules
-   • Better test coverage: 279 automated tests
-   • 128 issues fixed since v1.0
+   What's new in v2.6.2:
+   • Request channels directly from the app — community bot finds and adds them
+   • Report misclassified channels (wrong country, category) via long-press
+   • Simplified age gate: over/under 18 toggle replaces age slider
+   • Fixed app icon not displaying on Android 8+
+   • Community-powered channel curation with automated health checks
    ```
 5. Review and roll out to **100%** (or staged: 10% → 50% → 100%)
 

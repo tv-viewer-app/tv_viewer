@@ -35,7 +35,7 @@ This migration fixes **20 security warnings** identified by the Supabase linter 
 
 1. Open Supabase SQL Editor:
    ```
-   https://cdtxpefohpwtusmqengu.supabase.co/project/cdtxpefohpwtusmqengu/sql
+   https://supabase.com/dashboard/project/YOUR_PROJECT_REF/sql
    ```
 
 2. Copy/paste the entire contents of `scripts/supabase_security_fix.sql`
@@ -85,7 +85,7 @@ Expected: Each function should have `proconfig = {search_path=public}` or simila
 Try accessing as anon (should fail):
 
 ```bash
-curl "https://cdtxpefohpwtusmqengu.supabase.co/rest/v1/mv_daily_active_users" \
+curl "https://YOUR_PROJECT_REF.supabase.co/rest/v1/mv_daily_active_users" \
   -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
