@@ -273,6 +273,18 @@ class PlayerWindow(tk.Toplevel):
             self.cast_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
             add_tooltip(self.cast_btn, "Cast to TV/Chromecast")
         
+        # Report broken channel button
+        self._report_sent = False  # Debounce: one report per session
+        self.report_btn = ttk.Button(
+            self.controls_frame,
+            text="🔴",
+            width=3,
+            command=self._report_broken,
+            bootstyle="danger-outline"
+        )
+        self.report_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
+        add_tooltip(self.report_btn, "Report channel as broken")
+        
         # Channel info
         channel_name = self.channel.get('name', 'Unknown')
         self.channel_label = ttk.Label(
@@ -668,6 +680,57 @@ class PlayerWindow(tk.Toplevel):
                 SharedDbService.report_channel_failure(url)
             except Exception:
                 pass
+    
+    def _report_broken(self):
+        """Report current channel as broken via Supabase. One report per player session."""
+        if self._report_sent:
+            from tkinter import messagebox
+            messagebox.showinfo("Already Reported", "You already reported this channel.")
+            return
+        
+        import hashlib as _hashlib
+        # Use primary URL (urls[0]) for stable hash, fallback to current url
+        urls = self.channel.get('urls', [])
+        url = urls[0] if urls else self.channel.get('url', '')
+        name = self.channel.get('name', 'Unknown')
+        if not url:
+            return
+        
+        url_hash = _hashlib.sha256(url.encode('utf-8')).hexdigest()
+        self._report_sent = True
+        self.report_btn.configure(state="disabled", text="✓")
+        
+        def _run():
+            success = False
+            try:
+                import asyncio as _aio
+                from utils.supabase_channels import report_channel, is_configured
+                if is_configured():
+                    loop = _aio.new_event_loop()
+                    _aio.set_event_loop(loop)
+                    try:
+                        success = loop.run_until_complete(report_channel(url_hash))
+                    finally:
+                        loop.close()
+            except Exception:
+                pass
+            
+            def _ui_update():
+                if success:
+                    # Mark channel as not working locally
+                    self.channel['is_working'] = False
+                    self.channel['user_reported'] = True
+                    self.channel['scan_status'] = 'scanned'
+                    try:
+                        from utils.analytics import track_feature
+                        track_feature("channel_reported_broken")
+                    except Exception:
+                        pass
+            
+            self.after(0, _ui_update)
+        
+        import threading as _thr
+        _thr.Thread(target=_run, daemon=True).start()
     
     def pause(self):
         """Pause playback."""

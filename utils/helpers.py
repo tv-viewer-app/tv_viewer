@@ -17,24 +17,44 @@ from .channel_lookup import (
 def fix_mojibake(text: str) -> str:
     """Fix UTF-8 text that was incorrectly decoded as Latin-1/CP1252.
     
-    Detects the classic mojibake pattern (e.g. '×§×× ×¤×××' instead of 'קול פליי')
-    where UTF-8 bytes were interpreted as Latin-1, producing characters like × § ¨ etc.
-    Attempts to reverse the damage by re-encoding as Latin-1 and decoding as UTF-8.
-    Returns the original text if repair fails or isn't needed.
+    Detects the classic mojibake pattern (e.g. 'CÃ¡diz' instead of 'Cádiz',
+    '×§×× ×¤×××' instead of 'קול פליי') where UTF-8 bytes were interpreted
+    as Latin-1, producing characters like Ã, Â, ×, § etc.
+    
+    Strategy:
+      1. Try latin-1 → utf-8 re-decode (covers most mojibake)
+      2. For Windows-1252 control chars (0x80-0x9F), try cp1252 → utf-8
+    
+    Validation: accept repair if it reduces the number of high-byte (0x80-0xFF)
+    characters, indicating successful decode rather than further corruption.
     """
     if not text or not isinstance(text, str):
         return text
     # Quick check: if no characters in the Latin-1 supplement range (0x80-0xFF),
     # text is plain ASCII or already valid Unicode — skip.
-    if not any('\x80' <= c <= '\xff' for c in text):
+    high_byte_count = sum(1 for c in text if '\x80' <= c <= '\xff')
+    if high_byte_count == 0:
         return text
+    
+    # Pass 1: latin-1 → utf-8 (handles most mojibake)
     try:
         repaired = text.encode('latin-1').decode('utf-8')
-        # Verify the result has actual non-ASCII Unicode chars (Hebrew, Arabic, etc.)
-        if any(ord(c) > 0xFF for c in repaired):
+        repaired_high = sum(1 for c in repaired if '\x80' <= c <= '\xff')
+        if repaired_high < high_byte_count:
             return repaired
     except (UnicodeDecodeError, UnicodeEncodeError):
         pass
+    
+    # Pass 2: cp1252 → utf-8 (handles Windows-1252 control chars 0x80-0x9F)
+    if any('\x80' <= c <= '\x9f' for c in text):
+        try:
+            repaired = text.encode('cp1252').decode('utf-8')
+            repaired_high = sum(1 for c in repaired if '\x80' <= c <= '\xff')
+            if repaired_high < high_byte_count:
+                return repaired
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            pass
+    
     return text
 
 

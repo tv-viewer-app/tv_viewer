@@ -839,6 +839,19 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Mark a channel as failed (user-reported broken).
+  void markChannelFailed(Channel channel) {
+    final idx = _allChannels.indexWhere((c) => c.url == channel.url);
+    if (idx >= 0) {
+      _allChannels[idx] = _allChannels[idx].copyWith(
+        isWorking: false,
+        lastChecked: DateTime.now(),
+      );
+      _applyFilters();
+      notifyListeners();
+    }
+  }
+
   /// Toggle favorites-only filter
   void toggleFavoritesFilter() {
     _showFavoritesOnly = !_showFavoritesOnly;

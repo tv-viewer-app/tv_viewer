@@ -78,7 +78,7 @@ jobs:
             if (!fs.existsSync(resultsPath)) return;
 
             const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-            const newChannels = results.found.filter(c => !c.already_exists && c.healthy);
+            const newChannels = results.found.filter(c => !c.already_exists && c.healthy && (c.security_ok !== false));
             if (newChannels.length === 0) return;
 
             // Read current config

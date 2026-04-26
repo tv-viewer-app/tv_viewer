@@ -275,11 +275,19 @@ class ChannelTile extends StatelessWidget {
     final urlHash = SharedDbService.hashUrl(channel.url);
     SharedDbService.reportBrokenChannel(urlHash);
 
+    // Mark channel as not working locally via provider
+    try {
+      final provider = Provider.of<ChannelProvider>(context, listen: false);
+      provider.markChannelFailed(channel);
+    } catch (_) {
+      // Provider not available in this context — skip local update
+    }
+
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: const Text('Channel reported. Thanks for helping! 🙏'),
+          content: const Text('Channel reported as broken. Thanks! 🙏'),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),

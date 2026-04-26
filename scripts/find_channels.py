@@ -149,6 +149,9 @@ class FoundChannel:
     healthy: bool = False
     already_exists: bool = False
     matched_query: str = ""       # the original user query that matched
+    security_ok: bool = True      # passes URL security validation
+    security_reason: str = ""     # why it failed security check
+    language: str = ""            # auto-detected language
 
 
 @dataclass
@@ -573,6 +576,180 @@ def check_health_batch(channels: list[FoundChannel]) -> None:
              elapsed, healthy_count, len(channels))
 
 
+# ========================== Security Validation ===========================
+
+# Private/reserved IP ranges (RFC 1918, RFC 5737, loopback, link-local)
+_PRIVATE_IP_PREFIXES = (
+    "10.", "172.16.", "172.17.", "172.18.", "172.19.",
+    "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+    "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+    "172.30.", "172.31.", "192.168.", "127.", "0.",
+    "169.254.", "100.64.",  # CGNAT
+    "198.51.100.", "203.0.113.", "192.0.2.",  # Documentation ranges
+)
+
+# Suspicious TLDs / known bad patterns
+_SUSPICIOUS_PATTERNS = (
+    ".onion", ".i2p", "bit.ly/", "tinyurl.com/", "goo.gl/",
+    "pastebin.com", "hastebin.com",
+)
+
+
+def _validate_url_security(url: str) -> tuple[bool, str]:
+    """
+    Validate a stream URL for security concerns.
+
+    Returns:
+        (is_safe, reason) — True if safe, False with explanation if not.
+    """
+    if not url:
+        return False, "Empty URL"
+
+    # Must be HTTP or HTTPS
+    if not url.lower().startswith(("http://", "https://")):
+        return False, f"Non-HTTP scheme: {url[:30]}"
+
+    # Extract hostname
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+    except Exception:
+        return False, "Unparseable URL"
+
+    if not host:
+        return False, "No hostname in URL"
+
+    # Block private/reserved IPs
+    for prefix in _PRIVATE_IP_PREFIXES:
+        if host.startswith(prefix):
+            return False, f"Private/reserved IP: {host}"
+
+    # Block localhost variants
+    if host in ("localhost", "::1", "0.0.0.0"):
+        return False, f"Localhost: {host}"
+
+    # Block suspicious patterns
+    for pattern in _SUSPICIOUS_PATTERNS:
+        if pattern in url.lower():
+            return False, f"Suspicious pattern: {pattern}"
+
+    # Block URLs with credentials embedded
+    if parsed.username or parsed.password:
+        return False, "URL contains embedded credentials"
+
+    # Block extremely long URLs (potential injection)
+    if len(url) > 2048:
+        return False, f"URL too long: {len(url)} chars"
+
+    # Block non-standard ports that could indicate local services
+    if parsed.port and parsed.port in (22, 23, 25, 53, 3306, 5432, 6379, 27017):
+        return False, f"Suspicious port: {parsed.port}"
+
+    return True, ""
+
+
+def security_check_batch(channels: list[FoundChannel]) -> None:
+    """
+    Run security validation on a batch of channels.
+
+    Mutates each channel's security_ok and security_reason fields.
+    """
+    if not channels:
+        return
+
+    log.info("Running security checks on %d channels…", len(channels))
+    blocked = 0
+    for ch in channels:
+        is_safe, reason = _validate_url_security(ch.url)
+        ch.security_ok = is_safe
+        ch.security_reason = reason
+        if not is_safe:
+            blocked += 1
+            log.warning("🔒 Blocked: %s — %s (%s)", ch.name, reason, ch.url[:60])
+
+    log.info("Security checks done — %d/%d blocked.", blocked, len(channels))
+
+
+# ========================== Classification ================================
+
+# Country code → common languages
+_COUNTRY_LANGUAGES: dict[str, str] = {
+    "us": "English", "gb": "English", "au": "English", "ca": "English",
+    "ie": "English", "nz": "English", "za": "English",
+    "es": "Spanish", "mx": "Spanish", "ar": "Spanish", "co": "Spanish",
+    "cl": "Spanish", "pe": "Spanish", "ve": "Spanish",
+    "fr": "French", "be": "French",
+    "de": "German", "at": "German", "ch": "German",
+    "it": "Italian", "pt": "Portuguese", "br": "Portuguese",
+    "nl": "Dutch", "pl": "Polish", "ro": "Romanian", "hu": "Hungarian",
+    "cz": "Czech", "sk": "Slovak", "hr": "Croatian", "rs": "Serbian",
+    "ua": "Ukrainian", "ru": "Russian", "bg": "Bulgarian",
+    "gr": "Greek", "tr": "Turkish", "il": "Hebrew",
+    "sa": "Arabic", "ae": "Arabic", "eg": "Arabic", "qa": "Arabic",
+    "in": "Hindi", "jp": "Japanese", "cn": "Chinese", "kr": "Korean",
+    "th": "Thai", "id": "Indonesian", "my": "Malay", "ph": "Filipino",
+    "vn": "Vietnamese", "se": "Swedish", "no": "Norwegian",
+    "dk": "Danish", "fi": "Finnish",
+}
+
+# M3U group-title → normalized category
+_CATEGORY_MAP: dict[str, str] = {
+    "news": "News", "noticias": "News", "actualités": "News",
+    "sport": "Sports", "sports": "Sports", "deportes": "Sports",
+    "entertainment": "Entertainment", "general": "General",
+    "kids": "Kids", "children": "Kids", "infantil": "Kids",
+    "music": "Music", "musique": "Music", "música": "Music",
+    "movies": "Movies", "cinema": "Movies", "películas": "Movies",
+    "documentary": "Documentary", "documentaire": "Documentary",
+    "education": "Education", "religious": "Religious",
+    "comedy": "Comedy", "lifestyle": "Lifestyle",
+    "science": "Science", "nature": "Nature",
+    "cooking": "Cooking", "food": "Cooking",
+    "travel": "Travel", "weather": "Weather",
+    "business": "Business", "economy": "Business",
+    "culture": "Culture", "animation": "Animation",
+}
+
+
+def classify_channel(channel: FoundChannel, country_code: str) -> None:
+    """
+    Auto-classify a channel's language and normalize its category.
+
+    Mutates the channel in place.
+    """
+    # Auto-detect language from country
+    if not channel.language and country_code:
+        channel.language = _COUNTRY_LANGUAGES.get(country_code.lower(), "")
+
+    # Normalize category
+    cat_lower = channel.category.lower().strip()
+    for key, normalized in _CATEGORY_MAP.items():
+        if key in cat_lower:
+            channel.category = normalized
+            break
+
+    # Fallback: detect media type from URL patterns
+    url_lower = channel.url.lower()
+    if not channel.category or channel.category == "General":
+        if any(kw in url_lower for kw in ("radio", "fm", "am_")):
+            channel.category = "Radio"
+        elif any(kw in url_lower for kw in ("news", "noticias")):
+            channel.category = "News"
+        elif any(kw in url_lower for kw in ("sport", "espn", "bein")):
+            channel.category = "Sports"
+        elif any(kw in url_lower for kw in ("kids", "cartoon", "disney", "nick")):
+            channel.category = "Kids"
+
+
+def classify_batch(channels: list[FoundChannel], country_code: str) -> None:
+    """Classify a batch of channels."""
+    for ch in channels:
+        classify_channel(ch, country_code)
+    log.info("Classification done for %d channels (country: %s).",
+             len(channels), country_code or "unknown")
+
+
 # ========================== Result Formatting =============================
 
 def build_results(
@@ -605,9 +782,12 @@ def build_results(
                 "url": ch.url,
                 "category": ch.category,
                 "country": ch.country,
+                "language": ch.language,
                 "healthy": ch.healthy,
                 "already_exists": ch.already_exists,
                 "matched_query": ch.matched_query,
+                "security_ok": ch.security_ok,
+                "security_reason": ch.security_reason,
             }
             for ch in found_channels
         ],
@@ -628,6 +808,8 @@ def _status_icon(ch: dict) -> str:
     """Return a status emoji for a channel dict."""
     if ch.get("already_exists"):
         return "ℹ️ Exists"
+    if not ch.get("security_ok", True):
+        return "🔒 Blocked"
     return "🟢 Live" if ch.get("healthy") else "🔴 Down"
 
 
@@ -644,17 +826,31 @@ def write_markdown(results: SearchResults, output_path: Path) -> None:
     lines.append(f"**Request:** {country_display} channels — {channel_list}\n")
 
     # --- New channels found ---
-    new_channels = [ch for ch in results.found if not ch.get("already_exists")]
+    new_channels = [ch for ch in results.found
+                    if not ch.get("already_exists") and ch.get("security_ok", True)]
+    blocked_channels = [ch for ch in results.found
+                        if not ch.get("already_exists") and not ch.get("security_ok", True)]
+
     if new_channels:
         lines.append(f"### ✅ New Channels Found ({len(new_channels)})\n")
-        lines.append("| Channel | Category | Status | URL |")
-        lines.append("|---------|----------|--------|-----|")
+        lines.append("| Channel | Category | Language | Status | URL |")
+        lines.append("|---------|----------|----------|--------|-----|")
         for ch in new_channels:
             status = "🟢 Live" if ch.get("healthy") else "🔴 Down"
+            lang = ch.get("language", "—")
             url_display = f"`{ch['url'][:80]}{'…' if len(ch['url']) > 80 else ''}`"
             lines.append(
-                f"| {ch['name']} | {ch.get('category', '—')} | {status} | {url_display} |"
+                f"| {ch['name']} | {ch.get('category', '—')} | {lang} | {status} | {url_display} |"
             )
+        lines.append("")
+
+    # --- Security-blocked channels ---
+    if blocked_channels:
+        lines.append(f"### 🔒 Security Blocked ({len(blocked_channels)})\n")
+        lines.append("These channels failed security validation and will **not** be added:\n")
+        for ch in blocked_channels:
+            reason = ch.get("security_reason", "Unknown")
+            lines.append(f"- **{ch['name']}** — {reason}")
         lines.append("")
 
     # --- Already available ---
@@ -680,7 +876,7 @@ def write_markdown(results: SearchResults, output_path: Path) -> None:
     # --- Footer ---
     lines.append("---")
     lines.append(
-        "*Channels marked 🟢 Live passed health checks. "
+        "*Channels marked 🟢 Live passed health and security checks. "
         "A PR will be created to add new channels.*"
     )
     lines.append("*This is an automated response from the TV Viewer Channel Agent.*\n")
@@ -774,11 +970,18 @@ def run(
             matched_query=query,
         ))
 
-    # -- Step 5: Health checks (only for new channels) ------------------------
+    # -- Step 5: Security checks (all new channels) ----------------------------
     new_channels = [ch for ch in found_channels if not ch.already_exists]
-    check_health_batch(new_channels)
+    security_check_batch(new_channels)
 
-    # -- Step 6: Build & write results ----------------------------------------
+    # -- Step 6: Health checks (only security-cleared new channels) -----------
+    safe_channels = [ch for ch in new_channels if ch.security_ok]
+    check_health_batch(safe_channels)
+
+    # -- Step 7: Classification (all found channels) --------------------------
+    classify_batch(found_channels, request.country_code)
+
+    # -- Step 8: Build & write results ----------------------------------------
     results = build_results(request, found_channels, not_found_names)
 
     write_json(results, output_dir / "channel_results.json")

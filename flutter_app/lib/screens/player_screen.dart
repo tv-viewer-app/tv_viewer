@@ -53,6 +53,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   final PipService _pipService = PipService();
   bool _isPipMode = false;
   bool _isPipSupported = false;
+  bool _reportSent = false; // Debounce: one report per player session
 
   /// Guard wrapper: only call setState when the widget is still mounted.
   /// Prevents "setState() called after dispose()" crashes (fixes #82).
@@ -339,6 +340,30 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     } catch (e) {
       // Silently ignore errors - never block playback
       logger.debug('Health report error (non-critical): $e');
+    }
+  }
+  
+  /// Report current channel as broken to Supabase. Debounced: one per session.
+  void _reportBroken() {
+    if (_reportSent) return;
+    _safeSetState(() => _reportSent = true);
+    
+    final urlHash = SharedDbService.hashUrl(widget.channel.url);
+    SharedDbService.reportBrokenChannel(urlHash);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Channel reported as broken. Thanks! 🙏'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
     }
   }
   
@@ -896,6 +921,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                           icon: const Icon(Icons.cast, color: Colors.white),
                           tooltip: 'Cast',
                           onPressed: _showCastDialog,
+                        ),
+                        // Report broken channel button
+                        IconButton(
+                          icon: Icon(
+                            _reportSent ? Icons.check_circle : Icons.report_problem,
+                            color: _reportSent ? Colors.green : Colors.amber,
+                          ),
+                          tooltip: _reportSent ? 'Reported' : 'Report broken',
+                          onPressed: _reportSent ? null : _reportBroken,
                         ),
                         // External player button
                         IconButton(

@@ -1368,7 +1368,9 @@ class MainWindow:
         """Report a channel as broken via Supabase (runs in background thread)."""
         import hashlib as _hashlib
 
-        url = channel.get('url', '')
+        # Use primary URL (urls[0]) for stable hash, fallback to current url
+        urls = channel.get('urls', [])
+        url = urls[0] if urls else channel.get('url', '')
         name = channel.get('name', 'Unknown')
         if not url:
             messagebox.showwarning(
@@ -1411,6 +1413,13 @@ class MainWindow:
                 elif success:
                     self.toast.show_success(f"Reported \"{name}\" as broken")
                     track_feature("channel_reported_broken")
+                    # Mark channel as not working locally
+                    channel['is_working'] = False
+                    channel['user_reported'] = True
+                    channel['scan_status'] = 'scanned'
+                    self.channel_manager.save_channels()
+                    if self.current_group:
+                        self.root.after(200, lambda: self._select_group(self.current_group))
                 else:
                     messagebox.showinfo(
                         "Report",
