@@ -1,0 +1,96 @@
+name: 📊 Update Landing Page Stats
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+  workflow_dispatch:       # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Query Supabase and generate stats
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python3 -c "
+          import json, os, urllib.request, urllib.parse
+          from datetime import datetime, timezone
+
+          URL = os.environ['SUPABASE_URL']
+          KEY = os.environ['SUPABASE_ANON_KEY']
+          headers = {'apikey': KEY, 'Authorization': f'Bearer {KEY}'}
+
+          def get(endpoint, params=None):
+              qs = '&'.join(f'{k}={v}' for k,v in (params or {}).items())
+              url = f'{URL}/rest/v1/{endpoint}' + (f'?{qs}' if qs else '')
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.loads(r.read())
+
+          # Total channels
+          ch = get('channels', {'select': 'url_hash', 'limit': '1', 'offset': '0'})
+          # Use HEAD with Prefer: count=exact for total
+          req = urllib.request.Request(
+              f'{URL}/rest/v1/channels?select=url_hash',
+              headers={**headers, 'Prefer': 'count=exact', 'Range': '0-0'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              cr = r.headers.get('Content-Range', '0-0/0')
+              total_channels = int(cr.split('/')[-1]) if '/' in cr else 0
+
+          # Unique countries
+          all_ch = get('channels', {'select': 'country', 'limit': '50000'})
+          countries = set(c.get('country','') for c in all_ch if c.get('country') and c['country'] != 'Unknown')
+
+          # Categories
+          categories = set(c.get('category','') for c in get('channels', {'select': 'category', 'limit': '50000'})
+                          if c.get('category') and c['category'] != 'Other')
+
+          # Top countries by channel count
+          country_counts = {}
+          for c in all_ch:
+              co = c.get('country', 'Unknown')
+              if co and co != 'Unknown':
+                  country_counts[co] = country_counts.get(co, 0) + 1
+          top_countries = sorted(country_counts.items(), key=lambda x: -x[1])[:20]
+
+          # Top categories
+          cat_counts = {}
+          for c in get('channels', {'select': 'category', 'limit': '50000'}):
+              cat = c.get('category', 'Other')
+              if cat:
+                  cat_counts[cat] = cat_counts.get(cat, 0) + 1
+          top_categories = sorted(cat_counts.items(), key=lambda x: -x[1])[:15]
+
+          stats = {
+              'updated_at': datetime.now(timezone.utc).isoformat(),
+              'total_channels': total_channels,
+              'countries': len(countries),
+              'categories': len(categories),
+              'top_countries': [{'name': n, 'count': c} for n, c in top_countries],
+              'top_categories': [{'name': n, 'count': c} for n, c in top_categories],
+          }
+
+          with open('docs/stats.json', 'w') as f:
+              json.dump(stats, f, indent=2)
+          print(f'Stats: {total_channels} channels, {len(countries)} countries, {len(categories)} categories')
+          "
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "TV Viewer Bot"
+          git config user.email "noreply@tv-viewer-app.github.io"
+          git add docs/stats.json
+          git diff --cached --quiet && echo "No changes" || {
+            git commit -m "chore: update landing page stats [skip ci]"
+            git push
+          }
