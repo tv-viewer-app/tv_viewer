@@ -5,6 +5,27 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.4] - 2025-07-12
+
+### Security
+- **XXE prevention**: Replaced xml.etree with defusedxml for EPG parsing (prevents XML entity attacks)
+- **PIN hardening**: Upgraded parental PIN hashing from SHA-256 to PBKDF2-HMAC-SHA256 with random salt (backward-compatible migration)
+- **URL validation**: Added scheme allowlist and shell metacharacter blocking before VLC subprocess launch (Windows) and external player (Android)
+- **DLL hijacking mitigation**: Removed CWD from DLL search path on Windows via SetDllDirectoryW
+- **EPG download limits**: Capped EPG downloads at 10MB compressed / 50MB decompressed
+- **M3U export escaping**: Escape special characters in channel metadata for M3U export
+- **Temp file security**: Use tempfile.mkstemp for unpredictable temp file names
+- **HTTPS enforcement**: Warn users when adding HTTP repository URLs
+- **Supabase input sanitization**: Length-cap names/logos, validate URL schemes from Supabase data
+- **Dependency bumps**: requests≥2.32.0, aiohttp≥3.9.2, Pillow≥10.2.0
+- **GitHub Actions hardening**: All 13 workflows pinned to immutable commit SHAs, input validation, injection prevention
+- **Flutter error sanitization**: Generic error messages instead of raw exception details
+- **Lockout persistence**: Parental PIN lockout state persists across app restarts (Android)
+- **Privacy Policy link**: Implemented in consent dialog (Android)
+
+### Changed
+- File permissions restricted on parental settings file (Linux/macOS)
+
 ## [2.6.3] - 2026-04-25
 
 ### Added
