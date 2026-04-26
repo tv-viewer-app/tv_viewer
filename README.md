@@ -18,7 +18,6 @@
 If TV Viewer saves you a cable bill or just makes your day better, consider supporting development:
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
-<a href="https://paypal.me/tvviewerapp"><img src="https://img.shields.io/badge/PayPal-Donate%20💙-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="PayPal"></a>
 
 ## ✨ What's New in v2.6.3
 
