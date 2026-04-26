@@ -9,6 +9,8 @@ Settings are persisted to parental_settings.json in config.BASE_DIR.
 import hashlib
 import json
 import os
+import secrets
+import os
 import time
 from typing import List, Optional
 
@@ -30,9 +32,26 @@ MAX_FAILED_ATTEMPTS = 3
 LOCKOUT_DURATION_SECONDS = 30
 
 
-def _hash_pin(pin: str) -> str:
-    """Return the SHA-256 hex digest of *pin*."""
-    return hashlib.sha256(pin.encode("utf-8")).hexdigest()
+def _hash_pin(pin: str, salt: bytes = None) -> str:
+    """Return PBKDF2-HMAC-SHA256 hash of *pin* with random salt."""
+    if salt is None:
+        salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac('sha256', pin.encode('utf-8'), salt, 100_000)
+    return salt.hex() + ':' + dk.hex()
+
+
+def _verify_pin_hash(pin: str, stored: str) -> bool:
+    """Verify a PIN against a stored PBKDF2 hash (salt:dk format).
+    Also supports legacy unsalted SHA-256 hashes for migration."""
+    if ':' in stored:
+        # New PBKDF2 format: salt_hex:dk_hex
+        salt_hex, dk_hex = stored.split(':', 1)
+        salt = bytes.fromhex(salt_hex)
+        dk = hashlib.pbkdf2_hmac('sha256', pin.encode('utf-8'), salt, 100_000)
+        return secrets.compare_digest(dk.hex(), dk_hex)
+    else:
+        # Legacy SHA-256 format — verify then caller should re-hash
+        return hashlib.sha256(pin.encode('utf-8')).hexdigest() == stored
 
 
 class ParentalControls:
@@ -87,8 +106,12 @@ class ParentalControls:
         if self._pin_hash is None:
             return False
 
-        if _hash_pin(pin) == self._pin_hash:
+        if _verify_pin_hash(pin, self._pin_hash):
             self._failed_attempts = 0
+            # Migrate legacy SHA-256 hash to PBKDF2
+            if ':' not in self._pin_hash:
+                self._pin_hash = _hash_pin(pin)
+                self.save()
             return True
 
         self._failed_attempts += 1
@@ -207,6 +230,10 @@ class ParentalControls:
         try:
             with open(self._settings_path, "w", encoding="utf-8") as fh:
                 json.dump(data, fh, indent=2, ensure_ascii=False)
+            # Restrict file permissions (PIN hash is sensitive)
+            import sys
+            if sys.platform != 'win32':
+                os.chmod(self._settings_path, 0o600)
             logger.debug("Parental settings saved to %s", self._settings_path)
         except Exception as exc:
             logger.error("Failed to save parental settings: %s", exc)

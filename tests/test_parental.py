@@ -14,7 +14,7 @@ import pytest
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.parental import ParentalControls, _hash_pin, MAX_FAILED_ATTEMPTS, LOCKOUT_DURATION_SECONDS
+from utils.parental import ParentalControls, _hash_pin, _verify_pin_hash, MAX_FAILED_ATTEMPTS, LOCKOUT_DURATION_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -38,16 +38,28 @@ def pc(tmp_settings):
 # ---------------------------------------------------------------------------
 
 class TestPinHashing:
-    def test_hash_pin_returns_hex_string(self):
+    def test_hash_pin_returns_pbkdf2_format(self):
         h = _hash_pin("1234")
         assert isinstance(h, str)
-        assert len(h) == 64  # SHA-256 hex digest
+        assert ':' in h  # PBKDF2 format: salt_hex:dk_hex
+        salt_hex, dk_hex = h.split(':', 1)
+        assert len(salt_hex) == 32  # 16-byte salt = 32 hex chars
+        assert len(dk_hex) == 64   # SHA-256 output = 64 hex chars
 
-    def test_hash_pin_deterministic(self):
-        assert _hash_pin("0000") == _hash_pin("0000")
+    def test_hash_pin_verify_roundtrip(self):
+        h = _hash_pin("0000")
+        assert _verify_pin_hash("0000", h)
+        assert not _verify_pin_hash("1111", h)
 
     def test_hash_pin_different_pins(self):
         assert _hash_pin("1234") != _hash_pin("5678")
+
+    def test_verify_legacy_sha256_hash(self):
+        """Legacy unsalted SHA-256 hashes should still verify."""
+        import hashlib
+        legacy = hashlib.sha256("1234".encode()).hexdigest()
+        assert _verify_pin_hash("1234", legacy)
+        assert not _verify_pin_hash("0000", legacy)
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +116,8 @@ class TestPinSetupAndVerify:
         with open(tmp_settings, "r") as f:
             data = json.load(f)
         assert data["pin_hash"] != "9999"
-        assert data["pin_hash"] == _hash_pin("9999")
+        assert ':' in data["pin_hash"]  # PBKDF2 format
+        assert _verify_pin_hash("9999", data["pin_hash"])
 
 
 # ---------------------------------------------------------------------------
@@ -351,9 +364,11 @@ class TestPersistence:
 
     def test_backward_compat_min_age_18(self, tmp_settings):
         """Loading a legacy settings file with min_age >= 18 sets is_over_18=True."""
+        # Use a fresh PBKDF2 hash for testing
+        pin_hash = _hash_pin("1234")
         legacy_data = {
             "enabled": True,
-            "pin_hash": _hash_pin("1234"),
+            "pin_hash": pin_hash,
             "blocked_categories": [],
             "min_age": 18,
         }
@@ -365,9 +380,10 @@ class TestPersistence:
 
     def test_backward_compat_min_age_below_18(self, tmp_settings):
         """Loading a legacy settings file with min_age < 18 sets is_over_18=False."""
+        pin_hash = _hash_pin("1234")
         legacy_data = {
             "enabled": True,
-            "pin_hash": _hash_pin("1234"),
+            "pin_hash": pin_hash,
             "blocked_categories": [],
             "min_age": 12,
         }

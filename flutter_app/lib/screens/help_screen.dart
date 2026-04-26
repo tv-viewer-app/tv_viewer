@@ -69,8 +69,8 @@ class _HelpScreenState extends State<HelpScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
+          const SnackBar(
+            content: Text('Something went wrong. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );

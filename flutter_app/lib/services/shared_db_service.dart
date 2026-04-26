@@ -187,6 +187,11 @@ class SharedDbService {
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
+        // Security: Guard against oversized responses
+        if (response.bodyBytes.length > 50 * 1024 * 1024) {
+          logger.warning('Supabase response too large (>${response.bodyBytes.length} bytes)');
+          return [];
+        }
         final List<dynamic> data = json.decode(response.body);
         final channels = data.cast<Map<String, dynamic>>();
         logger.info('Fetched ${channels.length} channels from shared database');

@@ -33,7 +33,10 @@ import os
 import re
 import threading
 import time
-import xml.etree.ElementTree as ET
+try:
+    import defusedxml.ElementTree as ET  # Safe XML parsing (prevents XXE/billion-laughs)
+except ImportError:
+    import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -476,18 +479,27 @@ class EPGService:
     async def _fetch_source(self, session: aiohttp.ClientSession,
                              url: str) -> Tuple[Dict[str, str], Dict[str, List[EPGProgram]]]:
         """Fetch and parse a single EPG source."""
+        MAX_EPG_DOWNLOAD = 10 * 1024 * 1024    # 10 MB compressed
+        MAX_EPG_DECOMPRESSED = 50 * 1024 * 1024  # 50 MB decompressed
+
         logger.debug("Fetching EPG: %s", url)
         async with session.get(url) as response:
             if response.status != 200:
                 logger.warning("EPG fetch failed (%d): %s", response.status, url)
                 return {}, {}
 
-            data = await response.read()
+            data = await response.content.read(MAX_EPG_DOWNLOAD + 1)
+            if len(data) > MAX_EPG_DOWNLOAD:
+                logger.warning("EPG source too large (>10MB): %s", url)
+                return {}, {}
 
             # Decompress if gzipped
             if url.endswith('.gz') or response.headers.get('Content-Encoding') == 'gzip':
                 try:
                     data = gzip.decompress(data)
+                    if len(data) > MAX_EPG_DECOMPRESSED:
+                        logger.warning("EPG decompressed content too large (>50MB): %s", url)
+                        return {}, {}
                 except Exception:
                     pass  # might not actually be gzipped
 

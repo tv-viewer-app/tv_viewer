@@ -30,7 +30,7 @@ class ParentalControlsService extends ChangeNotifier {
   List<String> _blockedCategories = [];
   bool _isOver18 = false;
 
-  // Lockout state (not persisted)
+  // Lockout state (persisted to SharedPreferences)
   int _failedAttempts = 0;
   DateTime? _lockoutUntil;
 
@@ -128,6 +128,7 @@ class ParentalControlsService extends ChangeNotifier {
       logger.warning(
         'Max PIN attempts reached — lockout for ${lockoutDurationSeconds}s',
       );
+      _save(); // Persist lockout state
     }
 
     notifyListeners();
@@ -279,6 +280,13 @@ class ParentalControlsService extends ChangeNotifier {
       }
       await prefs.setStringList(_keyBlockedCategories, _blockedCategories);
       await prefs.setBool(_keyIsOver18, _isOver18);
+      // Persist lockout state
+      await prefs.setInt('parental_failed_attempts', _failedAttempts);
+      if (_lockoutUntil != null) {
+        await prefs.setInt('parental_lockout_until', _lockoutUntil!.millisecondsSinceEpoch);
+      } else {
+        await prefs.remove('parental_lockout_until');
+      }
       logger.debug('Parental settings saved');
     } catch (e, stackTrace) {
       logger.error('Failed to save parental settings', e, stackTrace);
@@ -303,6 +311,18 @@ class ParentalControlsService extends ChangeNotifier {
         await prefs.remove(_legacyKeyMinAge);
       } else {
         _isOver18 = false;
+      }
+
+      // Restore lockout state
+      _failedAttempts = prefs.getInt('parental_failed_attempts') ?? 0;
+      final lockoutMs = prefs.getInt('parental_lockout_until');
+      if (lockoutMs != null) {
+        _lockoutUntil = DateTime.fromMillisecondsSinceEpoch(lockoutMs);
+        // Clear expired lockout
+        if (DateTime.now().isAfter(_lockoutUntil!)) {
+          _failedAttempts = 0;
+          _lockoutUntil = null;
+        }
       }
     } catch (e, stackTrace) {
       logger.error('Failed to load parental settings', e, stackTrace);

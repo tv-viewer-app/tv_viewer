@@ -287,34 +287,33 @@ def load_json_file(filepath: str) -> Optional[Dict]:
 def save_json_file(filepath: str, data: Any) -> bool:
     """Save data to a JSON file safely.
     
-    Bug #67: Uses a unique temp file per call (PID + thread ID) to prevent
-    concurrent writers from colliding, then atomically replaces the target.
+    Bug #67: Uses tempfile.mkstemp for unpredictable temp filenames,
+    then atomically replaces the target.
     """
     try:
         # Security: Validate filepath
         if not filepath or not isinstance(filepath, str):
             return False
         
-        # Unique temp file per caller to prevent race between concurrent saves
-        import threading
-        temp_filepath = f"{filepath}.{os.getpid()}.{threading.get_ident()}.tmp"
-        with open(temp_filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        
-        # Atomic replace (works whether or not target already exists)
-        os.replace(temp_filepath, filepath)
-        return True
+        import tempfile
+        dir_name = os.path.dirname(filepath) or '.'
+        fd, temp_filepath = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            # Atomic replace (works whether or not target already exists)
+            os.replace(temp_filepath, filepath)
+            return True
+        except Exception:
+            try:
+                os.unlink(temp_filepath)
+            except OSError:
+                pass
+            raise
     except IOError as e:
         print(f"Error saving {filepath}: {e}")
     except Exception as e:
         print(f"Unexpected error saving {filepath}: {e}")
-    finally:
-        # Clean up temp file on failure
-        try:
-            if os.path.exists(temp_filepath):
-                os.remove(temp_filepath)
-        except (OSError, UnboundLocalError):
-            pass
     return False
 
 

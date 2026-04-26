@@ -262,6 +262,13 @@ def show_settings_dialog(parent_window):
         def _confirm(event=None):
             url = url_var.get().strip()
             if url:
+                # Security: enforce HTTPS for repository URLs
+                if url.startswith('http://'):
+                    from tkinter import messagebox
+                    messagebox.showwarning("Insecure URL",
+                        "HTTP repository URLs are not allowed.\n"
+                        "Please use HTTPS (https://) for security.")
+                    return
                 repo_listbox.insert(tk.END, url)
             add_dlg.destroy()
 

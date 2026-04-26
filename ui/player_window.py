@@ -976,6 +976,12 @@ class PlayerWindow(tk.Toplevel):
                 f"This stream type ('{parsed.scheme}') is not supported.\n\n"
                 "Only HTTP, HTTPS, RTMP, RTSP, and MMS streams are allowed.")
             return
+        # Security: Block shell metacharacters in URLs
+        import re
+        if re.search(r'[;&|`$(){}!<>]', url):
+            messagebox.showerror("Invalid Stream URL",
+                "The stream URL contains invalid characters.")
+            return
         
         try:
             vlc_launched = False

@@ -43,6 +43,14 @@ else:
 sys.path.insert(0, BASE_DIR)
 os.chdir(BASE_DIR)  # Set working directory
 
+# Security: Remove CWD from DLL search path to mitigate DLL hijacking (Windows)
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetDllDirectoryW("")
+    except Exception:
+        pass
+
 # Configure VLC for PyInstaller executables (Issue #35)
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller executable - ensure VLC can find system libraries
@@ -85,7 +93,8 @@ if getattr(sys, 'frozen', False):
         print(f"LD_LIBRARY_PATH configured for VLC")
 
 
-# Required packages with minimum versions
+# SECURITY: Package names below are hardcoded — NEVER load from external config.
+# __import__() is called with these names for dependency checking.
 REQUIRED_PACKAGES = {
     'ttkbootstrap': ('ttkbootstrap', '1.10.0'),
     'customtkinter': ('customtkinter', '5.2.0'),

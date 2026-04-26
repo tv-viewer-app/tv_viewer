@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/analytics_service.dart';
 
 /// First-launch consent dialog for analytics and age verification.
@@ -139,7 +140,10 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
             // Privacy policy link
             TextButton.icon(
               onPressed: () {
-                // TODO: Open privacy policy URL
+                launchUrl(
+                  Uri.parse('https://tv-viewer-app.github.io/tv_viewer/#privacy'),
+                  mode: LaunchMode.externalApplication,
+                );
               },
               icon: const Icon(Icons.privacy_tip, size: 16),
               label: const Text(

@@ -569,6 +569,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     final channelName = widget.channel.name;
     logger.info('Opening $channelName in external player');
 
+    // Security: Validate URL scheme before launching external player
+    const allowedSchemes = ['http', 'https', 'rtmp', 'rtsp', 'mms'];
+    final uri = Uri.tryParse(streamUrl);
+    if (uri == null || !allowedSchemes.contains(uri.scheme.toLowerCase())) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid or unsupported stream URL')),
+        );
+      }
+      return;
+    }
+
     if (Platform.isAndroid) {
       // Use Android intent with video/* MIME type to open in VLC/media player (not browser)
       try {

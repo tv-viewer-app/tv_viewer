@@ -153,13 +153,25 @@ async def fetch_channels(max_channels: int = 50_000) -> List[Dict[str, Any]]:
                             urls = json.loads(urls)
                         if not urls:
                             continue
+                        # Security: Sanitize channel data from Supabase
+                        name = str(row.get('name', ''))[:200].strip()
+                        category = str(row.get('category', 'Other'))[:100].strip()
+                        country = str(row.get('country', 'Unknown'))[:100].strip()
+                        logo = str(row.get('logo', ''))[:500].strip()
+                        # Validate URL schemes
+                        sanitized_urls = [
+                            u for u in urls
+                            if isinstance(u, str) and u[:8].lower().startswith(('http://', 'https://', 'rtmp://', 'rtsp://'))
+                        ]
+                        if not sanitized_urls:
+                            continue
                         channels.append({
-                            'name': row.get('name', ''),
-                            'urls': urls,
-                            'url': urls[0] if urls else '',
-                            'category': row.get('category', 'Other'),
-                            'country': row.get('country', 'Unknown'),
-                            'logo': row.get('logo', ''),
+                            'name': name,
+                            'urls': sanitized_urls,
+                            'url': sanitized_urls[0],
+                            'category': category,
+                            'country': country,
+                            'logo': logo,
                             'media_type': row.get('media_type'),
                             'source': row.get('source', 'supabase'),
                             'working_url_index': 0,

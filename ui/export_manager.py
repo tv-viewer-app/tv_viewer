@@ -53,15 +53,19 @@ def export_m3u(parent_window):
                 if not url:
                     continue
 
+                # Security: Escape values for safe M3U attribute embedding
+                def _m3u_escape(val):
+                    return val.replace('"', "'").replace('\n', ' ').replace('\r', '')
+
                 # Build EXTINF line with attributes
-                extinf = f'#EXTINF:-1 tvg-name="{name}"'
+                extinf = f'#EXTINF:-1 tvg-name="{_m3u_escape(name)}"'
                 if category:
-                    extinf += f' group-title="{category}"'
+                    extinf += f' group-title="{_m3u_escape(category)}"'
                 if logo:
-                    extinf += f' tvg-logo="{logo}"'
+                    extinf += f' tvg-logo="{_m3u_escape(logo)}"'
                 if country:
-                    extinf += f' tvg-country="{country}"'
-                extinf += f',{name}\n'
+                    extinf += f' tvg-country="{_m3u_escape(country)}"'
+                extinf += f',{_m3u_escape(name)}\n'
 
                 f.write(extinf)
                 f.write(f'{url}\n')
