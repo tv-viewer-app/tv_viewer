@@ -1,8 +1,8 @@
 # =============================================================================
 # Welcome Bot — Greet first-time contributors
 # =============================================================================
-# Automatically thanks first-time issue creators, PR authors, and commenters
-# to build a welcoming open-source community.
+# ⚠️ SECURITY: This uses pull_request_target which runs with base-branch
+# context and secrets. Do NOT add actions/checkout or run any code from the PR.
 # =============================================================================
 
 name: Welcome
@@ -20,25 +20,41 @@ permissions:
 jobs:
   welcome:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/first-interaction@v1
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: |
-            👋 Welcome to TV Viewer! Thanks for opening your first issue.
+          script: |
+            // Check if this is the user's first interaction
+            const creator = context.payload.sender.login;
+            const isIssue = !!context.payload.issue;
+            const isPR = !!context.payload.pull_request;
 
-            A maintainer will review this soon. In the meantime:
-            - 📺 **Channel issues?** Make sure to include the channel name and URL
-            - 🐛 **Bug reports?** Steps to reproduce help us fix it faster
-            - 💡 **Feature ideas?** We love hearing from users!
+            // Search for previous issues/PRs by this user
+            const searchType = isIssue ? 'issues' : 'pull-requests';
+            const query = isIssue
+              ? `repo:${context.repo.owner}/${context.repo.repo} author:${creator} is:issue`
+              : `repo:${context.repo.owner}/${context.repo.repo} author:${creator} is:pr`;
 
-            If you enjoy TV Viewer, consider [buying the developer a beer 🍺](https://ko-fi.com/tvviewerapp)
-          pr-message: |
-            👋 Welcome to TV Viewer! Thanks for your first pull request.
+            const { data } = await github.rest.search.issuesAndPullRequests({
+              q: query, per_page: 2
+            });
 
-            A maintainer will review your changes soon. Please make sure:
-            - ✅ Your changes follow existing code patterns
-            - ✅ Tests pass (if applicable)
-            - ✅ You've described what the PR does
+            // Only greet if this is their first (count == 1 means this is the only one)
+            if (data.total_count > 1) return;
 
-            Thanks for contributing to open-source IPTV! 🎉
+            if (isIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: `👋 Welcome to TV Viewer! Thanks for opening your first issue.\n\nA maintainer will review this soon. In the meantime:\n- 📺 **Channel issues?** Make sure to include the channel name and URL\n- 🐛 **Bug reports?** Steps to reproduce help us fix it faster\n- 💡 **Feature ideas?** We love hearing from users!\n\nIf you enjoy TV Viewer, consider [buying the developer a beer 🍺](https://ko-fi.com/tvviewerapp)`
+              });
+            } else if (isPR) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `👋 Welcome to TV Viewer! Thanks for your first pull request.\n\nA maintainer will review your changes soon. Please make sure:\n- ✅ Your changes follow existing code patterns\n- ✅ Tests pass (if applicable)\n- ✅ You've described what the PR does\n\nThanks for contributing to open-source IPTV! 🎉`
+              });
+            }

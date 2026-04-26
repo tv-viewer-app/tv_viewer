@@ -68,12 +68,13 @@ jobs:
   build-windows:
     name: Build Windows EXE
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.12'
           cache: 'pip'  # Caches pip download dir keyed on requirements.txt hash
@@ -116,16 +117,17 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
-          $version = "${{ inputs.version || github.ref_name }}"
-          if ($version) {
+          $version = "$env:INPUT_VERSION"
+          if ($version -and $version -match '^v?[0-9]+\.[0-9]+\.[0-9]+') {
             gh release upload $version dist/TV_Viewer.exe --clobber
           }
         shell: pwsh
 
       # Keep artifact upload as fallback but don't fail on quota
       - name: Upload artifact (optional)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         continue-on-error: true
         with:
           name: windows-exe
@@ -138,23 +140,24 @@ jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: flutter_app
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       # --- Java 17 (required by AGP / Gradle) ---
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4
         with:
           distribution: temurin
           java-version: '17'
 
       # --- Flutter SDK (cached between runs) ---
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
         with:
           flutter-version: '3.19.0'
           channel: stable
@@ -162,7 +165,7 @@ jobs:
 
       # --- Gradle cache (wrapper + dependency jars) ---
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.gradle/caches
@@ -172,7 +175,7 @@ jobs:
 
       # --- Pub cache ---
       - name: Cache pub packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.pub-cache
           key: pub-${{ hashFiles('flutter_app/pubspec.lock') }}
@@ -181,13 +184,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      # Build with Supabase secrets injected via --dart-define.
-      # Secrets are stored in GitHub repo Settings → Secrets.
+      # Build with Supabase secrets injected via env vars (not command line).
       - name: Build APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           flutter build apk --release \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
       - name: Verify APK
         run: |
@@ -204,8 +209,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
-          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="$INPUT_VERSION"
           APK_PATH=$(find build/app/outputs -name "*.apk" | head -1)
           if [ -n "$VERSION" ] && [ -n "$APK_PATH" ]; then
             gh release upload "$VERSION" "$APK_PATH#TV_Viewer_${VERSION}_Android.apk" --clobber
@@ -213,7 +219,7 @@ jobs:
 
       # Keep artifact upload as fallback but don't fail on quota
       - name: Upload artifact (optional)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         continue-on-error: true
         with:
           name: android-apk
@@ -226,12 +232,13 @@ jobs:
   build-ubuntu:
     name: Build Ubuntu Binary
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -260,8 +267,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
-          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="$INPUT_VERSION"
           if [ -n "$VERSION" ]; then
             mv dist/TV_Viewer "dist/TV_Viewer_${VERSION}_linux_x86_64"
             gh release upload "$VERSION" "dist/TV_Viewer_${VERSION}_linux_x86_64" --clobber
@@ -269,7 +277,7 @@ jobs:
 
       # Keep artifact upload as fallback but don't fail on quota
       - name: Upload artifact (optional)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         continue-on-error: true
         with:
           name: ubuntu-binary

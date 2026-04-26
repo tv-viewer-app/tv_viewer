@@ -45,24 +45,31 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0  # Full history for changelog + tag resolution
 
       # --- Resolve version string ---
       - name: Determine version
         id: version
+        env:
+          RAW_INPUT: ${{ github.event.inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Manual dispatch: use the input (strip leading 'v' if present)
-            RAW="${{ github.event.inputs.version }}"
-            VERSION="${RAW#v}"
+          if [ "$EVENT_NAME" == "workflow_dispatch" ]; then
+            RAW="$RAW_INPUT"
           else
-            # Tag push: extract from ref
-            VERSION="${GITHUB_REF#refs/tags/v}"
+            RAW="${GITHUB_REF#refs/tags/}"
           fi
+          # Validate version format (security: prevent injection)
+          if [[ ! "$RAW" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "❌ Invalid version format: $RAW"
+            exit 1
+          fi
+          VERSION="${RAW#v}"
           TAG="v${VERSION}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -70,21 +77,21 @@ jobs:
 
       # --- Download build artifacts (optional — builds upload directly to release) ---
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         continue-on-error: true
         with:
           name: windows-exe
           path: release-assets
 
       - name: Download Android artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         continue-on-error: true
         with:
           name: android-apk
           path: release-assets
 
       - name: Download Ubuntu artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         continue-on-error: true
         with:
           name: ubuntu-binary
