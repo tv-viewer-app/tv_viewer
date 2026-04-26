@@ -159,4 +159,4 @@ For a deeper understanding of the codebase, see:
 
 Every contribution matters — whether it's reporting a single broken channel, fixing a typo in the docs, or implementing a major feature. TV Viewer is built by its community, and that includes you.
 
-If you enjoy using TV Viewer, consider [buying us a beer 🍺](https://buymeacoffee.com/tvviewer).
+If you enjoy using TV Viewer, consider [buying us a beer 🍺](https://ko-fi.com/tvviewer).

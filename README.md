@@ -13,11 +13,12 @@
 
 **TV Viewer** is a free, open-source IPTV player where the community maintains the channel list. Users report broken streams, submit new channels, and rate quality — making the experience better for everyone. No account needed. No ads. No tracking.
 
-## Buy Me a Beer 🍺
+## Support the Project 🍺
 
 If TV Viewer saves you a cable bill or just makes your day better, consider supporting development:
 
-<a href="https://buymeacoffee.com/tvviewer"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Beer-🍺-f0a500?style=for-the-badge" alt="Buy Me a Beer"></a>
+<a href="https://ko-fi.com/tvviewer"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
+<a href="https://paypal.me/tvviewerapp"><img src="https://img.shields.io/badge/PayPal-Donate%20💙-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="PayPal"></a>
 
 ## ✨ What's New in v2.6.3
 

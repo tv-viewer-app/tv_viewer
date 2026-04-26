@@ -2073,7 +2073,7 @@ class MainWindow:
             activebackground=_AMBER_DARK, activeforeground="#FFFFFF",
             relief="flat", borderwidth=0, cursor="hand2",
             padx=14, pady=6,
-            command=lambda: _webbrowser.open("https://buymeacoffee.com/tvviewer"),
+            command=lambda: _webbrowser.open("https://ko-fi.com/tvviewer"),
         )
         beer_btn.pack(side="left")
 
