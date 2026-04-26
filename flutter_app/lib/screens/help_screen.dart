@@ -376,7 +376,7 @@ class _HelpScreenState extends State<HelpScreen> {
                         onPressed: () async {
                           try {
                             await launchUrl(
-                              Uri.parse('https://ko-fi.com/tvviewer'),
+                              Uri.parse('https://ko-fi.com/tvviewerapp'),
                               mode: LaunchMode.externalApplication,
                             );
                           } catch (e) {

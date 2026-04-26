@@ -464,7 +464,7 @@ def show_settings_dialog(parent_window):
         activebackground=_AMBER_DARK, activeforeground="#FFFFFF",
         relief="flat", borderwidth=0, cursor="hand2",
         padx=14, pady=6,
-        command=lambda: _webbrowser.open("https://ko-fi.com/tvviewer"),
+        command=lambda: _webbrowser.open("https://ko-fi.com/tvviewerapp"),
     )
     beer_btn.pack(side="left")
 
