@@ -30,7 +30,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.tvviewer.app"
+    namespace "app.tvviewer.player"
     compileSdk 35
 
     compileOptions {
@@ -43,7 +43,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.tvviewer.app"
+        applicationId "app.tvviewer.player"
         // PiP requires API 26+ (Android 8.0)
         minSdk 26
         targetSdk 35
@@ -85,4 +85,5 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+    implementation "com.google.android.play:integrity:1.4.0"
 }

@@ -54,7 +54,7 @@
 -keep class * extends androidx.lifecycle.AndroidViewModel { *; }
 
 # Prevent obfuscation of model classes (JSON serialization)
--keepclassmembers class com.tvviewer.app.** {
+-keepclassmembers class app.tvviewer.player.** {
     <init>(...);
     <fields>;
 }
