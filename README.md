@@ -19,13 +19,31 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.6.3
+## ✨ What's New in v2.7.0
 
-- **📻 Radio player** — Radio channels now show station name, country, and audio icon instead of a blank screen
-- **👆 Swipe to report** — Swipe any channel left to report it as broken (Android)
-- **🔽 Collapsible filters** — Tap the Filters arrow to collapse and get a full-screen channel list
-- **🔤 Hebrew font support** — Hebrew channel names now render correctly (was showing garbled text)
-- **🔒 Simplified parental controls** — Single over-18 toggle controls adult content visibility
+**All 13 feature requests implemented across Windows & Android!**
+
+### 🔒 Security & Integrity
+- **Play Integrity API** — Google Play attestation verifies app authenticity
+- **First-run consent dialog** — Age verification and analytics opt-in (Windows)
+
+### 📱 Android
+- **Settings screen** — Timeouts, theme toggle, repository management, about
+- **Advanced search** — `country:`, `category:`, `language:`, `type:`, `status:` prefixes
+- **Sort options** — Sort by name, country, category, type (asc/desc)
+- **Channel thumbnails** — Cached network images with fallback icons
+- **Repository management** — Add/remove/reset M3U playlist sources
+- **Radio player** — Dedicated screen with genre browsing and now-playing bar
+- **Chromecast & external player** — Cast dialog with VLC, external app, URL copy
+
+### 🖥️ Windows
+- **Collapsible filters** — Toggle filter visibility with persistent state
+- **Onboarding tooltips** — 4-step guided tour for new users
+- **Diagnostics screen** — Network tests, stream tester, system info, report export
+- **Rich channel info popup** — Metadata, EPG, source URLs, copy/play actions
+
+### 🔄 Both Platforms
+- **Auto-update checker** — Checks GitHub releases, notifies when update available
 
 ## Features
 
@@ -34,7 +52,7 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 - 🇮🇱 **Israeli channels included** — KAN 11, Reshet 13, Channel 14, i24NEWS, Makan 33, Kan Kids, and 50+ more
 - ✅ **Background channel validation** — Concurrent stream checking with smart priority queue
 - 📂 **Categorized channel list** — Filter by category, country, language, or media type (TV/Radio)
-- 📻 **Radio support** — Dedicated radio player with station name display and audio visualizer
+- 📻 **Dedicated radio player** — Genre browsing, now-playing bar, and audio controls (Android)
 - 🎬 **Embedded video player** — VLC-powered (Windows) / native player (Android)
 - 🔀 **Source selector** — Switch between alternative stream sources without leaving the player
 - 💾 **Offline mode** — Persistent local cache works without internet
@@ -47,8 +65,14 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 - 📺 **EPG Program Guide** — XMLTV-based Now/Next display with live progress bar
 - ⏱ **Watch history** — Recently played channels with play counts
 - 🔐 **Parental controls** — PIN-locked category blocking and over-18 age gate
-- 🔍 **Advanced search** — Prefix filters (`country:US`, `category:news`, `working:`) with fuzzy matching
+- 🔍 **Advanced search** — Prefix filters (`country:US`, `category:news`, `language:english`, `type:radio`) with fuzzy matching
 - 🛡️ **SSRF protection** — Server-side request forgery guards on all outbound URL fetches
+- ⚙️ **Settings screen** — Stream timeouts, theme, repository management (Android)
+- 📋 **Diagnostics** — Network tests, stream URL tester, system info export (Windows)
+- 🔄 **Auto-update checker** — GitHub release notifications on startup (both platforms)
+- 📡 **Chromecast support** — Cast to TV via VLC, external player, or URL copy (Android)
+- 🖼️ **Channel thumbnails** — Cached network images with fallback icons (Android)
+- 🔒 **Play Integrity API** — Google Play attestation for app security (Android)
 
 ## Contributing Channels
 
@@ -69,7 +93,7 @@ The heart of TV Viewer is its crowdsourced channel database. Help make it better
 
 | Platform | Download | Notes |
 |----------|----------|-------|
-| Android | [Latest APK](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 7.0+ (API 24) |
+| Android | [Latest APK](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 8.0+ (API 26) |
 | Windows | [Latest EXE](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Requires [VLC](https://www.videolan.org/vlc/) |
 | Linux | [From source](#from-source-windowslinux) | Python 3.12+ + VLC |
 
@@ -150,7 +174,7 @@ tv_viewer_project/
 ├── core/                   # Channel manager, repo handler, stream checker
 ├── ui/                     # Windows UI (main window, player, toast, tooltips)
 ├── utils/                  # Helpers, EPG, history, parental, logger, thumbnails
-├── tests/                  # Automated tests (255+ tests)
+├── tests/                  # Automated tests (258+ tests)
 ├── docs/                   # Documentation + landing page
 │   └── index.html          # GitHub Pages landing page
 └── .github/workflows/      # CI/CD (6 workflows)
