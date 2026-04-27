@@ -156,6 +156,9 @@ class MainWindow:
         
         # Load channels on startup
         self.root.after(100, self._initialize)
+        
+        # Check for onboarding after UI is ready (Feature #139)
+        self.root.after(1500, self._check_onboarding)
     
     def _setup_callbacks(self):
         """Set up callbacks for channel manager events."""
@@ -182,8 +185,8 @@ class MainWindow:
         # Sidebar frame
         self.sidebar = ttk.Frame(self.root, width=460)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        # Row 6 = category scroll (expandable)
-        self.sidebar.grid_rowconfigure(6, weight=1)
+        # Row 7 = category scroll (expandable) — shifted +1 for filter header/content split
+        self.sidebar.grid_rowconfigure(7, weight=1)
         self.sidebar.grid_columnconfigure(0, weight=1)
         self.sidebar.grid_propagate(False)
         
@@ -228,7 +231,7 @@ class MainWindow:
         """Create scan progress indicator with animation."""
         # Container frame
         self.scan_frame = ttk.Frame(self.sidebar)
-        self.scan_frame.grid(row=7, column=0, padx=10, pady=(5, 2), sticky="ew")
+        self.scan_frame.grid(row=8, column=0, padx=10, pady=(5, 2), sticky="ew")
         
         # Scan status label — single line, readable
         self.scan_label = ttk.Label(
@@ -354,13 +357,29 @@ class MainWindow:
             ).pack(side="left", expand=True, fill="x")
     
     def _create_filter_toggles(self):
-        """Create filter toggle switches - compact layout."""
-        # Filter options in a compact frame
-        filter_frame = ttk.Frame(self.sidebar)
-        filter_frame.grid(row=4, column=0, padx=15, pady=3, sticky="ew")
-        
+        """Create filter toggle switches - compact layout with collapsible header."""
+        # ── Collapsible header (Feature #138) ────────────────────────
+        self.filters_collapsed = tk.BooleanVar(value=self._load_filters_collapsed())
+
+        header_frame = ttk.Frame(self.sidebar)
+        header_frame.grid(row=4, column=0, padx=15, pady=(3, 0), sticky="ew")
+
+        self._filter_toggle_btn = ttk.Label(
+            header_frame,
+            text="▼ Filters" if not self.filters_collapsed.get() else "▶ Filters",
+            font=("Segoe UI", 11, "bold"),
+            cursor="hand2",
+            foreground=FluentColors.TEXT_PRIMARY,
+        )
+        self._filter_toggle_btn.pack(side="left")
+        self._filter_toggle_btn.bind("<Button-1>", lambda e: self._toggle_filters_panel())
+
+        # ── Filter checkboxes frame ──────────────────────────────────
+        self._filter_content_frame = ttk.Frame(self.sidebar)
+        self._filter_content_frame.grid(row=5, column=0, padx=15, pady=(0, 3), sticky="ew")
+
         # Row 1: Hide checking + Hide failed
-        row1 = ttk.Frame(filter_frame)
+        row1 = ttk.Frame(self._filter_content_frame)
         row1.pack(fill="x", pady=1)
         
         self.hide_checking_var = tk.BooleanVar(value=False)
@@ -384,7 +403,7 @@ class MainWindow:
         self.hide_failed_switch.pack(side="right")
         
         # Row 2: Favorites only toggle
-        row3 = ttk.Frame(filter_frame)
+        row3 = ttk.Frame(self._filter_content_frame)
         row3.pack(fill="x", pady=1)
         
         self.show_favorites_var = tk.BooleanVar(value=False)
@@ -396,7 +415,162 @@ class MainWindow:
             bootstyle="round-toggle"
         )
         self.show_favorites_switch.pack(side="left")
+
+        # Apply initial collapsed state
+        if self.filters_collapsed.get():
+            self._filter_content_frame.grid_remove()
+
+    def _toggle_filters_panel(self):
+        """Toggle the filters panel between collapsed and expanded."""
+        collapsed = not self.filters_collapsed.get()
+        self.filters_collapsed.set(collapsed)
+        if collapsed:
+            self._filter_content_frame.grid_remove()
+            self._filter_toggle_btn.configure(text="▶ Filters")
+        else:
+            self._filter_content_frame.grid()
+            self._filter_toggle_btn.configure(text="▼ Filters")
+        self._save_filters_collapsed(collapsed)
+
+    def _load_filters_collapsed(self) -> bool:
+        """Load filters collapsed preference from config."""
+        try:
+            import json
+            if os.path.exists(config.CHANNELS_CONFIG_FILE):
+                with open(config.CHANNELS_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return data.get('filters_collapsed', False)
+        except Exception:
+            pass
+        return False
+
+    def _save_filters_collapsed(self, collapsed: bool):
+        """Persist filters collapsed preference to config."""
+        try:
+            import json
+            cfg_path = config.CHANNELS_CONFIG_FILE
+            cfg_data = {}
+            if os.path.exists(cfg_path):
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    cfg_data = json.load(f)
+            cfg_data['filters_collapsed'] = collapsed
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"Failed to save filters_collapsed: {e}")
     
+    def _check_onboarding(self):
+        """Show onboarding tooltips on first run (Feature #139)."""
+        if getattr(config, 'ONBOARDING_COMPLETED', False):
+            return
+        try:
+            self._show_onboarding_sequence()
+        except Exception as e:
+            logger.debug(f"Onboarding skipped: {e}")
+
+    def _show_onboarding_sequence(self):
+        """Display sequential onboarding tooltips for new users."""
+        tips = [
+            (self.scan_btn, "👋 Click here to scan and find working channels"),
+            (self._filter_toggle_btn, "🔍 Use filters to find channels by status or favorites"),
+            (self.search_entry, "🔎 Search channels by name, country, or category"),
+            (self.settings_btn, "⚙️ Configure repositories, theme, and parental controls"),
+        ]
+        self._onboarding_tips = tips
+        self._onboarding_index = 0
+        self._onboarding_current_tip = None
+        self._show_next_onboarding_tip()
+
+    def _show_next_onboarding_tip(self):
+        """Show the next onboarding tooltip in the sequence."""
+        # Dismiss previous tip
+        if self._onboarding_current_tip:
+            try:
+                self._onboarding_current_tip.destroy()
+            except Exception:
+                pass
+            self._onboarding_current_tip = None
+
+        idx = self._onboarding_index
+        tips = self._onboarding_tips
+
+        if idx >= len(tips):
+            # Sequence complete — mark onboarding done
+            config.ONBOARDING_COMPLETED = True
+            self._save_onboarding_completed()
+            return
+
+        widget, text = tips[idx]
+        self._onboarding_index = idx + 1
+
+        try:
+            # Create a highlighted tooltip Toplevel
+            tip_win = tk.Toplevel(self.root)
+            tip_win.wm_overrideredirect(True)
+
+            # Position below the target widget
+            widget.update_idletasks()
+            wx = widget.winfo_rootx()
+            wy = widget.winfo_rooty() + widget.winfo_height() + 6
+
+            # Colored border frame (accent highlight)
+            border = tk.Frame(tip_win, background=FluentColors.ACCENT, padx=2, pady=2)
+            border.pack(fill="both", expand=True)
+
+            inner = tk.Frame(border, background="#1A1A1A")
+            inner.pack(fill="both", expand=True)
+
+            step_text = f"({idx + 1}/{len(tips)}) {text}"
+            label = tk.Label(
+                inner,
+                text=step_text,
+                background="#1A1A1A",
+                foreground="#FFFFFF",
+                font=("Segoe UI", 10),
+                padx=12,
+                pady=8,
+                wraplength=300,
+                justify="left",
+            )
+            label.pack()
+
+            tip_win.wm_geometry(f"+{wx}+{wy}")
+            self._onboarding_current_tip = tip_win
+
+            # Click anywhere on tip to advance
+            def _advance(event=None):
+                if hasattr(self, '_onboarding_timer') and self._onboarding_timer:
+                    self.root.after_cancel(self._onboarding_timer)
+                    self._onboarding_timer = None
+                self._show_next_onboarding_tip()
+
+            label.bind("<Button-1>", _advance)
+            border.bind("<Button-1>", _advance)
+            inner.bind("<Button-1>", _advance)
+
+            # Auto-advance after 4 seconds
+            self._onboarding_timer = self.root.after(4000, self._show_next_onboarding_tip)
+
+        except Exception as e:
+            logger.debug(f"Onboarding tip {idx} failed: {e}")
+            # Try next tip
+            self.root.after(100, self._show_next_onboarding_tip)
+
+    def _save_onboarding_completed(self):
+        """Persist onboarding completion to config file."""
+        try:
+            import json
+            cfg_path = config.CHANNELS_CONFIG_FILE
+            cfg_data = {}
+            if os.path.exists(cfg_path):
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    cfg_data = json.load(f)
+            cfg_data['onboarding_completed'] = True
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"Failed to save onboarding state: {e}")
+
     def _create_category_list(self):
         """Create the category/country scrollable list."""
         # Header
@@ -406,11 +580,11 @@ class MainWindow:
             font=("Segoe UI", 12, "bold"),
             anchor="w"
         )
-        self.group_header.grid(row=5, column=0, padx=15, pady=(8, 3), sticky="w")
+        self.group_header.grid(row=6, column=0, padx=15, pady=(8, 3), sticky="w")
         
-        # Scrollable frame for categories (row 6 has weight=1, so it expands)
+        # Scrollable frame for categories (row 7 has weight=1, so it expands)
         self.category_scroll = ScrolledFrame(self.sidebar, autohide=True)
-        self.category_scroll.grid(row=6, column=0, padx=10, pady=3, sticky="nsew")
+        self.category_scroll.grid(row=7, column=0, padx=10, pady=3, sticky="nsew")
         
         # Store category buttons and name->button map for in-place updates
         self.category_buttons = []
@@ -419,7 +593,7 @@ class MainWindow:
     def _create_action_buttons(self):
         """Create action buttons at bottom of sidebar."""
         button_frame = ttk.Frame(self.sidebar)
-        button_frame.grid(row=8, column=0, padx=10, pady=(5, 10), sticky="ew")
+        button_frame.grid(row=9, column=0, padx=10, pady=(5, 10), sticky="ew")
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
         button_frame.grid_columnconfigure(2, weight=1)
@@ -476,7 +650,16 @@ class MainWindow:
             command=self._show_about,
             bootstyle="secondary"
         )
-        self.about_btn.grid(row=2, column=1, columnspan=2, sticky="ew", padx=(3, 0), pady=(5, 0))
+        self.about_btn.grid(row=2, column=1, sticky="ew", padx=(3, 0), pady=(5, 0))
+
+        # Diagnostics button (Feature #141)
+        self.diag_btn = ttk.Button(
+            button_frame,
+            text="🔧 Diagnostics",
+            command=self._show_diagnostics,
+            bootstyle="secondary"
+        )
+        self.diag_btn.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(5, 0))
 
         # Add Channel (contribute) button
         self.contribute_btn = ttk.Button(
@@ -485,13 +668,14 @@ class MainWindow:
             command=self._show_contribute_dialog,
             bootstyle="success-outline"
         )
-        self.contribute_btn.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(5, 0))
+        self.contribute_btn.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(5, 0))
 
         # Tooltips
         add_tooltip(self.scan_btn, "Scan all channels to check which are online (F5)")
         add_tooltip(self.export_btn, "Export working channels to M3U playlist file")
         add_tooltip(self.map_btn, "Show channels on a world map by country")
         add_tooltip(self.settings_btn, "Open settings (Ctrl+,)")
+        add_tooltip(self.diag_btn, "Run diagnostics: device info, network test, stream tester")
         add_tooltip(self.contribute_btn, "Submit a new channel to the shared database")
     
     def _create_main_content(self):
@@ -724,8 +908,19 @@ class MainWindow:
             bootstyle="success",
             width=15
         )
-        self.play_btn.pack(side="right", padx=20)
+        self.play_btn.pack(side="right", padx=(5, 20))
         add_tooltip(self.play_btn, "Play the selected channel (double-click also works)")
+
+        # Info button (Feature #142)
+        self.info_btn = ttk.Button(
+            preview_frame,
+            text="ℹ Info",
+            command=self._show_selected_channel_info,
+            bootstyle="info-outline",
+            width=8
+        )
+        self.info_btn.pack(side="right", padx=5)
+        add_tooltip(self.info_btn, "View detailed channel information")
     
     def _create_status_bar(self):
         """Create the status bar."""
@@ -1321,14 +1516,13 @@ class MainWindow:
                 )
             menu.add_cascade(label=f"📡 Sources ({len(urls)})", menu=source_menu)
         
-        # Channel info/description option
+        # Channel info/description option (always visible — Feature #142)
         description = get_description(str(channel_name))
-        if description:
-            menu.add_separator()
-            menu.add_command(
-                label="ℹ Channel Info",
-                command=lambda d=description, n=channel_name: self._show_channel_info(str(n), d),
-            )
+        menu.add_separator()
+        menu.add_command(
+            label="ℹ Channel Info",
+            command=lambda d=description or "", n=channel_name: self._show_channel_info(str(n), d),
+        )
         
         # Report broken channel option
         menu.add_separator()
@@ -1357,12 +1551,167 @@ class MainWindow:
         self.channel_tree.item(row_id, values=values)
         track_feature(f"favorite_{'add' if is_fav else 'remove'}")
 
+    def _show_selected_channel_info(self):
+        """Show info dialog for the currently selected channel (Feature #142)."""
+        selection = self.channel_tree.selection()
+        if not selection:
+            return
+        item = self.channel_tree.item(selection[0])
+        channel_name = item['values'][1]
+        channel = self._find_channel_by_name(channel_name)
+        if not channel:
+            return
+        description = get_description(str(channel_name)) or ""
+        self._show_channel_info(str(channel_name), description)
+
     def _show_channel_info(self, channel_name: str, description: str):
-        """Show channel description in an info messagebox."""
-        messagebox.showinfo(
-            f"Channel Info — {channel_name}",
-            description,
-        )
+        """Show rich channel detail dialog (Feature #142)."""
+        channel = self._find_channel_by_name(str(channel_name))
+        if not channel:
+            messagebox.showinfo(f"Channel Info — {channel_name}", description)
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"Channel Info — {channel_name}")
+        dlg.geometry("540x520")
+        dlg.resizable(True, True)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.minsize(420, 400)
+
+        # Center
+        dlg.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - 540) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - 520) // 2
+        dlg.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+        FONT = ("Segoe UI", 10)
+        FONT_BOLD = ("Segoe UI", 10, "bold")
+        FONT_MONO = ("Consolas", 9)
+
+        from ttkbootstrap.widgets.scrolled import ScrolledFrame
+        scroll = ScrolledFrame(dlg, autohide=True)
+        scroll.pack(fill="both", expand=True, padx=16, pady=12)
+
+        # Title
+        ttk.Label(scroll, text=str(channel_name),
+                  font=("Segoe UI", 16, "bold"),
+                  foreground=FluentColors.ACCENT).pack(anchor="w", pady=(0, 10))
+
+        # ── Info grid ────────────────────────────────────────────────
+        info_frame = ttk.Frame(scroll)
+        info_frame.pack(fill="x", pady=(0, 10))
+
+        is_working = channel.get('is_working')
+        if is_working is True:
+            status_text = "✓ Working"
+        elif is_working is False:
+            status_text = "✗ Offline"
+        else:
+            status_text = "◌ Checking"
+
+        last_scanned = channel.get('last_scanned', 'N/A')
+        min_age = channel.get('min_age', 7)
+        age_rating = format_age_rating(min_age)
+
+        fields = [
+            ("Name", channel.get('name', 'Unknown')),
+            ("Category", channel.get('category', 'Other')),
+            ("Country", channel.get('country', 'Unknown')),
+            ("Language", channel.get('language', 'Unknown')),
+            ("Media Type", channel.get('media_type', 'TV')),
+            ("Status", status_text),
+            ("Last Checked", last_scanned),
+            ("Age Rating", age_rating),
+        ]
+        for i, (label, value) in enumerate(fields):
+            ttk.Label(info_frame, text=f"{label}:", font=FONT_BOLD).grid(
+                row=i, column=0, sticky="nw", padx=(0, 12), pady=2)
+            ttk.Label(info_frame, text=str(value), font=FONT, wraplength=350).grid(
+                row=i, column=1, sticky="w", pady=2)
+
+        # ── URLs section ─────────────────────────────────────────────
+        urls = channel.get('urls', [])
+        primary_url = channel.get('url', '')
+        if not urls and primary_url:
+            urls = [primary_url]
+
+        if urls:
+            ttk.Separator(scroll).pack(fill="x", pady=8)
+            ttk.Label(scroll, text="📡 Source URLs",
+                      font=("Segoe UI", 12, "bold"),
+                      foreground=FluentColors.ACCENT).pack(anchor="w", pady=(0, 4))
+
+            url_text = tk.Text(scroll, height=min(len(urls) + 1, 5),
+                               font=FONT_MONO, wrap="none", relief="flat",
+                               background=FluentColors.BG_CARD,
+                               foreground=FluentColors.TEXT_PRIMARY,
+                               padx=8, pady=6)
+            for i, u in enumerate(urls):
+                prefix = "► " if u == primary_url else "  "
+                url_text.insert("end", f"{prefix}{u}\n")
+            url_text.configure(state="disabled")
+            url_text.pack(fill="x", pady=(0, 6))
+
+        # ── Description section ──────────────────────────────────────
+        if description:
+            ttk.Separator(scroll).pack(fill="x", pady=8)
+            ttk.Label(scroll, text="📝 Description",
+                      font=("Segoe UI", 12, "bold"),
+                      foreground=FluentColors.ACCENT).pack(anchor="w", pady=(0, 4))
+            desc_label = ttk.Label(scroll, text=description, font=FONT,
+                                    wraplength=480, justify="left")
+            desc_label.pack(anchor="w", pady=(0, 6))
+
+        # ── EPG section ──────────────────────────────────────────────
+        try:
+            now_prog, next_prog = epg_service.get_now_next(channel_name=str(channel_name))
+            if now_prog:
+                ttk.Separator(scroll).pack(fill="x", pady=8)
+                ttk.Label(scroll, text="📺 Current Program (EPG)",
+                          font=("Segoe UI", 12, "bold"),
+                          foreground=FluentColors.ACCENT).pack(anchor="w", pady=(0, 4))
+                start_str = now_prog.start.strftime("%H:%M") if now_prog.start else ""
+                end_str = now_prog.end.strftime("%H:%M") if now_prog.end else ""
+                ttk.Label(scroll, text=f"▶ {now_prog.title}  ({start_str}–{end_str})",
+                          font=FONT_BOLD).pack(anchor="w")
+                if hasattr(now_prog, 'description') and now_prog.description:
+                    ttk.Label(scroll, text=now_prog.description, font=FONT,
+                              wraplength=480, justify="left").pack(anchor="w", pady=(2, 0))
+                if next_prog:
+                    next_start = next_prog.start.strftime("%H:%M") if next_prog.start else ""
+                    ttk.Label(scroll, text=f"⏭ Next: {next_prog.title}  ({next_start})",
+                              font=FONT, foreground=FluentColors.TEXT_SECONDARY).pack(anchor="w", pady=(4, 0))
+        except Exception:
+            pass
+
+        # ── Buttons ──────────────────────────────────────────────────
+        btn_frame = ttk.Frame(scroll)
+        btn_frame.pack(fill="x", pady=(12, 4))
+
+        def _copy_url():
+            url = primary_url or (urls[0] if urls else '')
+            if url:
+                dlg.clipboard_clear()
+                dlg.clipboard_append(url)
+                copy_btn.configure(text="✓ Copied!")
+                try:
+                    dlg.after(2000, lambda: copy_btn.configure(text="📋 Copy URL"))
+                except tk.TclError:
+                    pass
+
+        copy_btn = ttk.Button(btn_frame, text="📋 Copy URL",
+                              command=_copy_url, bootstyle="secondary")
+        copy_btn.pack(side="left", padx=(0, 6))
+
+        ttk.Button(btn_frame, text="▶ Play",
+                   command=lambda: [dlg.destroy(), self._play_channel(channel)],
+                   bootstyle="success").pack(side="left", padx=(0, 6))
+
+        ttk.Button(btn_frame, text="Close",
+                   command=dlg.destroy, bootstyle="secondary").pack(side="right")
+
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
 
     def _report_broken_channel(self, channel: Dict[str, Any]):
         """Report a channel as broken via Supabase (runs in background thread)."""
@@ -1875,6 +2224,21 @@ class MainWindow:
         """Show a proper Settings dialog with stream, repo, and display options."""
         from .settings_dialog import show_settings_dialog
         show_settings_dialog(self)
+
+    def _show_diagnostics(self):
+        """Show the diagnostics / stream tester dialog (Feature #141)."""
+        try:
+            from .diagnostics_dialog import show_diagnostics_dialog
+            show_diagnostics_dialog(self.root)
+            track_feature("diagnostics_opened")
+            logger.info("Diagnostics dialog opened")
+        except Exception as e:
+            logger.error(f"Failed to open diagnostics dialog: {e}")
+            messagebox.showerror(
+                "Error",
+                "Could not open the diagnostics dialog.\n"
+                f"Error: {e}",
+            )
     
     # ------------------------------------------------------------------
     # Parental Controls — PIN dialogs (extracted to ui/pin_dialogs.py)
@@ -2170,6 +2534,9 @@ class MainWindow:
         # Ask for telemetry consent before any analytics code runs
         self._check_telemetry_consent()
         
+        # Check for app updates in background (non-blocking)
+        self._check_for_updates()
+        
         self._set_status("Loading cached channels...")
         self.scan_label.configure(text="Loading...")
         
@@ -2204,6 +2571,54 @@ class MainWindow:
             self._scan_running = True
             self._start_scan_polling()
             self.scan_btn.configure(text="⏹ Stop Scan")
+    
+    # ── Update Check ──────────────────────────────────────────────────────
+    
+    def _check_for_updates(self):
+        """Check GitHub releases for a newer version (non-blocking)."""
+        try:
+            from utils.update_checker import check_for_update_async
+            
+            def _on_update(version):
+                if version:
+                    self.root.after(0, lambda v=version: self._show_update_banner(v))
+            
+            check_for_update_async(_on_update)
+        except Exception as e:
+            logger.debug(f"Update check setup failed: {e}")
+    
+    def _show_update_banner(self, new_version: str):
+        """Show a non-intrusive update notification banner."""
+        from utils.update_checker import dismiss_version, open_releases_page
+        
+        banner = ttk.Frame(self.root)
+        banner.configure(style="info.TFrame")
+        
+        inner = ttk.Frame(banner)
+        inner.pack(fill=tk.X, padx=10, pady=6)
+        
+        ttk.Label(
+            inner,
+            text=f"\U0001f514 New version v{new_version} is available!",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(side=tk.LEFT)
+        
+        ttk.Button(
+            inner,
+            text="Update",
+            bootstyle="info",
+            command=lambda: [open_releases_page(), banner.destroy()],
+        ).pack(side=tk.RIGHT, padx=(5, 0))
+        
+        ttk.Button(
+            inner,
+            text="Dismiss",
+            bootstyle="secondary-outline",
+            command=lambda: [dismiss_version(new_version), banner.destroy()],
+        ).pack(side=tk.RIGHT)
+        
+        # Place banner at top of main content area
+        self.toast.show_info(f"New version v{new_version} available! Check Help menu to update.")
     
     # ── First Run ─────────────────────────────────────────────────────────
     

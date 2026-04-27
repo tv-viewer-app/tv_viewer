@@ -13,6 +13,28 @@ import '../services/epg_service.dart';
 import '../models/epg_info.dart';
 import '../utils/logger_service.dart';
 
+/// #145: Sort field options for channel list.
+enum SortField { none, name, status, category, country }
+
+/// #144: Parsed advanced search query.
+class _ParsedQuery {
+  final String nameQuery;
+  final String? countryFilter;
+  final String? categoryFilter;
+  final String? languageFilter;
+  final String? mediaTypeFilter;
+  final String? statusFilter;
+
+  const _ParsedQuery({
+    required this.nameQuery,
+    this.countryFilter,
+    this.categoryFilter,
+    this.languageFilter,
+    this.mediaTypeFilter,
+    this.statusFilter,
+  });
+}
+
 /// Provider for managing channel state
 class ChannelProvider extends ChangeNotifier {
   /// Channel repository resolved from DI container.
@@ -193,6 +215,10 @@ class ChannelProvider extends ChangeNotifier {
   int _workingCount = 0;
   int _failedCount = 0;
 
+  // #145: Sort state
+  SortField _sortField = SortField.none;
+  bool _sortAscending = true;
+
   /// Generation counter to prevent stale fetch results from overwriting
   /// newer state when multiple fetches race (#80).
   int _fetchGeneration = 0;
@@ -221,6 +247,10 @@ class ChannelProvider extends ChangeNotifier {
   int get failedCount => _failedCount;
   int get totalChannels => _channels.length;
   int get favoritesCount => _favoriteUrls.length;
+
+  // #145: Sort getters
+  SortField get sortField => _sortField;
+  bool get sortAscending => _sortAscending;
 
 
   /// Check network connectivity (#41)
@@ -872,6 +902,20 @@ class ChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// #145: Set sort field
+  void setSortField(SortField field) {
+    _sortField = field;
+    _applyFilters();
+    notifyListeners();
+  }
+
+  /// #145: Set sort direction
+  void setSortDirection(bool ascending) {
+    _sortAscending = ascending;
+    _applyFilters();
+    notifyListeners();
+  }
+
   /// Clear all filters (BL-008)
   void clearFilters() {
     _selectedCategory = 'All';
@@ -1014,16 +1058,130 @@ class ChannelProvider extends ChangeNotifier {
         }
       }
 
-      // Search filter
+      // #144: Advanced search filter with syntax support
       if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        if (!channel.name.toLowerCase().contains(query)) {
-          return false;
+        final parsed = _parseSearchQuery(_searchQuery);
+
+        // Apply advanced search filters (AND logic)
+        if (parsed.countryFilter != null) {
+          final c = (channel.country ?? '').toLowerCase();
+          if (!c.contains(parsed.countryFilter!)) return false;
+        }
+        if (parsed.categoryFilter != null) {
+          final c = (channel.category ?? '').toLowerCase();
+          if (!c.contains(parsed.categoryFilter!)) return false;
+        }
+        if (parsed.languageFilter != null) {
+          final lang = _effectiveLanguage(channel).toLowerCase();
+          if (!lang.contains(parsed.languageFilter!)) return false;
+        }
+        if (parsed.mediaTypeFilter != null) {
+          if (channel.mediaType.toLowerCase() != parsed.mediaTypeFilter!) return false;
+        }
+        if (parsed.statusFilter != null) {
+          final status = parsed.statusFilter!;
+          if (status == 'working' && !(channel.isWorking && channel.lastChecked != null)) return false;
+          if (status == 'failed' && (channel.isWorking || channel.lastChecked == null)) return false;
+          if (status == 'unchecked' && channel.lastChecked != null) return false;
+        }
+
+        // Free-text name search (remaining text after prefix:value extraction)
+        if (parsed.nameQuery.isNotEmpty) {
+          if (!channel.name.toLowerCase().contains(parsed.nameQuery)) {
+            return false;
+          }
         }
       }
 
       return true;
     }).toList();
+
+    // #145: Apply sort after filtering
+    if (_sortField != SortField.none) {
+      _filteredChannels.sort((a, b) {
+        int cmp;
+        switch (_sortField) {
+          case SortField.name:
+            cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            break;
+          case SortField.status:
+            final aStatus = a.isWorking ? 1 : 0;
+            final bStatus = b.isWorking ? 1 : 0;
+            cmp = bStatus.compareTo(aStatus); // Working first
+            if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            break;
+          case SortField.category:
+            cmp = (a.category ?? 'zzz').toLowerCase().compareTo(
+                  (b.category ?? 'zzz').toLowerCase());
+            if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            break;
+          case SortField.country:
+            cmp = (a.country ?? 'zzz').toLowerCase().compareTo(
+                  (b.country ?? 'zzz').toLowerCase());
+            if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            break;
+          case SortField.none:
+            cmp = 0;
+            break;
+        }
+        return _sortAscending ? cmp : -cmp;
+      });
+    }
+  }
+
+  /// #144: Parse search query for advanced syntax like `country:US news`.
+  ///
+  /// Recognized prefixes: country, category, language, type/media, status.
+  /// Remaining text (not matching a prefix) is used as free-text name search.
+  static _ParsedQuery _parseSearchQuery(String query) {
+    String? countryFilter;
+    String? categoryFilter;
+    String? languageFilter;
+    String? mediaTypeFilter;
+    String? statusFilter;
+    final remaining = <String>[];
+
+    final parts = query.split(RegExp(r'\s+'));
+    for (final part in parts) {
+      final colonIdx = part.indexOf(':');
+      if (colonIdx > 0 && colonIdx < part.length - 1) {
+        final prefix = part.substring(0, colonIdx).toLowerCase();
+        final value = part.substring(colonIdx + 1).toLowerCase();
+        switch (prefix) {
+          case 'country':
+            countryFilter = value;
+            break;
+          case 'category':
+          case 'cat':
+            categoryFilter = value;
+            break;
+          case 'language':
+          case 'lang':
+            languageFilter = value;
+            break;
+          case 'type':
+          case 'media':
+            mediaTypeFilter = value;
+            break;
+          case 'status':
+            statusFilter = value;
+            break;
+          default:
+            remaining.add(part);
+        }
+      } else {
+        remaining.add(part);
+      }
+    }
+
+    return _ParsedQuery(
+      nameQuery: remaining.join(' ').toLowerCase().trim(),
+      countryFilter: countryFilter,
+      categoryFilter: categoryFilter,
+      languageFilter: languageFilter,
+      mediaTypeFilter: mediaTypeFilter,
+      statusFilter: statusFilter,
+    );
   }
 
   Future<List<Channel>> _loadFromCache() async {

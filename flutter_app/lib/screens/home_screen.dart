@@ -20,6 +20,9 @@ import 'help_screen.dart';
 import 'map_screen.dart';
 import 'parental_settings_screen.dart';
 import 'player_screen.dart';
+import 'radio_screen.dart';
+import 'settings_screen.dart';
+import '../services/update_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadRecentHistory();
       _checkRatingPrompt(); // BL-032: Check if we should show rating prompt
       _checkAndShowOnboarding();
+      _checkForUpdates();
     });
   }
   
@@ -84,6 +88,14 @@ class _HomeScreenState extends State<HomeScreen> {
           FeedbackService.showRatingPrompt(context);
         }
       });
+    }
+  }
+  
+  /// Check for app updates via GitHub Releases API
+  Future<void> _checkForUpdates() async {
+    final newVersion = await UpdateService.checkForUpdate();
+    if (newVersion != null && mounted) {
+      UpdateService.showUpdateBanner(context, newVersion);
     }
   }
   
@@ -241,9 +253,23 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
+          // Settings gear button
+          IconButton(
+            icon: const Icon(Icons.settings),
+            iconSize: compactAppBar ? 20 : null,
+            padding: compactAppBar ? EdgeInsets.zero : null,
+            constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'help') {
+              if (value == 'sort') {
+                _showSortOptions();
+              } else if (value == 'help') {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -265,6 +291,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 FeedbackService.openAppStore();
               } else if (value == 'about') {
                 _showAboutDialog();
+              } else if (value == 'radio') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RadioScreen()),
+                );
               } else if (value == 'map') {
                 Navigator.push(
                   context,
@@ -273,6 +304,26 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'sort',
+                child: Row(
+                  children: [
+                    Icon(Icons.sort),
+                    SizedBox(width: 8),
+                    Text('Sort Channels'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'radio',
+                child: Row(
+                  children: [
+                    Icon(Icons.radio),
+                    SizedBox(width: 8),
+                    Text('Radio Player'),
+                  ],
+                ),
+              ),
               if (compactAppBar)
                 const PopupMenuItem(
                   value: 'map',
@@ -1486,6 +1537,68 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(fontStyle: FontStyle.italic),
         ),
       ],
+    );
+  }
+
+  /// Show sort options bottom sheet (#145)
+  void _showSortOptions() {
+    final provider = context.read<ChannelProvider>();
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Sort Channels',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              _buildSortOption(context, provider, 'Default', SortField.none, true),
+              _buildSortOption(context, provider, 'Name (A→Z)', SortField.name, true),
+              _buildSortOption(context, provider, 'Name (Z→A)', SortField.name, false),
+              _buildSortOption(context, provider, 'Status', SortField.status, true),
+              _buildSortOption(context, provider, 'Category', SortField.category, true),
+              _buildSortOption(context, provider, 'Country', SortField.country, true),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSortOption(
+    BuildContext context,
+    ChannelProvider provider,
+    String label,
+    SortField field,
+    bool ascending,
+  ) {
+    final isSelected = provider.sortField == field &&
+        (field == SortField.none || provider.sortAscending == ascending);
+    return ListTile(
+      leading: Icon(
+        isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+        color: isSelected ? Theme.of(context).colorScheme.primary : null,
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+        ),
+      ),
+      onTap: () {
+        provider.setSortField(field);
+        provider.setSortDirection(ascending);
+        Navigator.pop(context);
+      },
     );
   }
 }

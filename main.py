@@ -253,6 +253,50 @@ def main():
         print("Also ensure VLC media player is installed on your system.")
         print()
     
+    # ── First-run consent dialog (Feature #140) ──────────────────────
+    # Show before MainWindow creation so the user can decline and exit.
+    if not getattr(config, 'CONSENT_ACCEPTED', False):
+        try:
+            import tkinter as _tk
+            _consent_root = _tk.Tk()
+            _consent_root.withdraw()
+            # Enable DPI awareness for the consent dialog on Windows
+            try:
+                _consent_root.tk.call('tk', 'scaling', 1.0)
+            except Exception:
+                pass
+            from ui.consent_dialog import show_consent_dialog
+            consent_result = show_consent_dialog(_consent_root)
+            _consent_root.destroy()
+            if not consent_result.get('accepted', False):
+                print("User declined consent. Exiting.")
+                sys.exit(0)
+            # Persist consent
+            config.CONSENT_ACCEPTED = True
+            config.TELEMETRY_ENABLED = consent_result.get('analytics', False)
+            # Save consent state to channels_config.json
+            import json as _json
+            _cfg_path = config.CHANNELS_CONFIG_FILE
+            _cfg_data = {}
+            try:
+                if os.path.exists(_cfg_path):
+                    with open(_cfg_path, 'r', encoding='utf-8') as _f:
+                        _cfg_data = _json.load(_f)
+            except Exception:
+                pass
+            _cfg_data['consent_accepted'] = True
+            _cfg_data['analytics_enabled'] = consent_result.get('analytics', False)
+            try:
+                with open(_cfg_path, 'w', encoding='utf-8') as _f:
+                    _json.dump(_cfg_data, _f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"Warning: Consent dialog failed: {e}")
+            # Allow app to continue if dialog fails
+
     # Import after path setup and requirements check
     # Bug #107: Wrap MainWindow creation in try/except with error dialog fallback
     try:

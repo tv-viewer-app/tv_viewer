@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.6.4"
+APP_VERSION = "2.7.0"
 
 # =============================================================================
 # File Paths
@@ -132,6 +132,10 @@ def load_external_config():
                 repos = data.get('repositories', default_repos)
                 custom = data.get('custom_channels', default_custom)
                 adult = data.get('adult_repositories', default_adult)
+                # Load persisted first-run / onboarding state
+                global CONSENT_ACCEPTED, ONBOARDING_COMPLETED
+                CONSENT_ACCEPTED = data.get('consent_accepted', False)
+                ONBOARDING_COMPLETED = data.get('onboarding_completed', False)
                 # Adult repos are stored but NOT merged here — callers use
                 # parental_controls.is_over_18 to decide at runtime.
                 print(f"Loaded external config: {len(repos)} repositories, {len(custom)} custom channels")
@@ -167,6 +171,15 @@ DEFAULT_CATEGORIES = [
     "Radio",
     "Other"
 ]
+
+# =============================================================================
+# First-Run / Onboarding State
+# =============================================================================
+# Set to True after the user completes the consent dialog
+CONSENT_ACCEPTED = False
+
+# Set to True after the user has seen the onboarding tooltip sequence
+ONBOARDING_COMPLETED = False
 
 # Refresh interval for channel checking (in seconds)
 CHANNEL_REFRESH_INTERVAL = 300  # 5 minutes

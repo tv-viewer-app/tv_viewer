@@ -5,6 +5,26 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-04-27
+
+### Added — Windows
+- **Collapsible filters panel** (#138): Sidebar filters section can be collapsed/expanded with a toggle; preference persisted
+- **Onboarding tooltips** (#139): First-run sequential tooltips guide new users through scan, filters, search, and settings
+- **First-run consent dialog** (#140): Content notice, age verification, and analytics opt-in shown on first launch
+- **Diagnostics screen** (#141): Device info, network connectivity tests, stream URL tester, and report export
+- **Rich channel info popup** (#142): Full detail dialog with metadata, URLs, EPG, and action buttons replacing simple messagebox
+- **Auto-update version check** (#149): Checks GitHub releases on startup; non-intrusive toast notification when update available
+
+### Added — Android
+- **Settings screen** (#143): Full settings with stream timeouts, theme toggle, repository management, privacy controls, and about section
+- **Advanced search syntax** (#144): Support for `country:US`, `category:news`, `language:english`, `type:radio`, `status:working` in search
+- **Channel sort options** (#145): Sort by name, status, category, or country via bottom sheet selector
+- **Chromecast support** (#146): Cast dialog with VLC-based casting, open in external player, and copy URL options
+- **Channel thumbnails** (#147): Cached network images for channel logos with circular avatar display and fallback icons
+- **Repository management** (#148): Add/remove M3U repository URLs with validation, swipe-to-delete, and reset to defaults
+- **Auto-update version check** (#149): Checks GitHub releases API; shows Material banner when newer version available
+- **Dedicated radio player** (#150): Radio screen with genre browsing, search, now-playing bar, volume control, and station list
+
 ## [2.6.4] - 2025-07-12
 
 ### Security

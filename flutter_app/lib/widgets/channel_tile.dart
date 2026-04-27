@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../data/channel_descriptions.dart';
 import '../models/channel.dart';
 import '../models/epg_info.dart';
@@ -128,28 +129,42 @@ class ChannelTile extends StatelessWidget {
 
   Widget _buildLeading() {
     final size = compact ? 28.0 : 40.0;
+    final iconSize = compact ? 14.0 : 24.0;
+    final fallbackIcon = Icon(
+      channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
+      color: Colors.white,
+      size: iconSize,
+    );
+
+    // #147: Use CachedNetworkImage for channel logos
+    final hasLogo = channel.logo != null &&
+        channel.logo!.isNotEmpty &&
+        (channel.logo!.startsWith('http://') || channel.logo!.startsWith('https://'));
+
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: channel.isWorking ? Colors.green : Colors.grey,
-      child: channel.logo != null
+      child: hasLogo
           ? ClipOval(
-              child: Image.network(
-                channel.logo!,
+              child: CachedNetworkImage(
+                imageUrl: channel.logo!,
                 width: size,
                 height: size,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(
-                  channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
-                  color: Colors.white,
-                  size: compact ? 14 : 24,
+                memCacheWidth: (size * 2).toInt(), // 2x for high DPI
+                maxWidthDiskCache: 80,
+                placeholder: (_, __) => SizedBox(
+                  width: size,
+                  height: size,
+                  child: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
+                errorWidget: (_, __, ___) => fallbackIcon,
               ),
             )
-          : Icon(
-              channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
-              color: Colors.white,
-              size: compact ? 14 : 24,
-            ),
+          : fallbackIcon,
     );
   }
 
