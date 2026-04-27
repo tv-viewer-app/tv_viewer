@@ -30,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   // Keys for onboarding tooltips
   final GlobalKey _scanButtonKey = GlobalKey();
@@ -172,31 +173,59 @@ class _HomeScreenState extends State<HomeScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final compactAppBar = isLandscape && !isTablet;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('📺 TV Viewer'),
+        toolbarHeight: compactAppBar ? 36 : null,
+        titleSpacing: compactAppBar ? 4 : null,
+        title: Text(
+          compactAppBar ? '📺 TV Viewer' : '📺 TV Viewer',
+          style: compactAppBar ? const TextStyle(fontSize: 14) : null,
+        ),
         actions: [
+          // Filter drawer toggle (landscape phone only)
+          if (compactAppBar)
+            IconButton(
+              icon: Consumer<ChannelProvider>(
+                builder: (context, provider, _) => Badge(
+                  isLabelVisible: provider.hasActiveFilters,
+                  child: const Icon(Icons.filter_list, size: 20),
+                ),
+              ),
+              iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Filters',
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
           // Add Channel button
           IconButton(
             icon: const Icon(Icons.add_circle_outline),
+            iconSize: compactAppBar ? 20 : null,
+            padding: compactAppBar ? EdgeInsets.zero : null,
+            constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
             tooltip: 'Contribute Channel',
             onPressed: () => ContributeChannelDialog.show(context),
           ),
           // World Map button
-          IconButton(
-            icon: const Icon(Icons.map),
-            tooltip: 'World Map',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MapScreen()),
+          if (!compactAppBar)
+            IconButton(
+              icon: const Icon(Icons.map),
+              tooltip: 'World Map',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MapScreen()),
+              ),
             ),
-          ),
           Consumer<ChannelProvider>(
             builder: (context, provider, _) {
               if (provider.isScanning) {
                 return IconButton(
                   key: _scanButtonKey,
                   icon: const Icon(Icons.stop),
+                  iconSize: compactAppBar ? 20 : null,
+                  padding: compactAppBar ? EdgeInsets.zero : null,
+                  constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
                   tooltip: 'Stop Scan',
                   onPressed: () => provider.stopValidation(),
                 );
@@ -204,6 +233,9 @@ class _HomeScreenState extends State<HomeScreen> {
               return IconButton(
                 key: _scanButtonKey,
                 icon: const Icon(Icons.refresh),
+                iconSize: compactAppBar ? 20 : null,
+                padding: compactAppBar ? EdgeInsets.zero : null,
+                constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
                 tooltip: 'Scan Channels',
                 onPressed: () => provider.validateChannels(),
               );
@@ -233,9 +265,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 FeedbackService.openAppStore();
               } else if (value == 'about') {
                 _showAboutDialog();
+              } else if (value == 'map') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MapScreen()),
+                );
               }
             },
             itemBuilder: (context) => [
+              if (compactAppBar)
+                const PopupMenuItem(
+                  value: 'map',
+                  child: Row(
+                    children: [
+                      Icon(Icons.map),
+                      SizedBox(width: 8),
+                      Text('World Map'),
+                    ],
+                  ),
+                ),
               const PopupMenuItem(
                 value: 'help',
                 child: Row(
@@ -302,6 +350,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      // Filter drawer for landscape phone mode
+      drawer: compactAppBar ? _buildFilterDrawer() : null,
+      key: _scaffoldKey,
       body: isTablet && isLandscape
           ? _buildTabletLandscapeBody()
           : isTablet && !isLandscape
@@ -559,6 +610,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Landscape layout: side-by-side with filter sidebar (left) and channel list (right).
+  /// Phone landscape layout: channel list (left) + embedded player (right).
+  /// Filters accessible via drawer (swipe from left or tap filter icon).
   Widget _buildLandscapeBody() {
     return Column(
       children: [
@@ -566,193 +619,239 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildErrorBanner(),
         Expanded(
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left sidebar: filters panel (fixed width, scrollable)
-              SizedBox(
-                width: 300,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(
-                        color: Theme.of(context).dividerColor,
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Consumer<ChannelProvider>(
-                    builder: (context, provider, _) {
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Search bar
-                            _buildSearchBar(padding: 8.0),
-                            // Vertical filter dropdowns
-                            Padding(
-                              key: _filterAreaKey,
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              // Left panel: compact search + channel list
+              Expanded(
+                flex: 2,
+                child: Column(
+                  children: [
+                    _buildSearchBar(padding: 4.0),
+                    _buildStatsBar(),
+                    Expanded(
+                      child: Consumer<ChannelProvider>(
+                        builder: (context, provider, _) {
+                          if (provider.isLoading) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (provider.channels.isEmpty) {
+                            return Center(
                               child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  FilterDropdown(
-                                    value: provider.selectedMediaType,
-                                    items: provider.mediaTypes,
-                                    hint: 'Type',
-                                    icon: Icons.live_tv,
-                                    onChanged: (value) => provider.setMediaType(value!),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  FilterDropdown(
-                                    value: provider.selectedStatus,
-                                    items: provider.statusOptions,
-                                    hint: 'Status',
-                                    icon: Icons.check_circle_outline,
-                                    onChanged: (value) => provider.setStatus(value!),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  FilterDropdown(
-                                    value: provider.selectedCategory,
-                                    items: provider.categories,
-                                    hint: 'Category',
-                                    icon: Icons.category,
-                                    onChanged: (value) => provider.setCategory(value!),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  FilterDropdown(
-                                    value: provider.selectedCountry,
-                                    items: provider.countries,
-                                    hint: 'Country',
-                                    icon: Icons.flag,
-                                    onChanged: (value) => provider.setCountry(value!),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  FilterDropdown(
-                                    value: provider.selectedLanguage,
-                                    items: provider.languages,
-                                    hint: 'Language',
-                                    icon: Icons.language,
-                                    onChanged: (value) => provider.setLanguage(value!),
-                                  ),
+                                  Icon(Icons.tv_off, size: 36,
+                                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                                  const SizedBox(height: 8),
+                                  const Text('No channels', style: TextStyle(fontSize: 12)),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            // Favorites chip
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                              child: FilterChip(
-                                label: Text(
-                                  '★ Favorites (${provider.favoritesCount})',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: provider.showFavoritesOnly
-                                        ? Colors.amber.shade900
-                                        : null,
-                                  ),
-                                ),
-                                selected: provider.showFavoritesOnly,
-                                selectedColor: Colors.amber.shade100,
-                                avatar: Icon(
-                                  provider.showFavoritesOnly
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  size: 18,
-                                  color: provider.showFavoritesOnly
-                                      ? Colors.amber.shade700
-                                      : null,
-                                ),
-                                onSelected: (_) => provider.toggleFavoritesFilter(),
-                              ),
-                            ),
-                            // Clear filters
-                            if (provider.hasActiveFilters)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    provider.clearFilters();
+                            );
+                          }
+                          return ListView.builder(
+                            itemCount: provider.channels.length,
+                            itemBuilder: (context, index) {
+                              final channel = provider.channels[index];
+                              final isSelected = _tabletSelectedChannel?.url == channel.url;
+                              return Container(
+                                color: isSelected
+                                    ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+                                    : null,
+                                child: ChannelTile(
+                                  channel: channel,
+                                  compact: true,
+                                  onTap: () {
+                                    setState(() {
+                                      _tabletSelectedChannel = channel;
+                                      _tabletSelectedIndex = index;
+                                    });
                                   },
-                                  icon: const Icon(Icons.clear_all, size: 18),
-                                  label: const Text('Clear Filters'),
-                                  style: OutlinedButton.styleFrom(
-                                    minimumSize: const Size(double.infinity, 36),
-                                  ),
                                 ),
-                              ),
-                            const Divider(height: 8),
-                            // Stats
-                            _buildStatsBar(),
-                            // Recently played (compact)
-                            if (_recentChannels.isNotEmpty) ...[
-                              const Divider(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.history, size: 14,
-                                        color: Theme.of(context).colorScheme.primary),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Recently Played',
-                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                child: Wrap(
-                                  spacing: 4,
-                                  runSpacing: 4,
-                                  children: _recentChannels.take(5).map((entry) {
-                                    final name = entry['name'] as String? ?? '';
-                                    final url = entry['url'] as String? ?? '';
-                                    final country = entry['country'] as String? ?? '';
-                                    final category = entry['category'] as String? ?? '';
-                                    return ActionChip(
-                                      avatar: const Icon(Icons.play_circle_fill, size: 14),
-                                      label: Text(
-                                        name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      visualDensity: VisualDensity.compact,
-                                      onPressed: () {
-                                        final channel = Channel(
-                                          name: name,
-                                          url: url,
-                                          country: country.isNotEmpty ? country : null,
-                                          category: category.isNotEmpty ? category : null,
-                                          logo: entry['logo'] as String?,
-                                        );
-                                        _playChannel(channel);
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              // Right panel: channel list
+              VerticalDivider(width: 1, color: Theme.of(context).dividerColor),
+              // Right panel: embedded player
               Expanded(
-                child: _buildChannelList(),
+                flex: 3,
+                child: _tabletSelectedChannel != null
+                    ? PlayerScreen(
+                        key: ValueKey(_tabletSelectedChannel!.url),
+                        channel: _tabletSelectedChannel!,
+                        channelList: context.read<ChannelProvider>().channels,
+                        channelIndex: _tabletSelectedIndex,
+                      )
+                    : Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.play_circle_outline, size: 64,
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                            const SizedBox(height: 12),
+                            Text('Select a channel',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
+                          ],
+                        ),
+                      ),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  /// Filter drawer for phone landscape mode.
+  Widget _buildFilterDrawer() {
+    return Drawer(
+      width: 280,
+      child: SafeArea(
+        child: Consumer<ChannelProvider>(
+          builder: (context, provider, _) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.filter_list, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      if (provider.hasActiveFilters)
+                        TextButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            provider.clearFilters();
+                          },
+                          child: const Text('Clear All', style: TextStyle(fontSize: 12)),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        FilterDropdown(
+                          value: provider.selectedMediaType,
+                          items: provider.mediaTypes,
+                          hint: 'Type',
+                          icon: Icons.live_tv,
+                          onChanged: (value) => provider.setMediaType(value!),
+                        ),
+                        const SizedBox(height: 8),
+                        FilterDropdown(
+                          value: provider.selectedStatus,
+                          items: provider.statusOptions,
+                          hint: 'Status',
+                          icon: Icons.check_circle_outline,
+                          onChanged: (value) => provider.setStatus(value!),
+                        ),
+                        const SizedBox(height: 8),
+                        FilterDropdown(
+                          value: provider.selectedCategory,
+                          items: provider.categories,
+                          hint: 'Category',
+                          icon: Icons.category,
+                          onChanged: (value) => provider.setCategory(value!),
+                        ),
+                        const SizedBox(height: 8),
+                        FilterDropdown(
+                          value: provider.selectedCountry,
+                          items: provider.countries,
+                          hint: 'Country',
+                          icon: Icons.flag,
+                          onChanged: (value) => provider.setCountry(value!),
+                        ),
+                        const SizedBox(height: 8),
+                        FilterDropdown(
+                          value: provider.selectedLanguage,
+                          items: provider.languages,
+                          hint: 'Language',
+                          icon: Icons.language,
+                          onChanged: (value) => provider.setLanguage(value!),
+                        ),
+                        const SizedBox(height: 12),
+                        FilterChip(
+                          label: Text(
+                            '★ Favorites (${provider.favoritesCount})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: provider.showFavoritesOnly ? Colors.amber.shade900 : null,
+                            ),
+                          ),
+                          selected: provider.showFavoritesOnly,
+                          selectedColor: Colors.amber.shade100,
+                          avatar: Icon(
+                            provider.showFavoritesOnly ? Icons.star : Icons.star_border,
+                            size: 18,
+                            color: provider.showFavoritesOnly ? Colors.amber.shade700 : null,
+                          ),
+                          onSelected: (_) => provider.toggleFavoritesFilter(),
+                        ),
+                        // Recently played
+                        if (_recentChannels.isNotEmpty) ...[
+                          const Divider(height: 16),
+                          Row(
+                            children: [
+                              Icon(Icons.history, size: 14,
+                                  color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(width: 4),
+                              Text('Recently Played',
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: _recentChannels.take(5).map((entry) {
+                              final name = entry['name'] as String? ?? '';
+                              final url = entry['url'] as String? ?? '';
+                              final country = entry['country'] as String? ?? '';
+                              final category = entry['category'] as String? ?? '';
+                              return ActionChip(
+                                avatar: const Icon(Icons.play_circle_fill, size: 14),
+                                label: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11)),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () {
+                                  Navigator.pop(context); // Close drawer
+                                  final channel = Channel(
+                                    name: name, url: url,
+                                    country: country.isNotEmpty ? country : null,
+                                    category: category.isNotEmpty ? category : null,
+                                    logo: entry['logo'] as String?,
+                                  );
+                                  setState(() {
+                                    _tabletSelectedChannel = channel;
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 

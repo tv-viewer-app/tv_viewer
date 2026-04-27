@@ -841,9 +841,9 @@ class ChannelProvider extends ChangeNotifier {
 
   /// Mark a channel as failed (user-reported broken).
   void markChannelFailed(Channel channel) {
-    final idx = _allChannels.indexWhere((c) => c.url == channel.url);
+    final idx = _channels.indexWhere((c) => c.url == channel.url);
     if (idx >= 0) {
-      _allChannels[idx] = _allChannels[idx].copyWith(
+      _channels[idx] = _channels[idx].copyWith(
         isWorking: false,
         lastChecked: DateTime.now(),
       );
