@@ -19,6 +19,7 @@ from utils.history import WatchHistory
 from utils.channel_descriptions import get_description
 from utils.logger import get_logger
 from .player_window import PlayerWindow
+from .tv_mode import TVModeWindow
 from .scan_animation import ScanProgressFrame
 from .map_window import MapWindow
 from .feedback_dialog import show_feedback_dialog
@@ -150,6 +151,7 @@ class MainWindow:
         self.root.bind_all("<F5>", lambda e: self._start_scan())
         self.root.bind_all("<Control-comma>", lambda e: self._show_settings_dialog())
         self.root.bind_all("<Escape>", lambda e: self._clear_search())
+        self.root.bind_all("<F11>", lambda e: self._enter_tv_mode())
         
         # Show loading indicator
         logger.info("TV Viewer starting up...")
@@ -661,6 +663,15 @@ class MainWindow:
         )
         self.diag_btn.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(5, 0))
 
+        # TV Mode button (fullscreen lean-back interface)
+        self.tv_mode_btn = ttk.Button(
+            button_frame,
+            text="📺 TV Mode",
+            command=self._enter_tv_mode,
+            bootstyle="info"
+        )
+        self.tv_mode_btn.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(5, 0))
+
         # Add Channel (contribute) button
         self.contribute_btn = ttk.Button(
             button_frame,
@@ -668,7 +679,7 @@ class MainWindow:
             command=self._show_contribute_dialog,
             bootstyle="success-outline"
         )
-        self.contribute_btn.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(5, 0))
+        self.contribute_btn.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(5, 0))
 
         # Tooltips
         add_tooltip(self.scan_btn, "Scan all channels to check which are online (F5)")
@@ -676,6 +687,7 @@ class MainWindow:
         add_tooltip(self.map_btn, "Show channels on a world map by country")
         add_tooltip(self.settings_btn, "Open settings (Ctrl+,)")
         add_tooltip(self.diag_btn, "Run diagnostics: device info, network test, stream tester")
+        add_tooltip(self.tv_mode_btn, "Fullscreen TV interface with remote control navigation (F11)")
         add_tooltip(self.contribute_btn, "Submit a new channel to the shared database")
     
     def _create_main_content(self):
@@ -2239,6 +2251,34 @@ class MainWindow:
                 "Could not open the diagnostics dialog.\n"
                 f"Error: {e}",
             )
+    
+    def _enter_tv_mode(self):
+        """Launch fullscreen TV Mode (Google TV-style lean-back interface)."""
+        channels = self.channel_manager.get_all_channels()
+        if not channels:
+            self.toast.show_error("No channels loaded yet. Wait for scan or load to complete.")
+            return
+        
+        track_feature("tv_mode_entered")
+        logger.info("Entering TV Mode")
+
+        def on_play_from_tv(channel):
+            """Handle play request from TV mode."""
+            self._play_channel(channel)
+
+        def on_exit_tv():
+            """Handle TV mode exit."""
+            self._tv_mode_window = None
+            logger.info("Exited TV Mode")
+
+        self._tv_mode_window = TVModeWindow(
+            self.root,
+            channels=channels,
+            favorites_manager=self.favorites_manager,
+            watch_history=self.watch_history,
+            on_play=on_play_from_tv,
+            on_exit=on_exit_tv,
+        )
     
     # ------------------------------------------------------------------
     # Parental Controls — PIN dialogs (extracted to ui/pin_dialogs.py)
