@@ -47,18 +47,27 @@ except (ImportError, Exception):
 def create_window(title: str = "", geometry: str = "", themename: str = "darkly"):
     """Create the main application window.
     
-    Uses ttkbootstrap.Window if available, otherwise plain tk.Tk with dark styling.
+    Uses ttkbootstrap.Window if available, otherwise customtkinter.CTk
+    (which handles dark mode natively), or plain tk.Tk as last resort.
     """
     if _USE_BOOTSTRAP:
         root = _ttk_bs.Window(themename=themename)
     else:
-        root = tk.Tk()
-        # Enable DPI awareness on Windows before any widget creation
+        # Use customtkinter if available — it handles dark mode properly
+        # and avoids conflicts when customtkinter is imported elsewhere
         try:
-            import ctypes
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception:
-            pass
+            import customtkinter as ctk
+            ctk.set_appearance_mode("dark")
+            ctk.set_default_color_theme("blue")
+            root = ctk.CTk()
+        except (ImportError, Exception):
+            root = tk.Tk()
+            # Enable DPI awareness on Windows
+            try:
+                import ctypes
+                ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            except Exception:
+                pass
         _apply_dark_theme(root)
     if title:
         root.title(title)

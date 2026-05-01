@@ -738,42 +738,60 @@ class MainWindow:
         list_container.grid_rowconfigure(0, weight=1)
         list_container.grid_columnconfigure(0, weight=1)
         
-        # Style the Treeview for dark theme — use ttkbootstrap's native colors
-        style = self.root.style
-        colors = style.colors
+        # Style the Treeview for dark theme
+        style = self.style
+        
+        # Color definitions — use ttkbootstrap colors if available, else our dark theme
+        if hasattr(style, 'colors'):
+            colors = style.colors
+            tv_bg = colors.inputbg
+            tv_fg = colors.inputfg
+            tv_dark = colors.dark
+            tv_primary = colors.primary
+            tv_secondary = colors.secondary
+            tv_fg_normal = colors.fg
+            tv_bg_root = colors.bg
+        else:
+            tv_bg = "#222240"
+            tv_fg = "#e0e0e0"
+            tv_dark = "#1a1a2e"
+            tv_primary = "#4CC2FF"
+            tv_secondary = "#2a2a48"
+            tv_fg_normal = "#e0e0e0"
+            tv_bg_root = "#1a1a2e"
         
         style.configure(
             "Material.Treeview",
-            background=colors.inputbg,
-            foreground=colors.inputfg,
-            fieldbackground=colors.inputbg,
+            background=tv_bg,
+            foreground=tv_fg,
+            fieldbackground=tv_bg,
             borderwidth=0,
             font=('Segoe UI', 12),
             rowheight=48
         )
         style.configure(
             "Material.Treeview.Heading",
-            background=colors.dark,
-            foreground=colors.fg,
+            background=tv_dark,
+            foreground=tv_fg_normal,
             borderwidth=0,
             font=('Segoe UI', 10, 'bold'),
             padding=(10, 8)
         )
         style.map(
             "Material.Treeview",
-            background=[('selected', colors.primary)],
+            background=[('selected', tv_primary)],
             foreground=[('selected', FluentColors.BG_CARD)]
         )
         style.map(
             "Material.Treeview.Heading",
-            background=[('active', colors.secondary)]
+            background=[('active', tv_secondary)]
         )
         
         # Scrollbar styling
         style.configure(
             "Material.Vertical.TScrollbar",
-            background=colors.secondary,
-            troughcolor=colors.bg,
+            background=tv_secondary,
+            troughcolor=tv_bg_root,
             borderwidth=0,
             arrowsize=0
         )
@@ -823,9 +841,16 @@ class MainWindow:
             self.channel_tree.column(col, width=width, minwidth=50)
         
         # Configure tags for status colors
-        self.channel_tree.tag_configure('working', foreground=colors.success)
-        self.channel_tree.tag_configure('not_working', foreground=colors.danger)
-        self.channel_tree.tag_configure('checking', foreground=colors.warning)
+        _success_color = "#13a10e"
+        _danger_color = "#f04a58"
+        _warning_color = "#ffb900"
+        if hasattr(self.style, 'colors'):
+            _success_color = self.style.colors.success
+            _danger_color = self.style.colors.danger
+            _warning_color = self.style.colors.warning
+        self.channel_tree.tag_configure('working', foreground=_success_color)
+        self.channel_tree.tag_configure('not_working', foreground=_danger_color)
+        self.channel_tree.tag_configure('checking', foreground=_warning_color)
         self.channel_tree.tag_configure('favorite', foreground=FluentColors.FAVORITE_STAR)
         
         # Bindings
