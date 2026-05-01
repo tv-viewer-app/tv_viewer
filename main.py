@@ -190,6 +190,7 @@ def cleanup_temp_files():
 
 def main():
     """Application entry point."""
+    import config
     print("Starting TV Viewer...")
     
     # Install crash reporter early
