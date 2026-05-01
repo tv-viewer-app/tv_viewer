@@ -258,17 +258,20 @@ def main():
     # Show before MainWindow creation so the user can decline and exit.
     if not getattr(config, 'CONSENT_ACCEPTED', False):
         try:
+            # Use plain tk.Tk() for consent — CTk's singleton conflicts with Toplevel children
             import tkinter as _tk
             _consent_root = _tk.Tk()
             _consent_root.withdraw()
             # Enable DPI awareness for the consent dialog on Windows
             try:
-                _consent_root.tk.call('tk', 'scaling', 1.0)
+                import ctypes as _ctypes
+                _ctypes.windll.shcore.SetProcessDpiAwareness(1)
             except Exception:
                 pass
             from ui.consent_dialog import show_consent_dialog
             consent_result = show_consent_dialog(_consent_root)
             _consent_root.destroy()
+            del _consent_root  # Fully release the Tk instance
             if not consent_result.get('accepted', False):
                 print("User declined consent. Exiting.")
                 sys.exit(0)

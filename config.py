@@ -175,11 +175,9 @@ DEFAULT_CATEGORIES = [
 # =============================================================================
 # First-Run / Onboarding State
 # =============================================================================
-# Set to True after the user completes the consent dialog
-CONSENT_ACCEPTED = False
-
-# Set to True after the user has seen the onboarding tooltip sequence
-ONBOARDING_COMPLETED = False
+# Defaults — load_external_config() may have already set these via 'global'
+CONSENT_ACCEPTED = globals().get('CONSENT_ACCEPTED', False)
+ONBOARDING_COMPLETED = globals().get('ONBOARDING_COMPLETED', False)
 
 # Refresh interval for channel checking (in seconds)
 CHANNEL_REFRESH_INTERVAL = 300  # 5 minutes
