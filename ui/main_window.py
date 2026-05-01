@@ -154,6 +154,10 @@ class MainWindow:
         # Show loading indicator
         logger.info("TV Viewer starting up...")
         
+        # Force window visible (fixes issue where window stays hidden on some systems)
+        self.root.deiconify()
+        self.root.update_idletasks()
+        
         # Load channels on startup
         self.root.after(100, self._initialize)
         

@@ -53,11 +53,21 @@ def create_window(title: str = "", geometry: str = "", themename: str = "darkly"
         root = _ttk_bs.Window(themename=themename)
     else:
         root = tk.Tk()
+        # Enable DPI awareness on Windows before any widget creation
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
         _apply_dark_theme(root)
     if title:
         root.title(title)
     if geometry:
         root.geometry(geometry)
+    # Force window to be visible
+    root.deiconify()
+    root.lift()
+    root.update_idletasks()
     return root
 
 
@@ -162,15 +172,15 @@ class ScrolledFrame(ttk.Frame):
 
 def _apply_dark_theme(root):
     """Apply a dark theme to plain tkinter/ttk that looks reasonable."""
-    root.configure(bg="#1a1a2e")
+    try:
+        root.configure(bg="#1a1a2e")
+    except Exception:
+        pass
 
     style = ttk.Style(root)
 
-    # Try to use 'clam' as base (looks best for custom colors)
-    try:
-        style.theme_use("clam")
-    except tk.TclError:
-        pass
+    # Don't switch theme_use — it can conflict with customtkinter.
+    # Just configure colors on top of whatever the current theme is.
 
     # Dark color definitions
     bg = "#1a1a2e"
