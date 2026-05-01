@@ -96,7 +96,6 @@ if getattr(sys, 'frozen', False):
 # SECURITY: Package names below are hardcoded — NEVER load from external config.
 # __import__() is called with these names for dependency checking.
 REQUIRED_PACKAGES = {
-    'ttkbootstrap': ('ttkbootstrap', '1.10.0'),
     'customtkinter': ('customtkinter', '5.2.0'),
     'PIL': ('Pillow', '10.0.0'),
     'aiohttp': ('aiohttp', '3.9.0'),
@@ -107,6 +106,7 @@ REQUIRED_PACKAGES = {
 OPTIONAL_PACKAGES = {
     'vlc': ('python-vlc', '3.0.18122', 'Video playback will not work'),
     'pychromecast': ('pychromecast', '13.0.0', 'Google Cast will not be available'),
+    'ttkbootstrap': ('ttkbootstrap', '1.10.0', 'Enhanced UI styling not available'),
 }
 
 

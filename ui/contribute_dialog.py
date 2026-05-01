@@ -12,9 +12,9 @@ import threading
 import re
 
 try:
-    import ttkbootstrap as ttk_bs
+    from ui.compat import ScrolledFrame
 except ImportError:
-    ttk_bs = None
+    ScrolledFrame = None
 
 from utils.logger import get_logger
 from .constants import FluentColorsDark as FluentColors
@@ -47,10 +47,7 @@ class ContributeDialog:
 
     def show(self):
         """Create and display the dialog."""
-        if ttk_bs is not None:
-            self.dialog = ttk_bs.Toplevel(self.parent)
-        else:
-            self.dialog = tk.Toplevel(self.parent)
+        self.dialog = tk.Toplevel(self.parent)
 
         self.dialog.title("➕ Contribute Channel")
         self.dialog.resizable(False, False)

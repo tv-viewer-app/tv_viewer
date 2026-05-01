@@ -6,7 +6,7 @@ All references to `self` have been replaced with `parent_window` (the MainWindow
 
 import tkinter as tk
 from tkinter import ttk
-import ttkbootstrap as ttk_bs
+from ui.compat import ScrolledFrame  # noqa: F401
 
 from .constants import FluentColorsDark as FluentColors
 from utils.logger import get_logger
@@ -32,7 +32,7 @@ def show_pin_entry_dialog(parent_window, title="🔒 Enter PIN", message="Enter 
     parent = parent or parent_window.root
     C = FluentColors
 
-    dlg = ttk_bs.Toplevel(parent)
+    dlg = tk.Toplevel(parent)
     dlg.title(title)
     dlg.resizable(False, False)
     dlg.grab_set()
@@ -162,7 +162,7 @@ def show_set_pin_dialog(parent_window, parent=None, on_success=None, on_cancel=N
     parent = parent or parent_window.root
     C = FluentColors
 
-    dlg = ttk_bs.Toplevel(parent)
+    dlg = tk.Toplevel(parent)
     dlg.title("🔒 Set Parental PIN")
     dlg.resizable(False, False)
     dlg.grab_set()

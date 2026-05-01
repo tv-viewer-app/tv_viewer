@@ -121,7 +121,7 @@ def show_diagnostics_dialog(parent_window):
     FONT_MONO = ("Consolas", 10)
 
     # Scrollable container
-    from ttkbootstrap.widgets.scrolled import ScrolledFrame
+    from ui.compat import ScrolledFrame
     scroll = ScrolledFrame(dlg, autohide=True)
     scroll.pack(fill="both", expand=True, padx=12, pady=12)
 

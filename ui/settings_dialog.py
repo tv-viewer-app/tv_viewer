@@ -6,7 +6,6 @@ All references to `self` have been replaced with `parent_window` (the MainWindow
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-import ttkbootstrap as ttk_bs
 import json as _json
 import os
 
@@ -78,7 +77,7 @@ def show_settings_dialog(parent_window):
     ]
 
     # ── Create dialog window ─────────────────────────────────────────
-    dlg = ttk_bs.Toplevel(parent_window.root)
+    dlg = tk.Toplevel(parent_window.root)
     dlg.title("Settings")
     dlg.resizable(False, False)
     dlg.grab_set()
@@ -243,7 +242,7 @@ def show_settings_dialog(parent_window):
     repo_btn_frame.pack(fill="x", pady=(4, 0))
 
     def _add_repo():
-        add_dlg = ttk_bs.Toplevel(dlg)
+        add_dlg = tk.Toplevel(dlg)
         add_dlg.title("Add Repository URL")
         add_dlg.resizable(False, False)
         add_dlg.grab_set()

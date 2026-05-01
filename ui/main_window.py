@@ -1,10 +1,8 @@
-"""Main application window with Windows 11 Fluent Design UI using ttkbootstrap."""
+"""Main application window with Windows 11 Fluent Design UI."""
 
-import ttkbootstrap as ttk_bs
-from ttkbootstrap.constants import *
-from ttkbootstrap.widgets.scrolled import ScrolledFrame
-from tkinter import ttk, messagebox
 import tkinter as tk
+from tkinter import ttk, messagebox
+from ui.compat import create_window, get_style, ScrolledFrame, Button
 from typing import Optional, Dict, Any, List
 import gc
 import time
@@ -52,8 +50,8 @@ class MainWindow:
     """Main application window with Windows 11 Fluent Design."""
     
     def __init__(self):
-        # Initialize ttkbootstrap window with dark theme
-        self.root = ttk_bs.Window(themename="darkly")
+        # Initialize window with dark theme
+        self.root = create_window(themename="darkly")
         self.root.title(f"{config.APP_NAME} v{config.APP_VERSION}")
         self.root.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
         self.root.minsize(800, 500)
@@ -72,7 +70,7 @@ class MainWindow:
             set_window_icon(self.root)
         
         # Configure custom styles
-        self.style = ttk_bs.Style()
+        self.style = get_style(self.root)
         self.style.configure("TButton", font=("Segoe UI", 11))
         self.style.configure("TLabel", font=("Segoe UI", 11))
         self.style.configure("TCheckbutton", font=("Segoe UI", 10))
@@ -1601,7 +1599,7 @@ class MainWindow:
         FONT_BOLD = ("Segoe UI", 10, "bold")
         FONT_MONO = ("Consolas", 9)
 
-        from ttkbootstrap.widgets.scrolled import ScrolledFrame
+        from ui.compat import ScrolledFrame
         scroll = ScrolledFrame(dlg, autohide=True)
         scroll.pack(fill="both", expand=True, padx=16, pady=12)
 
