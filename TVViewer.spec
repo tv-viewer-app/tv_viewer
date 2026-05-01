@@ -10,7 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'cv2', 'tensorflow', 'torch', 'sklearn'],
+    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'cv2', 'tensorflow', 'torch', 'sklearn', 'ttkbootstrap'],
     noarchive=False,
     optimize=0,
 )
@@ -19,20 +19,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='TVViewer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=['python312.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='tv_viewer.ico',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='TVViewer',
 )
