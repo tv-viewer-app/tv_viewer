@@ -302,12 +302,12 @@ def main():
             # Allow app to continue if dialog fails
 
     # Import after path setup and requirements check
-    # Bug #107: Wrap MainWindow creation in try/except with error dialog fallback
+    # TV Mode is now the primary UI (refactored from MainWindow)
     try:
-        from ui.main_window import MainWindow
+        from ui.tv_mode import TVModeApp
         
-        # Create and run the main window
-        app = MainWindow()
+        # Create and run the TV mode app
+        app = TVModeApp()
         app.run()
     except Exception as e:
         import traceback

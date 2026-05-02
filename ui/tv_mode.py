@@ -1,26 +1,37 @@
-"""TV Mode — Fullscreen Google TV / Android Streamer lean-back interface.
+"""TV Mode — Standalone Google TV / Android Streamer lean-back interface.
 
-Provides a fullscreen channel browser navigated entirely with arrow keys,
-Enter, and Escape — designed for use with a remote control or keyboard,
-no mouse required. Channels are displayed in horizontal rows grouped by
+Primary application UI: a full-window channel browser navigated with
+arrow keys, Enter, and Escape — designed for use with a remote control
+or keyboard.  Channels are displayed in horizontal rows grouped by
 category, with Favorites and Recent at the top.
 
-Keyboard Controls:
+Keyboard Controls (browse):
     Arrow keys  — Navigate between channels
     Enter       — Play selected channel
-    Escape/Back — Return from player / exit TV mode
+    Escape      — Stop player / quit app
     0-9         — Channel number quick-jump
     Page Up/Dn  — Jump rows quickly
     Home/End    — Jump to first/last in row
-    F           — Toggle fullscreen on player
+    F           — Toggle favorite on focused card
+    F11         — Toggle fullscreen
+    Ctrl+F or / — Open search
+    S           — Open settings
+
+Keyboard Controls (player):
+    Escape      — Stop and return to browse
+    Ch Up/Down  — Next/previous channel
     M           — Mute/unmute
     +/-         — Volume up/down
+    Space       — Pause/resume
 """
 
+__all__ = ['TVModeApp']
+
+import sys
 import tkinter as tk
 import time
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Callable, Set
+from typing import Optional, Dict, Any, List, Set
 
 from utils.logger import get_logger
 from utils.favorites import FavoritesManager
@@ -29,7 +40,25 @@ import config
 
 logger = get_logger(__name__)
 
-# ─── TV Mode Color Palette ──────────────────────────────────────────────────
+# Try to import optional modules
+try:
+    from icon import set_window_icon
+except ImportError:
+    set_window_icon = None
+
+try:
+    from utils.parental import ParentalControls
+except ImportError:
+    ParentalControls = None
+
+try:
+    from ui.vlc_controller import VLCController, VLC_AVAILABLE
+except ImportError:
+    VLCController = None
+    VLC_AVAILABLE = False
+
+
+# ─── TV Mode Color Palette ──────────────────────────────────────────────────────────
 class TVColors:
     """Dark theme optimized for 10-foot lean-back viewing."""
     BG = "#0A0A0F"
@@ -52,7 +81,7 @@ class TVColors:
     CATEGORY_ICON = "#8080A0"
     INFO_BAR_BG = "#0D1520"
     INFO_BAR_BORDER = "#1A2535"
-    OVERLAY_BG = "#000000E0"
+    OVERLAY_BG = "#0A0A0F"
     SUCCESS = "#4ADE80"
     LIVE_PULSE = "#EF4444"
     FAVORITE_STAR = "#FBBF24"
@@ -62,9 +91,15 @@ class TVColors:
     MONOGRAM_BG_4 = "#4A1D1D"
     TOAST_BG = "#1A1A2E"
     TOAST_BORDER = "#333348"
+    NAV_BG = "#0D0D14"
+    NAV_ACTIVE = "#1A2535"
+    SCAN_BAR_BG = "#1A3A5F"
+    SEARCH_BG = "#16161E"
+    SEARCH_BORDER = "#2A2A3A"
+    PLAYER_OSD_BG = "#0D0D14"
 
 
-# ─── TV Mode Constants ──────────────────────────────────────────────────────
+# ─── TV Mode Constants ────────────────────────────────────────────────────────────
 CARD_WIDTH = 240
 CARD_HEIGHT = 140
 CARD_WIDTH_FOCUS = 268
@@ -79,15 +114,17 @@ NUMBER_TIMEOUT_MS = 1800
 MAX_NUMBER_DIGITS = 4
 FONT_FAMILY = "Segoe UI"
 CLOCK_UPDATE_MS = 30000
+SCAN_POLL_MS = 3000
+OSD_FADE_MS = 3000
 
 # Category emoji mapping
 CATEGORY_ICONS = {
-    "News": "📰", "Sports": "⚽", "Entertainment": "🎬", "Music": "🎵",
-    "Kids": "🧸", "Movies": "🎥", "Documentary": "🌍", "Science": "🔬",
-    "Education": "📚", "Religious": "🕌", "Business": "💼", "Lifestyle": "🏡",
-    "Food": "🍳", "Travel": "✈️", "Weather": "🌤️", "Comedy": "😂",
-    "Drama": "🎭", "Culture": "🎨", "Technology": "💻", "Health": "❤️",
-    "Shopping": "🛒", "Gaming": "🎮", "Animation": "🎞️", "Classic": "📺",
+    "News": "\U0001f4f0", "Sports": "\u26bd", "Entertainment": "\U0001f3ac", "Music": "\U0001f3b5",
+    "Kids": "\U0001f9f8", "Movies": "\U0001f3a5", "Documentary": "\U0001f30d", "Science": "\U0001f52c",
+    "Education": "\U0001f4da", "Religious": "\U0001f54c", "Business": "\U0001f4bc", "Lifestyle": "\U0001f3e1",
+    "Food": "\U0001f373", "Travel": "\u2708\ufe0f", "Weather": "\U0001f324\ufe0f", "Comedy": "\U0001f602",
+    "Drama": "\U0001f3ad", "Culture": "\U0001f3a8", "Technology": "\U0001f4bb", "Health": "\u2764\ufe0f",
+    "Shopping": "\U0001f6d2", "Gaming": "\U0001f3ae", "Animation": "\U0001f39e\ufe0f", "Classic": "\U0001f4fa",
 }
 
 
@@ -98,150 +135,288 @@ def _get_monogram_color(name: str) -> str:
     return colors[hash(name) % len(colors)]
 
 
-class TVModeWindow(tk.Toplevel):
-    """Fullscreen TV mode with Google TV-style horizontal category rows."""
+class TVModeApp:
+    """Standalone TV-mode application with embedded VLC player.
 
-    def __init__(self, parent, channels: List[Dict[str, Any]],
-                 favorites_manager: FavoritesManager,
-                 watch_history: WatchHistory,
-                 on_play: Optional[Callable] = None,
-                 on_exit: Optional[Callable] = None):
-        super().__init__(parent)
-        self.parent = parent
-        self._all_channels = channels
-        self._favorites_manager = favorites_manager
-        self._watch_history = watch_history
-        self._on_play = on_play
-        self._on_exit = on_exit
+    Creates its own root window via ``ui.compat.create_window`` and manages
+    channel scanning, browsing, search, favorites, playback, and settings.
+    """
+
+    def __init__(self, channel_manager=None,
+                 favorites_manager: Optional[FavoritesManager] = None,
+                 watch_history: Optional[WatchHistory] = None):
+        # External dependencies (create if not provided)
+        if channel_manager is None:
+            from core.channel_manager import ChannelManager
+            channel_manager = ChannelManager()
+        self._channel_manager = channel_manager
+
+        self._favorites_manager = favorites_manager or FavoritesManager()
+        self._watch_history = watch_history or WatchHistory()
+
+        # Parental controls
+        self._parental = None
+        if ParentalControls is not None:
+            try:
+                self._parental = ParentalControls()
+            except Exception:
+                pass
+
+        # Root window
+        from ui.compat import create_window
+        self.root = create_window(
+            title=f"{config.APP_NAME} v{config.APP_VERSION}",
+            geometry=f"{getattr(config, 'WINDOW_WIDTH', 1280)}x{getattr(config, 'WINDOW_HEIGHT', 720)}",
+        )
+        self.root.configure(bg=TVColors.BG)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        if set_window_icon:
+            try:
+                set_window_icon(self.root)
+            except Exception:
+                pass
+
+        # Application state
+        self._state = "browse"  # "browse" | "playing"
+        self._is_fullscreen = False
+        self._all_channels: List[Dict[str, Any]] = []
 
         # Navigation state
         self._rows: List[Dict[str, Any]] = []
         self._row_index = 0
         self._col_index = 0
         self._col_offsets: List[int] = []
+        self._filtered_channels: Optional[List[Dict[str, Any]]] = None
 
-        # Cached data (rebuilt with rows)
+        # Cached data
         self._favorite_urls: Set[str] = set()
-        self._channel_numbers: Dict[int, int] = {}  # id(channel) → number
+        self._channel_numbers: Dict[int, int] = {}
         self._max_channel_number = 0
 
         # Number entry
         self._number_buffer = ""
         self._number_timer = None
 
-        # Animation state
+        # Animation
         self._anim_id = None
         self._scroll_target_offsets: List[int] = []
 
-        # Clock timer
+        # Timers
         self._clock_timer = None
-
-        # Toast state
         self._toast_timer = None
+        self._scan_timer = None
+        self._osd_timer = None
+
+        # Current nav tab
+        self._current_tab = "home"
+
+        # Search state
+        self._search_active = False
+        self._search_var = tk.StringVar(self.root)
+        self._search_var.trace_add("write", self._on_search_changed)
+
+        # VLC player
+        self._vlc = None
+        self._player_frame: Optional[tk.Frame] = None
+        self._player_channel: Optional[Dict[str, Any]] = None
+        self._player_volume = 80
 
         # UI elements
         self._canvas: Optional[tk.Canvas] = None
         self._info_label: Optional[tk.Label] = None
         self._clock_label: Optional[tk.Label] = None
         self._number_label: Optional[tk.Label] = None
+        self._scan_bar: Optional[tk.Frame] = None
+        self._scan_label: Optional[tk.Label] = None
+        self._search_frame: Optional[tk.Frame] = None
+        self._search_entry: Optional[tk.Entry] = None
+        self._nav_tabs: Dict[str, tk.Label] = {}
 
-        self._build_rows()
-        self._setup_window()
+        # Build UI
+        self._create_nav_bar()
         self._create_ui()
         self._bind_keys()
 
-        # Defer first draw to after window is mapped
-        self.after(50, self._draw)
-        self.after(100, self._start_clock)
+        # Initialise channels
+        self.root.after(50, self._initialize)
 
-    # ─── Data Preparation ───────────────────────────────────────────────────
+    # ---- Initialisation & Scanning ------------------------------------------
+
+    def _initialize(self):
+        """Load cached channels and start background scan."""
+        loaded = self._channel_manager.load_cached_channels()
+        if loaded:
+            self._all_channels = list(self._channel_manager.channels)
+            logger.info(f"Loaded {len(self._all_channels)} cached channels")
+        else:
+            self._all_channels = []
+            logger.info("No cached channels found, starting fresh scan")
+
+        self._build_rows()
+        self._draw()
+        self.root.after(100, self._start_clock)
+
+        # Start background fetch
+        self._channel_manager.fetch_channels_async(callback=self._on_fetch_complete)
+        self._scan_timer = self.root.after(SCAN_POLL_MS, self._poll_scan_progress)
+
+    def _on_fetch_complete(self):
+        """Called from background thread when fetch finishes."""
+        try:
+            self.root.after(0, self._refresh_from_manager)
+        except Exception:
+            pass
+
+    def _refresh_from_manager(self):
+        """Refresh channel list from manager (main thread)."""
+        self._all_channels = list(self._channel_manager.channels)
+        self._build_rows()
+        self._draw()
+        self._update_scan_bar(done=True)
+        self._show_toast(f"{len(self._all_channels)} channels loaded")
+        logger.info(f"Channels refreshed: {len(self._all_channels)} total")
+
+    def _poll_scan_progress(self):
+        """Periodically check scan status and refresh rows."""
+        try:
+            current = list(self._channel_manager.channels)
+            if len(current) != len(self._all_channels):
+                self._all_channels = current
+                self._build_rows()
+                self._draw()
+            self._update_scan_bar()
+        except Exception:
+            pass
+        self._scan_timer = self.root.after(SCAN_POLL_MS, self._poll_scan_progress)
+
+    def _update_scan_bar(self, done=False):
+        """Update the scan progress indicator."""
+        if not self._scan_bar:
+            return
+        working = len([c for c in self._all_channels if c.get('is_working')])
+        total = len(self._all_channels)
+        if done or total == 0:
+            self._scan_label.config(text=f"\u2713 {working} working channels")
+            self.root.after(5000, lambda: self._scan_bar.pack_forget() if self._scan_bar else None)
+        else:
+            self._scan_label.config(text=f"Scanning\u2026 {working}/{total} working")
+            self._scan_bar.pack(fill=tk.X, side=tk.TOP, before=self._canvas)
+
+    # ---- Data Preparation ---------------------------------------------------
 
     def _build_rows(self):
         """Organize channels into category rows with Favorites and Recent at top."""
         self._rows = []
 
-        # Cache favorite URLs (favorites stores URLs, not names)
+        # Determine source channels based on tab/search
+        if self._filtered_channels is not None:
+            source = self._filtered_channels
+        else:
+            source = self._all_channels
+
+        # Filter parental-blocked channels
+        if self._parental:
+            source = [ch for ch in source if not self._parental.is_channel_blocked(ch)]
+
+        # Cache favorite URLs
         self._favorite_urls = set()
         if self._favorites_manager:
             favs = self._favorites_manager.get_favorites()
             if favs:
                 self._favorite_urls = set(favs) if isinstance(favs, (set, list)) else set()
 
-        # Favorites row — match by URL
-        if self._favorite_urls:
-            fav_channels = [ch for ch in self._all_channels
-                           if ch.get('url') in self._favorite_urls and ch.get('is_working')]
-            if fav_channels:
-                self._rows.append({"label": "★ Favorites", "channels": fav_channels,
-                                   "icon": "⭐"})
-
-        # Recent row — WatchHistory.get_recent() returns dicts with 'url', 'name' keys
-        if self._watch_history:
-            recent_entries = self._watch_history.get_recent(limit=20)
-            if recent_entries:
-                recent_channels = []
-                seen_urls = set()
-                for entry in recent_entries:
-                    # entry is a dict: {url, name, country, category, last_played, play_count}
-                    entry_url = entry.get('url', '') if isinstance(entry, dict) else str(entry)
-                    if entry_url in seen_urls:
-                        continue
-                    for ch in self._all_channels:
-                        if ch.get('url') == entry_url and ch.get('is_working'):
-                            recent_channels.append(ch)
-                            seen_urls.add(entry_url)
-                            break
-                if recent_channels:
-                    self._rows.append({"label": "🕐 Continue Watching", "channels": recent_channels,
-                                       "icon": "🕐"})
-
-        # Most Played row (if we have history)
-        if self._watch_history:
-            try:
-                most_played = self._watch_history.get_most_played(limit=15)
-                if most_played:
-                    mp_channels = []
-                    seen = set()
-                    for entry in most_played:
-                        url = entry.get('url', '') if isinstance(entry, dict) else ''
-                        if url in seen or entry.get('play_count', 0) < 2:
+        if self._current_tab == "favorites":
+            if self._favorite_urls:
+                fav_channels = [ch for ch in source
+                               if ch.get('url') in self._favorite_urls and ch.get('is_working')]
+                if fav_channels:
+                    self._rows.append({"label": "\u2605 Favorites", "channels": fav_channels, "icon": "\u2b50"})
+        elif self._current_tab == "recent":
+            if self._watch_history:
+                recent_entries = self._watch_history.get_recent(limit=50)
+                if recent_entries:
+                    recent_channels = []
+                    seen_urls = set()
+                    for entry in recent_entries:
+                        entry_url = entry.get('url', '') if isinstance(entry, dict) else str(entry)
+                        if entry_url in seen_urls:
                             continue
-                        for ch in self._all_channels:
-                            if ch.get('url') == url and ch.get('is_working'):
-                                mp_channels.append(ch)
-                                seen.add(url)
+                        for ch in source:
+                            if ch.get('url') == entry_url and ch.get('is_working'):
+                                recent_channels.append(ch)
+                                seen_urls.add(entry_url)
                                 break
-                    if len(mp_channels) >= 3:
-                        self._rows.append({"label": "🔥 Most Played", "channels": mp_channels,
-                                           "icon": "🔥"})
-            except Exception:
-                pass
+                    if recent_channels:
+                        self._rows.append({"label": "\U0001f550 Recently Watched", "channels": recent_channels, "icon": "\U0001f550"})
+        else:
+            # Home tab
+            if self._favorite_urls:
+                fav_channels = [ch for ch in source
+                               if ch.get('url') in self._favorite_urls and ch.get('is_working')]
+                if fav_channels:
+                    self._rows.append({"label": "\u2605 Favorites", "channels": fav_channels, "icon": "\u2b50"})
 
-        # Category rows (only working channels, stable alphabetical order)
-        categories: Dict[str, List[Dict[str, Any]]] = {}
-        for ch in self._all_channels:
-            if not ch.get('is_working'):
-                continue
-            cat = ch.get('category', 'Other') or 'Other'
-            if cat not in categories:
-                categories[cat] = []
-            categories[cat].append(ch)
+            if self._watch_history:
+                recent_entries = self._watch_history.get_recent(limit=20)
+                if recent_entries:
+                    recent_channels = []
+                    seen_urls = set()
+                    for entry in recent_entries:
+                        entry_url = entry.get('url', '') if isinstance(entry, dict) else str(entry)
+                        if entry_url in seen_urls:
+                            continue
+                        for ch in source:
+                            if ch.get('url') == entry_url and ch.get('is_working'):
+                                recent_channels.append(ch)
+                                seen_urls.add(entry_url)
+                                break
+                    if recent_channels:
+                        self._rows.append({"label": "\U0001f550 Continue Watching", "channels": recent_channels, "icon": "\U0001f550"})
 
-        # Sort: larger categories first, then alphabetical for ties
-        for cat in sorted(categories, key=lambda c: (-len(categories[c]), c)):
-            if categories[cat]:
-                icon = CATEGORY_ICONS.get(cat, "📺")
-                self._rows.append({"label": f"{icon} {cat}", "channels": categories[cat],
-                                   "icon": icon})
+            if self._watch_history:
+                try:
+                    most_played = self._watch_history.get_most_played(limit=15)
+                    if most_played:
+                        mp_channels = []
+                        seen = set()
+                        for entry in most_played:
+                            url = entry.get('url', '') if isinstance(entry, dict) else ''
+                            if url in seen or entry.get('play_count', 0) < 2:
+                                continue
+                            for ch in source:
+                                if ch.get('url') == url and ch.get('is_working'):
+                                    mp_channels.append(ch)
+                                    seen.add(url)
+                                    break
+                        if len(mp_channels) >= 3:
+                            self._rows.append({"label": "\U0001f525 Most Played", "channels": mp_channels, "icon": "\U0001f525"})
+                except Exception:
+                    pass
+
+            # Category rows
+            categories: Dict[str, List[Dict[str, Any]]] = {}
+            for ch in source:
+                if not ch.get('is_working'):
+                    continue
+                cat = ch.get('category', 'Other') or 'Other'
+                if cat not in categories:
+                    categories[cat] = []
+                categories[cat].append(ch)
+
+            for cat in sorted(categories, key=lambda c: (-len(categories[c]), c)):
+                if categories[cat]:
+                    icon = CATEGORY_ICONS.get(cat, "\U0001f4fa")
+                    self._rows.append({"label": f"{icon} {cat}", "channels": categories[cat], "icon": icon})
 
         # Initialize scroll offsets
         self._col_offsets = [0] * len(self._rows)
         self._scroll_target_offsets = [0] * len(self._rows)
 
-        # Build canonical channel number map (deduplicated, category rows only)
+        # Build canonical channel number map
         self._channel_numbers = {}
         num = 0
-        seen_ids = set()
+        seen_ids: Set[int] = set()
         for row in self._rows:
             for ch in row["channels"]:
                 ch_id = id(ch)
@@ -251,64 +426,128 @@ class TVModeWindow(tk.Toplevel):
                     seen_ids.add(ch_id)
         self._max_channel_number = num
 
-    # ─── Window Setup ───────────────────────────────────────────────────────
+    # ---- Top Navigation Bar -------------------------------------------------
 
-    def _setup_window(self):
-        """Configure fullscreen window."""
-        self.title(f"{config.APP_NAME} — TV Mode")
-        self.configure(bg=TVColors.BG)
-        self.attributes("-fullscreen", True)
-        self.attributes("-topmost", True)
-        self.focus_force()
-        self.protocol("WM_DELETE_WINDOW", self._exit_tv_mode)
+    def _create_nav_bar(self):
+        """Create top navigation bar with tabs."""
+        self._nav_frame = tk.Frame(self.root, bg=TVColors.NAV_BG, height=44)
+        self._nav_frame.pack(fill=tk.X, side=tk.TOP)
+        self._nav_frame.pack_propagate(False)
 
-    # ─── UI Creation ────────────────────────────────────────────────────────
+        tk.Label(
+            self._nav_frame, text=f"\U0001f4fa {config.APP_NAME}",
+            bg=TVColors.NAV_BG, fg=TVColors.ACCENT,
+            font=(FONT_FAMILY, 13, "bold")
+        ).pack(side=tk.LEFT, padx=16, pady=8)
+
+        tabs = [("home", "\U0001f3e0 Home"), ("favorites", "\u2b50 Favorites"), ("recent", "\U0001f550 Recent")]
+        for tab_id, label_text in tabs:
+            lbl = tk.Label(
+                self._nav_frame, text=label_text,
+                bg=TVColors.NAV_ACTIVE if tab_id == self._current_tab else TVColors.NAV_BG,
+                fg=TVColors.ACCENT if tab_id == self._current_tab else TVColors.TEXT_SECONDARY,
+                font=(FONT_FAMILY, 11, "bold" if tab_id == self._current_tab else "normal"),
+                padx=14, pady=8, cursor="hand2",
+            )
+            lbl.pack(side=tk.LEFT, padx=2)
+            lbl.bind("<Button-1>", lambda e, t=tab_id: self._switch_tab(t))
+            self._nav_tabs[tab_id] = lbl
+
+        search_btn = tk.Label(
+            self._nav_frame, text="\U0001f50d",
+            bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
+            font=(FONT_FAMILY, 14), padx=12, pady=8, cursor="hand2",
+        )
+        search_btn.pack(side=tk.RIGHT, padx=8)
+        search_btn.bind("<Button-1>", lambda e: self._toggle_search())
+
+        settings_btn = tk.Label(
+            self._nav_frame, text="\u2699",
+            bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
+            font=(FONT_FAMILY, 14), padx=12, pady=8, cursor="hand2",
+        )
+        settings_btn.pack(side=tk.RIGHT, padx=4)
+        settings_btn.bind("<Button-1>", lambda e: self._open_settings())
+
+    def _switch_tab(self, tab_id: str):
+        """Switch between Home / Favorites / Recent views."""
+        self._current_tab = tab_id
+        for tid, lbl in self._nav_tabs.items():
+            if tid == tab_id:
+                lbl.configure(bg=TVColors.NAV_ACTIVE, fg=TVColors.ACCENT,
+                              font=(FONT_FAMILY, 11, "bold"))
+            else:
+                lbl.configure(bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
+                              font=(FONT_FAMILY, 11, "normal"))
+        self._row_index = 0
+        self._col_index = 0
+        self._build_rows()
+        self._draw()
+
+    # ---- UI Creation --------------------------------------------------------
 
     def _create_ui(self):
         """Create the TV mode interface."""
-        # Info bar at bottom (pack first so it stays below canvas)
-        self._info_frame = tk.Frame(self, bg=TVColors.INFO_BAR_BG, height=60)
+        # Info bar at bottom
+        self._info_frame = tk.Frame(self.root, bg=TVColors.INFO_BAR_BG, height=50)
         self._info_frame.pack(fill=tk.X, side=tk.BOTTOM)
         self._info_frame.pack_propagate(False)
 
-        # Separator line at top of info bar
         tk.Frame(self._info_frame, bg=TVColors.INFO_BAR_BORDER, height=1).pack(
             fill=tk.X, side=tk.TOP)
 
-        # App branding (left)
-        tk.Label(
-            self._info_frame, text=f"📺 {config.APP_NAME}",
-            bg=TVColors.INFO_BAR_BG, fg=TVColors.ACCENT,
-            font=(FONT_FAMILY, 13, "bold")
-        ).pack(side=tk.LEFT, padx=24, pady=14)
-
-        # Channel info (center-left)
         self._info_label = tk.Label(
             self._info_frame, text="",
             bg=TVColors.INFO_BAR_BG, fg=TVColors.TEXT_PRIMARY,
-            font=(FONT_FAMILY, 12)
+            font=(FONT_FAMILY, 11)
         )
-        self._info_label.pack(side=tk.LEFT, padx=20, pady=14)
+        self._info_label.pack(side=tk.LEFT, padx=20, pady=10)
 
-        # Clock (right)
         self._clock_label = tk.Label(
             self._info_frame, text="",
             bg=TVColors.INFO_BAR_BG, fg=TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 13)
+            font=(FONT_FAMILY, 12)
         )
-        self._clock_label.pack(side=tk.RIGHT, padx=24, pady=14)
+        self._clock_label.pack(side=tk.RIGHT, padx=20, pady=10)
 
-        # Navigation hints (right of center)
         tk.Label(
             self._info_frame,
-            text="↑↓←→ Navigate  │  Enter Play  │  Esc Exit  │  0-9 Jump",
+            text="\u2191\u2193\u2190\u2192 Navigate \u2502 Enter Play \u2502 F Fav \u2502 / Search \u2502 F11 Fullscreen \u2502 Esc Quit",
             bg=TVColors.INFO_BAR_BG, fg=TVColors.TEXT_MUTED,
-            font=(FONT_FAMILY, 10)
-        ).pack(side=tk.RIGHT, padx=16, pady=14)
+            font=(FONT_FAMILY, 9)
+        ).pack(side=tk.RIGHT, padx=12, pady=10)
+
+        # Scan progress bar (initially hidden)
+        self._scan_bar = tk.Frame(self.root, bg=TVColors.SCAN_BAR_BG, height=24)
+        self._scan_label = tk.Label(
+            self._scan_bar, text="Scanning\u2026",
+            bg=TVColors.SCAN_BAR_BG, fg=TVColors.ACCENT,
+            font=(FONT_FAMILY, 9)
+        )
+        self._scan_label.pack(side=tk.LEFT, padx=12, pady=2)
+
+        # Search bar (initially hidden)
+        self._search_frame = tk.Frame(self.root, bg=TVColors.SEARCH_BG, height=40)
+        self._search_frame.pack_propagate(False)
+        tk.Label(
+            self._search_frame, text="\U0001f50d",
+            bg=TVColors.SEARCH_BG, fg=TVColors.TEXT_SECONDARY,
+            font=(FONT_FAMILY, 14)
+        ).pack(side=tk.LEFT, padx=(12, 4), pady=6)
+        self._search_entry = tk.Entry(
+            self._search_frame, textvariable=self._search_var,
+            bg=TVColors.BG_CARD, fg=TVColors.TEXT_PRIMARY,
+            insertbackground=TVColors.ACCENT,
+            font=(FONT_FAMILY, 13), relief=tk.FLAT,
+            highlightbackground=TVColors.SEARCH_BORDER, highlightthickness=1,
+        )
+        self._search_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4, pady=6)
+        self._search_entry.bind("<Escape>", lambda e: self._close_search())
+        self._search_entry.bind("<Return>", lambda e: self._search_select())
 
         # Main canvas
         self._canvas = tk.Canvas(
-            self, bg=TVColors.BG, highlightthickness=0, borderwidth=0
+            self.root, bg=TVColors.BG, highlightthickness=0, borderwidth=0
         )
         self._canvas.pack(fill=tk.BOTH, expand=True)
         self._canvas.bind("<Button-1>", self._on_canvas_click)
@@ -316,21 +555,23 @@ class TVModeWindow(tk.Toplevel):
 
         # Number overlay (hidden)
         self._number_label = tk.Label(
-            self, text="", bg=TVColors.OVERLAY_BG, fg=TVColors.ACCENT,
+            self.root, text="", bg=TVColors.OVERLAY_BG, fg=TVColors.ACCENT,
             font=(FONT_FAMILY, 56, "bold"), padx=24, pady=12
         )
 
         # Toast label (hidden)
         self._toast_label = tk.Label(
-            self, text="", bg=TVColors.TOAST_BG, fg=TVColors.TEXT_SECONDARY,
+            self.root, text="", bg=TVColors.TOAST_BG, fg=TVColors.TEXT_SECONDARY,
             font=(FONT_FAMILY, 14), padx=16, pady=8,
             highlightbackground=TVColors.TOAST_BORDER, highlightthickness=1
         )
 
-    # ─── Drawing ────────────────────────────────────────────────────────────
+    # ---- Drawing ------------------------------------------------------------
 
     def _draw(self):
         """Render the channel grid on canvas."""
+        if self._state != "browse":
+            return
         canvas = self._canvas
         if not canvas:
             return
@@ -339,29 +580,50 @@ class TVModeWindow(tk.Toplevel):
         cw = canvas.winfo_width()
         ch_height = canvas.winfo_height()
         if cw < 100 or ch_height < 100:
-            cw = self.winfo_screenwidth()
-            ch_height = self.winfo_screenheight() - 60
+            cw = self.root.winfo_width() or 1280
+            ch_height = (self.root.winfo_height() or 720) - 94
 
         if not self._rows:
+            msg = "No channels available"
+            if self._search_active:
+                msg = "No matching channels"
             canvas.create_text(
                 cw // 2, ch_height // 2,
-                text="No channels available\nPress Escape to exit",
+                text=msg,
                 fill=TVColors.TEXT_SECONDARY,
                 font=(FONT_FAMILY, 22),
                 justify=tk.CENTER
             )
             return
 
-        # Background gradient at top (simulated with horizontal bands)
-        for i in range(6):
-            alpha_hex = format(max(0, 15 - i * 2), '02x')
-            color = f"#0F10{18 + i * 3:02x}"
-            canvas.create_rectangle(0, i * 12, cw, (i + 1) * 12,
-                                    fill=color, outline="")
+        # Hero area
+        focused_ch = self._get_focused_channel()
+        hero_h = 72
+        if focused_ch:
+            canvas.create_rectangle(0, 0, cw, hero_h, fill=TVColors.BG_GRADIENT_TOP, outline="")
+            name = focused_ch.get('name', '')
+            cat = focused_ch.get('category', '')
+            country = focused_ch.get('country', '')
+            ch_num = self._channel_numbers.get(id(focused_ch), 0)
+            hero_text = f"Ch.{ch_num}  {name}" if ch_num else name
+            canvas.create_text(
+                32, hero_h // 2 - 6, text=hero_text,
+                fill=TVColors.TEXT_PRIMARY, font=(FONT_FAMILY, 18, "bold"), anchor="w"
+            )
+            sub_parts = [p for p in [cat, country] if p]
+            if sub_parts:
+                canvas.create_text(
+                    32, hero_h // 2 + 18, text=" \u2022 ".join(sub_parts),
+                    fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 11), anchor="w"
+                )
+            if focused_ch.get('url', '') in self._favorite_urls:
+                canvas.create_text(
+                    cw - 32, hero_h // 2, text="\u2605 Favorite",
+                    fill=TVColors.FAVORITE_STAR, font=(FONT_FAMILY, 12), anchor="e"
+                )
 
-        y_offset = 28
+        y_offset = hero_h + 8
 
-        # Visible row window (centered on focused row)
         start_row = max(0, self._row_index - 1)
         end_row = min(len(self._rows), start_row + VISIBLE_ROWS)
         if end_row - start_row < VISIBLE_ROWS and start_row > 0:
@@ -372,40 +634,32 @@ class TVModeWindow(tk.Toplevel):
             is_active = (row_idx == self._row_index)
             channels = row["channels"]
 
-            # Active row highlight band
             if is_active:
                 canvas.create_rectangle(
                     0, y_offset - 6, cw, y_offset + ROW_LABEL_HEIGHT + CARD_HEIGHT_FOCUS + 12,
                     fill=TVColors.BG_ROW_ACTIVE, outline=""
                 )
 
-            # Row label with channel count
             label_font_size = 16 if is_active else 13
             label_weight = "bold" if is_active else "normal"
             label_color = TVColors.TEXT_PRIMARY if is_active else TVColors.TEXT_SECONDARY
             canvas.create_text(
-                32, y_offset + 6,
-                text=row["label"],
+                32, y_offset + 6, text=row["label"],
                 fill=label_color,
                 font=(FONT_FAMILY, label_font_size, label_weight),
                 anchor="nw"
             )
 
-            # Channel count (use bbox for proper positioning)
             count_text = f"  {len(channels)}"
             label_bbox = canvas.bbox(canvas.find_all()[-1])
             count_x = (label_bbox[2] + 12) if label_bbox else 200
             canvas.create_text(
-                count_x, y_offset + 10,
-                text=count_text,
-                fill=TVColors.TEXT_DIM,
-                font=(FONT_FAMILY, 11),
-                anchor="nw"
+                count_x, y_offset + 10, text=count_text,
+                fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 11), anchor="nw"
             )
 
             y_offset += ROW_LABEL_HEIGHT
 
-            # Cards
             scroll_offset = self._col_offsets[row_idx]
             x_start = 32 - scroll_offset * (CARD_WIDTH + CARD_GAP)
 
@@ -415,12 +669,10 @@ class TVModeWindow(tk.Toplevel):
                 card_h = CARD_HEIGHT_FOCUS if is_focused else CARD_HEIGHT
                 x = x_start + col_idx * (CARD_WIDTH + CARD_GAP)
 
-                # Center focused card vertically in row
                 y_card = y_offset
                 if is_focused:
                     y_card -= (CARD_HEIGHT_FOCUS - CARD_HEIGHT) // 2
 
-                # Cull off-screen cards
                 if x + card_w < -50 or x > cw + 50:
                     continue
 
@@ -429,29 +681,23 @@ class TVModeWindow(tk.Toplevel):
 
             y_offset += CARD_HEIGHT_FOCUS + 20
 
-        # Update info bar
         self._update_info_bar()
 
-    def _draw_card(self, canvas: tk.Canvas, x: int, y: int,
-                   w: int, h: int, channel: Dict[str, Any],
-                   is_focused: bool, is_active_row: bool):
+    def _draw_card(self, canvas, x, y, w, h, channel, is_focused, is_active_row):
         """Draw a single channel card with depth and visual hierarchy."""
         name = channel.get('name', 'Unknown')
         ch_url = channel.get('url', '')
 
         if is_focused:
-            # Outer glow
             canvas.create_rectangle(
                 x - 4, y - 4, x + w + 4, y + h + 4,
                 fill="", outline=TVColors.BORDER_FOCUS_GLOW, width=2,
                 stipple="gray50"
             )
-            # Card body
             canvas.create_rectangle(
                 x, y, x + w, y + h,
                 fill=TVColors.BG_CARD_FOCUS, outline=TVColors.BORDER_FOCUS, width=2
             )
-            # Inner gradient band (top accent)
             canvas.create_rectangle(
                 x + 1, y + 1, x + w - 1, y + 4,
                 fill=TVColors.BORDER_FOCUS, outline=""
@@ -467,7 +713,6 @@ class TVModeWindow(tk.Toplevel):
                 fill=TVColors.BG_CARD, outline=TVColors.BORDER_SUBTLE, width=1
             )
 
-        # Monogram background circle (simulates channel logo)
         mono_color = _get_monogram_color(name)
         cx, cy = x + w // 2, y + h // 2 - 10
         mono_r = 24 if is_focused else 20
@@ -475,39 +720,32 @@ class TVModeWindow(tk.Toplevel):
             cx - mono_r, cy - mono_r, cx + mono_r, cy + mono_r,
             fill=mono_color, outline=""
         )
-        # Monogram letter
         letter = name[0].upper() if name else "?"
         canvas.create_text(
-            cx, cy,
-            text=letter,
+            cx, cy, text=letter,
             fill=TVColors.TEXT_PRIMARY,
             font=(FONT_FAMILY, 16 if is_focused else 13, "bold")
         )
 
-        # Channel name (below monogram)
-        display_name = name if len(name) <= 24 else name[:22] + "…"
+        display_name = name if len(name) <= 24 else name[:22] + "\u2026"
         name_y = cy + mono_r + 14
         canvas.create_text(
-            x + w // 2, name_y,
-            text=display_name,
+            x + w // 2, name_y, text=display_name,
             fill=TVColors.TEXT_PRIMARY if is_focused else TVColors.TEXT_SECONDARY,
             font=(FONT_FAMILY, 12 if is_focused else 10,
                   "bold" if is_focused else "normal"),
             anchor="center", width=w - 20
         )
 
-        # Channel number badge (top-left)
         ch_num = self._channel_numbers.get(id(channel))
         if ch_num is not None:
             canvas.create_text(
-                x + 10, y + 10,
-                text=str(ch_num),
+                x + 10, y + 10, text=str(ch_num),
                 fill=TVColors.ACCENT if is_focused else TVColors.TEXT_DIM,
                 font=(FONT_FAMILY, 9, "bold" if is_focused else "normal"),
                 anchor="nw"
             )
 
-        # Live indicator (top-right, pulsing dot)
         if channel.get('is_working'):
             dot_color = TVColors.LIVE_PULSE if is_focused else TVColors.SUCCESS
             canvas.create_oval(
@@ -515,38 +753,37 @@ class TVModeWindow(tk.Toplevel):
                 fill=dot_color, outline=""
             )
 
-        # Favorite star (bottom-right)
         if ch_url in self._favorite_urls:
             canvas.create_text(
-                x + w - 14, y + h - 14,
-                text="★",
-                fill=TVColors.FAVORITE_STAR,
-                font=(FONT_FAMILY, 13),
-                anchor="center"
+                x + w - 14, y + h - 14, text="\u2605",
+                fill=TVColors.FAVORITE_STAR, font=(FONT_FAMILY, 13), anchor="center"
             )
 
-        # Category subtitle (bottom-left, only on focused)
         if is_focused:
             cat = channel.get('category', '')
             country = channel.get('country', '')
-            sub = cat + (f" • {country}" if country else "")
+            sub = cat + (f" \u2022 {country}" if country else "")
             if sub:
                 canvas.create_text(
-                    x + 10, y + h - 12,
-                    text=sub[:30],
-                    fill=TVColors.TEXT_DIM,
-                    font=(FONT_FAMILY, 9),
-                    anchor="sw"
+                    x + 10, y + h - 12, text=sub[:30],
+                    fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 9), anchor="sw"
                 )
+
+    def _get_focused_channel(self):
+        """Return the currently focused channel dict, or None."""
+        if not self._rows or self._row_index >= len(self._rows):
+            return None
+        row = self._rows[self._row_index]
+        if 0 <= self._col_index < len(row["channels"]):
+            return row["channels"][self._col_index]
+        return None
 
     def _update_info_bar(self):
         """Update the info bar with focused channel details."""
         if not self._rows or not self._info_label:
             return
-        row = self._rows[self._row_index]
-        channels = row["channels"]
-        if 0 <= self._col_index < len(channels):
-            ch = channels[self._col_index]
+        ch = self._get_focused_channel()
+        if ch:
             name = ch.get('name', 'Unknown')
             cat = ch.get('category', '')
             country = ch.get('country', '')
@@ -559,52 +796,59 @@ class TVModeWindow(tk.Toplevel):
                 parts.append(cat)
             if country:
                 parts.append(country)
-            self._info_label.config(text="  │  ".join(parts))
+            self._info_label.config(text="  \u2502  ".join(parts))
 
-    # ─── Clock ──────────────────────────────────────────────────────────────
+    # ---- Clock --------------------------------------------------------------
 
     def _start_clock(self):
-        """Start the clock update loop."""
         self._update_clock()
 
     def _update_clock(self):
-        """Update clock display."""
         if self._clock_label:
-            now = datetime.now()
-            self._clock_label.config(text=now.strftime("%H:%M"))
-        self._clock_timer = self.after(CLOCK_UPDATE_MS, self._update_clock)
+            self._clock_label.config(text=datetime.now().strftime("%H:%M"))
+        self._clock_timer = self.root.after(CLOCK_UPDATE_MS, self._update_clock)
 
-    # ─── Navigation ─────────────────────────────────────────────────────────
+    # ---- Navigation ---------------------------------------------------------
 
     def _bind_keys(self):
-        """Bind keyboard and mouse navigation."""
-        self.bind("<Up>", self._nav_up)
-        self.bind("<Down>", self._nav_down)
-        self.bind("<Left>", self._nav_left)
-        self.bind("<Right>", self._nav_right)
-        self.bind("<Return>", self._play_selected)
-        self.bind("<KP_Enter>", self._play_selected)
-        self.bind("<Escape>", self._on_escape)
-        self.bind("<BackSpace>", self._on_escape)
-        self.bind("<F11>", lambda e: self._exit_tv_mode())
-        self.bind("<Prior>", self._page_up)    # Page Up
-        self.bind("<Next>", self._page_down)   # Page Down
-        self.bind("<Home>", self._jump_home)
-        self.bind("<End>", self._jump_end)
+        """Bind keyboard navigation."""
+        r = self.root
+        r.bind("<Up>", self._nav_up)
+        r.bind("<Down>", self._nav_down)
+        r.bind("<Left>", self._nav_left)
+        r.bind("<Right>", self._nav_right)
+        r.bind("<Return>", self._play_selected)
+        r.bind("<KP_Enter>", self._play_selected)
+        r.bind("<Escape>", self._on_escape)
+        r.bind("<BackSpace>", self._on_backspace)
+        r.bind("<F11>", lambda e: self._toggle_fullscreen())
+        r.bind("<Prior>", self._page_up)
+        r.bind("<Next>", self._page_down)
+        r.bind("<Home>", self._jump_home)
+        r.bind("<End>", self._jump_end)
 
-        # Number keys
         for i in range(10):
-            self.bind(str(i), self._on_number_key)
-            self.bind(f"<KP_{i}>", self._on_number_key)
+            r.bind(str(i), self._on_number_key)
+            r.bind(f"<KP_{i}>", self._on_number_key)
 
-        # Volume
-        self.bind("<plus>", lambda e: self._volume_change(5))
-        self.bind("<KP_Add>", lambda e: self._volume_change(5))
-        self.bind("<minus>", lambda e: self._volume_change(-5))
-        self.bind("<KP_Subtract>", lambda e: self._volume_change(-5))
+        r.bind("<plus>", lambda e: self._volume_change(5))
+        r.bind("<KP_Add>", lambda e: self._volume_change(5))
+        r.bind("<minus>", lambda e: self._volume_change(-5))
+        r.bind("<KP_Subtract>", lambda e: self._volume_change(-5))
+
+        r.bind("f", self._on_f_key)
+        r.bind("F", self._on_f_key)
+        r.bind("s", lambda e: self._open_settings())
+        r.bind("S", lambda e: self._open_settings())
+        r.bind("m", lambda e: self._toggle_mute())
+        r.bind("M", lambda e: self._toggle_mute())
+        r.bind("<space>", self._on_space)
+        r.bind("/", lambda e: self._toggle_search())
+        r.bind("<Control-f>", lambda e: self._toggle_search())
 
     def _nav_up(self, event=None):
-        """Move to previous row."""
+        if self._state == "playing":
+            return
         if self._row_index > 0:
             self._row_index -= 1
             self._clamp_col()
@@ -612,22 +856,29 @@ class TVModeWindow(tk.Toplevel):
             self._draw()
 
     def _nav_down(self, event=None):
-        """Move to next row."""
-        if self._row_index < len(self._rows) - 1:
+        if self._state == "playing":
+            return
+        if self._rows and self._row_index < len(self._rows) - 1:
             self._row_index += 1
             self._clamp_col()
             self._ensure_col_visible()
             self._draw()
 
     def _nav_left(self, event=None):
-        """Move left in current row."""
+        if self._state == "playing":
+            self._channel_prev()
+            return
         if self._col_index > 0:
             self._col_index -= 1
             self._ensure_col_visible()
             self._draw()
 
     def _nav_right(self, event=None):
-        """Move right in current row."""
+        if self._state == "playing":
+            self._channel_next()
+            return
+        if not self._rows:
+            return
         row_len = len(self._rows[self._row_index]["channels"])
         if self._col_index < row_len - 1:
             self._col_index += 1
@@ -635,46 +886,54 @@ class TVModeWindow(tk.Toplevel):
             self._draw()
 
     def _page_up(self, event=None):
-        """Jump up by 3 rows."""
+        if self._state == "playing":
+            self._channel_prev()
+            return
         self._row_index = max(0, self._row_index - 3)
         self._clamp_col()
         self._ensure_col_visible()
         self._draw()
 
     def _page_down(self, event=None):
-        """Jump down by 3 rows."""
-        self._row_index = min(len(self._rows) - 1, self._row_index + 3)
+        if self._state == "playing":
+            self._channel_next()
+            return
+        if self._rows:
+            self._row_index = min(len(self._rows) - 1, self._row_index + 3)
         self._clamp_col()
         self._ensure_col_visible()
         self._draw()
 
     def _jump_home(self, event=None):
-        """Jump to first card in row."""
+        if self._state == "playing":
+            return
         self._col_index = 0
-        self._col_offsets[self._row_index] = 0
+        if self._rows:
+            self._col_offsets[self._row_index] = 0
         self._draw()
 
     def _jump_end(self, event=None):
-        """Jump to last card in row."""
+        if self._state == "playing":
+            return
+        if not self._rows:
+            return
         row_len = len(self._rows[self._row_index]["channels"])
         self._col_index = max(0, row_len - 1)
         self._ensure_col_visible()
         self._draw()
 
     def _clamp_col(self):
-        """Clamp column index to current row length."""
         if self._rows:
             row_len = len(self._rows[self._row_index]["channels"])
             if self._col_index >= row_len:
                 self._col_index = max(0, row_len - 1)
 
     def _ensure_col_visible(self):
-        """Adjust scroll offset so focused card is visible."""
-        if not self._canvas:
+        if not self._canvas or not self._rows:
             return
         cw = self._canvas.winfo_width()
         if cw < 100:
-            cw = self.winfo_screenwidth()
+            cw = self.root.winfo_width() or 1280
         visible_cards = max(1, (cw - 64) // (CARD_WIDTH + CARD_GAP))
         row_idx = self._row_index
 
@@ -683,45 +942,271 @@ class TVModeWindow(tk.Toplevel):
         elif self._col_index >= self._col_offsets[row_idx] + visible_cards:
             self._col_offsets[row_idx] = self._col_index - visible_cards + 1
 
+    # ---- Playback -----------------------------------------------------------
+
     def _play_selected(self, event=None):
         """Play the currently focused channel."""
-        if not self._rows:
+        if self._state == "playing":
+            return
+        ch = self._get_focused_channel()
+        if not ch:
+            return
+
+        if self._parental and self._parental.is_channel_blocked(ch):
+            self._show_toast("Channel blocked by parental controls")
+            return
+
+        url = ch.get('url', '')
+        if not url:
+            self._show_toast("No stream URL")
+            return
+
+        if self._watch_history:
+            try:
+                self._watch_history.record_play(ch)
+            except Exception:
+                pass
+
+        self._player_channel = ch
+        self._start_player(url, ch.get('name', 'Unknown'))
+
+    def _start_player(self, url, channel_name):
+        """Switch to playing state with embedded VLC."""
+        if not VLC_AVAILABLE or VLCController is None:
+            self._show_toast("VLC not available \u2014 install python-vlc")
+            return
+
+        self._state = "playing"
+
+        self._canvas.pack_forget()
+        if self._search_frame.winfo_ismapped():
+            self._search_frame.pack_forget()
+
+        self._player_frame = tk.Frame(self.root, bg="#000000")
+        self._player_frame.pack(fill=tk.BOTH, expand=True, before=self._info_frame)
+
+        self._vlc_canvas = tk.Canvas(self._player_frame, bg="#000000",
+                                     highlightthickness=0, borderwidth=0)
+        self._vlc_canvas.pack(fill=tk.BOTH, expand=True)
+
+        self._player_frame.update_idletasks()
+
+        self._vlc = VLCController()
+        hwnd = self._vlc_canvas.winfo_id()
+        if not self._vlc.initialize(hwnd, self._player_volume):
+            self._show_toast("Failed to initialise VLC")
+            self._stop_player()
+            return
+
+        if not self._vlc.play_url(url):
+            self._show_toast("Failed to play stream")
+            self._stop_player()
+            return
+
+        self._show_player_osd(channel_name)
+        self._info_label.config(text=f"\u25b6 {channel_name}")
+
+    def _show_player_osd(self, channel_name):
+        """Show channel name overlay that fades after a few seconds."""
+        if self._osd_timer:
+            self.root.after_cancel(self._osd_timer)
+
+        ch_num = ""
+        if self._player_channel:
+            n = self._channel_numbers.get(id(self._player_channel))
+            if n:
+                ch_num = f"Ch.{n}  "
+
+        self._osd_label = tk.Label(
+            self._player_frame, text=f"{ch_num}{channel_name}",
+            bg=TVColors.PLAYER_OSD_BG, fg=TVColors.TEXT_PRIMARY,
+            font=(FONT_FAMILY, 22, "bold"), padx=20, pady=10,
+        )
+        self._osd_label.place(relx=0.02, rely=0.04, anchor="nw")
+        self._osd_timer = self.root.after(OSD_FADE_MS, self._hide_osd)
+
+    def _hide_osd(self):
+        try:
+            if hasattr(self, '_osd_label') and self._osd_label:
+                self._osd_label.place_forget()
+                self._osd_label.destroy()
+                self._osd_label = None
+        except Exception:
+            pass
+        self._osd_timer = None
+
+    def _stop_player(self):
+        """Stop VLC and return to browse state."""
+        if self._osd_timer:
+            self.root.after_cancel(self._osd_timer)
+            self._osd_timer = None
+
+        if self._vlc:
+            try:
+                self._vlc.stop()
+                self._vlc.cleanup()
+            except Exception:
+                pass
+            self._vlc = None
+
+        if self._player_frame:
+            self._player_frame.destroy()
+            self._player_frame = None
+
+        self._state = "browse"
+        self._canvas.pack(fill=tk.BOTH, expand=True)
+        self._draw()
+
+    def _channel_next(self):
+        """Play next channel (player mode)."""
+        if self._state != "playing" or not self._rows:
             return
         row = self._rows[self._row_index]
-        channels = row["channels"]
-        if 0 <= self._col_index < len(channels):
-            channel = channels[self._col_index]
-            if self._on_play:
-                self._on_play(channel)
+        if self._col_index < len(row["channels"]) - 1:
+            self._col_index += 1
+        elif self._row_index < len(self._rows) - 1:
+            self._row_index += 1
+            self._col_index = 0
+        else:
+            return
+        self._stop_player()
+        self._play_selected()
+
+    def _channel_prev(self):
+        """Play previous channel (player mode)."""
+        if self._state != "playing" or not self._rows:
+            return
+        if self._col_index > 0:
+            self._col_index -= 1
+        elif self._row_index > 0:
+            self._row_index -= 1
+            self._col_index = max(0, len(self._rows[self._row_index]["channels"]) - 1)
+        else:
+            return
+        self._stop_player()
+        self._play_selected()
+
+    # ---- Search -------------------------------------------------------------
+
+    def _toggle_search(self):
+        if self._state == "playing":
+            return
+        if self._search_active:
+            self._close_search()
+        else:
+            self._open_search()
+
+    def _open_search(self):
+        self._search_active = True
+        self._search_frame.pack(fill=tk.X, side=tk.TOP, before=self._canvas)
+        self._search_entry.focus_set()
+
+    def _close_search(self):
+        self._search_active = False
+        self._search_var.set("")
+        self._search_frame.pack_forget()
+        self._filtered_channels = None
+        self._row_index = 0
+        self._col_index = 0
+        self._build_rows()
+        self._draw()
+        self.root.focus_set()
+
+    def _on_search_changed(self, *args):
+        query = self._search_var.get().strip().lower()
+        if not query:
+            self._filtered_channels = None
+        else:
+            self._filtered_channels = [
+                ch for ch in self._all_channels
+                if query in ch.get('name', '').lower()
+                or query in ch.get('category', '').lower()
+                or query in ch.get('country', '').lower()
+            ]
+        self._row_index = 0
+        self._col_index = 0
+        self._build_rows()
+        self._draw()
+
+    def _search_select(self):
+        self._close_search()
+
+    # ---- Favorites Toggle ---------------------------------------------------
+
+    def _on_f_key(self, event=None):
+        if self._state == "playing":
+            return
+        ch = self._get_focused_channel()
+        if not ch or not self._favorites_manager:
+            return
+        url = ch.get('url', '')
+        if not url:
+            return
+        self._favorites_manager.toggle_favorite(url)
+        if url in self._favorite_urls:
+            self._favorite_urls.discard(url)
+            self._show_toast("Removed from favorites")
+        else:
+            self._favorite_urls.add(url)
+            self._show_toast("Added to favorites")
+        self._draw()
+
+    # ---- Settings -----------------------------------------------------------
+
+    def _open_settings(self):
+        if self._state == "playing":
+            return
+        try:
+            from ui.settings_dialog import show_settings_dialog
+            show_settings_dialog(self)
+        except Exception as e:
+            self._show_toast(f"Settings unavailable: {e}")
+            logger.error(f"Settings dialog error: {e}")
+
+    # ---- Key Handlers -------------------------------------------------------
 
     def _on_escape(self, event=None):
-        """Exit TV mode."""
-        self._exit_tv_mode()
+        if self._search_active:
+            self._close_search()
+            return
+        if self._state == "playing":
+            self._stop_player()
+            return
+        self._on_close()
 
-    def _exit_tv_mode(self):
-        """Close TV mode and return to main window."""
-        if self._clock_timer:
-            self.after_cancel(self._clock_timer)
-        if self._number_timer:
-            self.after_cancel(self._number_timer)
-        if self._toast_timer:
-            self.after_cancel(self._toast_timer)
-        self.attributes("-fullscreen", False)
-        self.attributes("-topmost", False)
-        if self._on_exit:
-            self._on_exit()
-        self.destroy()
+    def _on_backspace(self, event=None):
+        if self._search_active:
+            return
+        if self._state == "playing":
+            self._stop_player()
 
-    # ─── Mouse Support ──────────────────────────────────────────────────────
+    def _on_space(self, event=None):
+        if self._state == "playing" and self._vlc:
+            self._vlc.pause()
+
+    def _toggle_fullscreen(self):
+        self._is_fullscreen = not self._is_fullscreen
+        self.root.attributes("-fullscreen", self._is_fullscreen)
+
+    def _toggle_mute(self):
+        if self._vlc:
+            muted = self._vlc.get_mute()
+            self._vlc.set_mute(not muted)
+            self._show_toast("\U0001f507 Muted" if not muted else "\U0001f50a Unmuted")
+
+    def _volume_change(self, delta):
+        if self._vlc and self._state == "playing":
+            self._player_volume = max(0, min(100, self._player_volume + delta))
+            self._vlc.set_volume(self._player_volume)
+            self._show_toast(f"\U0001f50a Volume: {self._player_volume}%")
+
+    # ---- Mouse Support ------------------------------------------------------
 
     def _on_canvas_click(self, event):
-        """Handle mouse click on canvas — find clicked card and focus/play."""
-        if not self._rows:
+        if not self._rows or self._state != "browse":
             return
-        # Determine which row/col was clicked based on geometry
         cw = self._canvas.winfo_width()
-        ch_h = self._canvas.winfo_height()
-        y_offset = 28
+        y_offset = 80
 
         start_row = max(0, self._row_index - 1)
         end_row = min(len(self._rows), start_row + VISIBLE_ROWS)
@@ -735,14 +1220,12 @@ class TVModeWindow(tk.Toplevel):
             card_h = CARD_HEIGHT_FOCUS if is_active else CARD_HEIGHT
 
             if y_top <= event.y <= y_top + card_h:
-                # Click is in this row — find column
                 scroll_offset = self._col_offsets[row_idx]
                 x_start = 32 - scroll_offset * (CARD_WIDTH + CARD_GAP)
                 for col_idx in range(len(row["channels"])):
                     x = x_start + col_idx * (CARD_WIDTH + CARD_GAP)
                     if x <= event.x <= x + CARD_WIDTH:
                         if self._row_index == row_idx and self._col_index == col_idx:
-                            # Double-click effect: play
                             self._play_selected()
                         else:
                             self._row_index = row_idx
@@ -753,41 +1236,36 @@ class TVModeWindow(tk.Toplevel):
             y_offset += ROW_LABEL_HEIGHT + CARD_HEIGHT_FOCUS + 20
 
     def _on_resize(self, event=None):
-        """Handle window/canvas resize."""
-        self.after(50, self._draw)
+        self.root.after(50, self._draw)
 
-    # ─── Channel Number Jump ────────────────────────────────────────────────
+    # ---- Channel Number Jump ------------------------------------------------
 
     def _on_number_key(self, event):
-        """Handle number key press for channel jump."""
+        if self._state == "playing":
+            return
         digit = event.char if event.char and event.char.isdigit() else ''
         if not digit:
-            # Try keysym for numpad
             ks = event.keysym
             if ks.startswith("KP_") and ks[-1].isdigit():
                 digit = ks[-1]
         if not digit:
             return
 
-        # Cap digits
         if len(self._number_buffer) >= MAX_NUMBER_DIGITS:
             return
 
         self._number_buffer += digit
         self._show_number_overlay()
 
-        # Reset timer
         if self._number_timer:
-            self.after_cancel(self._number_timer)
-        self._number_timer = self.after(NUMBER_TIMEOUT_MS, self._execute_number_jump)
+            self.root.after_cancel(self._number_timer)
+        self._number_timer = self.root.after(NUMBER_TIMEOUT_MS, self._execute_number_jump)
 
     def _show_number_overlay(self):
-        """Show the channel number being entered."""
         self._number_label.config(text=f"Ch. {self._number_buffer}_")
         self._number_label.place(relx=0.5, rely=0.12, anchor="center")
 
     def _execute_number_jump(self):
-        """Jump to the entered channel number."""
         self._number_timer = None
         target_text = self._number_buffer
         self._number_buffer = ""
@@ -802,7 +1280,6 @@ class TVModeWindow(tk.Toplevel):
             self._show_toast(f"Channel {target} not found")
             return
 
-        # Find channel by number (reverse lookup)
         for row_idx, row in enumerate(self._rows):
             for col_idx, ch in enumerate(row["channels"]):
                 if self._channel_numbers.get(id(ch)) == target:
@@ -814,42 +1291,28 @@ class TVModeWindow(tk.Toplevel):
 
         self._show_toast(f"Channel {target} not found")
 
-    # ─── Toast ──────────────────────────────────────────────────────────────
+    # ---- Toast --------------------------------------------------------------
 
-    def _show_toast(self, message: str, duration_ms: int = 2000):
-        """Show a brief toast notification."""
+    def _show_toast(self, message, duration_ms=2000):
         self._toast_label.config(text=message)
         self._toast_label.place(relx=0.5, rely=0.88, anchor="center")
         if self._toast_timer:
-            self.after_cancel(self._toast_timer)
-        self._toast_timer = self.after(duration_ms, self._hide_toast)
+            self.root.after_cancel(self._toast_timer)
+        self._toast_timer = self.root.after(duration_ms, self._hide_toast)
 
     def _hide_toast(self):
-        """Hide toast."""
         self._toast_label.place_forget()
         self._toast_timer = None
 
-    # ─── Volume ─────────────────────────────────────────────────────────────
+    # ---- Public Methods -----------------------------------------------------
 
-    def _volume_change(self, delta: int):
-        """Adjust volume (stub — integrates with player if active)."""
-        pass
-
-    # ─── Public Methods ─────────────────────────────────────────────────────
-
-    def refresh_channels(self, channels: List[Dict[str, Any]]):
+    def refresh_channels(self, channels):
         """Refresh channel data (e.g., after scan completes)."""
-        # Preserve focused channel
-        focused_ch = None
-        if self._rows and self._row_index < len(self._rows):
-            row = self._rows[self._row_index]
-            if self._col_index < len(row["channels"]):
-                focused_ch = row["channels"][self._col_index]
+        focused_ch = self._get_focused_channel()
 
         self._all_channels = channels
         self._build_rows()
 
-        # Restore focus by channel identity
         if focused_ch:
             focused_url = focused_ch.get('url', '')
             for row_idx, row in enumerate(self._rows):
@@ -861,7 +1324,35 @@ class TVModeWindow(tk.Toplevel):
                         self._draw()
                         return
 
-        # Fallback: reset
         self._row_index = min(self._row_index, max(0, len(self._rows) - 1))
         self._clamp_col()
         self._draw()
+
+    def run(self):
+        """Start the application main loop."""
+        self.root.mainloop()
+
+    def _on_close(self):
+        """Clean shutdown."""
+        logger.info("TVModeApp closing...")
+        for timer in [self._clock_timer, self._number_timer,
+                      self._toast_timer, self._scan_timer, self._osd_timer]:
+            if timer:
+                try:
+                    self.root.after_cancel(timer)
+                except Exception:
+                    pass
+        if self._state == "playing":
+            try:
+                self._stop_player()
+            except Exception:
+                pass
+        try:
+            self._channel_manager.save_channels()
+        except Exception:
+            pass
+        self.root.destroy()
+
+
+# Backwards compatibility alias (deprecated)
+TVModeWindow = TVModeApp
