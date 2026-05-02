@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — TV Viewer</title>
+    <meta name="description" content="Privacy policy for the TV Viewer Android and Windows apps. No accounts, no ads, no tracking. Analytics are strictly opt-in.">
+    <meta name="robots" content="index,follow">
+    <link rel="canonical" href="https://tv-viewer-app.github.io/tv_viewer/privacy.html">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --green: #3fb950;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.65;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); text-decoration: underline; }
+        .nav {
+            position: sticky; top: 0; z-index: 10;
+            background: rgba(13, 17, 23, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+        }
+        .nav-inner {
+            max-width: 880px; margin: 0 auto;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .nav img { width: 28px; height: 28px; border-radius: 6px; }
+        .nav a.brand { color: var(--text); font-weight: 600; font-size: 16px; }
+        .nav a.brand:hover { text-decoration: none; color: var(--accent); }
+        .container {
+            max-width: 880px; margin: 0 auto;
+            padding: 48px 24px 96px;
+        }
+        h1 {
+            font-size: 36px; font-weight: 700; margin-bottom: 8px;
+            background: linear-gradient(90deg, var(--accent), #79c0ff);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .meta { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+        .meta strong { color: var(--text); }
+        h2 {
+            font-size: 24px; font-weight: 600; margin-top: 40px; margin-bottom: 12px;
+            padding-bottom: 8px; border-bottom: 1px solid var(--border);
+        }
+        h3 { font-size: 18px; font-weight: 600; margin-top: 24px; margin-bottom: 8px; color: var(--accent); }
+        p { margin-bottom: 12px; }
+        ul, ol { margin: 12px 0 12px 28px; }
+        li { margin-bottom: 6px; }
+        code {
+            background: var(--surface); padding: 2px 6px; border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+            border: 1px solid var(--border);
+        }
+        table {
+            width: 100%; border-collapse: collapse; margin: 16px 0;
+            background: var(--surface); border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        th, td {
+            text-align: left; padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px; vertical-align: top;
+        }
+        th { background: rgba(88, 166, 255, 0.08); font-weight: 600; color: var(--text); }
+        tr:last-child td { border-bottom: none; }
+        .tldr {
+            background: rgba(63, 185, 80, 0.08);
+            border-left: 4px solid var(--green);
+            padding: 16px 20px; border-radius: 6px; margin: 24px 0;
+        }
+        .tldr h2 { border: none; margin-top: 0; padding-bottom: 0; color: var(--green); font-size: 18px; }
+        .tldr ul { margin: 8px 0 0 20px; }
+        .footer {
+            margin-top: 64px; padding-top: 24px;
+            border-top: 1px solid var(--border);
+            text-align: center; color: var(--text-muted); font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-inner">
+            <img src="icon-192.png" alt="TV Viewer">
+            <a class="brand" href="index.html">TV Viewer</a>
+            <span style="color: var(--text-muted); font-size: 14px;">/ Privacy Policy</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        <h1>Privacy Policy</h1>
+        <p class="meta"><strong>Effective date:</strong> 2 May 2026 &nbsp;·&nbsp; <strong>Last updated:</strong> 2 May 2026</p>
+        <p class="meta"><strong>Applies to:</strong> TV Viewer Android app (<code>app.tvviewer.player</code>) and TV Viewer Windows desktop app</p>
+
+        <p style="margin-top: 24px;">TV Viewer ("the app", "we", "our") is a free, open-source IPTV player developed by the TV Viewer community on GitHub. We respect your privacy and are committed to keeping data collection to the absolute minimum required to make the app work.</p>
+
+        <div class="tldr">
+            <h2>TL;DR</h2>
+            <ul>
+                <li><strong>No accounts.</strong> You don't sign up, you don't sign in.</li>
+                <li><strong>No advertising.</strong> No ads, no ad SDKs, no ad IDs.</li>
+                <li><strong>No tracking</strong> across apps or websites.</li>
+                <li><strong>No selling or sharing</strong> of personal data with third parties for marketing.</li>
+                <li><strong>Analytics are strictly opt-in</strong> and contain no personal data.</li>
+                <li><strong>The app is open source</strong> — anyone can audit exactly what it does at <a href="https://github.com/tv-viewer-app/tv_viewer">github.com/tv-viewer-app/tv_viewer</a>.</li>
+            </ul>
+        </div>
+
+        <h2>1. Information We Collect</h2>
+
+        <h3>1.1 Information collected automatically (always)</h3>
+        <table>
+            <tr><th>Data</th><th>Why</th><th>Where it goes</th></tr>
+            <tr><td>IPTV stream URLs you play</td><td>Required to load the video stream you selected</td><td>Sent only to the IPTV server hosting the stream (third party — see §3)</td></tr>
+            <tr><td>HTTP requests to M3U playlist sources</td><td>Required to fetch the channel list</td><td>Sent only to the configured playlist URLs (third party — see §3)</td></tr>
+            <tr><td>HTTP requests to GitHub Releases API</td><td>Used by the in-app update checker to detect new versions</td><td>Sent only to <code>api.github.com</code></td></tr>
+        </table>
+        <p>These requests are <strong>standard network calls</strong> required for the app to function. We do not log them on any server we control.</p>
+
+        <h3>1.2 Information you can choose to share (opt-in only)</h3>
+        <p>The first time you launch the Windows desktop app, a consent dialog asks whether you want to enable <strong>anonymous usage analytics</strong>. The Android app does <strong>not</strong> collect analytics by default.</p>
+        <p>If — and only if — you opt in, we collect:</p>
+        <ul>
+            <li><strong>Anonymous device class</strong> (e.g., "Windows 11", "Android 14") — never a device identifier</li>
+            <li><strong>App version</strong> (e.g., "2.7.2")</li>
+            <li><strong>Aggregate event counts</strong>: app launched, channel scan completed, search performed</li>
+            <li><strong>Crash reports</strong>: a stack trace and the app version at the time of the crash</li>
+        </ul>
+        <p>We do <strong>not</strong> collect: your name, email, phone number, location, IP address, IPTV channel choices, watch history, search queries, or any content you view.</p>
+        <p>You can disable analytics at any time:</p>
+        <ul>
+            <li><strong>Windows:</strong> Settings → Privacy → Disable analytics</li>
+            <li><strong>Android:</strong> Settings → Privacy controls → Analytics off</li>
+        </ul>
+
+        <h3>1.3 Information stored only on your device</h3>
+        <p>The following is saved locally on your device and <strong>never transmitted to us</strong>:</p>
+        <ul>
+            <li>Favourite channels, recently watched channels, watch history</li>
+            <li>Repository / playlist URLs you've added</li>
+            <li>App preferences (theme, sort order, filters)</li>
+            <li>Channel logo cache (<code>~/.tv_viewer/logos/</code> on Windows, app cache on Android)</li>
+        </ul>
+        <p>You can erase all of this by uninstalling the app or clearing app data in your OS settings.</p>
+
+        <h2>2. Permissions We Request</h2>
+
+        <h3>Android</h3>
+        <table>
+            <tr><th>Permission</th><th>Purpose</th></tr>
+            <tr><td><code>INTERNET</code></td><td>Required to fetch channel lists and play streams</td></tr>
+            <tr><td><code>ACCESS_NETWORK_STATE</code></td><td>Detect Wi-Fi vs mobile to warn before large downloads</td></tr>
+            <tr><td><code>WAKE_LOCK</code></td><td>Keep the screen on while a video is playing</td></tr>
+        </table>
+        <p>The Android app does <strong>not</strong> request location, contacts, camera, microphone, SMS, call log, storage outside its own sandbox, or any other sensitive permission.</p>
+
+        <h3>Windows</h3>
+        <p>The desktop app uses standard network and file-system access only within your user profile directory.</p>
+
+        <h2>3. Third-Party Services</h2>
+        <p>TV Viewer connects to several third-party services to deliver its functionality. <strong>We do not control these services.</strong> Their own privacy policies apply when the app talks to them:</p>
+        <table>
+            <tr><th>Service</th><th>Purpose</th><th>Privacy policy</th></tr>
+            <tr><td>GitHub (<code>api.github.com</code>, <code>github.com</code>)</td><td>Update checks, release downloads</td><td><a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy</a></td></tr>
+            <tr><td>Public M3U playlist hosts (e.g., iptv-org)</td><td>Channel list source</td><td>Varies by host — see source list in app Settings</td></tr>
+            <tr><td>IPTV stream providers</td><td>The actual video streams you play</td><td>Varies by provider — TV Viewer is a player, not a stream host</td></tr>
+            <tr><td>Google Play Integrity API</td><td>Verifies the app installation is genuine on Android</td><td><a href="https://policies.google.com/privacy">Google privacy</a></td></tr>
+            <tr><td>Supabase (analytics back-end, opt-in only)</td><td>Receives anonymous opt-in analytics from Windows</td><td><a href="https://supabase.com/privacy">Supabase privacy</a></td></tr>
+        </table>
+        <p>When you play a stream, the IPTV provider hosting that stream necessarily sees your IP address — this is a fundamental requirement of internet streaming and is true of every video player. TV Viewer does not add any additional disclosure beyond what your video player would normally make.</p>
+
+        <h2>4. How We Use Information</h2>
+        <p>We use the limited data described above only to:</p>
+        <ol>
+            <li>Deliver the channel list and play the streams you select</li>
+            <li>Notify you when an update is available</li>
+            <li>Diagnose crashes and improve the app (only if you opted in)</li>
+        </ol>
+        <p>We do <strong>not</strong> use any data for advertising, profiling, scoring, or selling to third parties.</p>
+
+        <h2>5. Data Retention</h2>
+        <ul>
+            <li><strong>On-device data:</strong> retained until you uninstall the app or clear app data.</li>
+            <li><strong>Opt-in analytics:</strong> retained for up to 12 months in aggregated form, then deleted.</li>
+            <li><strong>Crash reports:</strong> retained for up to 12 months for debugging, then deleted.</li>
+            <li>We do not retain backups of personal data because we do not collect personal data.</li>
+        </ul>
+
+        <h2>6. Your Rights</h2>
+        <p>Even though we collect very little data, you have full control:</p>
+        <ul>
+            <li><strong>Opt out of analytics</strong> at any time in app Settings.</li>
+            <li><strong>Erase all on-device data</strong> by uninstalling the app or using your OS "Clear app data" option.</li>
+            <li><strong>Request deletion</strong> of any opt-in analytics tied to your install by contacting us (see §10). Because the analytics are anonymous, we may need details such as your install date and approximate region to locate the records.</li>
+            <li><strong>Access / portability:</strong> Because we do not store personal data tied to identifiable individuals, there is normally nothing personal to export. If you believe you have personal data with us, contact us and we will assist.</li>
+        </ul>
+        <p>If you are in the EU/UK, you have rights under GDPR/UK-GDPR (access, rectification, erasure, restriction, objection, portability, and to lodge a complaint with your supervisory authority).<br>
+        If you are in California, you have rights under CCPA/CPRA. We do <strong>not</strong> sell or share personal information.</p>
+
+        <h2>7. Children's Privacy</h2>
+        <p>TV Viewer is <strong>not directed at children under 13</strong>. The app contains community-curated streams and may surface content not appropriate for children. We do not knowingly collect personal information from children. If you believe a child has provided us with information, contact us and we will delete it.</p>
+
+        <h2>8. Security</h2>
+        <ul>
+            <li>The app is open source — its source code is publicly auditable.</li>
+            <li>Network calls use HTTPS where the upstream service supports it.</li>
+            <li>The Android app is signed with our official upload key (SHA-1 <code>56:21:F2:7C:DA:DC:12:C3:22:A4:00:BD:74:28:27:97:EA:97:6B:E4</code>); installs from sources other than Google Play that don't match this fingerprint may be tampered with.</li>
+            <li>We follow the principle of minimum data collection: the strongest security posture is to not have the data in the first place.</li>
+        </ul>
+
+        <h2>9. International Transfers</h2>
+        <p>If you opt in to analytics, the anonymous data is transmitted to Supabase, whose servers may be located outside your country (typically the EU or US). By opting in, you consent to this transfer. You can opt out at any time.</p>
+
+        <h2>10. Contact</h2>
+        <p>For privacy questions, deletion requests, or concerns:</p>
+        <ul>
+            <li><strong>GitHub Issues</strong> (preferred, public): <a href="https://github.com/tv-viewer-app/tv_viewer/issues">github.com/tv-viewer-app/tv_viewer/issues</a></li>
+            <li><strong>Security disclosures</strong> (private): see <a href="https://github.com/tv-viewer-app/tv_viewer/blob/master/SECURITY.md"><code>SECURITY.md</code></a> in the repository</li>
+            <li><strong>Email:</strong> <a href="mailto:privacy@tvviewer.app">privacy@tvviewer.app</a></li>
+        </ul>
+
+        <h2>11. Changes to This Policy</h2>
+        <p>We may update this policy from time to time. The "Last updated" date at the top reflects the most recent change. Material changes will be announced in the app's release notes and in the GitHub repository. Continued use of the app after a change means you accept the updated policy.</p>
+
+        <h2>12. Open Source &amp; Transparency</h2>
+        <p>TV Viewer is licensed under the MIT License and developed in the open. You can review every line of code that handles your data:</p>
+        <ul>
+            <li><strong>Repository:</strong> <a href="https://github.com/tv-viewer-app/tv_viewer">github.com/tv-viewer-app/tv_viewer</a></li>
+            <li><strong>Analytics implementation (Windows):</strong> <a href="https://github.com/tv-viewer-app/tv_viewer/tree/master/analytics"><code>analytics/</code></a></li>
+            <li><strong>Network layer (Android):</strong> <a href="https://github.com/tv-viewer-app/tv_viewer/tree/master/flutter_app/lib/services"><code>flutter_app/lib/services/</code></a></li>
+        </ul>
+        <p>If you find anything in the code that contradicts this policy, please open an issue — we will fix the code or fix the policy.</p>
+
+        <div class="footer">
+            <p>TV Viewer is a free, open-source community project. <a href="index.html">Back to home</a> · <a href="https://github.com/tv-viewer-app/tv_viewer">GitHub</a></p>
+        </div>
+    </main>
+</body>
+</html>
