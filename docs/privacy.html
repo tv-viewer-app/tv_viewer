@@ -131,10 +131,22 @@
             <tr><td>IPTV stream URLs you play</td><td>Required to load the video stream you selected</td><td>Sent only to the IPTV server hosting the stream (third party — see §3)</td></tr>
             <tr><td>HTTP requests to M3U playlist sources</td><td>Required to fetch the channel list</td><td>Sent only to the configured playlist URLs (third party — see §3)</td></tr>
             <tr><td>HTTP requests to GitHub Releases API</td><td>Used by the in-app update checker to detect new versions</td><td>Sent only to <code>api.github.com</code></td></tr>
+            <tr><td><strong>Channel-health pings</strong> (SHA-256 hash of the stream URL + working/failed flag + country code)</td><td>Powers the <strong>crowdsourced channel catalog</strong> described in §1.2 — channels that fail playback for many users are auto-removed; channels that consistently work for users in your region get prioritised</td><td>Sent to our Supabase database (see §3). The plaintext URL is never sent — only its SHA-256 hash.</td></tr>
         </table>
-        <p>These requests are <strong>standard network calls</strong> required for the app to function. We do not log them on any server we control.</p>
+        <p>These requests are <strong>standard network calls</strong> required for the app to function. The channel-health pings carry no personal data and no device identifier — only the URL hash, status, and country code.</p>
 
-        <h3>1.2 Information you can choose to share (opt-in only)</h3>
+        <h3>1.2 Crowdsourced channel catalog (how the app stays up to date)</h3>
+        <p>The app's channel catalog is <strong>collaboratively maintained by all users</strong>. Two data flows feed it:</p>
+        <table>
+            <thead><tr><th>Flow</th><th>What is sent</th><th>Tied to your identity?</th><th>Visible to other users?</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Channel submissions</strong> (you tap <strong>Submit channel</strong> and fill in the form)</td><td>The channel name, stream URL, category and country <strong>you typed</strong></td><td>No — submissions are anonymous, no UUID attached</td><td>Yes — accepted submissions appear in the public catalog that every other app user fetches</td></tr>
+                <tr><td><strong>Channel-health pings</strong> (automatic — see §1.1)</td><td>SHA-256 <strong>hash</strong> of the URL you played + working/failed status + country code</td><td>No — these pings carry no UUID</td><td>Indirectly — they are aggregated to score every URL. URLs that fail for many users are removed from the catalog for everyone. The raw pings are not exposed; only the aggregate verdict is.</td></tr>
+            </tbody>
+        </table>
+        <p><strong>M3U / repository URLs you add manually in Settings → Repositories are stored only on your device.</strong> They are <em>not</em> uploaded to the shared catalog. Only channels you explicitly submit through the <strong>Submit channel</strong> dialog are shared.</p>
+
+        <h3>1.3 Information you can choose to share (opt-in only)</h3>
         <p>The first time you launch the Windows desktop app, a consent dialog asks whether you want to enable <strong>anonymous usage analytics</strong>. The Android app does <strong>not</strong> collect analytics by default.</p>
         <p>If — and only if — you opt in, we collect the following events. Each event includes the <strong>anonymous device identifier</strong> and <strong>approximate location</strong> described in the Play Store data-safety table at §1.4 below.</p>
         <table>
@@ -163,13 +175,13 @@
         <table>
             <thead><tr><th>Play Store category</th><th>Subtype</th><th>Collected?</th><th>Shared?</th><th>Optional?</th><th>Purpose</th><th>What it is in our code</th></tr></thead>
             <tbody>
-                <tr><td><strong>Location</strong></td><td>Approximate location</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Two-letter country code derived from your <strong>system locale only</strong> — never from IP geolocation or GPS</td></tr>
+                <tr><td><strong>Location</strong></td><td>Approximate location</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Two-letter country code derived from your <strong>system locale only</strong> — never from IP geolocation or GPS. (The country code attached to crowdsourced channel-health pings is also locale-derived.)</td></tr>
                 <tr><td><strong>App info &amp; performance</strong></td><td>Crash logs</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>App functionality, Analytics</td><td>Exception class, truncated message, first stack-trace line — no user data</td></tr>
                 <tr><td><strong>App info &amp; performance</strong></td><td>Diagnostics</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Session duration, scan results, app version, platform</td></tr>
-                <tr><td><strong>App info &amp; performance</strong></td><td>Other app performance data</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Channel play / fail counters used to compute aggregate channel-health stats</td></tr>
+                <tr><td><strong>App info &amp; performance</strong></td><td>Other app performance data</td><td>✅ Yes</td><td>✅ Yes (aggregated, anonymous)</td><td>❌ No (required for the catalog to work)</td><td>App functionality, Analytics</td><td>Per-stream <strong>channel-health pings</strong> — SHA-256 hash of the URL plus a working/failed flag. Aggregated across all users so failing channels are removed from the catalog and working channels are surfaced first. No device identifier is attached.</td></tr>
                 <tr><td><strong>App activity</strong></td><td>App interactions</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td><code>feature_use</code>, <code>favorite</code>, <code>channel_play</code> events — names of features used, never of channels watched</td></tr>
-                <tr><td><strong>App activity</strong></td><td>Other user-generated content</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>App functionality</td><td>Channel name + URL + category + country you submit through the in-app <strong>Submit channel</strong> dialog; freeform text + rating you submit through the <strong>Send feedback</strong> dialog</td></tr>
-                <tr><td><strong>Device or other IDs</strong></td><td>Device or other IDs</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>A <strong>per-install random UUID v4</strong> generated by the app and stored locally with file mode <code>0o600</code>. It is not the Android Advertising ID, the Android ID, the IMEI, or any hardware identifier. Uninstalling the app erases it.</td></tr>
+                <tr><td><strong>App activity</strong></td><td>Other user-generated content</td><td>✅ Yes</td><td>✅ <strong>Yes — published in the public channel catalog visible to all users</strong></td><td>❌ No (only triggered when you tap <strong>Submit channel</strong> / <strong>Send feedback</strong>)</td><td>App functionality</td><td>Channel name + stream URL + category + country code you type into the <strong>Submit channel</strong> dialog; the freeform text + rating you type into the <strong>Send feedback</strong> dialog. Submissions are <strong>anonymous</strong> (no UUID, no email) but the channel content itself becomes part of the public catalog every other app user fetches.</td></tr>
+                <tr><td><strong>Device or other IDs</strong></td><td>Device or other IDs</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>A <strong>per-install random UUID v4</strong> generated by the app and stored locally with file mode <code>0o600</code>. It is not the Android Advertising ID, the Android ID, the IMEI, or any hardware identifier. Uninstalling the app erases it. <strong>Note:</strong> the UUID is <em>only</em> attached to opt-in analytics events — never to channel-health pings or channel submissions.</td></tr>
             </tbody>
         </table>
         <p>Categories we <strong>do not</strong> collect (do not check on the Play Console form):</p>
@@ -188,11 +200,11 @@
             </tbody>
         </table>
 
-        <h3>1.3 Information stored only on your device</h3>
+        <h3>1.5 Information stored only on your device</h3>
         <p>The following is saved locally on your device and <strong>never transmitted to us</strong>:</p>
         <ul>
             <li>Favourite channels, recently watched channels, watch history</li>
-            <li>Repository / playlist URLs you've added</li>
+            <li>M3U / repository URLs you add manually in <strong>Settings → Repositories</strong></li>
             <li>App preferences (theme, sort order, filters)</li>
             <li>Channel logo cache (<code>~/.tv_viewer/logos/</code> on Windows, app cache on Android)</li>
         </ul>
