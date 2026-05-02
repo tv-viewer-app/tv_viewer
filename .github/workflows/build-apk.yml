@@ -38,6 +38,9 @@ jobs:
       - name: Build release APK
         run: cd flutter_app && flutter build apk --release
 
+      - name: Build release App Bundle (AAB) for Play Store
+        run: cd flutter_app && flutter build appbundle --release
+
       # --- Tag push: create a GitHub Release with the APK attached ---
       - name: Rename APK for release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -46,6 +49,8 @@ jobs:
         run: |
           cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
              "flutter_app/build/app/outputs/flutter-apk/tv-viewer-${TAG_NAME}.apk"
+          cp flutter_app/build/app/outputs/bundle/release/app-release.aab \
+             "flutter_app/build/app/outputs/bundle/release/tv-viewer-${TAG_NAME}.aab"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -55,13 +60,21 @@ jobs:
           generate_release_notes: true
           files: |
             flutter_app/build/app/outputs/flutter-apk/tv-viewer-*.apk
+            flutter_app/build/app/outputs/bundle/release/tv-viewer-*.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Manual dispatch: upload APK as a workflow artifact ---
+      # --- Manual dispatch: upload APK + AAB as workflow artifacts ---
       - name: Upload APK artifact
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: tv-viewer-apk
           path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload AAB artifact (Play Store)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: tv-viewer-aab
+          path: flutter_app/build/app/outputs/bundle/release/app-release.aab

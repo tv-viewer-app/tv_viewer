@@ -5,6 +5,23 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1] - 2026-05-02
+
+### Added — Windows
+- **Google TV-style primary UI** (#155): Brand-new lean-back interface as the sole Windows UI — horizontal scrolling channel rows grouped by category, keyboard/remote-friendly navigation, embedded fullscreen playback, top nav bar (Home/Favorites/Recent), real-time search overlay (Ctrl+F or `/`), channel number quick-jump (0-9), and player OSD with auto-fade.
+- **Smooth animated scrolling**: Pixel-based eased animation at 60fps replaces step-snap behaviour.
+- **Mouse wheel support**: Vertical wheel scrolls rows, Shift+wheel scrolls within a row, hover highlights card under cursor.
+- **Channel logos**: Async fetch from web with on-disk cache (`~/.tv_viewer/logos/`); monogram fallback for channels without logos.
+- **Larger fonts and bigger cards**: Card 260×160 (288×180 focused), name 15-17px, row labels 15-20px.
+
+### Fixed — Windows
+- **ttkbootstrap dependency removed**: Now optional via compat fallback layer — fixes recurring import failures.
+- **`python312.dll` Bad Image crash**: Switched PyInstaller from onefile to onedir build, disabled UPX.
+- **Window not appearing**: Forced plain `tk.Tk()` root with DPI awareness — fixes invisible window in frozen builds.
+- **Silent `AttributeError` on startup**: Replaced ttkbootstrap-only `style.colors.*` references with fallback color dict.
+- **Consent dialog re-shown every launch**: Fixed `CONSENT_ACCEPTED` being overwritten after `load_external_config()`.
+- **Invisible consent dialog**: Plain `tk.Tk()` parent (CTk singleton conflicted with `Toplevel` children).
+
 ## [2.7.0] - 2026-04-27
 
 ### Added — Windows
