@@ -36,6 +36,7 @@ from typing import Optional, Dict, Any, List, Set
 from utils.logger import get_logger
 from utils.favorites import FavoritesManager
 from utils.history import WatchHistory
+from ui.logo_manager import get_logo_manager, PIL_AVAILABLE
 import config
 
 logger = get_logger(__name__)
@@ -100,10 +101,10 @@ class TVColors:
 
 
 # ─── TV Mode Constants ────────────────────────────────────────────────────────────
-CARD_WIDTH = 240
-CARD_HEIGHT = 140
-CARD_WIDTH_FOCUS = 268
-CARD_HEIGHT_FOCUS = 156
+CARD_WIDTH = 260
+CARD_HEIGHT = 160
+CARD_WIDTH_FOCUS = 288
+CARD_HEIGHT_FOCUS = 180
 CARD_GAP = 18
 ROW_HEIGHT = 200
 ROW_LABEL_HEIGHT = 42
@@ -162,13 +163,24 @@ class TVModeApp:
             except Exception:
                 pass
 
-        # Root window
-        from ui.compat import create_window
-        self.root = create_window(
-            title=f"{config.APP_NAME} v{config.APP_VERSION}",
-            geometry=f"{getattr(config, 'WINDOW_WIDTH', 1280)}x{getattr(config, 'WINDOW_HEIGHT', 720)}",
+        # Root window — force plain tk.Tk for reliable rendering
+        # CTk has frozen-build (PyInstaller) issues where the window may not appear.
+        self.root = tk.Tk()
+        self.root.title(f"{config.APP_NAME} v{config.APP_VERSION}")
+        self.root.geometry(
+            f"{getattr(config, 'WINDOW_WIDTH', 1280)}x{getattr(config, 'WINDOW_HEIGHT', 720)}"
         )
         self.root.configure(bg=TVColors.BG)
+        # DPI awareness on Windows
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
+        # Force visibility
+        self.root.deiconify()
+        self.root.lift()
+        self.root.update_idletasks()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         if set_window_icon:
@@ -187,7 +199,16 @@ class TVModeApp:
         self._row_index = 0
         self._col_index = 0
         self._col_offsets: List[int] = []
+        self._row_pixel_offsets: List[float] = []
+        self._row_pixel_targets: List[float] = []
+        self._vertical_offset: float = 0.0
+        self._vertical_target: float = 0.0
         self._filtered_channels: Optional[List[Dict[str, Any]]] = None
+
+        # Logo manager + PhotoImage refs (must keep alive for tk)
+        self._logo_mgr = get_logo_manager() if PIL_AVAILABLE else None
+        self._logo_refs: Dict[str, Any] = {}
+        self._logo_redraw_pending = False
 
         # Cached data
         self._favorite_urls: Set[str] = set()
@@ -210,6 +231,9 @@ class TVModeApp:
 
         # Current nav tab
         self._current_tab = "home"
+
+        # Mouse hover tracking — last (row_idx, col_idx) under cursor
+        self._hover_pos: Optional[tuple] = None
 
         # Search state
         self._search_active = False
@@ -256,6 +280,9 @@ class TVModeApp:
         self._build_rows()
         self._draw()
         self.root.after(100, self._start_clock)
+
+        # Start smooth-scroll animation loop (~60fps)
+        self._anim_id = self.root.after(16, self._animate_scroll)
 
         # Start background fetch
         self._channel_manager.fetch_channels_async(callback=self._on_fetch_complete)
@@ -412,6 +439,8 @@ class TVModeApp:
         # Initialize scroll offsets
         self._col_offsets = [0] * len(self._rows)
         self._scroll_target_offsets = [0] * len(self._rows)
+        self._row_pixel_offsets = [0.0] * len(self._rows)
+        self._row_pixel_targets = [0.0] * len(self._rows)
 
         # Build canonical channel number map
         self._channel_numbers = {}
@@ -499,7 +528,7 @@ class TVModeApp:
         self._info_label = tk.Label(
             self._info_frame, text="",
             bg=TVColors.INFO_BAR_BG, fg=TVColors.TEXT_PRIMARY,
-            font=(FONT_FAMILY, 11)
+            font=(FONT_FAMILY, 13)
         )
         self._info_label.pack(side=tk.LEFT, padx=20, pady=10)
 
@@ -552,6 +581,11 @@ class TVModeApp:
         self._canvas.pack(fill=tk.BOTH, expand=True)
         self._canvas.bind("<Button-1>", self._on_canvas_click)
         self._canvas.bind("<Configure>", self._on_resize)
+        self._canvas.bind("<MouseWheel>", self._on_mouse_wheel)
+        self._canvas.bind("<Shift-MouseWheel>", self._on_shift_mouse_wheel)
+        self._canvas.bind("<Button-4>", lambda e: self._mouse_wheel_step(-1, True))
+        self._canvas.bind("<Button-5>", lambda e: self._mouse_wheel_step(1, True))
+        self._canvas.bind("<Motion>", self._on_canvas_motion)
 
         # Number overlay (hidden)
         self._number_label = tk.Label(
@@ -622,7 +656,7 @@ class TVModeApp:
                     fill=TVColors.FAVORITE_STAR, font=(FONT_FAMILY, 12), anchor="e"
                 )
 
-        y_offset = hero_h + 8
+        y_offset = hero_h + 8 + int(self._vertical_offset)
 
         start_row = max(0, self._row_index - 1)
         end_row = min(len(self._rows), start_row + VISIBLE_ROWS)
@@ -640,7 +674,7 @@ class TVModeApp:
                     fill=TVColors.BG_ROW_ACTIVE, outline=""
                 )
 
-            label_font_size = 16 if is_active else 13
+            label_font_size = 20 if is_active else 15
             label_weight = "bold" if is_active else "normal"
             label_color = TVColors.TEXT_PRIMARY if is_active else TVColors.TEXT_SECONDARY
             canvas.create_text(
@@ -654,14 +688,17 @@ class TVModeApp:
             label_bbox = canvas.bbox(canvas.find_all()[-1])
             count_x = (label_bbox[2] + 12) if label_bbox else 200
             canvas.create_text(
-                count_x, y_offset + 10, text=count_text,
-                fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 11), anchor="nw"
+                count_x, y_offset + 12, text=count_text,
+                fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 13), anchor="nw"
             )
 
             y_offset += ROW_LABEL_HEIGHT
 
-            scroll_offset = self._col_offsets[row_idx]
-            x_start = 32 - scroll_offset * (CARD_WIDTH + CARD_GAP)
+            # Pixel-based smooth horizontal scroll
+            if row_idx < len(self._row_pixel_offsets):
+                x_start = 32 - self._row_pixel_offsets[row_idx]
+            else:
+                x_start = 32
 
             for col_idx, channel in enumerate(channels):
                 is_focused = (is_active and col_idx == self._col_index)
@@ -713,26 +750,47 @@ class TVModeApp:
                 fill=TVColors.BG_CARD, outline=TVColors.BORDER_SUBTLE, width=1
             )
 
-        mono_color = _get_monogram_color(name)
-        cx, cy = x + w // 2, y + h // 2 - 10
-        mono_r = 24 if is_focused else 20
-        canvas.create_oval(
-            cx - mono_r, cy - mono_r, cx + mono_r, cy + mono_r,
-            fill=mono_color, outline=""
-        )
-        letter = name[0].upper() if name else "?"
-        canvas.create_text(
-            cx, cy, text=letter,
-            fill=TVColors.TEXT_PRIMARY,
-            font=(FONT_FAMILY, 16 if is_focused else 13, "bold")
-        )
+        # Try logo (cached) — fall back to monogram
+        logo_img = None
+        if self._logo_mgr is not None:
+            cached = self._logo_refs.get(ch_url)
+            if cached is not None:
+                logo_img = cached
+            else:
+                def _on_logo(img, key=ch_url):
+                    if img is not None:
+                        self._logo_refs[key] = img
+                        if not self._logo_redraw_pending:
+                            self._logo_redraw_pending = True
+                            self.root.after_idle(self._do_logo_redraw)
+                logo_img = self._logo_mgr.get_logo(channel, _on_logo)
+                if logo_img is not None:
+                    self._logo_refs[ch_url] = logo_img
+
+        cx = x + w // 2
+        cy = y + h // 2 - 14
+        if logo_img is not None:
+            canvas.create_image(cx, cy, image=logo_img, anchor='center')
+        else:
+            mono_color = _get_monogram_color(name)
+            mono_r = 28 if is_focused else 24
+            canvas.create_oval(
+                cx - mono_r, cy - mono_r, cx + mono_r, cy + mono_r,
+                fill=mono_color, outline=""
+            )
+            letter = name[0].upper() if name else "?"
+            canvas.create_text(
+                cx, cy, text=letter,
+                fill=TVColors.TEXT_PRIMARY,
+                font=(FONT_FAMILY, 18 if is_focused else 15, "bold")
+            )
 
         display_name = name if len(name) <= 24 else name[:22] + "\u2026"
-        name_y = cy + mono_r + 14
+        name_y = y + h - 24 if is_focused else y + h - 22
         canvas.create_text(
             x + w // 2, name_y, text=display_name,
             fill=TVColors.TEXT_PRIMARY if is_focused else TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 12 if is_focused else 10,
+            font=(FONT_FAMILY, 17 if is_focused else 15,
                   "bold" if is_focused else "normal"),
             anchor="center", width=w - 20
         )
@@ -742,7 +800,7 @@ class TVModeApp:
             canvas.create_text(
                 x + 10, y + 10, text=str(ch_num),
                 fill=TVColors.ACCENT if is_focused else TVColors.TEXT_DIM,
-                font=(FONT_FAMILY, 9, "bold" if is_focused else "normal"),
+                font=(FONT_FAMILY, 11, "bold"),
                 anchor="nw"
             )
 
@@ -755,8 +813,8 @@ class TVModeApp:
 
         if ch_url in self._favorite_urls:
             canvas.create_text(
-                x + w - 14, y + h - 14, text="\u2605",
-                fill=TVColors.FAVORITE_STAR, font=(FONT_FAMILY, 13), anchor="center"
+                x + w - 14, y + 10, text="\u2605",
+                fill=TVColors.FAVORITE_STAR, font=(FONT_FAMILY, 13), anchor="ne"
             )
 
         if is_focused:
@@ -765,9 +823,15 @@ class TVModeApp:
             sub = cat + (f" \u2022 {country}" if country else "")
             if sub:
                 canvas.create_text(
-                    x + 10, y + h - 12, text=sub[:30],
-                    fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 9), anchor="sw"
+                    x + 10, y + h - 8, text=sub[:30],
+                    fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 10), anchor="sw"
                 )
+
+    def _do_logo_redraw(self):
+        """Coalesced redraw triggered by async logo loads."""
+        self._logo_redraw_pending = False
+        if self._state == "browse":
+            self._draw()
 
     def _get_focused_channel(self):
         """Return the currently focused channel dict, or None."""
@@ -846,23 +910,35 @@ class TVModeApp:
         r.bind("/", lambda e: self._toggle_search())
         r.bind("<Control-f>", lambda e: self._toggle_search())
 
+    def _row_pitch(self) -> int:
+        """Approximate vertical pitch of a row (label + focused card + gap)."""
+        return ROW_LABEL_HEIGHT + CARD_HEIGHT_FOCUS + 20
+
+    def _change_row(self, new_row: int):
+        """Move row focus with an animated vertical slide."""
+        new_row = max(0, min(len(self._rows) - 1, new_row))
+        if new_row == self._row_index:
+            return
+        delta_rows = self._row_index - new_row  # positive when going up
+        self._row_index = new_row
+        # Snap offset so the new row appears at the old position, then ease to 0
+        self._vertical_offset = float(delta_rows * self._row_pitch())
+        self._vertical_target = 0.0
+        self._clamp_col()
+        self._ensure_col_visible()
+        self._draw()
+
     def _nav_up(self, event=None):
         if self._state == "playing":
             return
         if self._row_index > 0:
-            self._row_index -= 1
-            self._clamp_col()
-            self._ensure_col_visible()
-            self._draw()
+            self._change_row(self._row_index - 1)
 
     def _nav_down(self, event=None):
         if self._state == "playing":
             return
         if self._rows and self._row_index < len(self._rows) - 1:
-            self._row_index += 1
-            self._clamp_col()
-            self._ensure_col_visible()
-            self._draw()
+            self._change_row(self._row_index + 1)
 
     def _nav_left(self, event=None):
         if self._state == "playing":
@@ -889,20 +965,14 @@ class TVModeApp:
         if self._state == "playing":
             self._channel_prev()
             return
-        self._row_index = max(0, self._row_index - 3)
-        self._clamp_col()
-        self._ensure_col_visible()
-        self._draw()
+        self._change_row(max(0, self._row_index - 3))
 
     def _page_down(self, event=None):
         if self._state == "playing":
             self._channel_next()
             return
         if self._rows:
-            self._row_index = min(len(self._rows) - 1, self._row_index + 3)
-        self._clamp_col()
-        self._ensure_col_visible()
-        self._draw()
+            self._change_row(min(len(self._rows) - 1, self._row_index + 3))
 
     def _jump_home(self, event=None):
         if self._state == "playing":
@@ -910,6 +980,8 @@ class TVModeApp:
         self._col_index = 0
         if self._rows:
             self._col_offsets[self._row_index] = 0
+            if self._row_index < len(self._row_pixel_targets):
+                self._row_pixel_targets[self._row_index] = 0.0
         self._draw()
 
     def _jump_end(self, event=None):
@@ -934,13 +1006,51 @@ class TVModeApp:
         cw = self._canvas.winfo_width()
         if cw < 100:
             cw = self.root.winfo_width() or 1280
-        visible_cards = max(1, (cw - 64) // (CARD_WIDTH + CARD_GAP))
         row_idx = self._row_index
 
+        # Keep legacy integer offset roughly in sync (used by click hit-testing)
+        visible_cards = max(1, (cw - 64) // (CARD_WIDTH + CARD_GAP))
         if self._col_index < self._col_offsets[row_idx]:
             self._col_offsets[row_idx] = self._col_index
         elif self._col_index >= self._col_offsets[row_idx] + visible_cards:
             self._col_offsets[row_idx] = self._col_index - visible_cards + 1
+
+        # Pixel-based smooth scroll target
+        card_pitch = CARD_WIDTH + CARD_GAP
+        target_card_x = self._col_index * card_pitch
+        visible_w = max(1, cw - 64)
+        current = self._row_pixel_targets[row_idx] if row_idx < len(self._row_pixel_targets) else 0.0
+        if target_card_x < current:
+            self._row_pixel_targets[row_idx] = float(target_card_x)
+        elif target_card_x + CARD_WIDTH > current + visible_w:
+            self._row_pixel_targets[row_idx] = float(target_card_x + CARD_WIDTH - visible_w)
+
+    # ---- Smooth-scroll animation -------------------------------------------
+
+    def _animate_scroll(self):
+        """Per-frame interpolation of pixel offsets toward targets (~60fps)."""
+        try:
+            changed = False
+            ease = 0.22  # 0..1 — higher = snappier
+            for i in range(len(self._row_pixel_offsets)):
+                delta = self._row_pixel_targets[i] - self._row_pixel_offsets[i]
+                if abs(delta) > 0.5:
+                    self._row_pixel_offsets[i] += delta * ease
+                    changed = True
+                else:
+                    self._row_pixel_offsets[i] = self._row_pixel_targets[i]
+
+            v_delta = self._vertical_target - self._vertical_offset
+            if abs(v_delta) > 0.5:
+                self._vertical_offset += v_delta * ease
+                changed = True
+            else:
+                self._vertical_offset = self._vertical_target
+
+            if changed and self._state == "browse":
+                self._draw()
+        finally:
+            self._anim_id = self.root.after(16, self._animate_scroll)
 
     # ---- Playback -----------------------------------------------------------
 
@@ -1205,38 +1315,110 @@ class TVModeApp:
     def _on_canvas_click(self, event):
         if not self._rows or self._state != "browse":
             return
-        cw = self._canvas.winfo_width()
-        y_offset = 80
+        hit = self._hit_test(event.x, event.y)
+        if hit is None:
+            return
+        row_idx, col_idx = hit
+        if self._row_index == row_idx and self._col_index == col_idx:
+            self._play_selected()
+        else:
+            if row_idx != self._row_index:
+                self._change_row(row_idx)
+            self._col_index = col_idx
+            self._clamp_col()
+            self._ensure_col_visible()
+            self._draw()
 
+    def _on_resize(self, event=None):
+        self.root.after(50, self._draw)
+
+    # ---- Mouse wheel & hover -----------------------------------------------
+
+    def _on_mouse_wheel(self, event):
+        # Vertical wheel = move row up/down
+        direction = -1 if event.delta > 0 else 1
+        self._mouse_wheel_step(direction, vertical=True)
+
+    def _on_shift_mouse_wheel(self, event):
+        # Shift+wheel = horizontal scroll within current row
+        direction = -1 if event.delta > 0 else 1
+        self._mouse_wheel_step(direction, vertical=False)
+
+    def _mouse_wheel_step(self, direction, vertical):
+        if self._state != "browse" or not self._rows:
+            return
+        if vertical:
+            new_row = max(0, min(len(self._rows) - 1, self._row_index + direction))
+            if new_row != self._row_index:
+                self._change_row(new_row)
+        else:
+            row_idx = self._row_index
+            if row_idx >= len(self._row_pixel_targets):
+                return
+            cw = self._canvas.winfo_width() or 1280
+            row_len = len(self._rows[row_idx]["channels"])
+            max_offset = max(
+                0,
+                row_len * (CARD_WIDTH + CARD_GAP) - (cw - 64)
+            )
+            delta = direction * (CARD_WIDTH + CARD_GAP)
+            self._row_pixel_targets[row_idx] = max(
+                0.0, min(float(max_offset),
+                         self._row_pixel_targets[row_idx] + delta)
+            )
+
+    def _on_canvas_motion(self, event):
+        """Highlight the card under the cursor (mouse hover)."""
+        if self._state != "browse" or not self._rows:
+            return
+        hit = self._hit_test(event.x, event.y)
+        if hit is None:
+            return
+        row_idx, col_idx = hit
+        if (row_idx, col_idx) == self._hover_pos:
+            return
+        self._hover_pos = (row_idx, col_idx)
+        if row_idx == self._row_index and col_idx == self._col_index:
+            return
+        # Switch focus without snapping vertical (keep smooth-scroll quiet for hovers)
+        if row_idx != self._row_index:
+            self._change_row(row_idx)
+            self._col_index = col_idx
+            self._clamp_col()
+            self._ensure_col_visible()
+            self._draw()
+        else:
+            self._col_index = col_idx
+            self._clamp_col()
+            self._ensure_col_visible()
+            self._draw()
+
+    def _hit_test(self, mx, my):
+        """Return (row_idx, col_idx) under (mx, my) or None."""
+        if not self._rows:
+            return None
+        y_offset = 80 + int(self._vertical_offset)
         start_row = max(0, self._row_index - 1)
         end_row = min(len(self._rows), start_row + VISIBLE_ROWS)
         if end_row - start_row < VISIBLE_ROWS and start_row > 0:
             start_row = max(0, end_row - VISIBLE_ROWS)
-
         for row_idx in range(start_row, end_row):
             row = self._rows[row_idx]
             is_active = (row_idx == self._row_index)
             y_top = y_offset + ROW_LABEL_HEIGHT
             card_h = CARD_HEIGHT_FOCUS if is_active else CARD_HEIGHT
-
-            if y_top <= event.y <= y_top + card_h:
-                scroll_offset = self._col_offsets[row_idx]
-                x_start = 32 - scroll_offset * (CARD_WIDTH + CARD_GAP)
+            if y_top <= my <= y_top + card_h:
+                if row_idx < len(self._row_pixel_offsets):
+                    x_start = 32 - self._row_pixel_offsets[row_idx]
+                else:
+                    x_start = 32
                 for col_idx in range(len(row["channels"])):
                     x = x_start + col_idx * (CARD_WIDTH + CARD_GAP)
-                    if x <= event.x <= x + CARD_WIDTH:
-                        if self._row_index == row_idx and self._col_index == col_idx:
-                            self._play_selected()
-                        else:
-                            self._row_index = row_idx
-                            self._col_index = col_idx
-                            self._draw()
-                        return
-
+                    if x <= mx <= x + CARD_WIDTH:
+                        return (row_idx, col_idx)
+                return None
             y_offset += ROW_LABEL_HEIGHT + CARD_HEIGHT_FOCUS + 20
-
-    def _on_resize(self, event=None):
-        self.root.after(50, self._draw)
+        return None
 
     # ---- Channel Number Jump ------------------------------------------------
 
@@ -1336,12 +1518,14 @@ class TVModeApp:
         """Clean shutdown."""
         logger.info("TVModeApp closing...")
         for timer in [self._clock_timer, self._number_timer,
-                      self._toast_timer, self._scan_timer, self._osd_timer]:
+                      self._toast_timer, self._scan_timer, self._osd_timer,
+                      self._anim_id]:
             if timer:
                 try:
                     self.root.after_cancel(timer)
                 except Exception:
                     pass
+        self._anim_id = None
         if self._state == "playing":
             try:
                 self._stop_player()
