@@ -1,0 +1,46 @@
+name: 🔒 Privacy request
+description: Privacy question, data-deletion request, or GDPR/CCPA enquiry
+title: "[Privacy] "
+labels: ["privacy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for contacting us about privacy. Please review our [Privacy Policy](https://tv-viewer-app.github.io/tv_viewer/privacy.html) first — most questions (what we collect, how to opt out of analytics, how to erase local data) are answered there.
+
+        ⚠️ **Do not post personal information** (name, email, address, IP) in this public issue. If your request requires confidential info, open a [private security advisory](https://github.com/tv-viewer-app/tv_viewer/security/advisories/new) instead.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type of request
+      options:
+        - General privacy question
+        - Data deletion request (opt-in analytics)
+        - GDPR access / portability request
+        - CCPA "do not sell/share" request
+        - Children's-privacy concern (under 13)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What would you like us to do? Include the platform (Android / Windows) and app version.
+      placeholder: e.g. "Please delete any opt-in analytics for installs from approximately April 2026 in the EU region."
+    validations:
+      required: true
+  - type: input
+    id: install_window
+    attributes:
+      label: Install date / region (optional, helps us locate anonymous analytics records)
+      placeholder: e.g. "installed ~April 2026, Germany"
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have read the [Privacy Policy](https://tv-viewer-app.github.io/tv_viewer/privacy.html)
+          required: true
+        - label: I am not posting personal information that I would not want to be public
+          required: true

@@ -133,11 +133,12 @@ If you opt in to analytics, the anonymous data is transmitted to Supabase, whose
 
 ## 10. Contact
 
-For privacy questions, deletion requests, or concerns:
+TV Viewer is a community open-source project, not a company — we do not run a customer-support inbox. All privacy questions, deletion requests, and concerns are handled through our public GitHub repository, which gives every request a permanent, auditable record:
 
-- **GitHub Issues (preferred, public):** https://github.com/tv-viewer-app/tv_viewer/issues
-- **Security disclosures (private):** see `SECURITY.md` in the repository
-- **Email:** privacy@tvviewer.app
+- **General privacy questions or deletion requests (public):** open an issue at https://github.com/tv-viewer-app/tv_viewer/issues using the "Privacy request" template, or label your issue `privacy`. A maintainer will respond in the issue thread.
+- **Confidential or security-sensitive disclosures (private):** open a private vulnerability report via GitHub Security Advisories at https://github.com/tv-viewer-app/tv_viewer/security/advisories/new — only repository maintainers can read it. See also [`SECURITY.md`](https://github.com/tv-viewer-app/tv_viewer/blob/master/SECURITY.md).
+
+A free GitHub account is required to use either channel. If you cannot use GitHub for accessibility or other reasons, please indicate this in your initial message and we will arrange an alternative.
 
 ## 11. Changes to This Policy
 
