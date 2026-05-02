@@ -5,6 +5,11 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2] - 2026-05-02
+
+### Fixed — Android
+- **Release signing key (Play Store)**: CI now signs APK and AAB with the official upload key (SHA1 `56:21:F2:7C:DA:DC:12:C3:22:A4:00:BD:74:28:27:97:EA:97:6B:E4`) instead of the debug key. v2.7.1 artifacts were debug-signed and rejected by Play Console — re-release as v2.7.2 with correct signing. Workflow now hard-fails if the keystore SHA1 doesn't match the expected fingerprint.
+
 ## [2.7.1] - 2026-05-02
 
 ### Added — Windows

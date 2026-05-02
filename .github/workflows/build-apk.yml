@@ -32,6 +32,36 @@ jobs:
           flutter-version: '3.24.5'
           channel: stable
 
+      - name: Decode signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing — release would be signed with debug key"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > flutter_app/android/app/upload-keystore.jks
+          cat > flutter_app/android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          # Verify SHA1 fingerprint matches the expected upload key
+          EXPECTED_SHA1="56:21:F2:7C:DA:DC:12:C3:22:A4:00:BD:74:28:27:97:EA:97:6B:E4"
+          ACTUAL_SHA1=$(keytool -list -v -keystore flutter_app/android/app/upload-keystore.jks \
+                        -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" 2>/dev/null \
+                        | grep -i "SHA1:" | head -1 | awk -F'SHA1: ' '{print $2}' | tr -d ' ')
+          echo "Expected SHA1: $EXPECTED_SHA1"
+          echo "Actual SHA1:   $ACTUAL_SHA1"
+          if [ "$ACTUAL_SHA1" != "$EXPECTED_SHA1" ]; then
+            echo "::error::Keystore SHA1 mismatch — refusing to build with wrong signing key"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: cd flutter_app && flutter pub get
 
