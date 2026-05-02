@@ -19,9 +19,16 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.7.0
+## ✨ What's New in v2.7.3
 
-**All 13 feature requests implemented across Windows & Android!**
+- 🔐 **Privacy policy rewritten** — accurate description of crowdsourced channel-health data flow, Play Store data-safety mapping
+- 🌐 **Landing page hardened** — every marketing claim now backed by shipping behaviour; added DMCA / takedown contact
+- 📦 **Android signing fixed** — official upload key (was a debug key in v2.7.1, rejected by Play)
+- 🪟 **Windows app icon regenerated** from the 512px Prism Play source
+
+### Earlier in v2.7.x — Feature Sprint (v2.7.0)
+
+**13 community feature requests implemented across Windows & Android.**
 
 ### 🔒 Security & Integrity
 - **Play Integrity API** — Google Play attestation verifies app authenticity

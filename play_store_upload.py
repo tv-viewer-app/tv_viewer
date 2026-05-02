@@ -32,7 +32,21 @@ except ImportError:
 
 PACKAGE_NAME = "app.tvviewer.player"
 SCRIPT_DIR = Path(__file__).parent
-AAB_PATH = SCRIPT_DIR / "dist" / "tv_viewer_v2.7.0.aab"
+
+
+def _read_app_version():
+    """Read version name + code from flutter_app/pubspec.yaml so we can't drift."""
+    pubspec = SCRIPT_DIR / "flutter_app" / "pubspec.yaml"
+    for line in pubspec.read_text(encoding="utf-8").splitlines():
+        if line.startswith("version:"):
+            raw = line.split(":", 1)[1].strip()  # e.g. "2.7.3+39"
+            name, _, code = raw.partition("+")
+            return name.strip(), int(code) if code else 0
+    raise RuntimeError("Could not find `version:` in pubspec.yaml")
+
+
+APP_VERSION_NAME, APP_VERSION_CODE = _read_app_version()
+AAB_PATH = SCRIPT_DIR / "dist" / f"tv-viewer-v{APP_VERSION_NAME}.aab"
 
 # Store listing content
 LISTING = {
@@ -88,7 +102,7 @@ TV Viewer does not host any content. All streams come from publicly available co
 }
 
 RELEASE_NOTES = {
-    "en-US": """What's new in v2.7.0:
+    "en-US": f"""What's new in v{APP_VERSION_NAME}:
 • Settings screen with stream timeout controls & theme toggle
 • Advanced search: country:, category:, language:, type: prefixes
 • Sort channels by name, country, category, or type
@@ -163,7 +177,7 @@ def assign_to_track(service, edit_id: str, track: str, version_code: int):
                     "versionCodes": [str(version_code)],
                     "releaseNotes": release_notes,
                     "status": "completed",
-                    "name": "2.7.0",
+                    "name": APP_VERSION_NAME,
                 }
             ],
         },
