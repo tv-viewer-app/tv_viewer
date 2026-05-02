@@ -136,19 +136,57 @@
 
         <h3>1.2 Information you can choose to share (opt-in only)</h3>
         <p>The first time you launch the Windows desktop app, a consent dialog asks whether you want to enable <strong>anonymous usage analytics</strong>. The Android app does <strong>not</strong> collect analytics by default.</p>
-        <p>If — and only if — you opt in, we collect:</p>
-        <ul>
-            <li><strong>Anonymous device class</strong> (e.g., "Windows 11", "Android 14") — never a device identifier</li>
-            <li><strong>App version</strong> (e.g., "2.7.2")</li>
-            <li><strong>Aggregate event counts</strong>: app launched, channel scan completed, search performed</li>
-            <li><strong>Crash reports</strong>: a stack trace and the app version at the time of the crash</li>
-        </ul>
-        <p>We do <strong>not</strong> collect: your name, email, phone number, location, IP address, IPTV channel choices, watch history, search queries, or any content you view.</p>
+        <p>If — and only if — you opt in, we collect the following events. Each event includes the <strong>anonymous device identifier</strong> and <strong>approximate location</strong> described in the Play Store data-safety table at §1.4 below.</p>
+        <table>
+            <thead><tr><th>Event</th><th>Triggered when</th><th>Properties sent</th></tr></thead>
+            <tbody>
+                <tr><td><code>app_launch</code> / <code>app_start</code></td><td>App opens</td><td>platform, app version, timestamp</td></tr>
+                <tr><td><code>channel_play</code></td><td>You start a channel</td><td>category, country code of the channel, <strong>SHA-256 hash of the URL</strong> (no plaintext URL or channel name)</td></tr>
+                <tr><td><code>channel_fail</code></td><td>A channel fails to play</td><td>category, country code, URL hash, error type</td></tr>
+                <tr><td><code>favorite</code></td><td>You add or remove a favourite</td><td>category, country code, URL hash, action (<code>add</code>/<code>remove</code>)</td></tr>
+                <tr><td><code>feature_use</code></td><td>You open a major feature</td><td>feature name (e.g. <code>map_open</code>, <code>search</code>, <code>fullscreen</code>) — <strong>no search query text</strong></td></tr>
+                <tr><td><code>filter_used</code> (Android only)</td><td>You apply a filter</td><td>filter type (e.g. <code>country</code>) — <strong>no filter values</strong></td></tr>
+                <tr><td><code>scan_complete</code></td><td>A health scan finishes</td><td>total channels, working count, duration in seconds</td></tr>
+                <tr><td><code>session_end</code></td><td>App closes</td><td>session duration, channels played, channels favourited</td></tr>
+                <tr><td><code>app_crash</code></td><td>An uncaught exception occurs</td><td>exception class, message (truncated to 200 chars), first stack-trace line, app version</td></tr>
+            </tbody>
+        </table>
+        <p>We do <strong>not</strong> collect: your name, email, phone number, precise location, IP address (Supabase logs the connection IP for ≤ 30 days at the network layer but we do not retain or analyse it), the names or URLs of channels you watch, your search queries, your watch history, your favourites list, or the list of other apps installed on your device.</p>
         <p>You can disable analytics at any time:</p>
         <ul>
             <li><strong>Windows:</strong> Settings → Privacy → Disable analytics</li>
             <li><strong>Android:</strong> Settings → Privacy controls → Analytics off</li>
         </ul>
+
+        <h3>1.4 Play Store data-safety mapping (Android)</h3>
+        <p>This is the same information formatted to match the categories in the Google Play Store <strong>Data safety</strong> form so you can verify exactly what we declared:</p>
+        <table>
+            <thead><tr><th>Play Store category</th><th>Subtype</th><th>Collected?</th><th>Shared?</th><th>Optional?</th><th>Purpose</th><th>What it is in our code</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Location</strong></td><td>Approximate location</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Two-letter country code derived from your <strong>system locale only</strong> — never from IP geolocation or GPS</td></tr>
+                <tr><td><strong>App info &amp; performance</strong></td><td>Crash logs</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>App functionality, Analytics</td><td>Exception class, truncated message, first stack-trace line — no user data</td></tr>
+                <tr><td><strong>App info &amp; performance</strong></td><td>Diagnostics</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Session duration, scan results, app version, platform</td></tr>
+                <tr><td><strong>App info &amp; performance</strong></td><td>Other app performance data</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>Channel play / fail counters used to compute aggregate channel-health stats</td></tr>
+                <tr><td><strong>App activity</strong></td><td>App interactions</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td><code>feature_use</code>, <code>favorite</code>, <code>channel_play</code> events — names of features used, never of channels watched</td></tr>
+                <tr><td><strong>App activity</strong></td><td>Other user-generated content</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>App functionality</td><td>Channel name + URL + category + country you submit through the in-app <strong>Submit channel</strong> dialog; freeform text + rating you submit through the <strong>Send feedback</strong> dialog</td></tr>
+                <tr><td><strong>Device or other IDs</strong></td><td>Device or other IDs</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (opt-in)</td><td>Analytics</td><td>A <strong>per-install random UUID v4</strong> generated by the app and stored locally with file mode <code>0o600</code>. It is not the Android Advertising ID, the Android ID, the IMEI, or any hardware identifier. Uninstalling the app erases it.</td></tr>
+            </tbody>
+        </table>
+        <p>Categories we <strong>do not</strong> collect (do not check on the Play Console form):</p>
+        <table>
+            <thead><tr><th>Play Store category</th><th>Why not</th></tr></thead>
+            <tbody>
+                <tr><td>Personal info (name, email, address, race, religion, sexual orientation, etc.)</td><td>Never collected</td></tr>
+                <tr><td>Financial info</td><td>App is free; no payments</td></tr>
+                <tr><td>Health &amp; fitness</td><td>Not collected</td></tr>
+                <tr><td>Messages, photos, audio, files</td><td>Not collected</td></tr>
+                <tr><td>Calendar, contacts</td><td>Not collected</td></tr>
+                <tr><td>Web browsing history</td><td>Not collected</td></tr>
+                <tr><td><strong>App activity → Installed apps</strong></td><td>We do not declare <code>QUERY_ALL_PACKAGES</code> and never call <code>getInstalledApplications()</code></td></tr>
+                <tr><td><strong>App activity → In-app search history</strong></td><td>Search queries you type are processed locally and <strong>never sent</strong>. Only the <em>fact</em> that the search feature was opened is logged (under "App interactions")</td></tr>
+                <tr><td><strong>Location → Precise location</strong></td><td>Never collected — we have no <code>ACCESS_FINE_LOCATION</code> or <code>ACCESS_COARSE_LOCATION</code> permission</td></tr>
+            </tbody>
+        </table>
 
         <h3>1.3 Information stored only on your device</h3>
         <p>The following is saved locally on your device and <strong>never transmitted to us</strong>:</p>
