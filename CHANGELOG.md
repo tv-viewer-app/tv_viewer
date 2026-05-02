@@ -5,6 +5,12 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] - 2026-05-02
+
+### Fixed — Windows
+- **App icon now reflects current Prism Play branding** (#155): Regenerated `tv_viewer.ico` (and `assets/icons/tv_viewer.ico`, `docs/favicon.ico`) from `docs/icon-512.png` as a multi-resolution ICO (16/24/32/48/64/128/256). Previous EXE shipped with a stale generic TV icon predating the Prism Play rebrand. Affects Windows taskbar, Alt-Tab, and File Explorer thumbnails.
+- **Debug build icon**: `TV_Viewer_Debug.spec` now embeds the same icon (was previously default PyInstaller icon).
+
 ## [2.7.2] - 2026-05-02
 
 ### Fixed — Android
