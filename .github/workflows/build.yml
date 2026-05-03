@@ -84,6 +84,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # channels.json is auto-generated at runtime and gitignored, but
+      # PyInstaller's --add-data needs the file to exist at build time
+      # (Issue #174). An empty list is a valid initial state.
+      - name: Ensure channels.json placeholder
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "channels.json")) {
+            "[]" | Out-File -FilePath "channels.json" -Encoding utf8 -NoNewline
+            Write-Host "Created placeholder channels.json"
+          }
+
       # PyInstaller with the same flags as TV_Viewer.spec.
       # Using CLI flags rather than the .spec so we have full visibility in CI.
       - name: Build executable
@@ -159,7 +170,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
         with:
-          flutter-version: '3.19.0'
+          flutter-version: '3.24.0'
           channel: stable
           cache: true
 
