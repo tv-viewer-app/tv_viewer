@@ -392,7 +392,7 @@ class PlayerWindow(tk.Toplevel):
         
         # Bind keyboard shortcuts
         self.bind('<space>', lambda e: self._toggle_play())
-        self.bind('<Escape>', lambda e: self._handle_escape())
+        self.bind('<Escape>', lambda e: (self._handle_escape(), 'break')[1])
         self.bind('f', lambda e: self._toggle_fullscreen())
         self.bind('m', lambda e: self._toggle_mute())
         self.bind('<Up>', lambda e: self._volume_up())
@@ -1297,10 +1297,17 @@ class PlayerWindow(tk.Toplevel):
             try:
                 is_fav = self.favorites_manager.is_favorite(url)
             except Exception:
+                logger.exception("favorites_manager.is_favorite failed")
                 is_fav = False
+        new_text = '★' if is_fav else '☆'
         try:
-            btn.configure(text='★' if is_fav else '☆',
-                          bootstyle='warning' if is_fav else 'secondary')
+            btn.configure(text=new_text)
+        except Exception:
+            logger.exception("fav_btn text update failed")
+            return
+        # CTkButton supports text_color; ttk.Button (fallback) does not.
+        try:
+            btn.configure(text_color=('#ffb900' if is_fav else '#ffffff'))
         except Exception:
             pass
 

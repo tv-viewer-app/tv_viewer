@@ -15,7 +15,7 @@ try:
     MAP_AVAILABLE = True
 except ImportError:
     MAP_AVAILABLE = False
-    logger.warning("tkintermapview not installed — Map feature unavailable")
+    logger.info("tkintermapview not installed — using built-in fallback list view")
 
 # Country center coordinates {name: (lat, lon)}
 COUNTRY_COORDS: Dict[str, Tuple[float, float]] = {

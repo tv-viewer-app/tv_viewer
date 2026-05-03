@@ -5,6 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.5] - 2026-05-03
+
+### Fixed
+- **Favorite star never toggled in player OSD**: `_refresh_fav_button` was passing `bootstyle=` to `CTkButton`, which silently raised an exception so the star glyph never updated and the user couldn't tell whether a channel was favorited. Now updates text + `text_color` (gold when active, white when not) using only CTkButton-supported kwargs.
+- **Escape key racing with main window's `bind_all('<Escape>')`**: Player Escape handler now returns `'break'` so the global Esc binding doesn't fire `_clear_search` after the player window has destroyed itself. Reduces the rare crash some users hit when pressing Escape during VLC startup.
+- **OSD controls invisible in packaged Windows EXE**: PyInstaller spec now bundles `customtkinter` theme + asset files via `collect_data_files('customtkinter')`. Without these, CTkButton couldn't read its theme JSON, so OSD buttons rendered as zero-size canvases — making the controls bar appear empty. The dev environment had the assets on disk so the bug only surfaced in the packaged build.
+- **Map "list view" warning was misleading**: Changed import-time log from WARNING to INFO since the fallback list view handles the missing dependency gracefully.
+
 ## [2.9.4] - 2026-05-03
 
 ### Fixed
