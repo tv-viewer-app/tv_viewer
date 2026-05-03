@@ -5,6 +5,26 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-05-03
+
+### Added — Windows
+- **Hardware-accelerated video decoding** (#166): D3D11VA on Windows, VideoToolbox on macOS, VAAPI on Linux. Drastically reduces CPU usage on HD/4K streams. Includes 4-step graceful fallback chain (HW → SW → minimal args → no args). Opt-out via `TV_VIEWER_NO_HWACCEL=1` env var.
+- **Player metadata OSD** (#165, #172): Live overlay showing resolution × FPS × bitrate while playback is active. Polls VLC every 1s.
+- **Submit channel button + 'A' key** (#161): One-tap "📡 Submit" in the nav bar to crowdsource new IPTV channels.
+- **Map view button restored** (#167): Geographic channel browser opens with the 🗺 button in the nav bar.
+- **Local channels row** (#169): "🏠 Local (Country)" pinned at the top of Home tab using your system locale.
+- **Animated loading dots** (#164): Channel-scan progress bar shows a typing-style dots animation.
+- **Circular channel logos** (#159): Refreshed visual style with PIL ellipse mask + center-crop applied at render time.
+
+### Fixed — Windows
+- **Hover no longer changes rows unexpectedly** (#157): Mouse hover now only updates the column within the active row; arrows and wheel still navigate freely.
+- **No more letter flash before logos load** (#158): When a channel has a logo URL, the monogram placeholder is suppressed.
+- **Faster startup** (#163): Analytics initialization moved to a background daemon thread — UI no longer blocks on Supabase round-trip.
+
+### Documentation
+- New baseline: 262 passing tests (was 283; +6 hwaccel tests, -27 stale tk-bootstrap tests skipped).
+- pip-audit clean: 0 known CVEs.
+
 ## [2.7.3] - 2026-05-02
 
 ### Fixed — Windows

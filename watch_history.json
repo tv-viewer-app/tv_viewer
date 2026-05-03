@@ -1,0 +1,164 @@
+{
+  "entries": [
+    {
+      "name": "Reshet 13 Nofesh",
+      "url": "https://d1yd8hohnldm33.cloudfront.net/out/v1/19dee23c2cc24f689bd4e1288661ee0c/index.m3u8",
+      "country": "Israel",
+      "category": "Entertainment",
+      "last_played": 1777661046.3589494,
+      "play_count": 2
+    },
+    {
+      "name": "13 Kids",
+      "url": "https://origin.dpsgo.com/ssai/event/LhHrVtyeQkKZ-Ye_xEU75g/master.m3u8",
+      "country": "Unknown",
+      "category": "Kids",
+      "last_played": 1777713914.0340748,
+      "play_count": 1
+    },
+    {
+      "name": "Reshet 13 Comedy",
+      "url": "https://d15ds134q59udk.cloudfront.net/out/v1/fbba879221d045598540ee783b140fe2/index.m3u8",
+      "country": "Israel",
+      "category": "Entertainment",
+      "last_played": 1777751687.7421079,
+      "play_count": 1
+    },
+    {
+      "name": "News 24 Ⓢ",
+      "url": "https://tv.balkanweb.com/news24/livestream/playlist.m3u8",
+      "country": "Unknown",
+      "category": "News",
+      "last_played": 1777753862.311046,
+      "play_count": 1
+    },
+    {
+      "name": "CNN",
+      "url": "http://live.cnnindonesia.com/livecnn/smil:cnntv.smil/playlist.m3u8",
+      "country": "US",
+      "category": "News",
+      "last_played": 1777753886.4231868,
+      "play_count": 2
+    },
+    {
+      "name": "Al-Sharqiya News",
+      "url": "https://5d94523502c2d.streamlock.net/alsharqiyalive/mystream/playlist.m3u8",
+      "country": "Unknown",
+      "category": "News",
+      "last_played": 1777753888.167049,
+      "play_count": 2
+    },
+    {
+      "name": "iNEWS",
+      "url": "https://svs.itworkscdn.net/inewsiqlive/inewsiq.smil/playlist.m3u8",
+      "country": "Unknown",
+      "category": "News",
+      "last_played": 1777753888.278549,
+      "play_count": 1
+    },
+    {
+      "name": "Newstalk",
+      "url": "https://stream.audioxi.com/NT",
+      "country": "Unknown",
+      "category": "News",
+      "last_played": 1777753894.3304875,
+      "play_count": 1
+    },
+    {
+      "name": "RadioFreccia",
+      "url": "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S3160845/0tuSetc8UFkF/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753907.201912,
+      "play_count": 1
+    },
+    {
+      "name": "Radio ZETA",
+      "url": "https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S9346184/XEx1LqlYbNic/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753911.196988,
+      "play_count": 1
+    },
+    {
+      "name": "Virgin Radio TV Ⓖ",
+      "url": "https://live02-seg.msr.cdn.mediaset.net/live/ch-ew/ew-clr.isml/index.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753972.109952,
+      "play_count": 1
+    },
+    {
+      "name": "Giornale Radio Tv",
+      "url": "https://5f204aff97bee.streamlock.net/GR_tv/livestream/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753978.12335,
+      "play_count": 1
+    },
+    {
+      "name": "Onda Web Radio",
+      "url": "http://178.33.224.197:1935/ondaradioweb/ondaradioweb/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753980.5304303,
+      "play_count": 1
+    },
+    {
+      "name": "Radio 3M InBlu",
+      "url": "https://stream.mariatvcdn.com/telemistrettaradio/900bfcc0f9012ea272584fd5ff5281b8.sdp/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753982.7764366,
+      "play_count": 1
+    },
+    {
+      "name": "Radio 51 Tv",
+      "url": "https://59d7d6f47d7fc.streamlock.net/canale51/canale51/chunklist_w1193883900.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753985.1831284,
+      "play_count": 1
+    },
+    {
+      "name": "Radio Birikina Tv",
+      "url": "https://tvd-bk.fluid.stream/RadioBirikinaTV/livestream/chunklist_w84398277.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753988.3746774,
+      "play_count": 1
+    },
+    {
+      "name": "Radio Bruno Tv",
+      "url": "https://router.xdevel.com/video0s975758-473/stream/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777753993.4509318,
+      "play_count": 1
+    },
+    {
+      "name": "Radio Ibiza",
+      "url": "https://str48.fluid.stream/RadioIbizaTV/livestream/playlist.m3u8",
+      "country": "Unknown",
+      "category": "Radio",
+      "last_played": 1777754020.156245,
+      "play_count": 1
+    },
+    {
+      "name": "Al Arabiya العربية",
+      "url": "https://live.alarabiya.net/alarabiapublish/alarabiya.smil/playlist.m3u8",
+      "country": "UAE",
+      "category": "News",
+      "last_played": 1777754106.6808038,
+      "play_count": 1
+    },
+    {
+      "name": "DW العربية",
+      "url": "https://dwamdstream103.akamaized.net/hls/live/2015526/dwstream103/index.m3u8",
+      "country": "Germany",
+      "category": "News",
+      "last_played": 1777754108.2055929,
+      "play_count": 1
+    }
+  ]
+}

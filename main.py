@@ -201,19 +201,27 @@ def main():
     except Exception as e:
         print(f"Warning: Could not install crash reporter: {e}")
     
-    # Initialize anonymous analytics (non-blocking, fail-safe)
-    try:
-        import asyncio
-        from utils.analytics import analytics
-        loop = asyncio.new_event_loop()
+    # Initialize anonymous analytics in a background daemon thread so the
+    # UI can render without waiting on network/disk I/O (Issue #163).
+    def _init_analytics_async():
         try:
-            loop.run_until_complete(analytics.initialize())
-            loop.run_until_complete(analytics.track_app_launch())
-        finally:
-            loop.close()
-        print("Analytics initialized")
+            import asyncio
+            from utils.analytics import analytics
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(analytics.initialize())
+                loop.run_until_complete(analytics.track_app_launch())
+            finally:
+                loop.close()
+            print("Analytics initialized")
+        except Exception as e:
+            print(f"Warning: Analytics init skipped: {e}")
+
+    try:
+        import threading
+        threading.Thread(target=_init_analytics_async, daemon=True).start()
     except Exception as e:
-        print(f"Warning: Analytics init skipped: {e}")
+        print(f"Warning: Analytics thread failed to start: {e}")
     
     # Check requirements first
     success, missing, warnings = check_requirements()

@@ -127,10 +127,20 @@ class LogoManager:
             callback(None)
 
     def _load_image(self, path: str) -> 'ImageTk.PhotoImage':
-        from PIL import Image, ImageTk
+        from PIL import Image, ImageTk, ImageDraw
         img_pil = Image.open(path).convert('RGBA')
         img_pil.thumbnail(LOGO_SIZE, Image.LANCZOS)
-        return ImageTk.PhotoImage(img_pil)
+        # Crop to a centered circle (Issue #159)
+        w, h = img_pil.size
+        size = min(w, h)
+        left = (w - size) // 2
+        top = (h - size) // 2
+        img_pil = img_pil.crop((left, top, left + size, top + size))
+        mask = Image.new('L', (size, size), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, size, size), fill=255)
+        circular = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        circular.paste(img_pil, (0, 0), mask)
+        return ImageTk.PhotoImage(circular)
 
 
 _logo_mgr: Optional[LogoManager] = None

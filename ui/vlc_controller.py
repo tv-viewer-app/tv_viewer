@@ -32,44 +32,61 @@ except ImportError:
     logger.warning("python-vlc not installed. Video playback will not work.")
 
 
-def get_vlc_hardware_acceleration_args() -> list:
-    """Get VLC arguments optimized for IPTV streaming.
-    
-    Hardware acceleration is disabled by default as it causes compatibility issues.
-    The args focus on stability and low latency for IPTV streams.
-    
+def get_vlc_hardware_acceleration_args(prefer_hwaccel: bool = True) -> list:
+    """Get VLC arguments optimized for IPTV streaming with optional HW accel.
+
+    Hardware acceleration is opt-in via ``prefer_hwaccel`` (default True on
+    Windows where D3D11VA is universally supported on Win 8.1+; the GPU driver
+    falls back to software automatically if the codec/profile is unsupported).
+    The hwaccel-enabled instance is the first attempt; on failure callers should
+    retry with ``prefer_hwaccel=False`` to get software-only args.
+
+    Args:
+        prefer_hwaccel: When True (default), include platform-appropriate
+            hardware acceleration flags. When False, return the safe
+            software-decode profile that is guaranteed to start.
+
     Returns:
-        List of VLC command-line arguments
+        List of VLC command-line arguments.
     """
-    # Base args optimized for IPTV streaming (Issue #35)
     base_args = [
-        '--no-xlib',           # Disable X11 threading (Linux)
-        '--quiet',             # Reduce logging
-        '--no-lua',            # Disable Lua scripting (security/performance)
-        '--no-video-title-show',  # Don't show title on video
-        '--network-caching=1000',  # 1 second network buffer
-        '--live-caching=1000',     # 1 second live stream buffer
-        '--clock-jitter=0',        # Disable jitter compensation (smoother)
-        '--clock-synchro=0',       # Disable clock synchronization
+        '--no-xlib',
+        '--quiet',
+        '--no-lua',
+        '--no-video-title-show',
+        '--network-caching=1000',
+        '--live-caching=1000',
+        '--clock-jitter=0',
+        '--clock-synchro=0',
     ]
-    
-    # Platform-specific adjustments (no hardware acceleration to avoid failures)
+
     if sys.platform == 'win32':
-        # Windows: Simple, stable settings
-        return base_args + [
-            '--no-plugins-cache',  # Don't cache plugins
-        ]
+        win_args = base_args + ['--no-plugins-cache']
+        if prefer_hwaccel and os.environ.get('TV_VIEWER_NO_HWACCEL') != '1':
+            # Issue #166: D3D11VA is the modern Windows decoder (DXVA2 is the
+            # legacy fallback). Both are part of every Windows 8.1+ install
+            # and VLC silently falls back to software if the GPU rejects
+            # the codec/profile, so this is safe to enable by default.
+            win_args += [
+                '--avcodec-hw=d3d11va',
+                '--avcodec-fast',
+                '--avcodec-skiploopfilter=1',
+            ]
+        return win_args
     elif sys.platform == 'darwin':
-        # macOS: Simple, stable settings
-        return base_args + [
-            '--no-plugins-cache',
-        ]
+        mac_args = base_args + ['--no-plugins-cache']
+        if prefer_hwaccel and os.environ.get('TV_VIEWER_NO_HWACCEL') != '1':
+            mac_args += ['--avcodec-hw=videotoolbox']
+        return mac_args
     else:
-        # Linux: Simple, stable settings (no VAAPI/VDPAU)
-        return base_args + [
+        linux_args = base_args + [
             '--no-plugins-cache',
-            '--no-sub-autodetect-file',  # Don't scan for subtitles
+            '--no-sub-autodetect-file',
         ]
+        if prefer_hwaccel and os.environ.get('TV_VIEWER_NO_HWACCEL') != '1':
+            # Linux: 'any' lets VLC auto-pick VAAPI / VDPAU / VA-API copy
+            linux_args += ['--avcodec-hw=any']
+        return linux_args
 
 
 class VLCController:
@@ -124,21 +141,27 @@ class VLCController:
             True if initialization succeeded, False otherwise.
         """
         try:
-            # Try with optimized arguments first
-            vlc_args = get_vlc_hardware_acceleration_args()
-            logger.info(f"Initializing VLC with args: {vlc_args}")
-            
+            # Try with hardware-accelerated arguments first (Issue #166)
+            vlc_args = get_vlc_hardware_acceleration_args(prefer_hwaccel=True)
+            logger.info(f"Initializing VLC (hwaccel) with args: {vlc_args}")
+
             self._instance = vlc.Instance(*vlc_args)
             if not self._instance:
+                # Retry with hwaccel disabled (software decode)
+                logger.warning("HW-accel VLC init failed, retrying with software decode...")
+                sw_args = get_vlc_hardware_acceleration_args(prefer_hwaccel=False)
+                self._instance = vlc.Instance(*sw_args)
+
+            if not self._instance:
                 # Fallback: try with absolute minimal settings
-                logger.warning("Optimized VLC init failed, trying minimal settings...")
+                logger.warning("Software VLC init failed, trying minimal settings...")
                 self._instance = vlc.Instance('--quiet', '--no-xlib')
-            
+
             if not self._instance:
                 # Last resort: no arguments at all
                 logger.warning("Minimal VLC init failed, trying no arguments...")
                 self._instance = vlc.Instance()
-            
+
             if not self._instance:
                 raise RuntimeError("Failed to create VLC instance with all fallbacks")
             

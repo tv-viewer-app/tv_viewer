@@ -318,7 +318,7 @@ class TVModeApp:
         self._scan_timer = self.root.after(SCAN_POLL_MS, self._poll_scan_progress)
 
     def _update_scan_bar(self, done=False):
-        """Update the scan progress indicator."""
+        """Update the scan progress indicator (with simple animation — Issue #164)."""
         if not self._scan_bar:
             return
         working = len([c for c in self._all_channels if c.get('is_working')])
@@ -327,7 +327,11 @@ class TVModeApp:
             self._scan_label.config(text=f"\u2713 {working} working channels")
             self.root.after(5000, lambda: self._scan_bar.pack_forget() if self._scan_bar else None)
         else:
-            self._scan_label.config(text=f"Scanning\u2026 {working}/{total} working")
+            # Animated dots cycle while scanning
+            phase = (getattr(self, '_scan_phase', 0) + 1) % 4
+            self._scan_phase = phase
+            dots = "." * phase + " " * (3 - phase)
+            self._scan_label.config(text=f"\u26ec Scanning{dots}  {working}/{total} working")
             self._scan_bar.pack(fill=tk.X, side=tk.TOP, before=self._canvas)
 
     # ---- Data Preparation ---------------------------------------------------
@@ -378,6 +382,24 @@ class TVModeApp:
                         self._rows.append({"label": "\U0001f550 Recently Watched", "channels": recent_channels, "icon": "\U0001f550"})
         else:
             # Home tab
+            # Issue #169: "Local" row pinned at top — uses system locale country.
+            try:
+                local_country = self._get_local_country()
+                if local_country:
+                    local_channels = [
+                        ch for ch in source
+                        if ch.get('is_working')
+                        and ch.get('country', '').strip().lower() == local_country.lower()
+                    ]
+                    if local_channels:
+                        self._rows.append({
+                            "label": f"\U0001f3e0 Local ({local_country})",
+                            "channels": local_channels,
+                            "icon": "\U0001f3e0",
+                        })
+            except Exception:
+                pass
+
             if self._favorite_urls:
                 fav_channels = [ch for ch in source
                                if ch.get('url') in self._favorite_urls and ch.get('is_working')]
@@ -497,6 +519,24 @@ class TVModeApp:
         )
         settings_btn.pack(side=tk.RIGHT, padx=4)
         settings_btn.bind("<Button-1>", lambda e: self._open_settings())
+
+        # Issue #161: Submit / Contribute Channel button
+        submit_btn = tk.Label(
+            self._nav_frame, text="\U0001f4e1 Submit",
+            bg=TVColors.NAV_BG, fg=TVColors.ACCENT,
+            font=(FONT_FAMILY, 11, "bold"), padx=12, pady=8, cursor="hand2",
+        )
+        submit_btn.pack(side=tk.RIGHT, padx=4)
+        submit_btn.bind("<Button-1>", lambda e: self._open_submit_dialog())
+
+        # Issue #167: Map view button
+        map_btn = tk.Label(
+            self._nav_frame, text="\U0001f5fa",
+            bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
+            font=(FONT_FAMILY, 14), padx=12, pady=8, cursor="hand2",
+        )
+        map_btn.pack(side=tk.RIGHT, padx=4)
+        map_btn.bind("<Button-1>", lambda e: self._open_map())
 
     def _switch_tab(self, tab_id: str):
         """Switch between Home / Favorites / Recent views."""
@@ -769,21 +809,32 @@ class TVModeApp:
 
         cx = x + w // 2
         cy = y + h // 2 - 14
+        mono_r = 28 if is_focused else 24
         if logo_img is not None:
+            # Soft circular backdrop so transparent PNGs read on the card
+            canvas.create_oval(
+                cx - mono_r - 2, cy - mono_r - 2,
+                cx + mono_r + 2, cy + mono_r + 2,
+                fill=TVColors.BG_CARD, outline=""
+            )
             canvas.create_image(cx, cy, image=logo_img, anchor='center')
         else:
             mono_color = _get_monogram_color(name)
-            mono_r = 28 if is_focused else 24
             canvas.create_oval(
                 cx - mono_r, cy - mono_r, cx + mono_r, cy + mono_r,
                 fill=mono_color, outline=""
             )
-            letter = name[0].upper() if name else "?"
-            canvas.create_text(
-                cx, cy, text=letter,
-                fill=TVColors.TEXT_PRIMARY,
-                font=(FONT_FAMILY, 18 if is_focused else 15, "bold")
-            )
+            # Issue #158: only draw the monogram letter when the channel has
+            # NO logo URL — otherwise the letter "flashes" then is replaced
+            # by the logo, looking like override text.
+            has_logo_url = bool((channel.get('logo') or '').startswith(('http://', 'https://')))
+            if not has_logo_url:
+                letter = name[0].upper() if name else "?"
+                canvas.create_text(
+                    cx, cy, text=letter,
+                    fill=TVColors.TEXT_PRIMARY,
+                    font=(FONT_FAMILY, 18 if is_focused else 15, "bold")
+                )
 
         display_name = name if len(name) <= 24 else name[:22] + "\u2026"
         name_y = y + h - 24 if is_focused else y + h - 22
@@ -909,6 +960,9 @@ class TVModeApp:
         r.bind("<space>", self._on_space)
         r.bind("/", lambda e: self._toggle_search())
         r.bind("<Control-f>", lambda e: self._toggle_search())
+        # Issue #161: 'a' / 'A' opens Submit Channel
+        r.bind("a", lambda e: self._open_submit_dialog())
+        r.bind("A", lambda e: self._open_submit_dialog())
 
     def _row_pitch(self) -> int:
         """Approximate vertical pitch of a row (label + focused card + gap)."""
@@ -1117,7 +1171,7 @@ class TVModeApp:
         self._info_label.config(text=f"\u25b6 {channel_name}")
 
     def _show_player_osd(self, channel_name):
-        """Show channel name overlay that fades after a few seconds."""
+        """Show channel name overlay + live metadata strip (Issues #165 + #172)."""
         if self._osd_timer:
             self.root.after_cancel(self._osd_timer)
 
@@ -1133,7 +1187,57 @@ class TVModeApp:
             font=(FONT_FAMILY, 22, "bold"), padx=20, pady=10,
         )
         self._osd_label.place(relx=0.02, rely=0.04, anchor="nw")
+
+        # Bottom-right metadata strip (resolution / fps / bitrate / cast)
+        self._osd_meta_label = tk.Label(
+            self._player_frame, text="",
+            bg=TVColors.PLAYER_OSD_BG, fg=TVColors.TEXT_SECONDARY,
+            font=("Consolas", 11), padx=14, pady=6,
+        )
+        self._osd_meta_label.place(relx=0.98, rely=0.96, anchor="se")
+
         self._osd_timer = self.root.after(OSD_FADE_MS, self._hide_osd)
+        # Start metadata polling (cancelled when player stops or OSD hides)
+        self._meta_poll_active = True
+        self._poll_player_metadata()
+
+    def _poll_player_metadata(self):
+        """Periodically refresh the bottom OSD strip with VLC metadata."""
+        if not getattr(self, '_meta_poll_active', False):
+            return
+        if self._state != "playing" or not self._vlc:
+            return
+        try:
+            w, h = self._vlc.get_video_dimensions()
+            fps = self._vlc.get_fps()
+            stats = self._vlc.get_media_stats()
+            bitrate_kbps = 0
+            if stats is not None:
+                # demux_bitrate is float in MB/s — convert to kb/s
+                try:
+                    bitrate_kbps = int(getattr(stats, 'demux_bitrate', 0.0) * 8000)
+                except Exception:
+                    bitrate_kbps = 0
+
+            parts = []
+            if w and h:
+                parts.append(f"{w}\u00d7{h}")
+            if fps and fps > 0.1:
+                parts.append(f"{fps:.0f}fps")
+            if bitrate_kbps:
+                parts.append(f"{bitrate_kbps}kbps")
+            if not parts:
+                parts.append("buffering\u2026")
+            text = "  \u2022  ".join(parts)
+            if hasattr(self, '_osd_meta_label') and self._osd_meta_label is not None:
+                try:
+                    self._osd_meta_label.config(text=text)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # Keep polling every 1s while playing
+        self.root.after(1000, self._poll_player_metadata)
 
     def _hide_osd(self):
         try:
@@ -1143,13 +1247,53 @@ class TVModeApp:
                 self._osd_label = None
         except Exception:
             pass
+        # Keep meta strip visible — it stays until player stops
         self._osd_timer = None
+
+    def _show_osd_again(self, event=None):
+        """Re-show channel name OSD on user input during playback."""
+        if self._state != "playing" or not self._player_channel:
+            return
+        name = self._player_channel.get('name', 'Unknown')
+        # Restart the title label only
+        if hasattr(self, '_osd_label') and self._osd_label is not None:
+            try:
+                self._osd_label.destroy()
+            except Exception:
+                pass
+            self._osd_label = None
+        ch_num = ""
+        n = self._channel_numbers.get(id(self._player_channel))
+        if n:
+            ch_num = f"Ch.{n}  "
+        self._osd_label = tk.Label(
+            self._player_frame, text=f"{ch_num}{name}",
+            bg=TVColors.PLAYER_OSD_BG, fg=TVColors.TEXT_PRIMARY,
+            font=(FONT_FAMILY, 22, "bold"), padx=20, pady=10,
+        )
+        self._osd_label.place(relx=0.02, rely=0.04, anchor="nw")
+        if self._osd_timer:
+            try:
+                self.root.after_cancel(self._osd_timer)
+            except Exception:
+                pass
+        self._osd_timer = self.root.after(OSD_FADE_MS, self._hide_osd)
 
     def _stop_player(self):
         """Stop VLC and return to browse state."""
+        # Stop metadata polling
+        self._meta_poll_active = False
+
         if self._osd_timer:
             self.root.after_cancel(self._osd_timer)
             self._osd_timer = None
+        # Drop meta label reference
+        if hasattr(self, '_osd_meta_label') and self._osd_meta_label is not None:
+            try:
+                self._osd_meta_label.destroy()
+            except Exception:
+                pass
+            self._osd_meta_label = None
 
         if self._vlc:
             try:
@@ -1273,6 +1417,50 @@ class TVModeApp:
             self._show_toast(f"Settings unavailable: {e}")
             logger.error(f"Settings dialog error: {e}")
 
+    def _open_submit_dialog(self):
+        """Open the Submit Channel / contribute dialog (Issue #161)."""
+        if self._state == "playing":
+            return
+        try:
+            from ui.contribute_dialog import show_contribute_dialog
+            show_contribute_dialog(self.root)
+            self._show_toast("Thanks for contributing! Re-scan to see new channels")
+        except Exception as e:
+            self._show_toast(f"Submit unavailable: {e}")
+            logger.error(f"Contribute dialog error: {e}")
+
+    def _open_map(self):
+        """Open the world map view of channels (Issue #167)."""
+        if self._state == "playing":
+            return
+        try:
+            from ui.map_window import MapWindow
+            MapWindow(
+                self.root,
+                self._channel_manager,
+                self._favorites_manager,
+                on_play_channel=self._play_channel_from_map,
+            )
+        except Exception as e:
+            self._show_toast(f"Map unavailable: {e}")
+            logger.error(f"Map window error: {e}")
+
+    def _play_channel_from_map(self, channel):
+        """Callback for map view to start playback."""
+        try:
+            url = channel.get('url', '')
+            if not url:
+                return
+            self._player_channel = channel
+            if self._watch_history:
+                try:
+                    self._watch_history.record_play(channel)
+                except Exception:
+                    pass
+            self._start_player(url, channel.get('name', 'Unknown'))
+        except Exception as e:
+            logger.error(f"Map play failed: {e}")
+
     # ---- Key Handlers -------------------------------------------------------
 
     def _on_escape(self, event=None):
@@ -1368,7 +1556,12 @@ class TVModeApp:
             )
 
     def _on_canvas_motion(self, event):
-        """Highlight the card under the cursor (mouse hover)."""
+        """Highlight the card under the cursor (mouse hover).
+
+        Issue #157: Hover MUST NOT change rows — that causes the canvas
+        to scroll vertically just from mouse motion. Only update the
+        column focus within the currently-active row.
+        """
         if self._state != "browse" or not self._rows:
             return
         hit = self._hit_test(event.x, event.y)
@@ -1378,20 +1571,15 @@ class TVModeApp:
         if (row_idx, col_idx) == self._hover_pos:
             return
         self._hover_pos = (row_idx, col_idx)
-        if row_idx == self._row_index and col_idx == self._col_index:
-            return
-        # Switch focus without snapping vertical (keep smooth-scroll quiet for hovers)
+        # Only react to hovers within the active row (no auto-row-change).
         if row_idx != self._row_index:
-            self._change_row(row_idx)
-            self._col_index = col_idx
-            self._clamp_col()
-            self._ensure_col_visible()
-            self._draw()
-        else:
-            self._col_index = col_idx
-            self._clamp_col()
-            self._ensure_col_visible()
-            self._draw()
+            return
+        if col_idx == self._col_index:
+            return
+        self._col_index = col_idx
+        self._clamp_col()
+        self._ensure_col_visible()
+        self._draw()
 
     def _hit_test(self, mx, my):
         """Return (row_idx, col_idx) under (mx, my) or None."""
@@ -1487,6 +1675,39 @@ class TVModeApp:
         self._toast_timer = None
 
     # ---- Public Methods -----------------------------------------------------
+
+    def _get_local_country(self) -> Optional[str]:
+        """Detect the user's country from system locale (Issue #169).
+
+        Returns a country name matching the channel ``country`` field
+        format (e.g. 'United States'), or None on failure.
+        """
+        cached = getattr(self, '_local_country_cache', '__missing__')
+        if cached != '__missing__':
+            return cached
+        result: Optional[str] = None
+        try:
+            import locale
+            loc = locale.getdefaultlocale()[0]  # e.g. 'en_US'
+            if loc and '_' in loc:
+                cc = loc.split('_', 1)[1].split('.')[0].upper()
+                # Map ISO-3166 alpha-2 to common channel-list country names
+                cc_map = {
+                    'US': 'United States', 'GB': 'United Kingdom',
+                    'CA': 'Canada', 'AU': 'Australia', 'DE': 'Germany',
+                    'FR': 'France', 'ES': 'Spain', 'IT': 'Italy',
+                    'IL': 'Israel', 'IN': 'India', 'JP': 'Japan',
+                    'BR': 'Brazil', 'MX': 'Mexico', 'NL': 'Netherlands',
+                    'RU': 'Russia', 'CN': 'China', 'KR': 'South Korea',
+                    'AR': 'Argentina', 'CL': 'Chile', 'CO': 'Colombia',
+                    'PT': 'Portugal', 'PL': 'Poland', 'GR': 'Greece',
+                    'TR': 'Turkey', 'EG': 'Egypt', 'ZA': 'South Africa',
+                }
+                result = cc_map.get(cc)
+        except Exception:
+            pass
+        self._local_country_cache = result
+        return result
 
     def refresh_channels(self, channels):
         """Refresh channel data (e.g., after scan completes)."""
