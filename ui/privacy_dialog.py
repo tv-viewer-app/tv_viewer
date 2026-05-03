@@ -1,13 +1,12 @@
 """First-launch privacy / consent modal (Issue #170).
 
-Three opt-in checkboxes (all default OFF):
-    [ ] Share anonymous usage stats
-    [ ] Use online channel database
-    [ ] Allow geo-IP to find local channels
+Single master toggle: participate in the community channel database
+(analytics + crowdsourced channel DB + geo-IP for local channels), or
+opt out of all three. Default OFF.
 
 Saves to ``~/.tv_viewer/consent.json`` via :mod:`utils.consent`.
 
-The dialog blocks until the user clicks Accept or Decline All.
+The dialog blocks until the user clicks Save.
 """
 from __future__ import annotations
 
@@ -24,24 +23,26 @@ _ACCENT = "#4da6ff"
 _BG_CARD = "#1f222a"
 _BORDER = "#2a2d35"
 
-PRIVACY_URL = "https://tv-viewer.app/privacy"
+PRIVACY_URL = "https://tv-viewer-app.github.io/tv_viewer/privacy.html"
 
-_OPTIONS = [
-    ("analytics",
-     "Share anonymous usage stats",
-     "App version, feature usage, error reports. No channel names or URLs."),
-    ("online_db",
-     "Use online channel database",
-     "Faster updates and contributes new channels you find back to everyone."),
-    ("geo_ip",
-     "Allow geo-IP for local channels",
-     "Pins a 'Local (Country)' row at the top of Home using your public IP."),
-]
+# All three keys are tied to the single master toggle.
+_KEYS = ("analytics", "online_db", "geo_ip")
+
+_TOGGLE_LABEL = "Participate in the community channel database"
+_TOGGLE_HINT = (
+    "Turning this on enables three things together:\n"
+    "  • Anonymous usage stats (app version, feature usage, error reports — "
+    "no channel names or URLs)\n"
+    "  • Online channel database (faster updates, contribute new channels "
+    "you find back to everyone)\n"
+    "  • Geo-IP for a 'Local (Country)' row at the top of Home (uses your "
+    "public IP only)"
+)
 
 _INFO_BANNER = (
-    "Crowdsourced channel data is community-powered. If you turn analytics "
-    "and online DB OFF, you won't receive database updates, new channels, or "
-    "channel status updates from the community.\n\n"
+    "Crowdsourced channel data is community-powered. If you leave this OFF, "
+    "you won't receive database updates, new channels, or channel status "
+    "updates from the community.\n\n"
     "You can change this any time in Settings → Privacy."
 )
 
@@ -49,11 +50,10 @@ _INFO_BANNER = (
 def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
     """Modal first-launch consent dialog. Returns chosen values."""
     initial = load_consent()
-    vars_: Dict[str, tk.BooleanVar] = {
-        key: tk.BooleanVar(root, value=bool(initial.get(key, False)))
-        for key, _, _ in _OPTIONS
-    }
-    result: Dict[str, bool] = {key: False for key, _, _ in _OPTIONS}
+    # Master toggle is ON only if the user previously enabled all three.
+    master_default = all(bool(initial.get(k, False)) for k in _KEYS)
+    master_var = tk.BooleanVar(root, value=master_default)
+    result: Dict[str, bool] = {k: False for k in _KEYS}
 
     win = tk.Toplevel(root)
     win.title("Privacy & Data")
@@ -67,7 +67,7 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
 
     # Center on screen
     win.update_idletasks()
-    w, h = 560, 560
+    w, h = 560, 480
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()
     win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
@@ -78,7 +78,7 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
     ).pack(pady=(20, 4))
     tk.Label(
         win,
-        text="Choose what data TV Viewer may use. All options are off by default.",
+        text="One choice covers analytics, the online channel DB, and geo-IP.",
         bg=_BG, fg=_FG_MUTED, font=("Segoe UI", 10), wraplength=500, justify="center",
     ).pack(pady=(0, 12))
 
@@ -95,23 +95,21 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
     body = tk.Frame(win, bg=_BG)
     body.pack(fill=tk.BOTH, expand=True, padx=20)
 
-    for key, label, hint in _OPTIONS:
-        row = tk.Frame(body, bg=_BG_CARD, highlightbackground=_BORDER,
-                       highlightthickness=1)
-        row.pack(fill=tk.X, pady=4)
-        cb = tk.Checkbutton(
-            row, text=label, variable=vars_[key],
-            bg=_BG_CARD, fg=_FG, selectcolor=_BG_CARD,
-            activebackground=_BG_CARD, activeforeground=_FG,
-            font=("Segoe UI", 11, "bold"), anchor="w",
-            padx=12, pady=8,
-        )
-        cb.pack(fill=tk.X, anchor="w")
-        tk.Label(
-            row, text=hint, bg=_BG_CARD, fg=_FG_MUTED,
-            font=("Segoe UI", 9), wraplength=480, justify="left", anchor="w",
-            padx=40,
-        ).pack(fill=tk.X, anchor="w", pady=(0, 8))
+    row = tk.Frame(body, bg=_BG_CARD, highlightbackground=_BORDER,
+                   highlightthickness=1)
+    row.pack(fill=tk.X, pady=4)
+    tk.Checkbutton(
+        row, text=_TOGGLE_LABEL, variable=master_var,
+        bg=_BG_CARD, fg=_FG, selectcolor=_BG_CARD,
+        activebackground=_BG_CARD, activeforeground=_FG,
+        font=("Segoe UI", 11, "bold"), anchor="w",
+        padx=12, pady=8,
+    ).pack(fill=tk.X, anchor="w")
+    tk.Label(
+        row, text=_TOGGLE_HINT, bg=_BG_CARD, fg=_FG_MUTED,
+        font=("Segoe UI", 9), wraplength=480, justify="left", anchor="w",
+        padx=40,
+    ).pack(fill=tk.X, anchor="w", pady=(0, 8))
 
     # Privacy policy link
     link = tk.Label(
@@ -127,7 +125,8 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
 
     def _save():
         nonlocal result
-        result = {k: bool(v.get()) for k, v in vars_.items()}
+        on = bool(master_var.get())
+        result = {k: on for k in _KEYS}
         save_consent(result)
         apply_to_config(result)
         try:
@@ -144,7 +143,7 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
         bd=0, highlightthickness=0, cursor="hand2",
     ).pack()
 
-    # Closing the window via X = save current selections (whatever they are)
+    # Closing the window via X = save current selection
     win.protocol("WM_DELETE_WINDOW", _save)
     win.wait_window()
     return result

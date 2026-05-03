@@ -5,6 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.3] - 2026-05-03
+
+### Fixed
+- **Privacy policy link was broken** — `https://tv-viewer.app/privacy` is not our domain. Updated to the published GitHub Pages URL `https://tv-viewer-app.github.io/tv_viewer/privacy.html`.
+
+### Changed
+- **Privacy dialog: single master toggle** — replaced the three separate checkboxes (analytics / online DB / geo-IP) with one "Participate in the community channel database" toggle that controls all three together. The hint copy enumerates exactly what's covered. Same opt-out trade-off banner.
+
 ## [2.9.2] - 2026-05-03
 
 ### Fixed
