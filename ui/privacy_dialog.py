@@ -143,10 +143,16 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
 
 
 def maybe_show_privacy_dialog(root: tk.Tk) -> Optional[Dict[str, bool]]:
-    """Show dialog only if needed; otherwise apply stored consent silently."""
+    """Show dialog only if needed; otherwise apply stored consent silently.
+
+    NOTE: We do NOT call ``apply_to_config`` when the user has not yet
+    answered the dialog — that would clobber any ``TELEMETRY_ENABLED=true``
+    environment variable set at import time in ``config.py``.  Defaults
+    only get pushed into config once the user has explicitly answered.
+    """
     from utils.consent import needs_prompt
-    stored = load_consent()
-    apply_to_config(stored)
     if needs_prompt():
         return show_privacy_dialog(root)
+    stored = load_consent()
+    apply_to_config(stored)
     return stored

@@ -46,7 +46,7 @@ def load_consent() -> Dict[str, Any]:
         if isinstance(data.get(k), bool):
             out[k] = data[k]
     out["policy_version"] = int(data.get("policy_version", 0))
-    out["answered"] = bool(data.get("answered", True))
+    out["answered"] = bool(data.get("answered", False))
     return out
 
 

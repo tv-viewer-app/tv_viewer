@@ -73,8 +73,8 @@ def channel_passes(channel: Dict, filters: Dict[str, Set[str]]) -> bool:
         if country and country not in filters["country"]:
             return False
     if filters.get("category"):
-        cat = (channel.get("category") or "Other").strip()
-        if cat not in filters["category"]:
+        cat = (channel.get("category") or "").strip()
+        if cat and cat not in filters["category"]:
             return False
     return True
 

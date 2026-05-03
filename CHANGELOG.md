@@ -5,7 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.9.0] - 2026-05-04
+## [2.9.1] - 2026-05-03
+
+### Fixed (post-release self-review)
+- **Privacy dialog no longer clobbers `TELEMETRY_ENABLED=true` env var**: `maybe_show_privacy_dialog` previously called `apply_to_config(stored)` *before* the user answered the dialog, overwriting any opt-in set via environment variable. Now config is only mirrored after the user answers, or when a stored consent file exists.
+- **`load_consent` now defaults `answered` to `False`** when the field is missing from a malformed file (was `True`, which could silently mark a stale file as already-answered).
+- **`channel_passes` category filter is now lenient** like language and country: channels without a category are no longer excluded when a category filter is active. Previously empty categories were treated as "Other" and silently filtered out.
+
+## [2.9.0] - 2026-05-03
 
 ### Added — Windows
 - **Filter chip dialog** (#160): 🔎 Filter button in the nav bar opens a multi-select dialog (Language / Country / Category). Filters are persisted to `~/.tv_viewer/ui_state.json` and apply to every tab.
