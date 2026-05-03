@@ -64,7 +64,8 @@ class PlayerWindow(tk.Toplevel):
     def __init__(self, parent, channel: Dict[str, Any],
                  channel_list: Optional[List[Dict[str, Any]]] = None,
                  channel_index: Optional[int] = None,
-                 on_channel_change: Optional[Callable] = None):
+                 on_channel_change: Optional[Callable] = None,
+                 favorites_manager=None):
         super().__init__(parent)
         
         self.channel = channel
@@ -72,6 +73,7 @@ class PlayerWindow(tk.Toplevel):
         self.channel_list = channel_list
         self.channel_index = channel_index
         self._on_channel_change = on_channel_change
+        self.favorites_manager = favorites_manager
         self.vlc = VLCController()
         self.is_playing = False
         self._update_job = None
@@ -92,6 +94,7 @@ class PlayerWindow(tk.Toplevel):
         
         self._setup_window()
         self._create_widgets()
+        self._update_radio_overlay()
         
         if self.vlc.is_available:
             self._init_vlc()
@@ -190,6 +193,19 @@ class PlayerWindow(tk.Toplevel):
             )
             self.next_btn.pack(side=tk.LEFT, padx=2)
             add_tooltip(self.next_btn, "Next channel")
+        
+        # Favorite (star) toggle — visible regardless of channel_list size
+        self.fav_btn = ttk.Button(
+            self.controls_frame,
+            text="☆",
+            width=3,
+            command=self._toggle_favorite_current,
+            bootstyle="secondary",
+        )
+        self.fav_btn.pack(side=tk.LEFT, padx=(8, 2))
+        add_tooltip(self.fav_btn, "Add to favorites (F2)")
+        self._refresh_fav_button()
+        self.bind('<F2>', lambda e: self._toggle_favorite_current())
         
         # Time label
         self.time_label = ttk.Label(
@@ -1203,6 +1219,124 @@ class PlayerWindow(tk.Toplevel):
         logger.info("Player window cleanup completed successfully")
         self.destroy()
     
+    def _refresh_fav_button(self):
+        """Update the star button glyph + tooltip based on current channel state."""
+        btn = getattr(self, 'fav_btn', None)
+        if btn is None:
+            return
+        url = (self.channel or {}).get('url', '') if isinstance(self.channel, dict) else ''
+        is_fav = False
+        if self.favorites_manager and url:
+            try:
+                is_fav = self.favorites_manager.is_favorite(url)
+            except Exception:
+                is_fav = False
+        try:
+            btn.configure(text='★' if is_fav else '☆',
+                          bootstyle='warning' if is_fav else 'secondary')
+        except Exception:
+            pass
+
+    def _toggle_favorite_current(self):
+        """Add/remove the currently-playing channel from favorites."""
+        if not self.favorites_manager:
+            return
+        url = (self.channel or {}).get('url', '') if isinstance(self.channel, dict) else ''
+        if not url:
+            return
+        try:
+            self.favorites_manager.toggle_favorite(url)
+        except Exception:
+            return
+        self._refresh_fav_button()
+
+    def _is_radio_channel(self) -> bool:
+        """Return True when the current channel is a radio (audio-only) stream."""
+        if not isinstance(getattr(self, 'channel', None), dict):
+            return False
+        media_type = (self.channel.get('media_type') or '').strip().lower()
+        if media_type == 'radio':
+            return True
+        # Heuristic fallback: category contains 'radio'
+        cat = (self.channel.get('category') or '').strip().lower()
+        return 'radio' in cat
+
+    def _update_radio_overlay(self):
+        """Draw a big channel-name card on the video canvas for radio streams.
+
+        For TV channels the canvas is left untouched so VLC can render video
+        into it. For radio channels we paint a styled placeholder showing the
+        station name and a 'Radio' badge so the user has visual feedback that
+        playback is active even though there is no video.
+        """
+        canvas = getattr(self, 'video_canvas', None)
+        if canvas is None:
+            return
+        try:
+            canvas.delete('radio_overlay')
+        except Exception:
+            pass
+
+        if not self._is_radio_channel():
+            try:
+                canvas.configure(bg='black')
+            except Exception:
+                pass
+            return
+
+        try:
+            canvas.update_idletasks()
+            w = max(canvas.winfo_width(), 480)
+            h = max(canvas.winfo_height(), 270)
+        except Exception:
+            w, h = 960, 540
+
+        try:
+            canvas.configure(bg='#0b1220')
+        except Exception:
+            pass
+
+        cx, cy = w // 2, h // 2
+        name = (self.channel.get('name') or 'Radio').strip() or 'Radio'
+
+        # Subtle accent ring behind the name
+        ring_r = max(80, min(w, h) // 5)
+        canvas.create_oval(
+            cx - ring_r, cy - ring_r - 30, cx + ring_r, cy + ring_r - 30,
+            outline='#4da6ff', width=3, tags='radio_overlay',
+        )
+        canvas.create_text(
+            cx, cy - 30, text='📻', fill='#4da6ff',
+            font=('Segoe UI Emoji', max(40, ring_r // 2)),
+            tags='radio_overlay',
+        )
+
+        # Big channel name
+        canvas.create_text(
+            cx, cy + ring_r + 20,
+            text=name,
+            fill='#ffffff',
+            font=('Segoe UI', max(24, min(w // 18, 56)), 'bold'),
+            width=int(w * 0.85),
+            tags='radio_overlay',
+        )
+
+        # 'RADIO' badge
+        canvas.create_text(
+            cx, cy + ring_r + 70,
+            text='● LIVE RADIO',
+            fill='#4da6ff',
+            font=('Segoe UI', 12, 'bold'),
+            tags='radio_overlay',
+        )
+
+        # Re-draw on resize so the overlay stays centered
+        try:
+            canvas.bind('<Configure>',
+                        lambda e: self._update_radio_overlay(), add='+')
+        except Exception:
+            pass
+
     def set_channel(self, channel: Dict[str, Any]):
         """
         Switch to a different channel.
@@ -1224,4 +1358,6 @@ class PlayerWindow(tk.Toplevel):
         self.channel = channel
         self.title(f"{config.APP_NAME} - {channel.get('name', 'Unknown')}")
         self.channel_label.configure(text=channel.get('name', 'Unknown'))
+        self._update_radio_overlay()
+        self._refresh_fav_button()
         self.play()

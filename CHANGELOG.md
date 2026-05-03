@@ -5,6 +5,21 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.2] - 2026-05-03
+
+### Fixed
+- **Privacy dialog crash on first launch**: tuple-form `pady=(0, 8)` was passed to a `tk.Label` constructor (only `.pack()`/`.grid()` accept tuples), producing `TclError: bad screen distance "0 8"`. Moved the tuple to `.pack()`.
+- **Settings dialog crash in TV Mode**: `'TVModeApp' object has no attribute 'group_by_mode'`. The Settings dialog now defensively reads `group_by_mode`, `parental_controls`, theme, and `_save_telemetry_preference` via `getattr`/`hasattr`, so it works in both Standard and TV mode.
+- **Legacy Release workflow Windows EXE build**: PyInstaller `--add-data "channels.json;."` failed because the runtime cache file is gitignored. Build now creates an empty `channels.json` placeholder before invoking PyInstaller.
+- **Legacy Release workflow Flutter version**: bumped pinned Flutter `3.19.0` → `3.24.0` so Material 3 `ColorScheme.surfaceContainerHighest` is available.
+
+### Added
+- **Privacy dialog redesigned**: Single **Save** button (replaces the Decline All / Accept Selected pair). New banner explains the trade-off: declining analytics + online DB means no community channel updates, no new channels, and no channel status updates. Users can always change the choice in Settings → Privacy.
+- **Radio playback overlay**: when a Radio channel is playing, the player canvas now shows a large station name, a 📻 glyph, and a "● LIVE RADIO" badge (instead of a black canvas). OSD play / pause / stop / prev / next remain visible.
+- **Favorite (★) button on the player**: toggle the playing channel in/out of favorites without leaving the player. Bound to `F2`.
+- **"Add Channel" labeling**: the contribute dialog's submit button and TV mode's nav bar now say **"➕ Add Channel"** instead of "📡 Submit".
+- **Map button icon**: replaced `🗺️ Map` with `🌍 Map` so the icon renders consistently and at the same visual weight as the other toolbar buttons (Windows often renders the variation-selector form text-style and visually smaller).
+
 ## [2.9.1] - 2026-05-03
 
 ### Fixed (post-release self-review)

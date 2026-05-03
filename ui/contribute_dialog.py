@@ -169,7 +169,7 @@ class ContributeDialog:
 
         ttk.Button(
             btn_frame,
-            text="📡 Submit",
+            text="➕ Add Channel",
             command=self._on_submit,
             bootstyle="success",
             width=14,

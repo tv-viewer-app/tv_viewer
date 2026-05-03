@@ -556,7 +556,7 @@ class TVModeApp:
 
         # Issue #161: Submit / Contribute Channel button
         submit_btn = tk.Label(
-            self._nav_frame, text="\U0001f4e1 Submit",
+            self._nav_frame, text="\u2795 Add Channel",
             bg=TVColors.NAV_BG, fg=TVColors.ACCENT,
             font=(FONT_FAMILY, 11, "bold"), padx=12, pady=8, cursor="hand2",
         )

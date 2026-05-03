@@ -38,6 +38,13 @@ _OPTIONS = [
      "Pins a 'Local (Country)' row at the top of Home using your public IP."),
 ]
 
+_INFO_BANNER = (
+    "Crowdsourced channel data is community-powered. If you turn analytics "
+    "and online DB OFF, you won't receive database updates, new channels, or "
+    "channel status updates from the community.\n\n"
+    "You can change this any time in Settings → Privacy."
+)
+
 
 def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
     """Modal first-launch consent dialog. Returns chosen values."""
@@ -60,20 +67,30 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
 
     # Center on screen
     win.update_idletasks()
-    w, h = 540, 460
+    w, h = 560, 560
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()
     win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
 
     tk.Label(
-        win, text="Welcome to TV Viewer", bg=_BG, fg=_FG,
+        win, text="Privacy & Data", bg=_BG, fg=_FG,
         font=("Segoe UI", 18, "bold"),
     ).pack(pady=(20, 4))
     tk.Label(
         win,
         text="Choose what data TV Viewer may use. All options are off by default.",
-        bg=_BG, fg=_FG_MUTED, font=("Segoe UI", 10), wraplength=480, justify="center",
-    ).pack(pady=(0, 16))
+        bg=_BG, fg=_FG_MUTED, font=("Segoe UI", 10), wraplength=500, justify="center",
+    ).pack(pady=(0, 12))
+
+    # Info banner about the trade-off
+    banner = tk.Frame(win, bg="#1a2332", highlightbackground=_ACCENT,
+                      highlightthickness=1)
+    banner.pack(fill=tk.X, padx=20, pady=(0, 12))
+    tk.Label(
+        banner, text=_INFO_BANNER, bg="#1a2332", fg=_FG,
+        font=("Segoe UI", 9), wraplength=480, justify="left",
+        padx=12, pady=10,
+    ).pack(fill=tk.X)
 
     body = tk.Frame(win, bg=_BG)
     body.pack(fill=tk.BOTH, expand=True, padx=20)
@@ -92,9 +109,9 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
         cb.pack(fill=tk.X, anchor="w")
         tk.Label(
             row, text=hint, bg=_BG_CARD, fg=_FG_MUTED,
-            font=("Segoe UI", 9), wraplength=460, justify="left", anchor="w",
-            padx=40, pady=(0, 8),
-        ).pack(fill=tk.X, anchor="w")
+            font=("Segoe UI", 9), wraplength=480, justify="left", anchor="w",
+            padx=40,
+        ).pack(fill=tk.X, anchor="w", pady=(0, 8))
 
     # Privacy policy link
     link = tk.Label(
@@ -104,16 +121,13 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
     link.pack(pady=(8, 0))
     link.bind("<Button-1>", lambda e: webbrowser.open(PRIVACY_URL))
 
-    # Buttons
+    # Single Save button
     btns = tk.Frame(win, bg=_BG)
-    btns.pack(pady=16)
+    btns.pack(pady=14)
 
-    def _finish(accept: bool):
+    def _save():
         nonlocal result
-        if accept:
-            result = {k: bool(v.get()) for k, v in vars_.items()}
-        else:
-            result = {k: False for k in vars_}
+        result = {k: bool(v.get()) for k, v in vars_.items()}
         save_consent(result)
         apply_to_config(result)
         try:
@@ -123,21 +137,15 @@ def show_privacy_dialog(root: tk.Tk) -> Dict[str, bool]:
         win.destroy()
 
     tk.Button(
-        btns, text="Decline all",
-        command=lambda: _finish(False),
-        bg=_BG_CARD, fg=_FG_MUTED, activebackground=_BORDER, activeforeground=_FG,
-        font=("Segoe UI", 10), relief=tk.FLAT, padx=18, pady=8,
-        bd=0, highlightthickness=0, cursor="hand2",
-    ).pack(side=tk.LEFT, padx=8)
-    tk.Button(
-        btns, text="Accept selected",
-        command=lambda: _finish(True),
+        btns, text="Save",
+        command=_save,
         bg=_ACCENT, fg="#0b1220", activebackground="#3893e6", activeforeground="#0b1220",
-        font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=18, pady=8,
+        font=("Segoe UI", 11, "bold"), relief=tk.FLAT, padx=42, pady=10,
         bd=0, highlightthickness=0, cursor="hand2",
-    ).pack(side=tk.LEFT, padx=8)
+    ).pack()
 
-    win.protocol("WM_DELETE_WINDOW", lambda: _finish(False))
+    # Closing the window via X = save current selections (whatever they are)
+    win.protocol("WM_DELETE_WINDOW", _save)
     win.wait_window()
     return result
 

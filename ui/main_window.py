@@ -620,10 +620,11 @@ class MainWindow:
         )
         self.export_btn.grid(row=1, column=0, sticky="ew", padx=(0, 3))
         
-        # World Map button
+        # World Map button — globe renders consistently across Windows;
+        # plain 🗺 + variation selector often renders text-style/smaller.
         self.map_btn = ttk.Button(
             button_frame,
-            text="🗺️ Map",
+            text="🌍 Map",
             command=self._open_map,
             bootstyle="secondary"
         )
@@ -1999,6 +2000,7 @@ class MainWindow:
                 self.root, channel,
                 channel_list=self._displayed_channels if self._displayed_channels else None,
                 channel_index=channel_index,
+                favorites_manager=self.favorites_manager,
             )
             self.player_window.on_playback_confirmed = _on_playback_confirmed
     

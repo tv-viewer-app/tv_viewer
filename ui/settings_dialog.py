@@ -309,8 +309,9 @@ def show_settings_dialog(parent_window):
     # Default group mode
     ttk.Label(content, text="Default group by:", font=FONT
               ).grid(row=r, column=0, sticky="w", padx=(0, 8))
+    _group_mode = getattr(parent_window, 'group_by_mode', 'category') or 'category'
     group_mode_var = tk.StringVar(
-        value=parent_window.group_by_mode.capitalize()
+        value=_group_mode.capitalize()
     )
     group_combo = ttk.Combobox(
         content, textvariable=group_mode_var,
@@ -324,7 +325,14 @@ def show_settings_dialog(parent_window):
     ttk.Label(content, text="Theme:", font=FONT
               ).grid(row=r, column=0, sticky="w", padx=(0, 8))
     available_themes = ["darkly", "superhero", "cyborg", "vapor", "solar"]
-    current_theme = parent_window.root.style.theme.name if hasattr(parent_window.root.style, 'theme') else "darkly"
+    current_theme = "darkly"
+    try:
+        _root = getattr(parent_window, 'root', None)
+        _style = getattr(_root, 'style', None) if _root is not None else None
+        if _style is not None and hasattr(_style, 'theme'):
+            current_theme = _style.theme.name
+    except Exception:
+        pass
     theme_var = tk.StringVar(value=current_theme)
     theme_combo = ttk.Combobox(
         content, textvariable=theme_var,
@@ -335,89 +343,93 @@ def show_settings_dialog(parent_window):
     r += 1
 
     # ── 4. Parental Controls ─────────────────────────────────────────
-    r = _section(content, "🔒  Parental Controls", r)
-
-    # Available categories for blocking
-    _parental_categories = [
-        "XXX", "Adult", "Movies", "Series", "Entertainment",
-        "Sports", "News", "Kids", "Music", "Religious",
-    ]
-
-    # Enable/disable toggle
-    parental_enabled_var = tk.BooleanVar(value=parent_window.parental_controls.enabled)
-
-    def _on_parental_toggle():
-        if parental_enabled_var.get():
-            # Enabling — require a PIN to be set
-            if not parent_window.parental_controls.has_pin():
-                parent_window._show_set_pin_dialog(
-                    parent=dlg,
-                    on_success=lambda: None,
-                    on_cancel=lambda: parental_enabled_var.set(False),
-                )
-        else:
-            # Disabling — require PIN verification
-            if parent_window.parental_controls.has_pin():
-                def _disable():
-                    parental_enabled_var.set(False)
-                def _cancel():
-                    parental_enabled_var.set(True)
-                parent_window._show_pin_entry_dialog(
-                    title="🔒 Disable Parental Controls",
-                    message="Enter PIN to disable parental controls:",
-                    on_success=_disable,
-                    on_cancel=_cancel,
-                    parent=dlg,
-                )
-                # Keep it enabled until PIN is verified
-                parental_enabled_var.set(True)
-
-    parental_cb = ttk.Checkbutton(
-        content, text="Enable parental controls",
-        variable=parental_enabled_var,
-        command=_on_parental_toggle,
-    )
-    parental_cb.grid(row=r, column=0, columnspan=3, sticky="w")
-    r += 1
-
-    # Set/Change PIN button
-    def _on_set_change_pin():
-        if parent_window.parental_controls.has_pin():
-            parent_window._show_change_pin_dialog(parent=dlg)
-        else:
-            parent_window._show_set_pin_dialog(parent=dlg)
-
-    ttk.Button(
-        content, text="Set / Change PIN",
-        command=_on_set_change_pin,
-        bootstyle="info-outline", width=18,
-    ).grid(row=r, column=0, columnspan=3, sticky="w", pady=(2, 6))
-    r += 1
-
-    # Category checkboxes
-    ttk.Label(content, text="Block categories:", font=FONT
-              ).grid(row=r, column=0, columnspan=3, sticky="w")
-    r += 1
-
     cat_vars = {}
-    blocked_lower = {c.lower() for c in parent_window.parental_controls.blocked_categories}
-    cat_frame = ttk.Frame(content)
-    cat_frame.grid(row=r, column=0, columnspan=3, sticky="w", padx=(12, 0))
-    for idx, cat_name in enumerate(_parental_categories):
-        var = tk.BooleanVar(value=cat_name.lower() in blocked_lower)
-        cat_vars[cat_name] = var
-        ttk.Checkbutton(cat_frame, text=cat_name, variable=var
-                        ).grid(row=idx // 3, column=idx % 3, sticky="w", padx=(0, 12))
-    r += 1
+    parental_enabled_var = tk.BooleanVar(value=False)
+    over18_var = tk.BooleanVar(value=False)
+    if hasattr(parent_window, 'parental_controls'):
+        r = _section(content, "🔒  Parental Controls", r)
 
-    # Over-18 confirmation checkbox (replaces the old age-rating slider)
-    over18_var = tk.BooleanVar(value=parent_window.parental_controls.is_over_18)
-    over18_cb = ttk.Checkbutton(
-        content, text="I confirm I am 18 or older",
-        variable=over18_var,
-    )
-    over18_cb.grid(row=r, column=0, columnspan=3, sticky="w")
-    r += 1
+        # Available categories for blocking
+        _parental_categories = [
+            "XXX", "Adult", "Movies", "Series", "Entertainment",
+            "Sports", "News", "Kids", "Music", "Religious",
+        ]
+
+        # Enable/disable toggle
+        parental_enabled_var = tk.BooleanVar(value=parent_window.parental_controls.enabled)
+
+    if hasattr(parent_window, 'parental_controls'):
+        def _on_parental_toggle():
+            if parental_enabled_var.get():
+                # Enabling — require a PIN to be set
+                if not parent_window.parental_controls.has_pin():
+                    parent_window._show_set_pin_dialog(
+                        parent=dlg,
+                        on_success=lambda: None,
+                        on_cancel=lambda: parental_enabled_var.set(False),
+                    )
+            else:
+                # Disabling — require PIN verification
+                if parent_window.parental_controls.has_pin():
+                    def _disable():
+                        parental_enabled_var.set(False)
+                    def _cancel():
+                        parental_enabled_var.set(True)
+                    parent_window._show_pin_entry_dialog(
+                        title="🔒 Disable Parental Controls",
+                        message="Enter PIN to disable parental controls:",
+                        on_success=_disable,
+                        on_cancel=_cancel,
+                        parent=dlg,
+                    )
+                    # Keep it enabled until PIN is verified
+                    parental_enabled_var.set(True)
+
+        parental_cb = ttk.Checkbutton(
+            content, text="Enable parental controls",
+            variable=parental_enabled_var,
+            command=_on_parental_toggle,
+        )
+        parental_cb.grid(row=r, column=0, columnspan=3, sticky="w")
+        r += 1
+
+        # Set/Change PIN button
+        def _on_set_change_pin():
+            if parent_window.parental_controls.has_pin():
+                parent_window._show_change_pin_dialog(parent=dlg)
+            else:
+                parent_window._show_set_pin_dialog(parent=dlg)
+
+        ttk.Button(
+            content, text="Set / Change PIN",
+            command=_on_set_change_pin,
+            bootstyle="info-outline", width=18,
+        ).grid(row=r, column=0, columnspan=3, sticky="w", pady=(2, 6))
+        r += 1
+
+        # Category checkboxes
+        ttk.Label(content, text="Block categories:", font=FONT
+                  ).grid(row=r, column=0, columnspan=3, sticky="w")
+        r += 1
+
+        blocked_lower = {c.lower() for c in parent_window.parental_controls.blocked_categories}
+        cat_frame = ttk.Frame(content)
+        cat_frame.grid(row=r, column=0, columnspan=3, sticky="w", padx=(12, 0))
+        for idx, cat_name in enumerate(_parental_categories):
+            var = tk.BooleanVar(value=cat_name.lower() in blocked_lower)
+            cat_vars[cat_name] = var
+            ttk.Checkbutton(cat_frame, text=cat_name, variable=var
+                            ).grid(row=idx // 3, column=idx % 3, sticky="w", padx=(0, 12))
+        r += 1
+
+        # Over-18 confirmation checkbox (replaces the old age-rating slider)
+        over18_var = tk.BooleanVar(value=parent_window.parental_controls.is_over_18)
+        over18_cb = ttk.Checkbutton(
+            content, text="I confirm I am 18 or older",
+            variable=over18_var,
+        )
+        over18_cb.grid(row=r, column=0, columnspan=3, sticky="w")
+        r += 1
 
     # ── 5. Privacy Settings (Issues #65, #79, #114) ─────────────────
     r = _section(content, "🔒  Privacy", r)
@@ -532,9 +544,11 @@ def show_settings_dialog(parent_window):
 
         # -- Display settings --
         new_group = group_mode_var.get()
-        if new_group.lower() != parent_window.group_by_mode:
-            parent_window._on_group_by_change(new_group)
-            parent_window.group_by_var.set(new_group)
+        if new_group.lower() != getattr(parent_window, 'group_by_mode', 'category'):
+            if hasattr(parent_window, '_on_group_by_change'):
+                parent_window._on_group_by_change(new_group)
+            if hasattr(parent_window, 'group_by_var'):
+                parent_window.group_by_var.set(new_group)
 
         new_theme = theme_var.get()
         if new_theme != current_theme:
@@ -545,19 +559,26 @@ def show_settings_dialog(parent_window):
                 logger.warning(f"Settings: failed to apply theme: {e}")
 
         # -- Parental controls --
-        parent_window.parental_controls.enabled = parental_enabled_var.get()
-        new_blocked = [cat for cat, var in cat_vars.items() if var.get()]
-        parent_window.parental_controls.set_blocked_categories(new_blocked)
-        parent_window.parental_controls.set_over_18(bool(over18_var.get()))
-        parent_window.parental_controls.save()
+        if hasattr(parent_window, 'parental_controls'):
+            try:
+                parent_window.parental_controls.enabled = parental_enabled_var.get()
+                new_blocked = [cat for cat, var in cat_vars.items() if var.get()]
+                parent_window.parental_controls.set_blocked_categories(new_blocked)
+                parent_window.parental_controls.set_over_18(bool(over18_var.get()))
+                parent_window.parental_controls.save()
+            except Exception as e:
+                logger.warning(f"Settings: parental controls update failed: {e}")
         # Re-filter to apply parental control changes immediately
-        if parent_window.current_group:
+        if getattr(parent_window, 'current_group', None) and hasattr(parent_window, '_select_group'):
             parent_window.root.after(50, lambda: parent_window._select_group(parent_window.current_group))
 
         # -- Privacy / Telemetry (Issues #65, #79, #114) --
         new_telemetry = telemetry_var.get()
         if new_telemetry != getattr(config, 'TELEMETRY_ENABLED', False):
-            parent_window._save_telemetry_preference(new_telemetry)
+            if hasattr(parent_window, '_save_telemetry_preference'):
+                parent_window._save_telemetry_preference(new_telemetry)
+            else:
+                config.TELEMETRY_ENABLED = bool(new_telemetry)
             logger.info(f"Settings: telemetry {'enabled' if new_telemetry else 'disabled'}")
 
         _on_close()
