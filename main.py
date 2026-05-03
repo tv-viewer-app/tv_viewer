@@ -192,7 +192,41 @@ def main():
     """Application entry point."""
     import config
     print("Starting TV Viewer...")
-    
+
+    # ---- File logging (Issue #176): persist all logs + uncaught exceptions
+    # to ``~/.tv_viewer/app.log`` so post-crash diagnostics is possible
+    # even when SUPABASE telemetry is disabled. -------------------------
+    try:
+        import logging
+        from logging.handlers import RotatingFileHandler
+        log_dir = os.path.join(os.path.expanduser("~"), ".tv_viewer")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "app.log")
+        handler = RotatingFileHandler(
+            log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
+        )
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        ))
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        # Avoid duplicate handlers on hot-reload
+        if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+            root_logger.addHandler(handler)
+        # Capture uncaught exceptions in the log file too
+        _prev_hook = sys.excepthook
+        def _log_excepthook(exc_type, exc_value, exc_tb):
+            try:
+                logging.getLogger("crash").critical(
+                    "Uncaught exception", exc_info=(exc_type, exc_value, exc_tb)
+                )
+            finally:
+                _prev_hook(exc_type, exc_value, exc_tb)
+        sys.excepthook = _log_excepthook
+        print(f"File logging enabled: {log_path}")
+    except Exception as e:
+        print(f"Warning: Could not enable file logging: {e}")
+
     # Install crash reporter early
     try:
         from utils.crash_reporter import install_global_handler

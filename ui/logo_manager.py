@@ -130,16 +130,18 @@ class LogoManager:
         from PIL import Image, ImageTk, ImageDraw
         img_pil = Image.open(path).convert('RGBA')
         img_pil.thumbnail(LOGO_SIZE, Image.LANCZOS)
-        # Crop to a centered circle (Issue #159)
-        w, h = img_pil.size
-        size = min(w, h)
-        left = (w - size) // 2
-        top = (h - size) // 2
-        img_pil = img_pil.crop((left, top, left + size, top + size))
-        mask = Image.new('L', (size, size), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, size, size), fill=255)
-        circular = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-        circular.paste(img_pil, (0, 0), mask)
+        # Issue #159 v2: fit-inside scaling so wide banner logos
+        # (96x21 etc.) aren't cropped to a tiny circle.  Pad to a
+        # centered square canvas, then apply an ellipse mask.
+        target = max(img_pil.size)
+        square = Image.new('RGBA', (target, target), (0, 0, 0, 0))
+        ox = (target - img_pil.size[0]) // 2
+        oy = (target - img_pil.size[1]) // 2
+        square.paste(img_pil, (ox, oy), img_pil)
+        mask = Image.new('L', (target, target), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, target, target), fill=255)
+        circular = Image.new('RGBA', (target, target), (0, 0, 0, 0))
+        circular.paste(square, (0, 0), mask)
         return ImageTk.PhotoImage(circular)
 
 

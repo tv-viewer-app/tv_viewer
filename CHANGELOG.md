@@ -5,6 +5,15 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-05-03
+
+### Fixed
+- **Wide channel logos no longer crop to a tiny circle** (#175): Banner-style logos (e.g. 96×21) are now padded to a centered square before the circular mask is applied, so the full logo is preserved inside the circle.
+- **Player OSD now visible on Windows** (#175): The metadata/OSD labels are explicitly raised above the VLC video surface; previously they were rendered behind the DirectX overlay and never appeared.
+
+### Added
+- **Local file logging** (#176): All logs and any uncaught exception are now written to `~/.tv_viewer/app.log` (rotating, 2 MB × 3). Provides a local crash trail when Supabase telemetry is disabled.
+
 ## [2.8.0] - 2026-05-03
 
 ### Added — Windows

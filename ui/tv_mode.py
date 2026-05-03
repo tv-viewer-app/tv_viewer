@@ -1187,6 +1187,11 @@ class TVModeApp:
             font=(FONT_FAMILY, 22, "bold"), padx=20, pady=10,
         )
         self._osd_label.place(relx=0.02, rely=0.04, anchor="nw")
+        # Lift above VLC canvas so the label is actually visible (#175)
+        try:
+            self._osd_label.lift()
+        except Exception:
+            pass
 
         # Bottom-right metadata strip (resolution / fps / bitrate / cast)
         self._osd_meta_label = tk.Label(
@@ -1195,6 +1200,10 @@ class TVModeApp:
             font=("Consolas", 11), padx=14, pady=6,
         )
         self._osd_meta_label.place(relx=0.98, rely=0.96, anchor="se")
+        try:
+            self._osd_meta_label.lift()
+        except Exception:
+            pass
 
         self._osd_timer = self.root.after(OSD_FADE_MS, self._hide_osd)
         # Start metadata polling (cancelled when player stops or OSD hides)
