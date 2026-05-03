@@ -96,3 +96,6 @@ flutter_app/*.csv
 
 # Archived docs (internal only)
 docs/archive/
+
+.audit.json
+watch_history.json
