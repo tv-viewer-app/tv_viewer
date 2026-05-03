@@ -5,6 +5,18 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-05-04
+
+### Added — Windows
+- **Filter chip dialog** (#160): 🔎 Filter button in the nav bar opens a multi-select dialog (Language / Country / Category). Filters are persisted to `~/.tv_viewer/ui_state.json` and apply to every tab.
+- **First-run interactive tour** (#162): 7-step coachmark walkthrough that fires once on first launch (Navigate → Search → Quick-jump → Submit → Filter → Map → Fullscreen). Suppress with the ? Help button if not wanted.
+- **First-run privacy / consent dialog** (#170): Modal Toplevel with three explicit checkboxes — Anonymous Analytics / Online Channel DB / Geo-IP Lookup — all default OFF. Mirrors selections into `config.TELEMETRY_ENABLED`, `config.ONLINE_DB_ENABLED`, `config.GEO_IP_ENABLED`. Re-prompts if `POLICY_VERSION` bumps.
+- **Spring-physics scroll** (#175): Channel-row scrolling now uses a critically-damped spring integrator instead of linear easing, giving the TV-style fluid deceleration without overshoot. Tunable via `stiffness=0.18 / damping=0.55`.
+- **Windows performance & dependency audit** (#168): New `docs/WINDOWS_PERF_AUDIT.md` documents the cold-start budget, AV friendliness matrix, dependency pin policy, and the WinUI3/WebView2 evaluation deferred to post-v3.
+
+### Changed
+- v2.9 bumps `POLICY_VERSION` to `1`; existing users who silently inherited telemetry from env vars will see the consent dialog once.
+
 ## [2.8.1] - 2026-05-03
 
 ### Fixed

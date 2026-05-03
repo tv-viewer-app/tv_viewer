@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.8.1"
+APP_VERSION = "2.9.0"
 
 # =============================================================================
 # File Paths
@@ -97,6 +97,12 @@ PLAYER_HEIGHT = 500
 #   2. An environment variable:  TELEMETRY_ENABLED=true / 1 / yes
 # The first-run dialog writes to config.TELEMETRY_ENABLED at runtime.
 TELEMETRY_ENABLED = os.environ.get('TELEMETRY_ENABLED', '').lower() in ('true', '1', 'yes')
+
+# Issue #170 — additional consent flags written by the first-run privacy
+# dialog (utils/consent.py).  All default OFF; environment variables can
+# force them on for headless/CI scenarios.
+ONLINE_DB_ENABLED = os.environ.get('ONLINE_DB_ENABLED', '').lower() in ('true', '1', 'yes')
+GEO_IP_ENABLED = os.environ.get('GEO_IP_ENABLED', '').lower() in ('true', '1', 'yes')
 
 # =============================================================================
 # Supabase Analytics & Shared DB

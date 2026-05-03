@@ -201,9 +201,14 @@ class TVModeApp:
         self._col_offsets: List[int] = []
         self._row_pixel_offsets: List[float] = []
         self._row_pixel_targets: List[float] = []
+        self._row_pixel_velocity: List[float] = []  # #175 spring physics
         self._vertical_offset: float = 0.0
         self._vertical_target: float = 0.0
+        self._vertical_velocity: float = 0.0  # #175 spring physics
         self._filtered_channels: Optional[List[Dict[str, Any]]] = None
+        self._active_filters: Dict[str, set] = {  # #160 filter state
+            'language': set(), 'country': set(), 'category': set()
+        }
 
         # Logo manager + PhotoImage refs (must keep alive for tk)
         self._logo_mgr = get_logo_manager() if PIL_AVAILABLE else None
@@ -269,6 +274,20 @@ class TVModeApp:
 
     def _initialize(self):
         """Load cached channels and start background scan."""
+        # Issue #170 — first-launch privacy / consent dialog
+        try:
+            from ui.privacy_dialog import maybe_show_privacy_dialog
+            maybe_show_privacy_dialog(self.root)
+        except Exception as e:
+            logger.warning(f"Privacy dialog skipped: {e}")
+
+        # Issue #160 — restore persisted filter selections
+        try:
+            from ui.filter_dialog import load_filters
+            self._active_filters = load_filters()
+        except Exception:
+            self._active_filters = {'language': set(), 'country': set(), 'category': set()}
+
         loaded = self._channel_manager.load_cached_channels()
         if loaded:
             self._all_channels = list(self._channel_manager.channels)
@@ -287,6 +306,13 @@ class TVModeApp:
         # Start background fetch
         self._channel_manager.fetch_channels_async(callback=self._on_fetch_complete)
         self._scan_timer = self.root.after(SCAN_POLL_MS, self._poll_scan_progress)
+
+        # Issue #162 — first-run tooltip tour (after window settles)
+        try:
+            from ui.tour_overlay import maybe_show_tour
+            maybe_show_tour(self.root)
+        except Exception as e:
+            logger.warning(f"Tour skipped: {e}")
 
     def _on_fetch_complete(self):
         """Called from background thread when fetch finishes."""
@@ -349,6 +375,14 @@ class TVModeApp:
         # Filter parental-blocked channels
         if self._parental:
             source = [ch for ch in source if not self._parental.is_channel_blocked(ch)]
+
+        # Issue #160: apply user-selected language/country/category filters
+        if any(self._active_filters.values()):
+            try:
+                from ui.filter_dialog import channel_passes
+                source = [ch for ch in source if channel_passes(ch, self._active_filters)]
+            except Exception:
+                pass
 
         # Cache favorite URLs
         self._favorite_urls = set()
@@ -537,6 +571,25 @@ class TVModeApp:
         )
         map_btn.pack(side=tk.RIGHT, padx=4)
         map_btn.bind("<Button-1>", lambda e: self._open_map())
+
+        # Issue #160: Filter button
+        filter_btn = tk.Label(
+            self._nav_frame, text="\U0001f50e Filter",
+            bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
+            font=(FONT_FAMILY, 11, "bold"), padx=12, pady=8, cursor="hand2",
+        )
+        filter_btn.pack(side=tk.RIGHT, padx=4)
+        filter_btn.bind("<Button-1>", lambda e: self._open_filter())
+        self._filter_btn = filter_btn
+
+        # Issue #162: Help / tour button
+        help_btn = tk.Label(
+            self._nav_frame, text="?",
+            bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
+            font=(FONT_FAMILY, 14, "bold"), padx=12, pady=8, cursor="hand2",
+        )
+        help_btn.pack(side=tk.RIGHT, padx=4)
+        help_btn.bind("<Button-1>", lambda e: self._open_tour())
 
     def _switch_tab(self, tab_id: str):
         """Switch between Home / Favorites / Recent views."""
@@ -1082,24 +1135,46 @@ class TVModeApp:
     # ---- Smooth-scroll animation -------------------------------------------
 
     def _animate_scroll(self):
-        """Per-frame interpolation of pixel offsets toward targets (~60fps)."""
+        """Per-frame critically-damped spring scroll (#175).
+
+        Velocity-aware spring gives a TV-style fluid feel: the row
+        gently accelerates toward the target and decelerates as it
+        approaches, instead of the linear easing it had before.
+        """
         try:
             changed = False
-            ease = 0.22  # 0..1 — higher = snappier
+            # Tuned for ~60fps tick. stiffness ~ k/m, damping ~ c/m
+            stiffness = 0.18
+            damping = 0.55
+
+            # Ensure velocity arrays match length (rows can change at runtime)
+            while len(self._row_pixel_velocity) < len(self._row_pixel_offsets):
+                self._row_pixel_velocity.append(0.0)
+            while len(self._row_pixel_velocity) > len(self._row_pixel_offsets):
+                self._row_pixel_velocity.pop()
+
             for i in range(len(self._row_pixel_offsets)):
                 delta = self._row_pixel_targets[i] - self._row_pixel_offsets[i]
-                if abs(delta) > 0.5:
-                    self._row_pixel_offsets[i] += delta * ease
+                v = self._row_pixel_velocity[i]
+                if abs(delta) > 0.4 or abs(v) > 0.4:
+                    v = v * (1.0 - damping) + delta * stiffness
+                    self._row_pixel_velocity[i] = v
+                    self._row_pixel_offsets[i] += v
                     changed = True
                 else:
                     self._row_pixel_offsets[i] = self._row_pixel_targets[i]
+                    self._row_pixel_velocity[i] = 0.0
 
             v_delta = self._vertical_target - self._vertical_offset
-            if abs(v_delta) > 0.5:
-                self._vertical_offset += v_delta * ease
+            vv = self._vertical_velocity
+            if abs(v_delta) > 0.4 or abs(vv) > 0.4:
+                vv = vv * (1.0 - damping) + v_delta * stiffness
+                self._vertical_velocity = vv
+                self._vertical_offset += vv
                 changed = True
             else:
                 self._vertical_offset = self._vertical_target
+                self._vertical_velocity = 0.0
 
             if changed and self._state == "browse":
                 self._draw()
@@ -1437,6 +1512,56 @@ class TVModeApp:
         except Exception as e:
             self._show_toast(f"Submit unavailable: {e}")
             logger.error(f"Contribute dialog error: {e}")
+
+    def _open_filter(self):
+        """Open the channel filter dialog (Issue #160)."""
+        if self._state == "playing":
+            return
+        try:
+            from ui.filter_dialog import show_filter_dialog
+
+            # Build sorted unique sets across all loaded channels
+            langs, countries, cats = set(), set(), set()
+            for ch in self._all_channels:
+                lang = (ch.get('language') or '').strip()
+                if lang:
+                    langs.add(lang)
+                country = (ch.get('country') or '').strip()
+                if country:
+                    countries.add(country)
+                cat = (ch.get('category') or 'Other').strip()
+                if cat:
+                    cats.add(cat)
+
+            def _on_apply(new_filters):
+                self._active_filters = new_filters
+                self._build_rows()
+                self._draw()
+                active_count = sum(len(v) for v in new_filters.values())
+                if active_count:
+                    self._show_toast(f"Filter applied ({active_count} criteria)")
+                else:
+                    self._show_toast("Filters cleared")
+
+            show_filter_dialog(
+                self.root,
+                sorted(langs), sorted(countries), sorted(cats),
+                self._active_filters,
+                _on_apply,
+            )
+        except Exception as e:
+            self._show_toast(f"Filter unavailable: {e}")
+            logger.error(f"Filter dialog error: {e}")
+
+    def _open_tour(self):
+        """Show the first-run tooltip tour (Issue #162). Available from ? button."""
+        if self._state == "playing":
+            return
+        try:
+            from ui.tour_overlay import show_tour
+            show_tour(self.root)
+        except Exception as e:
+            logger.error(f"Tour error: {e}")
 
     def _open_map(self):
         """Open the world map view of channels (Issue #167)."""
