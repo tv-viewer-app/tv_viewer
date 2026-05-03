@@ -5,6 +5,17 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.4] - 2026-05-03
+
+### Fixed
+- **Player OSD invisible on some launches**: explicitly forces `'-fullscreen'=False` on player startup and pins `minsize=60` on the controls grid row so the playback bar can never collapse. Also fixes a `<Configure>` handler leak in the radio overlay (the resize binding was being re-added on every `_update_radio_overlay()` call, accumulating exponentially and starving the Tk event loop).
+- **Crash when leaving certain channels with Escape**: `bind_all('<Escape>')` on the main window was firing globally — including while the player Toplevel was focused — and then touching widgets in transient states. The handler now checks that the main window root actually has focus before clearing the search, and is wrapped in defensive try/except.
+- **Map window unusable when `tkintermapview` is missing**: Map button used to show a "module not installed" dialog and quit. The window now opens in a built-in fallback **list view** that shows the same toolbar (search, favorites, hide-offline, stats), a country picker on the left (sorted by channel count), and the channel list on the right — fully functional without the optional dependency.
+
+### Changed
+- **Player Escape = "leave the channel"**: pressing Escape in the player now exits fullscreen if active, otherwise closes the player window cleanly. Matches the user's mental model of Escape as "back / leave".
+- **Round OSD buttons**: all player playback controls (play, stop, prev, next, favorite, mute, fullscreen, VLC, cast, report) are now rendered as round/pill `CTkButton`s with the Defender accent palette. The previous ttk buttons were forced to a square shape by Windows native theming regardless of the ttkbootstrap style applied. Falls back to ttk.Button on environments without `customtkinter`.
+
 ## [2.9.3] - 2026-05-03
 
 ### Fixed

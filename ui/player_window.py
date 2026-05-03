@@ -57,6 +57,56 @@ from utils.telemetry import track_channel_fail, track_feature
 from ui.constants import FluentColors, FluentSpacing
 from ui.tooltip import add_tooltip
 
+try:
+    import customtkinter as ctk
+    CTK_AVAILABLE = True
+except ImportError:  # pragma: no cover - dev safety net
+    CTK_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Round OSD button factory
+# ---------------------------------------------------------------------------
+# We use customtkinter for the OSD controls because ttk.Button on Windows uses
+# the native theme renderer and cannot draw rounded corners regardless of the
+# ttkbootstrap style applied. CTkButton supports a true `corner_radius` and
+# gives us the round/pill look that matches the Defender player aesthetic.
+
+_OSD_VARIANTS = {
+    'primary': {'fg_color': '#4da6ff', 'hover_color': '#60b4ff',
+                'text_color': '#ffffff'},
+    'secondary': {'fg_color': '#3b3a3f', 'hover_color': '#4a4950',
+                  'text_color': '#ffffff'},
+    'danger': {'fg_color': '#3b3a3f', 'hover_color': '#f04a58',
+               'text_color': '#f04a58'},
+}
+
+
+def _make_osd_button(parent, *, text, command, variant='secondary',
+                     width=40, height=40, font_size=16, state='normal'):
+    """Create a round OSD button using CTkButton when available.
+
+    Falls back to a ttk.Button on environments without customtkinter so the
+    UI still renders (just without the rounded corners).
+    """
+    if CTK_AVAILABLE:
+        colors = _OSD_VARIANTS.get(variant, _OSD_VARIANTS['secondary'])
+        return ctk.CTkButton(
+            parent,
+            text=text,
+            command=command,
+            width=width,
+            height=height,
+            corner_radius=height // 2,  # half-height = perfectly round
+            font=('Segoe UI Emoji', font_size, 'bold'),
+            state=state,
+            **colors,
+        )
+    bs = {'primary': 'primary', 'secondary': 'secondary',
+          'danger': 'danger-outline'}.get(variant, 'secondary')
+    return ttk.Button(parent, text=text, command=command, width=4,
+                      bootstyle=bs, state=state)
+
 
 class PlayerWindow(tk.Toplevel):
     """Separate window for video playback with controls."""
@@ -120,25 +170,34 @@ class PlayerWindow(tk.Toplevel):
         """Create the player UI components with Windows 11 Fluent Design."""
         # Configure window background
         self.configure(bg=FluentColors.BG_SOLID)
-        
+
+        # Make sure we never start up in fullscreen — the OSD is hidden when
+        # fullscreen is active, so a stale '-fullscreen=true' attribute would
+        # make it look like the controls disappeared.
+        try:
+            self.attributes('-fullscreen', False)
+        except tk.TclError:
+            pass
+
         # Main container
         self.main_frame = ttk.Frame(self)
         self.main_frame.grid(row=0, column=0, sticky="nsew")
-        self.main_frame.rowconfigure(0, weight=1)
+        self.main_frame.rowconfigure(0, weight=1)            # video stretches
+        self.main_frame.rowconfigure(1, weight=0, minsize=60)  # OSD always 60px
         self.main_frame.columnconfigure(0, weight=1)
-        
+
         # Video frame (where VLC will render)
         self.video_frame = ttk.Frame(self.main_frame)
         self.video_frame.grid(row=0, column=0, sticky="nsew")
-        
+
         # Create a canvas for video (needed for VLC on some platforms)
         self.video_canvas = tk.Canvas(
-            self.video_frame, 
+            self.video_frame,
             bg='black',
             highlightthickness=0
         )
         self.video_canvas.pack(fill=tk.BOTH, expand=True)
-        
+
         # Controls frame with Fluent Design
         self.controls_frame = ttk.Frame(
             self.main_frame,
@@ -147,60 +206,52 @@ class PlayerWindow(tk.Toplevel):
         self.controls_frame.grid(row=1, column=0, sticky="ew")
         self.controls_frame.grid_propagate(False)
         
-        # Play/Pause button - Windows 11 style
-        self.play_btn = ttk.Button(
+        # Play/Pause button - round OSD style
+        self.play_btn = _make_osd_button(
             self.controls_frame,
             text="⏸",
-            width=4,
             command=self._toggle_play,
-            bootstyle="primary"
+            variant='primary',
+            width=48, height=48, font_size=18,
         )
         self.play_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_LARGE, pady=8)
         add_tooltip(self.play_btn, "Play/Pause (Space)")
-        
+
         # Stop button
-        self.stop_btn = ttk.Button(
+        self.stop_btn = _make_osd_button(
             self.controls_frame,
             text="⏹",
-            width=4,
             command=self.stop,
-            bootstyle="secondary"
         )
         self.stop_btn.pack(side=tk.LEFT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.stop_btn, "Stop playback")
-        
+
         # Previous channel button
         if self.channel_list and len(self.channel_list) > 1:
-            self.prev_btn = ttk.Button(
+            self.prev_btn = _make_osd_button(
                 self.controls_frame,
                 text="⏮",
-                width=3,
                 command=self._previous_channel,
-                bootstyle="secondary",
-                state="normal" if self.channel_index and self.channel_index > 0 else "disabled"
+                state="normal" if self.channel_index and self.channel_index > 0 else "disabled",
             )
             self.prev_btn.pack(side=tk.LEFT, padx=2)
             add_tooltip(self.prev_btn, "Previous channel")
-            
+
             # Next channel button
-            self.next_btn = ttk.Button(
+            self.next_btn = _make_osd_button(
                 self.controls_frame,
                 text="⏭",
-                width=3,
                 command=self._next_channel,
-                bootstyle="secondary",
-                state="normal" if self.channel_index is not None and self.channel_index < len(self.channel_list) - 1 else "disabled"
+                state="normal" if self.channel_index is not None and self.channel_index < len(self.channel_list) - 1 else "disabled",
             )
             self.next_btn.pack(side=tk.LEFT, padx=2)
             add_tooltip(self.next_btn, "Next channel")
-        
+
         # Favorite (star) toggle — visible regardless of channel_list size
-        self.fav_btn = ttk.Button(
+        self.fav_btn = _make_osd_button(
             self.controls_frame,
             text="☆",
-            width=3,
             command=self._toggle_favorite_current,
-            bootstyle="secondary",
         )
         self.fav_btn.pack(side=tk.LEFT, padx=(8, 2))
         add_tooltip(self.fav_btn, "Add to favorites (F2)")
@@ -245,58 +296,50 @@ class PlayerWindow(tk.Toplevel):
         self.volume_label.pack(side=tk.LEFT, padx=2)
         
         # Mute button
-        self.mute_btn = ttk.Button(
+        self.mute_btn = _make_osd_button(
             volume_frame,
             text="🔇",
-            width=3,
             command=self._toggle_mute,
-            bootstyle="secondary"
         )
         self.mute_btn.pack(side=tk.LEFT)
         add_tooltip(self.mute_btn, "Mute/Unmute (M)")
-        
+
         # Fullscreen button
-        self.fullscreen_btn = ttk.Button(
+        self.fullscreen_btn = _make_osd_button(
             self.controls_frame,
             text="⛶",
-            width=3,
             command=self._toggle_fullscreen,
-            bootstyle="secondary"
         )
         self.fullscreen_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.fullscreen_btn, "Fullscreen (F) - Press ESC to exit")
-        
+
         # Open in VLC button
-        self.vlc_btn = ttk.Button(
+        self.vlc_btn = _make_osd_button(
             self.controls_frame,
             text="VLC",
-            width=4,
             command=self._open_in_external_vlc,
-            bootstyle="secondary"
+            width=56, font_size=12,
         )
         self.vlc_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.vlc_btn, "Open in external VLC player")
-        
+
         # Cast button (if available)
         if CAST_AVAILABLE:
-            self.cast_btn = ttk.Button(
+            self.cast_btn = _make_osd_button(
                 self.controls_frame,
                 text="📺",
-                width=3,
                 command=self._show_cast_menu,
-                bootstyle="secondary"
             )
             self.cast_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
             add_tooltip(self.cast_btn, "Cast to TV/Chromecast")
-        
+
         # Report broken channel button
         self._report_sent = False  # Debounce: one report per session
-        self.report_btn = ttk.Button(
+        self.report_btn = _make_osd_button(
             self.controls_frame,
             text="🔴",
-            width=3,
             command=self._report_broken,
-            bootstyle="danger-outline"
+            variant='danger',
         )
         self.report_btn.pack(side=tk.RIGHT, padx=FluentSpacing.PADDING_SMALL)
         add_tooltip(self.report_btn, "Report channel as broken")
@@ -349,7 +392,7 @@ class PlayerWindow(tk.Toplevel):
         
         # Bind keyboard shortcuts
         self.bind('<space>', lambda e: self._toggle_play())
-        self.bind('<Escape>', lambda e: self._exit_fullscreen())
+        self.bind('<Escape>', lambda e: self._handle_escape())
         self.bind('f', lambda e: self._toggle_fullscreen())
         self.bind('m', lambda e: self._toggle_mute())
         self.bind('<Up>', lambda e: self._volume_up())
@@ -890,6 +933,30 @@ class PlayerWindow(tk.Toplevel):
         """Exit fullscreen mode."""
         self.attributes('-fullscreen', False)
         self.controls_frame.grid()
+
+    def _handle_escape(self):
+        """Escape on the player means 'leave the channel'.
+
+        If we're in fullscreen, exit fullscreen first (one-step rollback).
+        Otherwise close the player window cleanly. This matches the user's
+        mental model of Escape = back/leave and avoids the crash that came
+        from main_window's global ``bind_all('<Escape>')`` racing with the
+        player's own Escape handler.
+        """
+        try:
+            if self.attributes('-fullscreen'):
+                self._exit_fullscreen()
+                return
+        except (tk.TclError, AttributeError):
+            pass
+        try:
+            self._on_close()
+        except Exception:
+            logger.exception("Error closing player on Escape")
+            try:
+                self.destroy()
+            except Exception:
+                pass
     
     def _update_time(self):
         """Update the time display and detect confirmed playback."""
@@ -1330,12 +1397,17 @@ class PlayerWindow(tk.Toplevel):
             tags='radio_overlay',
         )
 
-        # Re-draw on resize so the overlay stays centered
-        try:
-            canvas.bind('<Configure>',
-                        lambda e: self._update_radio_overlay(), add='+')
-        except Exception:
-            pass
+        # Re-draw on resize so the overlay stays centered.
+        # Bind only once — _update_radio_overlay is called repeatedly (init,
+        # set_channel, configure) and a re-bind on each call leaks handlers
+        # and can starve the event loop.
+        if not getattr(self, '_radio_resize_bound', False):
+            try:
+                canvas.bind('<Configure>',
+                            lambda e: self._update_radio_overlay(), add='+')
+                self._radio_resize_bound = True
+            except Exception:
+                pass
 
     def set_channel(self, channel: Dict[str, Any]):
         """

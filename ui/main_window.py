@@ -1338,14 +1338,35 @@ class MainWindow:
             self.search_var.set("")
     
     def _clear_search(self):
-        """Clear search and restore channel list (Escape shortcut)."""
-        if self._search_has_focus or (self.search_var.get() and self.search_var.get() != self._search_placeholder):
-            self.search_var.set("")
-            self.search_entry.delete(0, tk.END)
-            self.root.focus_set()
-            # Restore current group view
-            if self.current_group:
-                self._select_group(self.current_group)
+        """Clear search and restore channel list (Escape shortcut).
+
+        Defensive: ``bind_all('<Escape>')`` fires globally, including while a
+        child Toplevel (player, map, settings) is focused. We only want to
+        clear the search when the main window root actually has focus —
+        otherwise we used to crash with attribute errors when widgets were
+        in transient states or the user was just trying to leave a player.
+        """
+        try:
+            focused = self.root.focus_get()
+        except (tk.TclError, KeyError):
+            return
+        # If focus is on a child Toplevel (e.g., the player), let that
+        # window handle Escape itself.
+        try:
+            if focused is not None and focused.winfo_toplevel() is not self.root:
+                return
+        except (tk.TclError, AttributeError):
+            return
+        try:
+            if self._search_has_focus or (self.search_var.get() and self.search_var.get() != self._search_placeholder):
+                self.search_var.set("")
+                self.search_entry.delete(0, tk.END)
+                self.root.focus_set()
+                # Restore current group view
+                if self.current_group:
+                    self._select_group(self.current_group)
+        except (tk.TclError, AttributeError) as exc:
+            logger.debug("clear_search ignored: %s", exc)
     
     def _do_search(self):
         """Execute the actual search after debounce delay."""

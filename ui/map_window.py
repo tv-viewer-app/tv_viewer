@@ -134,14 +134,6 @@ class MapWindow:
 
     def __init__(self, parent, channel_manager, favorites_manager=None,
                  on_play_channel=None):
-        if not MAP_AVAILABLE:
-            from tkinter import messagebox
-            messagebox.showwarning(
-                "Map Unavailable",
-                "Install tkintermapview:\n  pip install tkintermapview"
-            )
-            return
-
         MapWindow._init_fonts()
 
         self._parent = parent
@@ -155,6 +147,9 @@ class MapWindow:
         self._search_var = tk.StringVar()
         self._search_debounce_id = None
         self._cached_grouped = {}
+        self._is_fallback = not MAP_AVAILABLE
+        self._fallback_country_rows = {}
+        self._fallback_selected_country = None
 
         # Pause background scanning while map is open to free network for tiles
         try:
@@ -163,9 +158,15 @@ class MapWindow:
             pass
 
         try:
-            self._build_window()
+            if self._is_fallback:
+                self._build_fallback_window()
+            else:
+                self._build_window()
             self._win.protocol("WM_DELETE_WINDOW", self._on_close)
-            self._win.after(300, self._place_markers)
+            if not self._is_fallback:
+                self._win.after(300, self._place_markers)
+            else:
+                self._win.after(50, self._refresh_fallback)
             self._win.after(100, lambda: self._animate_open())
         except Exception:
             # Resume scanning if map init fails
@@ -613,3 +614,306 @@ class MapWindow:
         popup.destroy()
         if self._on_play:
             self._on_play(channel)
+
+    # ──────────────────────────────────────────────────────────────────
+    # Fallback (no tkintermapview) — country list + channel list
+    # ──────────────────────────────────────────────────────────────────
+
+    def _build_fallback_window(self):
+        """Build a list-based replacement for the map widget.
+
+        Used whenever ``tkintermapview`` is not installed. Same toolbar
+        (search / favorites / hide-offline / stat badges) but the map
+        canvas is replaced by a two-pane layout: country rows on the
+        left and channel rows on the right.
+        """
+        self._win = ctk.CTkToplevel(self._parent)
+        self._win.title("🌍 TV Viewer — World Map (list view)")
+        self._win.geometry("1100x720")
+        self._win.minsize(800, 500)
+        self._win.configure(fg_color=self._BG)
+
+        # ── Top toolbar ──
+        toolbar = ctk.CTkFrame(self._win, height=50, fg_color=self._SURFACE,
+                               corner_radius=0)
+        toolbar.pack(fill="x")
+        toolbar.pack_propagate(False)
+
+        ctk.CTkLabel(
+            toolbar, text="🌍  World Map",
+            font=self._F_TITLE, text_color=self._TEXT,
+        ).pack(side="left", padx=16)
+
+        # Search box
+        search_frame = ctk.CTkFrame(toolbar, fg_color=self._CARD,
+                                     corner_radius=8, height=32)
+        search_frame.pack(side="left", padx=16, pady=9)
+        ctk.CTkLabel(search_frame, text="🔍", width=28,
+                     font=self._F_SEARCH_ICON).pack(side="left", padx=(8, 0))
+        self._search_entry = ctk.CTkEntry(
+            search_frame, textvariable=self._search_var,
+            placeholder_text="Search country...",
+            fg_color="transparent", border_width=0, width=160, height=28,
+            font=self._F_SEARCH,
+        )
+        self._search_entry.pack(side="left", padx=(0, 8))
+        self._search_var.trace_add("write", lambda *_: self._on_search())
+
+        # Filter toggles
+        self._fav_btn = ctk.CTkButton(
+            toolbar, text="★ Favorites",
+            fg_color="transparent", hover_color=self._CARD_HOVER,
+            text_color=self._TEXT_SEC, font=self._F_SEARCH,
+            width=100, height=32, corner_radius=16,
+            border_width=1, border_color=self._BORDER,
+            command=self._toggle_favorites,
+        )
+        self._fav_btn.pack(side="left", padx=4)
+
+        self._offline_btn = ctk.CTkButton(
+            toolbar, text="📡 Hide offline",
+            fg_color="transparent", hover_color=self._CARD_HOVER,
+            text_color=self._TEXT_SEC, font=self._F_SEARCH,
+            width=120, height=32, corner_radius=16,
+            border_width=1, border_color=self._BORDER,
+            command=self._toggle_offline,
+        )
+        self._offline_btn.pack(side="left", padx=4)
+
+        # "Install tkintermapview" hint button
+        def _show_install_hint():
+            from tkinter import messagebox
+            messagebox.showinfo(
+                "Install full map view",
+                "For an interactive zoomable map with markers, install:\n\n"
+                "    pip install tkintermapview\n\n"
+                "Then restart TV Viewer. The list view stays available either way.",
+            )
+
+        ctk.CTkButton(
+            toolbar, text="ⓘ List view",
+            fg_color="transparent", hover_color=self._CARD_HOVER,
+            text_color=self._TEXT_SEC, font=self._F_SEARCH,
+            width=110, height=32, corner_radius=16,
+            border_width=1, border_color=self._BORDER,
+            command=_show_install_hint,
+        ).pack(side="left", padx=4)
+
+        # Stats panel
+        self._stats_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        self._stats_frame.pack(side="right", padx=16)
+        self._stat_countries = self._make_stat_badge(self._stats_frame, "0", "countries")
+        self._stat_channels = self._make_stat_badge(self._stats_frame, "0", "channels")
+        self._stat_working = self._make_stat_badge(self._stats_frame, "0", "working", self._GREEN)
+
+        # ── Two-pane body: countries (left) + channels (right) ──
+        body = ctk.CTkFrame(self._win, fg_color=self._BG)
+        body.pack(fill="both", expand=True, padx=8, pady=8)
+
+        left_col = ctk.CTkFrame(body, fg_color=self._SURFACE, corner_radius=10,
+                                width=320)
+        left_col.pack(side="left", fill="y", padx=(0, 8))
+        left_col.pack_propagate(False)
+
+        ctk.CTkLabel(
+            left_col, text="Countries", font=self._F_TITLE,
+            text_color=self._TEXT, anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 4))
+
+        self._country_scroll = ctk.CTkScrollableFrame(
+            left_col, fg_color="transparent",
+            scrollbar_button_color=self._CARD,
+        )
+        self._country_scroll.pack(fill="both", expand=True, padx=6, pady=(0, 8))
+
+        right_col = ctk.CTkFrame(body, fg_color=self._SURFACE, corner_radius=10)
+        right_col.pack(side="left", fill="both", expand=True)
+
+        self._channels_header = ctk.CTkLabel(
+            right_col, text="Select a country to see its channels",
+            font=self._F_TITLE, text_color=self._TEXT, anchor="w",
+        )
+        self._channels_header.pack(fill="x", padx=12, pady=(10, 4))
+
+        self._channels_subheader = ctk.CTkLabel(
+            right_col, text="", font=self._F_SMALL,
+            text_color=self._TEXT_SEC, anchor="w",
+        )
+        self._channels_subheader.pack(fill="x", padx=12)
+
+        self._channels_scroll = ctk.CTkScrollableFrame(
+            right_col, fg_color="transparent",
+            scrollbar_button_color=self._CARD,
+        )
+        self._channels_scroll.pack(fill="both", expand=True, padx=6, pady=8)
+
+    def _refresh_fallback(self):
+        """Rebuild the fallback country list from current filter state."""
+        # Clear the country column
+        for child in list(self._country_scroll.winfo_children()):
+            try:
+                child.destroy()
+            except tk.TclError:
+                pass
+        self._fallback_country_rows.clear()
+
+        channels = self._get_filtered_channels()
+        grouped = self._group_by_country(channels)
+
+        total_placed = 0
+        total_working = 0
+        # Sort countries by total channel count desc, name asc
+        ordered = sorted(
+            grouped.items(),
+            key=lambda kv: (-len(kv[1]), kv[0].lower()),
+        )
+
+        for country, ch_list in ordered:
+            count = len(ch_list)
+            working = sum(1 for c in ch_list if c.get('status') != 'offline')
+            total_placed += count
+            total_working += working
+            row = self._build_country_row(country, count, working)
+            row.pack(fill="x", pady=2, padx=4)
+            self._fallback_country_rows[country] = row
+
+        # Update stats
+        self._animate_counter(self._stat_countries, len(grouped))
+        self._animate_counter(self._stat_channels, total_placed)
+        self._animate_counter(self._stat_working, total_working)
+
+        # Re-render channels for the previously selected country if still present
+        if self._fallback_selected_country and self._fallback_selected_country in grouped:
+            self._show_country_channels(
+                self._fallback_selected_country,
+                grouped[self._fallback_selected_country],
+            )
+        elif ordered:
+            # Auto-select the top country for a populated initial view
+            country, ch_list = ordered[0]
+            self._show_country_channels(country, ch_list)
+        else:
+            self._channels_header.configure(text="No channels match the current filters")
+            self._channels_subheader.configure(text="")
+            for child in list(self._channels_scroll.winfo_children()):
+                try:
+                    child.destroy()
+                except tk.TclError:
+                    pass
+
+    def _build_country_row(self, country: str, count: int, working: int):
+        ratio = working / count if count else 0
+        bar_color = self._GREEN if ratio > 0.7 else self._AMBER if ratio > 0.3 else self._RED
+
+        row = ctk.CTkFrame(self._country_scroll, fg_color=self._CARD,
+                           corner_radius=8, height=58)
+        row.pack_propagate(False)
+
+        def on_enter(_e=None):
+            row.configure(fg_color=self._CARD_HOVER)
+        def on_leave(_e=None):
+            if self._fallback_selected_country == country:
+                row.configure(fg_color=self._ACCENT)
+            else:
+                row.configure(fg_color=self._CARD)
+        row.bind("<Enter>", on_enter)
+        row.bind("<Leave>", on_leave)
+
+        flag = ctk.CTkLabel(
+            row, text="🌍", font=ctk.CTkFont(size=20), width=32,
+        )
+        flag.pack(side="left", padx=(8, 4))
+
+        text_frame = ctk.CTkFrame(row, fg_color="transparent")
+        text_frame.pack(side="left", fill="both", expand=True)
+
+        ctk.CTkLabel(
+            text_frame, text=country, font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=self._TEXT, anchor="w",
+        ).pack(fill="x", padx=4, pady=(6, 0))
+
+        ctk.CTkLabel(
+            text_frame, text=f"{count} channels  •  {working} working",
+            font=ctk.CTkFont(size=10),
+            text_color=self._TEXT_SEC, anchor="w",
+        ).pack(fill="x", padx=4)
+
+        # Health pill
+        pill = ctk.CTkLabel(
+            row, text=str(count),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#fff", fg_color=bar_color,
+            corner_radius=12, width=44, height=24,
+        )
+        pill.pack(side="right", padx=10)
+
+        # Make the entire row clickable
+        def on_click(_e=None):
+            channels = self._group_by_country(self._get_filtered_channels()).get(country, [])
+            self._show_country_channels(country, channels)
+
+        for w in (row, flag, text_frame, pill):
+            w.bind("<Button-1>", on_click)
+            try:
+                w.configure(cursor="hand2")
+            except Exception:
+                pass
+
+        return row
+
+    def _show_country_channels(self, country: str, channels: List[dict]):
+        """Render the right-pane channel list for the selected country."""
+        # Update selected highlight
+        prev = self._fallback_selected_country
+        self._fallback_selected_country = country
+        if prev and prev in self._fallback_country_rows:
+            try:
+                self._fallback_country_rows[prev].configure(fg_color=self._CARD)
+            except tk.TclError:
+                pass
+        if country in self._fallback_country_rows:
+            try:
+                self._fallback_country_rows[country].configure(fg_color=self._ACCENT)
+            except tk.TclError:
+                pass
+
+        # Update header
+        working = sum(1 for c in channels if c.get('status') != 'offline')
+        self._channels_header.configure(text=f"📺 {country}")
+        self._channels_subheader.configure(
+            text=f"{len(channels)} channels  •  {working} working  •  "
+                 f"{len(channels) - working} offline"
+        )
+
+        # Clear and re-render
+        for child in list(self._channels_scroll.winfo_children()):
+            try:
+                child.destroy()
+            except tk.TclError:
+                pass
+
+        # Working channels first
+        sorted_channels = sorted(
+            channels,
+            key=lambda c: (0 if c.get('status') != 'offline' else 1, c.get('name', '')),
+        )
+        for ch in sorted_channels:
+            row = self._create_channel_row(self._channels_scroll, ch, self._win)
+            row.pack(fill="x", pady=2, padx=2)
+
+    # Override marker hooks so toolbar buttons keep working in fallback mode.
+    # The real implementations are above; these wrappers branch on _is_fallback.
+    _real_refresh_markers = _refresh_markers
+    _real_place_markers = _place_markers
+
+    def _refresh_markers(self):  # type: ignore[no-redef]
+        if getattr(self, '_is_fallback', False):
+            self._refresh_fallback()
+            return
+        self._real_refresh_markers()
+
+    def _place_markers(self):  # type: ignore[no-redef]
+        if getattr(self, '_is_fallback', False):
+            self._refresh_fallback()
+            return
+        self._real_place_markers()
