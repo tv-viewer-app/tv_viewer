@@ -1,0 +1,41 @@
+# Dependabot — automated dependency updates
+# Weekly cadence keeps deps current without flooding the PR list.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "ci"]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    ignore:
+      # python-vlc is tightly coupled to the user's installed VLC version
+      - dependency-name: "python-vlc"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pub"
+    directory: "/flutter_app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "flutter"]
+
+  - package-ecosystem: "gradle"
+    directory: "/flutter_app/android"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "android"]

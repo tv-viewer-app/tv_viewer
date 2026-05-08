@@ -14,13 +14,12 @@
 name: Release
 
 on:
-  # DISABLED auto-trigger to save Actions storage (0.5GB limit reached)
-  # push:
-  #   tags: ['v*']
+  # Manual fallback only. Auto-release flow is owned by release-gate.yml,
+  # which calls build.yml and publishes the release after all gates pass.
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v2.0.3)'
+        description: 'Version tag (e.g., v2.0.3) — manual dispatch bypasses Release Gate'
         required: true
         type: string
 
@@ -35,7 +34,7 @@ jobs:
     name: Build all platforms
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ inputs.version || github.ref_name }}
+      version: ${{ inputs.version }}
     secrets: inherit  # Pass SUPABASE_URL / SUPABASE_ANON_KEY to build-android
 
   # ===========================================================================

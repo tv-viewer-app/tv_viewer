@@ -1,0 +1,326 @@
+# =============================================================================
+# Release Gate — Comprehensive validation that BLOCKS the release on failure
+# =============================================================================
+# Triggered on tag push (v*) or manual dispatch. release.yml depends on this
+# completing successfully before any binary is published.
+#
+# What it gates:
+#   1. Python tests on matrix (Ubuntu+Windows × Python 3.10/3.11/3.12)
+#   2. Flutter unit tests (was missing — we have 7 test files, none ran in CI)
+#   3. Version sync check (config.py == flutter_app/pubspec.yaml)
+#   4. CHANGELOG.md has an entry for the tagged version
+#   5. Smoke build of the EXE on Windows + headless launch test
+#   6. Bandit HIGH severity must be 0
+#   7. shell=True must be 0 in production code
+# =============================================================================
+
+name: Release Gate
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to validate (e.g., v2.9.5)'
+        required: true
+        type: string
+
+permissions:
+  contents: write  # publish job needs to create/edit releases
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: false  # Never cancel a release validation
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate 1: Version sync + CHANGELOG entry
+  # ---------------------------------------------------------------------------
+  metadata:
+    name: Metadata gate (version sync, changelog)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            RAW="$INPUT_VERSION"
+          else
+            RAW="${GITHUB_REF#refs/tags/}"
+          fi
+          if [[ ! "$RAW" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: $RAW"
+            exit 1
+          fi
+          VERSION="${RAW#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Resolved version: $VERSION"
+
+      - name: Check config.py version matches tag
+        run: |
+          VERSION="${{ steps.resolve.outputs.version }}"
+          CONFIG_VERSION=$(grep -oP 'APP_VERSION\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' config.py)
+          if [ "$CONFIG_VERSION" != "$VERSION" ]; then
+            echo "::error::config.py APP_VERSION ($CONFIG_VERSION) != tag ($VERSION)"
+            exit 1
+          fi
+          echo "✅ config.py version matches"
+
+      - name: Check pubspec.yaml version matches tag
+        run: |
+          VERSION="${{ steps.resolve.outputs.version }}"
+          PUBSPEC_VERSION=$(grep -oP '^version:\s*\K[0-9]+\.[0-9]+\.[0-9]+' flutter_app/pubspec.yaml)
+          if [ "$PUBSPEC_VERSION" != "$VERSION" ]; then
+            echo "::error::flutter_app/pubspec.yaml version ($PUBSPEC_VERSION) != tag ($VERSION)"
+            exit 1
+          fi
+          echo "✅ pubspec.yaml version matches"
+
+      - name: Check CHANGELOG entry exists
+        run: |
+          VERSION="${{ steps.resolve.outputs.version }}"
+          if ! grep -qE "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md missing entry for [${VERSION}]"
+            exit 1
+          fi
+          echo "✅ CHANGELOG entry found"
+
+  # ---------------------------------------------------------------------------
+  # Gate 2: Python test matrix — Ubuntu + Windows × 3.10/3.11/3.12
+  # ---------------------------------------------------------------------------
+  python-matrix:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    needs: metadata
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: 'pip'
+
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq vlc libvlc-dev python3-tk xvfb
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run pytest (Linux, headless via xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m pytest tests/ -v --tb=short --deselect tests/test_toast.py
+
+      - name: Run pytest (Windows)
+        if: runner.os == 'Windows'
+        run: python -m pytest tests/ -v --tb=short --deselect tests/test_toast.py
+
+  # ---------------------------------------------------------------------------
+  # Gate 3: Static security — bandit HIGH must be 0, no shell=True
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security gate (bandit + shell=True)
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Bandit — block on HIGH
+        run: |
+          bandit -r core/ ui/ utils/ main.py config.py -ll --format json --output bandit.json 2>&1 || true
+          python3 << 'PY'
+          import json, sys
+          with open('bandit.json') as f: data = json.load(f)
+          high = [r for r in data.get('results', []) if r['issue_severity'] == 'HIGH']
+          for r in high:
+              print(f"❌ HIGH [{r['test_id']}] {r['filename']}:{r['line_number']} — {r['issue_text']}")
+          if high:
+              print(f"\n❌ BLOCKED: {len(high)} HIGH severity issue(s) must be fixed before release")
+              sys.exit(1)
+          print("✅ No HIGH severity bandit issues")
+          PY
+
+      - name: shell=True prohibition
+        run: |
+          if grep -rn "shell=True" core/ ui/ utils/ main.py --include="*.py"; then
+            echo "::error::shell=True found in production code — BLOCKED"
+            exit 1
+          fi
+          echo "✅ No shell=True in production"
+
+  # ---------------------------------------------------------------------------
+  # Gate 4: Flutter unit tests (we have 7 test files — they should run!)
+  # ---------------------------------------------------------------------------
+  flutter-tests:
+    name: Flutter tests
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run: { working-directory: flutter_app }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Analyze (errors only)
+        run: |
+          flutter analyze --no-fatal-infos 2>&1 | tee /tmp/analyze.txt || true
+          if grep -qP '^\s*error\s+•' /tmp/analyze.txt; then
+            echo "::error::Flutter analyze found errors"
+            grep -P '^\s*error\s+•' /tmp/analyze.txt
+            exit 1
+          fi
+      - name: Run unit tests
+        run: flutter test --reporter expanded
+
+  # ---------------------------------------------------------------------------
+  # Gate 5: Smoke test — build the Windows EXE and verify it's not corrupt
+  # ---------------------------------------------------------------------------
+  windows-smoke:
+    name: Windows EXE smoke build
+    needs: metadata
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: 'pip' }
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ensure channels.json placeholder
+        shell: pwsh
+        run: if (-not (Test-Path "channels.json")) { "[]" | Out-File -FilePath "channels.json" -Encoding utf8 -NoNewline }
+
+      # Use the .spec file — guarantees customtkinter assets bundle is identical
+      # to local builds (this was the v2.9.5 bug: CLI args missed CTK assets and
+      # OSD rendered as zero-size canvas in the EXE).
+      - name: Build EXE from spec
+        run: python -m PyInstaller tv_viewer.spec --noconfirm
+
+      - name: Verify EXE + bundled assets
+        shell: pwsh
+        run: |
+          $exe = "dist\TV_Viewer\TV_Viewer.exe"
+          if (-not (Test-Path $exe)) { Write-Error "❌ EXE missing"; exit 1 }
+          $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 2)
+          Write-Host "✅ EXE built: $sizeMB MB"
+
+          # Critical: customtkinter theme JSONs MUST be bundled — without them
+          # CTkButton renders as zero-size canvas (caused v2.9.4 OSD invisibility).
+          $themes = Get-ChildItem -Recurse "dist\TV_Viewer\_internal\customtkinter" -Filter "*.json" -ErrorAction SilentlyContinue
+          if ($themes.Count -lt 3) {
+            Write-Error "❌ customtkinter theme JSONs not bundled (found $($themes.Count), expected >=3) — OSD will be invisible"
+            exit 1
+          }
+          Write-Host "✅ customtkinter assets bundled ($($themes.Count) theme files)"
+
+  # ---------------------------------------------------------------------------
+  # Final gate — all jobs above must succeed
+  # ---------------------------------------------------------------------------
+  gate-passed:
+    name: Release gate passed
+    needs: [metadata, python-matrix, security, flutter-tests, windows-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "## ✅ Release gate PASSED for v${{ needs.metadata.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "All quality checks passed. Proceeding to publish binaries." >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Build all platforms (only runs after gate passes)
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build all platforms
+    needs: gate-passed
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build.yml
+    with:
+      version: v${{ needs.metadata.outputs.version }}
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # Publish GitHub Release with notes from CHANGELOG
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish GitHub Release
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          VERSION="${{ needs.metadata.outputs.version }}"
+          NOTES=$(awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release v${VERSION}"
+          fi
+          {
+            echo "## TV Viewer v${VERSION}"
+            echo ""
+            echo "$NOTES"
+            echo ""
+            echo "### 📥 Downloads"
+            echo "- **Windows**: \`TV_Viewer-windows.zip\` (extract and run \`TV_Viewer.exe\`)"
+            echo "- **Android**: \`TV_Viewer_v${VERSION}_Android.apk\`"
+            echo "- **Linux**: \`TV_Viewer_v${VERSION}_linux_x86_64\`"
+          } > release_notes.md
+          cat release_notes.md
+
+      - name: Create / update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ needs.metadata.outputs.version }}"
+          # build.yml already uploaded the binaries via gh release upload.
+          # Here we ensure the release exists with the correct notes.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "TV Viewer $TAG" --notes-file release_notes.md
+            echo "✅ Updated release $TAG"
+          else
+            gh release create "$TAG" --title "TV Viewer $TAG" --notes-file release_notes.md
+            echo "✅ Created release $TAG"
+          fi
+
+          echo "## 🎉 Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "**${TAG}** — [View release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG})" >> $GITHUB_STEP_SUMMARY

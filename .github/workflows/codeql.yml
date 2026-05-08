@@ -1,0 +1,56 @@
+# =============================================================================
+# CodeQL — GitHub-native security scanning (free for public repos)
+# =============================================================================
+# Catches: SQL injection, command injection, path traversal, hardcoded creds,
+# unsafe deserialization, XSS — across Python and Java (Android).
+# =============================================================================
+
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '**/*.py'
+      - '**/*.java'
+      - '**/*.kt'
+  pull_request:
+    branches: [master]
+    paths:
+      - '**/*.py'
+      - '**/*.java'
+      - '**/*.kt'
+  schedule:
+    - cron: '23 4 * * 1'  # Monday 04:23 UTC
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, java-kotlin]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
