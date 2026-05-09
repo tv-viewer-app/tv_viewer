@@ -99,3 +99,6 @@ docs/archive/
 
 .audit.json
 watch_history.json
+
+# Play Store marketing artefacts (regenerate via scripts/generate_play_store_assets.py)
+play_store_assets/
