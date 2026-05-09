@@ -48,8 +48,11 @@ on:
         description: Name of the Windows artifact
         value: windows-exe
       android-artifact:
-        description: Name of the Android artifact
+        description: Name of the Android APK artifact
         value: android-apk
+      android-aab-artifact:
+        description: Name of the Android AAB artifact
+        value: android-aab
 
 permissions:
   contents: write
@@ -195,8 +198,24 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      # Build with Supabase secrets injected via env vars (not command line).
-      - name: Build APK
+      # --- Decode signing keystore from secret (skipped if secret missing) ---
+      - name: Decode keystore
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+          echo "✅ Signing keystore configured"
+
+      # Build AAB (Play Store) and APK (sideload + GitHub Release)
+      # AAB is required by Play Store for new uploads since 2021.
+      - name: Build APK + AAB
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -204,17 +223,16 @@ jobs:
           flutter build apk --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
-      - name: Verify APK
+      - name: Verify outputs
         run: |
           APK="build/app/outputs/flutter-apk/app-release.apk"
-          if [ -f "$APK" ]; then
-            SIZE=$(du -h "$APK" | cut -f1)
-            echo "✅ APK build successful — $SIZE"
-          else
-            echo "❌ APK not found at $APK"
-            exit 1
-          fi
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          [ -f "$APK" ] && echo "✅ APK: $(du -h $APK | cut -f1)" || { echo "❌ APK missing"; exit 1; }
+          [ -f "$AAB" ] && echo "✅ AAB: $(du -h $AAB | cut -f1)" || { echo "❌ AAB missing"; exit 1; }
 
       - name: Upload to Release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
@@ -223,19 +241,29 @@ jobs:
           INPUT_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           VERSION="$INPUT_VERSION"
-          APK_PATH=$(find build/app/outputs -name "*.apk" | head -1)
-          if [ -n "$VERSION" ] && [ -n "$APK_PATH" ]; then
-            gh release upload "$VERSION" "$APK_PATH#TV_Viewer_${VERSION}_Android.apk" --clobber
+          APK_PATH=$(find build/app/outputs/flutter-apk -name "app-release.apk" | head -1)
+          AAB_PATH=$(find build/app/outputs/bundle/release -name "app-release.aab" | head -1)
+          if [ -n "$VERSION" ]; then
+            [ -n "$APK_PATH" ] && gh release upload "$VERSION" "$APK_PATH#TV_Viewer_${VERSION}_Android.apk" --clobber
+            [ -n "$AAB_PATH" ] && gh release upload "$VERSION" "$AAB_PATH#TV_Viewer_${VERSION}_Android.aab" --clobber
           fi
 
-      # Keep artifact upload as fallback but don't fail on quota
-      - name: Upload artifact (optional)
+      # Keep artifact upload as fallback (play-store.yml downloads from here)
+      - name: Upload APK artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         continue-on-error: true
         with:
           name: android-apk
           path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 1
+          retention-days: 7
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        continue-on-error: true
+        with:
+          name: android-aab
+          path: flutter_app/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 7
 
   # ===========================================================================
   # Job 3: Ubuntu — PyInstaller → TV_Viewer (Linux binary)

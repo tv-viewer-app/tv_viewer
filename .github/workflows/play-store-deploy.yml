@@ -1,0 +1,182 @@
+# =============================================================================
+# Play Store Deploy — Auto-publish AAB to Google Play on every GitHub Release
+# =============================================================================
+# Trigger: GitHub Release published (or manual dispatch).
+# Default track: 'internal' (safe — internal testers only). Promote to alpha/
+# beta/production via manual dispatch with the track input.
+#
+# Required GitHub repo secrets (Settings → Secrets → Actions):
+#   PLAY_STORE_SERVICE_ACCOUNT_JSON
+#       JSON key file for a Google Play service account with
+#       'Release manager' permission. Created in Play Console →
+#       Setup → API access → Create new service account.
+#       Paste the entire JSON file content as the secret value.
+#   ANDROID_KEYSTORE_BASE64
+#       base64 of your upload-keystore.jks file.
+#       Generate with:  base64 -w 0 upload-keystore.jks > keystore.b64
+#       (on Windows: certutil -encode upload-keystore.jks keystore.b64)
+#   ANDROID_KEYSTORE_PASSWORD     keystore password
+#   ANDROID_KEY_ALIAS             key alias inside keystore (e.g. 'upload')
+#   ANDROID_KEY_PASSWORD          key password
+#
+# One-time Play Console setup:
+#   1. App must already be created in Play Console with package
+#      'app.tvviewer.player' and a first release uploaded manually
+#      (Play Store rejects API uploads until the first manual release).
+#   2. In Play Console → Setup → API access, link a Google Cloud project,
+#      create a service account, grant 'Release manager' role.
+#   3. Download the JSON key, paste into PLAY_STORE_SERVICE_ACCOUNT_JSON.
+# =============================================================================
+
+name: Play Store Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v2.9.5)'
+        required: true
+        type: string
+      track:
+        description: 'Play Store track'
+        required: true
+        type: choice
+        default: internal
+        options: [internal, alpha, beta, production]
+      status:
+        description: 'Release status'
+        required: true
+        type: choice
+        default: draft
+        options: [draft, inProgress, completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-store-deploy
+  cancel-in-progress: false  # Never cancel a Play Store push mid-flight
+
+jobs:
+  deploy:
+    name: Deploy to Play Store (${{ github.event.inputs.track || 'internal' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${INPUT_VERSION:-$REL_TAG}"
+          if [ -z "$VERSION" ]; then echo "::error::No version"; exit 1; fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying $VERSION"
+
+      # --- Try to download the AAB from the GitHub Release first ---
+      - name: Download AAB from release
+        id: dl-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+        run: |
+          mkdir -p aab
+          VERSION="${{ steps.ver.outputs.version }}"
+          # Asset name uploaded by build.yml: TV_Viewer_<TAG>_Android.aab
+          gh release download "$VERSION" \
+            --repo ${{ github.repository }} \
+            --pattern "*Android.aab" \
+            --dir aab
+          AAB=$(find aab -name "*.aab" | head -1)
+          if [ -n "$AAB" ]; then
+            mv "$AAB" aab/app-release.aab
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✅ AAB downloaded from release"
+          fi
+
+      # --- Fallback: build AAB from source if release didn't have one ---
+      - name: Set up Java 17
+        if: steps.dl-release.outputs.found != 'true'
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - name: Set up Flutter
+        if: steps.dl-release.outputs.found != 'true'
+        uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.24.0', channel: stable, cache: true }
+
+      - name: Build AAB from source (fallback)
+        if: steps.dl-release.outputs.found != 'true'
+        working-directory: flutter_app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret missing — cannot build signed AAB"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+          flutter pub get
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          mkdir -p ../aab
+          cp build/app/outputs/bundle/release/app-release.aab ../aab/app-release.aab
+
+      # --- Extract release notes from CHANGELOG for whatsnew ---
+      - name: Prepare whatsnew
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          VERSION_NUM="${VERSION#v}"
+          mkdir -p whatsnew
+          NOTES=$(awk "/^## \[${VERSION_NUM}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md \
+                  | sed '/^$/d' | head -20)
+          if [ -z "$NOTES" ]; then NOTES="Bug fixes and improvements."; fi
+          # Play Store limit: 500 chars per locale. Truncate safely.
+          echo "$NOTES" | head -c 480 > whatsnew/whatsnew-en-US
+          # Provide a default locale fallback file expected by the action
+          cp whatsnew/whatsnew-en-US whatsnew/whatsnew-en-GB || true
+          echo "--- whatsnew ---"
+          cat whatsnew/whatsnew-en-US
+
+      # --- Upload to Play Store ---
+      - name: Deploy to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: app.tvviewer.player
+          releaseFiles: aab/app-release.aab
+          track: ${{ github.event.inputs.track || 'internal' }}
+          status: ${{ github.event.inputs.status || 'completed' }}
+          whatsNewDirectory: whatsnew
+          # Stage rollout (production only): start at 10%, promote manually after.
+          # Comment out for internal/alpha/beta which always go 100%.
+          # userFraction: 0.1
+          changesNotSentForReview: false
+
+      - name: Summary
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          TRACK="${{ github.event.inputs.track || 'internal' }}"
+          {
+            echo "## 🚀 Play Store Deploy"
+            echo ""
+            echo "- **Version:** $VERSION"
+            echo "- **Track:** $TRACK"
+            echo "- **Package:** app.tvviewer.player"
+            echo "- **Console:** https://play.google.com/console/u/0/developers/-/app-list"
+          } >> $GITHUB_STEP_SUMMARY
