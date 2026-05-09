@@ -1,0 +1,109 @@
+# =============================================================================
+# Sync Version Docs — Auto-update README, landing page, and config.py on release
+# =============================================================================
+# Trigger: a GitHub Release is published (or run manually).
+# Action:
+#   1. Resolves the version from the release tag (or workflow input).
+#   2. Runs scripts/sync_version_docs.py which rewrites:
+#        - README.md         "What's New in vX.Y.Z" section + bullets
+#        - docs/index.html   landing page hero + subtitle
+#        - config.py         APP_VERSION
+#      Bullets and subtitle are pulled from the matching CHANGELOG.md section.
+#   3. Commits the changes back to master with [skip ci] so this doesn't loop
+#      back into the release pipeline.
+#
+# Why master and not the release tag?
+#   The tag is immutable; what we want is for *future* visitors to README.md /
+#   the landing page to see the current shipping version. That lives on master.
+#
+# Idempotent: if README/landing/config already match the version, no commit.
+# =============================================================================
+
+name: Sync Version Docs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (X.Y.Z or vX.Y.Z, must exist in CHANGELOG.md)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-version-docs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          # Need a real commit (not a shallow detached HEAD) so we can push back.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve version
+        id: ver
+        env:
+          REL_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-$REL_TAG}"
+          # Strip leading 'v' if present
+          VERSION="${VERSION#v}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version supplied (missing release tag and workflow input)"
+            exit 1
+          fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$VERSION' is not semver X.Y.Z"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Syncing docs to v$VERSION"
+
+      - name: Run sync script
+        run: python scripts/sync_version_docs.py "${{ steps.ver.outputs.version }}"
+
+      - name: Commit and push if changed
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git config user.name  "TV Viewer Bot"
+          git config user.email "noreply@tv-viewer-app.github.io"
+          git add README.md docs/index.html config.py
+          if git diff --cached --quiet; then
+            echo "::notice::Docs already in sync with v${VERSION} — nothing to commit"
+            exit 0
+          fi
+          git commit -m "docs: sync README + landing + config to v${VERSION} [skip ci]
+
+          Auto-generated from CHANGELOG.md by .github/workflows/sync-version-docs.yml
+          on release publish.
+
+          Co-authored-by: TV Viewer Bot <noreply@tv-viewer-app.github.io>"
+          git push origin HEAD:master
+
+      - name: Summary
+        run: |
+          {
+            echo "## 📝 Sync Version Docs"
+            echo ""
+            echo "- **Version:** v${{ steps.ver.outputs.version }}"
+            echo "- **Files touched:** \`README.md\`, \`docs/index.html\`, \`config.py\`"
+            echo "- **Source:** \`CHANGELOG.md\` section for that version"
+          } >> $GITHUB_STEP_SUMMARY

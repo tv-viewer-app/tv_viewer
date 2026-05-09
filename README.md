@@ -19,38 +19,14 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.7.3
+## ✨ What's New in v2.9.5
 
-- 🔐 **Privacy policy rewritten** — accurate description of crowdsourced channel-health data flow, Play Store data-safety mapping
-- 🌐 **Landing page hardened** — every marketing claim now backed by shipping behaviour; added DMCA / takedown contact
-- 📦 **Android signing fixed** — official upload key (was a debug key in v2.7.1, rejected by Play)
-- 🪟 **Windows app icon regenerated** from the 512px Prism Play source
+- **Favorite star never toggled in player OSD**: `_refresh_fav_button` was passing `bootstyle=` to `CTkButton`, which silently raised an exception so the star glyph never updated and the user couldn't tell whether a channel was favorited. Now updates text + `text_color` (gold when active, white when not) using only CTkButton-supported kwargs.
+- **Escape key racing with main window's `bind_all('<Escape>')`**: Player Escape handler now returns `'break'` so the global Esc binding doesn't fire `_clear_search` after the player window has destroyed itself. Reduces the rare crash some users hit when pressing Escape during VLC startup.
+- **OSD controls invisible in packaged Windows EXE**: PyInstaller spec now bundles `customtkinter` theme + asset files via `collect_data_files('customtkinter')`. Without these, CTkButton couldn't read its theme JSON, so OSD buttons rendered as zero-size canvases — making the controls bar appear empty. The dev environment had the assets on disk so the bug only surfaced in the packaged build.
+- **Map "list view" warning was misleading**: Changed import-time log from WARNING to INFO since the fallback list view handles the missing dependency gracefully.
 
-### Earlier in v2.7.x — Feature Sprint (v2.7.0)
-
-**13 community feature requests implemented across Windows & Android.**
-
-### 🔒 Security & Integrity
-- **Play Integrity API** — Google Play attestation verifies app authenticity
-- **First-run consent dialog** — Age verification and analytics opt-in (Windows)
-
-### 📱 Android
-- **Settings screen** — Timeouts, theme toggle, repository management, about
-- **Advanced search** — `country:`, `category:`, `language:`, `type:`, `status:` prefixes
-- **Sort options** — Sort by name, country, category, type (asc/desc)
-- **Channel thumbnails** — Cached network images with fallback icons
-- **Repository management** — Add/remove/reset M3U playlist sources
-- **Radio player** — Dedicated screen with genre browsing and now-playing bar
-- **Chromecast & external player** — Cast dialog with VLC, external app, URL copy
-
-### 🖥️ Windows
-- **Collapsible filters** — Toggle filter visibility with persistent state
-- **Onboarding tooltips** — 4-step guided tour for new users
-- **Diagnostics screen** — Network tests, stream tester, system info, report export
-- **Rich channel info popup** — Metadata, EPG, source URLs, copy/play actions
-
-### 🔄 Both Platforms
-- **Auto-update checker** — Checks GitHub releases, notifies when update available
+_See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
 ## Features
 
