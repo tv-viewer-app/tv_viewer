@@ -80,7 +80,10 @@ class LogoManager:
         return None
 
     def _cache_path(self, url: str) -> str:
-        h = hashlib.sha1(url.encode('utf-8')).hexdigest()
+        # SHA1 here is purely a filename hash for the on-disk logo cache —
+        # not a security primitive. Tag with usedforsecurity=False so
+        # bandit B324 / FIPS-mode environments don't flag it.
+        h = hashlib.sha1(url.encode('utf-8'), usedforsecurity=False).hexdigest()
         return os.path.join(LOGO_CACHE_DIR, f"{h}.png")
 
     def _fetch(self, url: str, cache_file: str, callback):

@@ -228,19 +228,32 @@ jobs:
       # to local builds (this was the v2.9.5 bug: CLI args missed CTK assets and
       # OSD rendered as zero-size canvas in the EXE).
       - name: Build EXE from spec
-        run: python -m PyInstaller tv_viewer.spec --noconfirm
+        run: python -m PyInstaller TVViewer.spec --noconfirm
 
       - name: Verify EXE + bundled assets
         shell: pwsh
         run: |
-          $exe = "dist\TV_Viewer\TV_Viewer.exe"
-          if (-not (Test-Path $exe)) { Write-Error "❌ EXE missing"; exit 1 }
+          # TVViewer.spec emits dist\TVViewer\TVViewer.exe (no underscore).
+          $candidates = @(
+            "dist\TVViewer\TVViewer.exe",
+            "dist\TV_Viewer\TV_Viewer.exe"
+          )
+          $exe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $exe) { Write-Error "❌ EXE missing — looked in: $($candidates -join ', ')"; exit 1 }
           $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 2)
-          Write-Host "✅ EXE built: $sizeMB MB"
+          Write-Host "✅ EXE built: $exe ($sizeMB MB)"
 
           # Critical: customtkinter theme JSONs MUST be bundled — without them
           # CTkButton renders as zero-size canvas (caused v2.9.4 OSD invisibility).
-          $themes = Get-ChildItem -Recurse "dist\TV_Viewer\_internal\customtkinter" -Filter "*.json" -ErrorAction SilentlyContinue
+          $exeDir = Split-Path -Parent $exe
+          $internalDir = Join-Path $exeDir "_internal\customtkinter"
+          if (Test-Path $internalDir) {
+            $themes = Get-ChildItem -Recurse $internalDir -Filter "*.json" -ErrorAction SilentlyContinue
+          } else {
+            # Onefile spec or older layout — search the whole dist tree.
+            $themes = Get-ChildItem -Recurse $exeDir -Filter "*.json" -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match 'customtkinter' }
+          }
           if ($themes.Count -lt 3) {
             Write-Error "❌ customtkinter theme JSONs not bundled (found $($themes.Count), expected >=3) — OSD will be invisible"
             exit 1
