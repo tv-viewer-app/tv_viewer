@@ -1,9 +1,9 @@
 name: Build APK
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Disabled tag trigger — release-gate.yml + build.yml now own the v* tag flow
+  # and produce the canonical TV_Viewer_v<version>_Android.apk/.aab assets.
+  # Keep workflow_dispatch only for manual ad-hoc builds.
   workflow_dispatch:
 
 permissions: {}  # Deny all by default

@@ -258,8 +258,14 @@ jobs:
             if ! gh release view "$VERSION" >/dev/null 2>&1; then
               gh release create "$VERSION" --title "TV Viewer $VERSION" --notes "Release in progress — notes will be updated when publish job completes."
             fi
-            [ -n "$APK_PATH" ] && gh release upload "$VERSION" "$APK_PATH#TV_Viewer_${VERSION}_Android.apk" --clobber
-            [ -n "$AAB_PATH" ] && gh release upload "$VERSION" "$AAB_PATH#TV_Viewer_${VERSION}_Android.aab" --clobber
+            if [ -n "$APK_PATH" ]; then
+              cp "$APK_PATH" "/tmp/TV_Viewer_${VERSION}_Android.apk"
+              gh release upload "$VERSION" "/tmp/TV_Viewer_${VERSION}_Android.apk" --clobber
+            fi
+            if [ -n "$AAB_PATH" ]; then
+              cp "$AAB_PATH" "/tmp/TV_Viewer_${VERSION}_Android.aab"
+              gh release upload "$VERSION" "/tmp/TV_Viewer_${VERSION}_Android.aab" --clobber
+            fi
           fi
 
       # Keep artifact upload as fallback (play-store.yml downloads from here)
