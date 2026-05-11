@@ -19,12 +19,10 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.9.5
+## ✨ What's New in v2.9.6
 
-- **Favorite star never toggled in player OSD**: `_refresh_fav_button` was passing `bootstyle=` to `CTkButton`, which silently raised an exception so the star glyph never updated and the user couldn't tell whether a channel was favorited. Now updates text + `text_color` (gold when active, white when not) using only CTkButton-supported kwargs.
-- **Escape key racing with main window's `bind_all('<Escape>')`**: Player Escape handler now returns `'break'` so the global Esc binding doesn't fire `_clear_search` after the player window has destroyed itself. Reduces the rare crash some users hit when pressing Escape during VLC startup.
-- **OSD controls invisible in packaged Windows EXE**: PyInstaller spec now bundles `customtkinter` theme + asset files via `collect_data_files('customtkinter')`. Without these, CTkButton couldn't read its theme JSON, so OSD buttons rendered as zero-size canvases — making the controls bar appear empty. The dev environment had the assets on disk so the bug only surfaced in the packaged build.
-- **Map "list view" warning was misleading**: Changed import-time log from WARNING to INFO since the fallback list view handles the missing dependency gracefully.
+- **Screen sleeps while watching video on Android (#190)**: wake lock was only enabled once at player startup, so any system-side preemption (battery saver waking, returning from background) silently dropped it and the screen would dim/sleep mid-stream. The wake lock is now re-asserted whenever the app returns to the foreground (`AppLifecycleState.resumed`) and whenever the user resumes playback via the play button. Also calls `WakelockPlus.enable()` defensively on every play action — the package is idempotent so this is safe.
+- **No fullscreen button or way to fullscreen on tablet (#189)**: portrait tablet mode left video letterboxed with no way to expand it. Added an explicit fullscreen / exit-fullscreen `IconButton` to the player's top control bar (next to the External Player button) and rebound double-tap on the video surface to toggle fullscreen, matching mainstream player behavior. Long-press still toggles play/pause, and the center play/pause icon is now a tappable target (it used to be display-only) so users keep that affordance now that double-tap means fullscreen.
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
