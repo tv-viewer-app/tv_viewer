@@ -246,28 +246,41 @@ class FeedbackService {
       // Silently fail analytics - don't block feedback submission
     }
     
-    // Compose email with rating info
-    final emailBody = '''
-Rating: ${'⭐' * rating} ($rating/5)
-Category: $type
+    // Compose issue body to prefill on the GitHub new-issue form
+    final issueBody = '''**Rating:** ${'⭐' * rating} ($rating/5)
+**Category:** $type
+**App version:** v2.9.6
 
-Feedback:
+## Feedback
+
 $feedback
 
 ---
-Sent via TV Viewer Feedback System
+_Submitted via TV Viewer in-app feedback (${DateTime.now().toIso8601String()})_
 ''';
-    
+
+    // Map category → label for triage. Don't reference a template — the legacy
+    // template=feedback.yml pointed at a file that doesn't exist, which
+    // silently caused GitHub to drop the body= param and open an empty form.
+    final label = switch (type) {
+      'Bug' => 'bug',
+      'Feature Request' => 'enhancement',
+      _ => 'feedback',
+    };
+
     final issuesUri = Uri(
       scheme: 'https',
       host: 'github.com',
       pathSegments: ['tv-viewer-app', 'tv_viewer', 'issues', 'new'],
       queryParameters: {
-        'template': 'feedback.yml',
-        'title': '[$type] TV Viewer Feedback',
+        'title': '[$type] $feedback'.length > 80
+            ? '[$type] ${feedback.substring(0, feedback.length > 60 ? 60 : feedback.length)}...'
+            : '[$type] $feedback',
+        'body': issueBody,
+        'labels': label,
       },
     );
-    
+
     bool feedbackOpened = false;
     if (await canLaunchUrl(issuesUri)) {
       await launchUrl(issuesUri, mode: LaunchMode.externalApplication);
