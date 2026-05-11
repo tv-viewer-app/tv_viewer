@@ -277,7 +277,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build:
     name: Build all platforms
-    needs: gate-passed
+    needs: [metadata, gate-passed]
     permissions:
       contents: write
     uses: ./.github/workflows/build.yml
