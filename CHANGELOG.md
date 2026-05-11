@@ -5,6 +5,15 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.7] - 2026-05-11
+
+### Fixed
+- **In-app feedback dialog lost typed text when "Open GitHub" was pressed (#191)**: the deep link sent the user to GitHub's issue form but the URL only carried `template=feedback.yml` (a template that doesn't exist in this repo) and the title — the body was never set, so everything the user typed was discarded. Switched to a direct `?body=…&labels=…&title=…` deep link that prefills the issue body with the rating, category, app version, the feedback text, and a timestamp. Category now also maps to a sensible label (`bug`, `enhancement`, or `feedback`).
+- **Settings → Parental Controls bypassed the PIN gate (security)**: the overflow menu's Parental Controls path required the PIN, but tapping Parental Controls inside Settings navigated straight to the screen with no check. Anyone with physical access could change parental settings without the PIN. The Settings entry now goes through the same PIN gate.
+
+### Changed
+- **Overflow menu reorganized for clarity**: items are now grouped into three sections separated by dividers — **Tools** (Sort, Radio, Map on compact screens), **Feedback** (Send Feedback, Rate App), and **Help & info** (Help & Support, Diagnostics, About). The duplicate Parental Controls entry was removed (it lives under Settings, where it belongs).
+
 ## [2.9.6] - 2026-05-11
 
 ### Fixed

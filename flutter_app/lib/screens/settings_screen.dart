@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/parental_controls_service.dart';
 import '../services/settings_service.dart';
+import '../widgets/pin_dialog.dart';
 import 'parental_settings_screen.dart';
 import 'repo_management_screen.dart';
 
@@ -189,14 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Parental Controls'),
                   subtitle: const Text('Manage PIN, blocked categories, and age settings'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ParentalSettingsScreen(),
-                      ),
-                    );
-                  },
+                  onTap: _openParentalSettings,
                 ),
                 const Divider(),
 
@@ -250,6 +245,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openParentalSettings() async {
+    final parentalService = ParentalControlsService.instance;
+
+    if (parentalService.hasPin && parentalService.enabled) {
+      final verified = await PinDialog.show(
+        context,
+        title: 'Enter PIN',
+        subtitle: 'Enter your PIN to access parental control settings',
+        onSubmit: (pin) async => parentalService.verifyPin(pin),
+      );
+      if (!verified || !mounted) return;
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ParentalSettingsScreen(),
       ),
     );
   }

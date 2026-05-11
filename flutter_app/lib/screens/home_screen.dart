@@ -18,7 +18,6 @@ import '../widgets/consent_dialog.dart';
 import 'diagnostics_screen.dart';
 import 'help_screen.dart';
 import 'map_screen.dart';
-import 'parental_settings_screen.dart';
 import 'player_screen.dart';
 import 'radio_screen.dart';
 import 'settings_screen.dart';
@@ -283,8 +282,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (context) => const DiagnosticsScreen(),
                   ),
                 );
-              } else if (value == 'parental') {
-                _openParentalSettings();
               } else if (value == 'feedback') {
                 FeedbackService.showFeedbackDialog(context);
               } else if (value == 'rate') {
@@ -304,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (context) => [
+              // ── Tools ──────────────────────────────────────────────
               const PopupMenuItem(
                 value: 'sort',
                 child: Row(
@@ -335,37 +333,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-              const PopupMenuItem(
-                value: 'help',
-                child: Row(
-                  children: [
-                    Icon(Icons.help_outline),
-                    SizedBox(width: 8),
-                    Text('Help & Support'),
-                  ],
-                ),
-              ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'parental',
-                child: Row(
-                  children: [
-                    Icon(Icons.lock),
-                    SizedBox(width: 8),
-                    Text('Parental Controls'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'diagnostics',
-                child: Row(
-                  children: [
-                    Icon(Icons.bug_report),
-                    SizedBox(width: 8),
-                    Text('Diagnostics'),
-                  ],
-                ),
-              ),
+              // ── Feedback ───────────────────────────────────────────
               const PopupMenuItem(
                 value: 'feedback',
                 child: Row(
@@ -387,6 +356,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const PopupMenuDivider(),
+              // ── Help & info ────────────────────────────────────────
+              const PopupMenuItem(
+                value: 'help',
+                child: Row(
+                  children: [
+                    Icon(Icons.help_outline),
+                    SizedBox(width: 8),
+                    Text('Help & Support'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'diagnostics',
+                child: Row(
+                  children: [
+                    Icon(Icons.bug_report),
+                    SizedBox(width: 8),
+                    Text('Diagnostics'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'about',
                 child: Row(
@@ -1488,30 +1478,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // Refresh recently played after returning from player
       _loadRecentHistory();
     });
-  }
-
-  /// Open parental controls settings.
-  /// If parental controls are already set up, require PIN to access settings.
-  Future<void> _openParentalSettings() async {
-    final parentalService = ParentalControlsService.instance;
-
-    if (parentalService.hasPin && parentalService.enabled) {
-      final verified = await PinDialog.show(
-        context,
-        title: 'Enter PIN',
-        subtitle: 'Enter your PIN to access parental control settings',
-        onSubmit: (pin) async => parentalService.verifyPin(pin),
-      );
-      if (!verified || !mounted) return;
-    }
-
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ParentalSettingsScreen(),
-      ),
-    );
   }
 
   void _showAboutDialog() async {
