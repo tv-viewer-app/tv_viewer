@@ -19,10 +19,11 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.9.6
+## ✨ What's New in v2.9.7
 
-- **Screen sleeps while watching video on Android (#190)**: wake lock was only enabled once at player startup, so any system-side preemption (battery saver waking, returning from background) silently dropped it and the screen would dim/sleep mid-stream. The wake lock is now re-asserted whenever the app returns to the foreground (`AppLifecycleState.resumed`) and whenever the user resumes playback via the play button. Also calls `WakelockPlus.enable()` defensively on every play action — the package is idempotent so this is safe.
-- **No fullscreen button or way to fullscreen on tablet (#189)**: portrait tablet mode left video letterboxed with no way to expand it. Added an explicit fullscreen / exit-fullscreen `IconButton` to the player's top control bar (next to the External Player button) and rebound double-tap on the video surface to toggle fullscreen, matching mainstream player behavior. Long-press still toggles play/pause, and the center play/pause icon is now a tappable target (it used to be display-only) so users keep that affordance now that double-tap means fullscreen.
+- **In-app feedback dialog lost typed text when "Open GitHub" was pressed (#191)**: the deep link sent the user to GitHub's issue form but the URL only carried `template=feedback.yml` (a template that doesn't exist in this repo) and the title — the body was never set, so everything the user typed was discarded. Switched to a direct `?body=…&labels=…&title=…` deep link that prefills the issue body with the rating, category, app version, the feedback text, and a timestamp. Category now also maps to a sensible label (`bug`, `enhancement`, or `feedback`).
+- **Settings → Parental Controls bypassed the PIN gate (security)**: the overflow menu's Parental Controls path required the PIN, but tapping Parental Controls inside Settings navigated straight to the screen with no check. Anyone with physical access could change parental settings without the PIN. The Settings entry now goes through the same PIN gate.
+- **Overflow menu reorganized for clarity**: items are now grouped into three sections separated by dividers — **Tools** (Sort, Radio, Map on compact screens), **Feedback** (Send Feedback, Rate App), and **Help & info** (Help & Support, Diagnostics, About). The duplicate Parental Controls entry was removed (it lives under Settings, where it belongs).
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
