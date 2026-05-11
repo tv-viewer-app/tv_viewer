@@ -55,6 +55,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   bool _isPipSupported = false;
   bool _reportSent = false; // Debounce: one report per player session
 
+  // Fullscreen toggle state (#189)
+  // When true: orientations locked to landscape only.
+  // When false: auto-rotation (portrait + landscape).
+  bool _isFullscreen = false;
+
   /// Guard wrapper: only call setState when the widget is still mounted.
   /// Prevents "setState() called after dispose()" crashes (fixes #82).
   void _safeSetState(VoidCallback fn) {
@@ -149,6 +154,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         if (!_isPipMode) {
           _videoController?.play();
         }
+        // Re-assert wake lock — Android may drop it on background/resume (#190)
+        _initializeWakeLock();
         break;
       default:
         break;
@@ -385,6 +392,33 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _videoController!.pause();
     } else {
       _videoController!.play();
+      // Re-assert wake lock when user resumes playback (#190)
+      _initializeWakeLock();
+    }
+  }
+
+  /// Toggle forced-landscape "fullscreen" view (#189).
+  /// On entry: lock to landscape orientations only and hide system UI.
+  /// On exit: restore auto-rotation and immersive mode.
+  Future<void> _toggleFullscreen() async {
+    final goingFullscreen = !_isFullscreen;
+    _safeSetState(() {
+      _isFullscreen = goingFullscreen;
+    });
+    if (goingFullscreen) {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     }
   }
 
@@ -832,7 +866,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTap: _toggleControls,
-        onDoubleTap: _togglePlayPause,
+        onDoubleTap: _toggleFullscreen,
+        onLongPress: _togglePlayPause,
         child: Stack(
           children: [
             // Video or error
@@ -949,28 +984,43 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                           tooltip: 'Open in External App',
                           onPressed: _openInExternalPlayer,
                         ),
+                        // Fullscreen toggle (#189)
+                        IconButton(
+                          icon: Icon(
+                            _isFullscreen
+                                ? Icons.fullscreen_exit
+                                : Icons.fullscreen,
+                            color: Colors.white,
+                          ),
+                          tooltip: _isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
+                          onPressed: _toggleFullscreen,
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
 
-            // Play/Pause indicator
+            // Play/Pause indicator (tappable so users have a play/pause affordance
+            // now that double-tap toggles fullscreen — #189)
             if (!_isLoading && _error == null && _showControls)
               Center(
-                child: AnimatedOpacity(
-                  opacity: _isPlaying ? 0.0 : 1.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 50,
+                child: GestureDetector(
+                  onTap: _togglePlayPause,
+                  child: AnimatedOpacity(
+                    opacity: _isPlaying ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 50,
+                      ),
                     ),
                   ),
                 ),

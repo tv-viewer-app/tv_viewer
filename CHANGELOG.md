@@ -5,6 +5,12 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.6] - 2026-05-11
+
+### Fixed
+- **Screen sleeps while watching video on Android (#190)**: wake lock was only enabled once at player startup, so any system-side preemption (battery saver waking, returning from background) silently dropped it and the screen would dim/sleep mid-stream. The wake lock is now re-asserted whenever the app returns to the foreground (`AppLifecycleState.resumed`) and whenever the user resumes playback via the play button. Also calls `WakelockPlus.enable()` defensively on every play action — the package is idempotent so this is safe.
+- **No fullscreen button or way to fullscreen on tablet (#189)**: portrait tablet mode left video letterboxed with no way to expand it. Added an explicit fullscreen / exit-fullscreen `IconButton` to the player's top control bar (next to the External Player button) and rebound double-tap on the video surface to toggle fullscreen, matching mainstream player behavior. Long-press still toggles play/pause, and the center play/pause icon is now a tappable target (it used to be display-only) so users keep that affordance now that double-tap means fullscreen.
+
 ## [2.9.5] - 2026-05-03
 
 ### Fixed
