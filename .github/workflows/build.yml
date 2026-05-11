@@ -98,25 +98,31 @@ jobs:
             Write-Host "Created placeholder channels.json"
           }
 
-      # Build using tv_viewer.spec — the spec bundles customtkinter assets via
+      # Build using TVViewer.spec — the spec bundles customtkinter assets via
       # collect_data_files('customtkinter'). Building with raw CLI flags (the
       # previous approach) silently dropped CTK theme JSONs and caused v2.9.4
       # OSD invisibility bug. NEVER replace this with inline --hidden-import.
       - name: Build EXE from spec
-        run: python -m PyInstaller tv_viewer.spec --noconfirm
+        run: python -m PyInstaller TVViewer.spec --noconfirm
 
       - name: Verify build + bundled assets
         shell: pwsh
         run: |
-          $exe = "dist\TV_Viewer\TV_Viewer.exe"
+          $exe = "dist\TVViewer\TVViewer.exe"
           if (-not (Test-Path $exe)) { Write-Error "❌ $exe not found"; exit 1 }
           $size = [math]::Round((Get-Item $exe).Length / 1MB, 2)
           Write-Host "✅ EXE built: $size MB"
 
           # customtkinter theme JSONs MUST be bundled or OSD breaks (v2.9.4 bug)
-          $themes = Get-ChildItem -Recurse "dist\TV_Viewer\_internal\customtkinter" -Filter "*.json" -ErrorAction SilentlyContinue
+          $internalDir = "dist\TVViewer\_internal\customtkinter"
+          if (Test-Path $internalDir) {
+            $themes = Get-ChildItem -Recurse $internalDir -Filter "*.json" -ErrorAction SilentlyContinue
+          } else {
+            $themes = Get-ChildItem -Recurse "dist\TVViewer" -Filter "*.json" -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match 'customtkinter' }
+          }
           if ($themes.Count -lt 3) {
-            Write-Error "❌ customtkinter assets missing ($($themes.Count) themes) — OSD will be invisible. Check tv_viewer.spec collect_data_files('customtkinter')"
+            Write-Error "❌ customtkinter assets missing ($($themes.Count) themes) — OSD will be invisible. Check TVViewer.spec collect_data_files('customtkinter')"
             exit 1
           }
           Write-Host "✅ customtkinter assets bundled ($($themes.Count) theme files)"
@@ -124,7 +130,7 @@ jobs:
       - name: Package EXE folder for release
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist\TV_Viewer\*" -DestinationPath "dist\TV_Viewer-windows.zip" -Force
+          Compress-Archive -Path "dist\TVViewer\*" -DestinationPath "dist\TV_Viewer-windows.zip" -Force
           Write-Host "✅ Packaged: dist\TV_Viewer-windows.zip"
 
       - name: Upload to Release
@@ -135,6 +141,11 @@ jobs:
         run: |
           $version = "$env:INPUT_VERSION"
           if ($version -and $version -match '^v?[0-9]+\.[0-9]+\.[0-9]+') {
+            # Ensure release exists (publish job may not have run yet)
+            gh release view $version 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              gh release create $version --title "TV Viewer $version" --notes "Release in progress — notes will be updated when publish job completes." --draft=false
+            }
             gh release upload $version dist/TV_Viewer-windows.zip --clobber
           }
         shell: pwsh
@@ -244,6 +255,9 @@ jobs:
           APK_PATH=$(find build/app/outputs/flutter-apk -name "app-release.apk" | head -1)
           AAB_PATH=$(find build/app/outputs/bundle/release -name "app-release.aab" | head -1)
           if [ -n "$VERSION" ]; then
+            if ! gh release view "$VERSION" >/dev/null 2>&1; then
+              gh release create "$VERSION" --title "TV Viewer $VERSION" --notes "Release in progress — notes will be updated when publish job completes."
+            fi
             [ -n "$APK_PATH" ] && gh release upload "$VERSION" "$APK_PATH#TV_Viewer_${VERSION}_Android.apk" --clobber
             [ -n "$AAB_PATH" ] && gh release upload "$VERSION" "$AAB_PATH#TV_Viewer_${VERSION}_Android.aab" --clobber
           fi
@@ -310,6 +324,9 @@ jobs:
         run: |
           VERSION="$INPUT_VERSION"
           if [ -n "$VERSION" ]; then
+            if ! gh release view "$VERSION" >/dev/null 2>&1; then
+              gh release create "$VERSION" --title "TV Viewer $VERSION" --notes "Release in progress — notes will be updated when publish job completes."
+            fi
             mv dist/TV_Viewer "dist/TV_Viewer_${VERSION}_linux_x86_64"
             gh release upload "$VERSION" "dist/TV_Viewer_${VERSION}_linux_x86_64" --clobber
           fi
