@@ -24,12 +24,46 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+def _setup_bundled_libvlc() -> None:
+    """Point libvlc loader at PyInstaller-bundled VLC if present (#200).
+
+    When ``BUNDLE_LIBVLC_DIR`` was set during ``build.py`` we ship
+    libvlc.dll/libvlccore.dll alongside the EXE and the plugins/ subtree
+    inside it. The python-vlc loader looks at ``PYTHON_VLC_LIB_PATH`` /
+    ``PYTHON_VLC_MODULE_PATH`` env vars before falling back to the system,
+    so wire those up here before the ``import vlc`` below runs.
+
+    No-op on dev installs and on platforms where the user has system VLC.
+    """
+    if sys.platform != "win32":
+        return
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(
+        os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__)
+    )
+    libvlc = os.path.join(base, "libvlc.dll")
+    plugins = os.path.join(base, "plugins")
+    if os.path.isfile(libvlc):
+        os.environ.setdefault("PYTHON_VLC_LIB_PATH", libvlc)
+        # Help Windows resolve libvlccore.dll dependency
+        try:
+            os.add_dll_directory(base)  # py3.8+
+        except (AttributeError, OSError):
+            pass
+        os.environ["PATH"] = base + os.pathsep + os.environ.get("PATH", "")
+    if os.path.isdir(plugins):
+        os.environ.setdefault("PYTHON_VLC_MODULE_PATH", plugins)
+        os.environ.setdefault("VLC_PLUGIN_PATH", plugins)
+
+
+_setup_bundled_libvlc()
+
 try:
     import vlc
     VLC_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError) as _vlc_err:
     VLC_AVAILABLE = False
-    logger.warning("python-vlc not installed. Video playback will not work.")
+    logger.warning("python-vlc not loadable (%s). Video playback will not work.", _vlc_err)
 
 
 def get_vlc_hardware_acceleration_args(prefer_hwaccel: bool = True) -> list:

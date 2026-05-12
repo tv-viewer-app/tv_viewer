@@ -98,6 +98,37 @@ jobs:
             Write-Host "Created placeholder channels.json"
           }
 
+      # Generate Windows VERSIONINFO so SmartScreen / cloud-reputation treats
+      # the EXE as a properly-published binary rather than "unknown" (#190).
+      - name: Generate version_info.txt
+        shell: pwsh
+        run: |
+          python -c "from build import write_version_file; write_version_file('version_info.txt')"
+          if (Test-Path version_info.txt) { Write-Host "✅ version_info.txt generated" } else { Write-Error "❌ version_info.txt missing"; exit 1 }
+
+      # Download portable VLC and bundle libvlc.dll + plugins so the EXE
+      # works on a clean Windows install with NO VLC prerequisite (#200).
+      # Adds ~70 MB to the EXE folder; well worth eliminating the install
+      # blocker that bit ~half of new users.
+      - name: Download portable VLC for libvlc bundling
+        shell: pwsh
+        run: |
+          $vlcVersion = "3.0.20"
+          $url = "https://download.videolan.org/pub/videolan/vlc/$vlcVersion/win64/vlc-$vlcVersion-win64.zip"
+          Write-Host "Downloading $url"
+          Invoke-WebRequest -Uri $url -OutFile vlc.zip -UseBasicParsing
+          Expand-Archive -Path vlc.zip -DestinationPath vlc-extracted -Force
+          $vlcDir = Get-ChildItem vlc-extracted -Directory | Select-Object -First 1
+          $bundleDir = Join-Path $env:GITHUB_WORKSPACE "vlc-portable"
+          New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
+          Copy-Item "$($vlcDir.FullName)\libvlc.dll"     $bundleDir
+          Copy-Item "$($vlcDir.FullName)\libvlccore.dll" $bundleDir
+          Copy-Item "$($vlcDir.FullName)\plugins" $bundleDir -Recurse
+          $size = [math]::Round((Get-ChildItem $bundleDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+          Write-Host "✅ libvlc bundle staged at $bundleDir ($size MB)"
+          # Expose to PyInstaller spec
+          "BUNDLE_LIBVLC_DIR=$bundleDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       # Build using TVViewer.spec — the spec bundles customtkinter assets via
       # collect_data_files('customtkinter'). Building with raw CLI flags (the
       # previous approach) silently dropped CTK theme JSONs and caused v2.9.4
@@ -126,6 +157,15 @@ jobs:
             exit 1
           }
           Write-Host "✅ customtkinter assets bundled ($($themes.Count) theme files)"
+
+          # libvlc must be bundled (#200) so app works on clean Windows installs
+          $libvlc = "dist\TVViewer\libvlc.dll"
+          if (-not (Test-Path $libvlc)) {
+            Write-Error "❌ libvlc.dll not bundled — set BUNDLE_LIBVLC_DIR in CI"
+            exit 1
+          }
+          $plugins = (Get-ChildItem "dist\TVViewer\plugins" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue).Count
+          Write-Host "✅ libvlc bundled ($plugins plugin DLLs)"
 
       - name: Package EXE folder for release
         shell: pwsh

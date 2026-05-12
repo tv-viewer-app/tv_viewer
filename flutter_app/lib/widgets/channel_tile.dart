@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../data/channel_descriptions.dart';
 import '../models/channel.dart';
 import '../models/epg_info.dart';
 import '../providers/channel_provider.dart';
 import '../services/shared_db_service.dart';
 import 'quality_badge.dart';
+import 'safe_channel_logo.dart';
 
 /// Reusable channel list item widget (BL-015)
 class ChannelTile extends StatelessWidget {
@@ -129,42 +129,19 @@ class ChannelTile extends StatelessWidget {
 
   Widget _buildLeading() {
     final size = compact ? 28.0 : 40.0;
-    final iconSize = compact ? 14.0 : 24.0;
-    final fallbackIcon = Icon(
-      channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
-      color: Colors.white,
-      size: iconSize,
-    );
 
-    // #147: Use CachedNetworkImage for channel logos
-    final hasLogo = channel.logo != null &&
-        channel.logo!.isNotEmpty &&
-        (channel.logo!.startsWith('http://') || channel.logo!.startsWith('https://'));
-
+    // Channel logo via SafeChannelLogo (handles URL validation,
+    // 429 backoff via cache, and crash-safe fallback). #147 #194 #199.
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: channel.isWorking ? Colors.green : Colors.grey,
-      child: hasLogo
-          ? ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: channel.logo!,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                memCacheWidth: (size * 2).toInt(), // 2x for high DPI
-                maxWidthDiskCache: 80,
-                placeholder: (_, __) => SizedBox(
-                  width: size,
-                  height: size,
-                  child: const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-                errorWidget: (_, __, ___) => fallbackIcon,
-              ),
-            )
-          : fallbackIcon,
+      child: ClipOval(
+        child: SafeChannelLogo(
+          url: channel.logo,
+          size: size,
+          fallbackIcon: channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
+        ),
+      ),
     );
   }
 

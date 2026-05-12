@@ -76,15 +76,14 @@ The heart of TV Viewer is its crowdsourced channel database. Help make it better
 | Platform | Download | Notes |
 |----------|----------|-------|
 | Android | [Latest APK](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 8.0+ (API 26) |
-| Windows | [Latest EXE](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Requires [VLC](https://www.videolan.org/vlc/) |
+| Windows | [Latest EXE](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Self-contained — VLC is bundled |
 | Linux | [From source](#from-source-windowslinux) | Python 3.12+ + VLC |
 
 ## Quick Start
 
 ### Windows
-1. Download `TV_Viewer.exe` from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
-2. Install [VLC](https://www.videolan.org/vlc/) if not already installed
-3. Double-click to run
+1. Download `TV_Viewer-windows.zip` from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
+2. Extract anywhere and run `TVViewer.exe` — VLC is bundled, no separate install needed
 
 ### Android
 1. Download the `.apk` from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
@@ -196,7 +195,7 @@ See [SUPPORT_GUIDE.md](docs/SUPPORT_GUIDE.md) for detailed troubleshooting.
 
 | Problem | Solution |
 |---------|----------|
-| VLC not found | Install VLC from [videolan.org](https://www.videolan.org/vlc/) |
+| VLC not found | Windows EXE bundles VLC. From source, install VLC from [videolan.org](https://www.videolan.org/vlc/) |
 | No channels | Check internet connection, click "Refresh" |
 | Duplicate channels | Clear cache — channels consolidate automatically on next load |
 | Stream not playing | Use the source selector in the player to try an alternative stream |

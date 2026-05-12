@@ -5,6 +5,96 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-05-12
+
+This release was driven by Supabase telemetry analysis. Crash data showed that
+21% of all events from the field were Android crashes, dominated by three root
+causes (#199, #196, #194). On the desktop side, multiple users reported that
+the Windows EXE was being quarantined by Microsoft Defender. This release
+fixes all of those without requiring any AV exclusions on the user side.
+
+### Fixed — Android (P0/P1)
+- **Logo URL crashes — `No host specified in URI file:[PATH]` (#199, P0, 82× in field)**:
+  `Image.network(...)` and `CachedNetworkImage(...)` throw `ArgumentError`
+  *synchronously* inside Dart's HTTP client when handed a `file://...` URL or a
+  URL with no host — `errorBuilder` does not catch sync throws, so the whole
+  widget tree crashed. Added `flutter_app/lib/widgets/safe_channel_logo.dart`
+  which validates `Uri.tryParse(url)?.isScheme('http'|'https')` and `host.isNotEmpty`
+  before constructing the network image. `radio_screen.dart` and
+  `channel_tile.dart` now both go through it; bad logo URLs render the fallback
+  icon instead of crashing.
+- **Null-check operator crash in radio_screen `_playStation` setState (#196, P0, 20× in field)**:
+  the method `await`-ed `VideoPlayerController.initialize()` and `play()` then
+  called `setState()`. If the user tapped Back during the await the State was
+  already disposed and the `_controller!` null-check threw. Added `if (!mounted)`
+  guards after each await, with `_controller?.dispose()` cleanup, and a guard in
+  the catch block. Same hardening previously applied to `player_screen.dart`
+  (#82) is now consistent across the app.
+- **HTTP 429 from logo CDN crashes the player (#194, P1, 13× in field)**:
+  the new `SafeChannelLogo` widget uses `cached_network_image`'s built-in
+  exponential backoff and disk cache, so transient 429s now degrade to the
+  fallback icon and recover on next launch instead of taking the screen down.
+
+### Fixed — Analytics & data quality (P1/P2)
+- **`refresh_analytics_views()` failed with duplicate-key on `idx_mv_top` (#195, P1)**:
+  `mv_top_channels` groups by `(channel_hash, country, category)` but the
+  unique index that backs `REFRESH MATERIALIZED VIEW CONCURRENTLY` only
+  covered `channel_hash`. Same hash legitimately appears under multiple
+  country/category pairs, so the upsert phase blew up with `23505`. The MV is
+  rebuilt with `COALESCE(NULLIF(...), 'XX'/'')` on the nullable group cols
+  (NULLs in unique-index columns also break CONCURRENTLY refresh) and the
+  unique index now spans the full `(hash, country, category)` tuple. Migration
+  script: `scripts/fix_mv_top_channels.sql`.
+- **Country normalization (#192, P2)**: Flutter `analytics_service` now
+  routes `country` through a 50+ alias `_normalizeCountry()` map → ISO-3166
+  alpha-2. Old data showing `ISRAEL`, `Israel`, `il`, `IL` now all land as `IL`,
+  fixing dashboard breakdowns.
+
+### Changed — Windows EXE (P0/P1)
+- **Eliminated VLC prerequisite (#200, P1)**: Windows builds now bundle
+  `libvlc.dll`, `libvlccore.dll`, and the full `plugins/` tree from VLC 3.0.20
+  inside the EXE folder. The app starts and plays streams on a clean Windows
+  install with no VLC installation required. Adds ~70 MB to the bundle but
+  removes the #1 install blocker. `ui/vlc_controller.py` sets
+  `PYTHON_VLC_LIB_PATH` / `VLC_PLUGIN_PATH` to the bundled copies before
+  importing `vlc`, so it transparently prefers bundled libvlc and falls back
+  to system VLC if the user has it installed.
+- **Defender-hardened EXE bundle (#190)**: removed AV-flagged libraries from
+  the PyInstaller spec — `zeroconf` (mDNS, frequent false-positive),
+  `pychromecast`/`casttube`, `PIL._avif.pyd`/`PIL._webp.pyd`/`PIL._imagingcms`
+  (unused codec plugins, `_avif.pyd` is a known trigger). Cast support remains
+  available via runtime import (`try/except` already in place) — install
+  `pychromecast` separately to enable. UPX is explicitly disabled
+  (`--noupx` + `upx=False` in spec) — UPX-compressed EXEs are weighted
+  heavily in Defender's reputation model. Bundle is now ~12 MB lighter
+  before the libvlc addition.
+- **Windows VERSIONINFO embedded in EXE (#190)**: PyInstaller now writes a
+  proper `version_info.txt` (CompanyName, FileDescription, FileVersion,
+  ProductVersion, copyright) and embeds it in the EXE. SmartScreen and
+  Defender's cloud-reputation system weight signed metadata heavily —
+  unsigned binaries with no metadata are flagged as "unknown publisher".
+  This is the cheapest reputation signal we can ship without code-signing.
+
+### Build & CI
+- `TVViewer.spec` rewritten as a documented, structured spec (was an
+  auto-generated single-line file). Bundles customtkinter theme JSONs (fixes
+  the v2.9.4 OSD invisibility regression) and conditionally bundles libvlc
+  when CI sets `BUNDLE_LIBVLC_DIR`.
+- `.github/workflows/build.yml` Windows job now downloads VLC 3.0.20 portable,
+  generates `version_info.txt` from `config.APP_VERSION`, sets
+  `BUNDLE_LIBVLC_DIR` and verifies that `libvlc.dll` + plugins are present in
+  the final bundle. Build fails if any expected asset is missing.
+
+### Notes
+- Code signing (#202) is still pending — requires either a paid certificate
+  or a SignPath Foundation OSS sponsorship. The reputation hardening in this
+  release should sharply reduce false-positive rate, but signing remains the
+  definitive fix.
+- A bootloader rebuild from source (#201) was deferred to a follow-up release
+  — it adds 30+ minutes of CI time per platform and the cumulative impact of
+  the changes above (no UPX, no zeroconf, no _avif, version metadata, proper
+  VLC bundling) should already move the needle significantly.
+
 ## [2.9.7] - 2026-05-11
 
 ### Fixed

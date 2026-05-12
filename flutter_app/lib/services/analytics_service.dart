@@ -205,7 +205,7 @@ class AnalyticsService {
   Future<void> trackChannelPlay(String url, {String country = '', String category = ''}) async {
     await trackEvent('channel_play', {
       'url_hash': _hashUrl(url),
-      'country': country,
+      'country': _normalizeCountry(country),
       'category': category,
     });
   }
@@ -215,7 +215,7 @@ class AnalyticsService {
     await trackEvent('channel_fail', {
       'url_hash': _hashUrl(url),
       'error_code': error,
-      'country': country,
+      'country': _normalizeCountry(country),
       'category': category,
     });
   }
@@ -273,9 +273,91 @@ class AnalyticsService {
     await trackEvent('favorite', {
       'url_hash': _hashUrl(url),
       'action': action, // 'add' or 'remove'
-      'country': country,
+      'country': _normalizeCountry(country),
       'category': category,
     });
+  }
+
+  /// Normalize free-form country strings to ISO-3166-1 alpha-2 codes (#192).
+  ///
+  /// Inputs come from the channel database where country is sometimes a full
+  /// name ("Israel", "United States"), sometimes uppercase code ("ISRAEL"),
+  /// sometimes already alpha-2 ("IL"), and occasionally garbage ("XX", "").
+  ///
+  /// We map only the most common cases and leave anything else as the
+  /// uppercase first 2 characters, so the analytics stay groupable. Empty
+  /// inputs are emitted as "XX" (= unknown), matching the Python desktop.
+  static String _normalizeCountry(String country) {
+    if (country.isEmpty) return 'XX';
+    final upper = country.trim().toUpperCase();
+    if (upper.length == 2) return upper;
+    const aliases = <String, String>{
+      'ISRAEL': 'IL',
+      'UNITED STATES': 'US',
+      'UNITED STATES OF AMERICA': 'US',
+      'USA': 'US',
+      'UNITED KINGDOM': 'GB',
+      'GREAT BRITAIN': 'GB',
+      'UK': 'GB',
+      'GERMANY': 'DE',
+      'FRANCE': 'FR',
+      'SPAIN': 'ES',
+      'ITALY': 'IT',
+      'NETHERLANDS': 'NL',
+      'CANADA': 'CA',
+      'AUSTRALIA': 'AU',
+      'BRAZIL': 'BR',
+      'MEXICO': 'MX',
+      'INDIA': 'IN',
+      'JAPAN': 'JP',
+      'CHINA': 'CN',
+      'RUSSIA': 'RU',
+      'TURKEY': 'TR',
+      'POLAND': 'PL',
+      'SWEDEN': 'SE',
+      'NORWAY': 'NO',
+      'FINLAND': 'FI',
+      'DENMARK': 'DK',
+      'SWITZERLAND': 'CH',
+      'AUSTRIA': 'AT',
+      'BELGIUM': 'BE',
+      'PORTUGAL': 'PT',
+      'GREECE': 'GR',
+      'IRELAND': 'IE',
+      'ROMANIA': 'RO',
+      'UKRAINE': 'UA',
+      'CZECH REPUBLIC': 'CZ',
+      'CZECHIA': 'CZ',
+      'HUNGARY': 'HU',
+      'BULGARIA': 'BG',
+      'CROATIA': 'HR',
+      'SERBIA': 'RS',
+      'SLOVAKIA': 'SK',
+      'SLOVENIA': 'SI',
+      'EGYPT': 'EG',
+      'SAUDI ARABIA': 'SA',
+      'UAE': 'AE',
+      'UNITED ARAB EMIRATES': 'AE',
+      'IRAN': 'IR',
+      'IRAQ': 'IQ',
+      'PAKISTAN': 'PK',
+      'INDONESIA': 'ID',
+      'PHILIPPINES': 'PH',
+      'VIETNAM': 'VN',
+      'THAILAND': 'TH',
+      'MALAYSIA': 'MY',
+      'SINGAPORE': 'SG',
+      'SOUTH KOREA': 'KR',
+      'KOREA': 'KR',
+      'NEW ZEALAND': 'NZ',
+      'SOUTH AFRICA': 'ZA',
+      'ARGENTINA': 'AR',
+      'CHILE': 'CL',
+      'COLOMBIA': 'CO',
+      'PERU': 'PE',
+      'VENEZUELA': 'VE',
+    };
+    return aliases[upper] ?? upper.substring(0, 2);
   }
 
   /// Track session end with engagement depth.

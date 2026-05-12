@@ -6,6 +6,7 @@ import '../providers/channel_provider.dart';
 import '../services/watch_history_service.dart';
 import '../services/analytics_service.dart';
 import '../utils/logger_service.dart';
+import '../widgets/safe_channel_logo.dart';
 
 /// Dedicated radio player screen with genre browsing and audio-focused UI.
 class RadioScreen extends StatefulWidget {
@@ -94,8 +95,20 @@ class _RadioScreenState extends State<RadioScreen> {
 
       _controller = VideoPlayerController.networkUrl(Uri.parse(url));
       await _controller!.initialize();
+      // #196: widget can be disposed during async initialize; bail out
+      // before touching state on a defunct State object.
+      if (!mounted) {
+        _controller?.dispose();
+        _controller = null;
+        return;
+      }
       _controller!.setVolume(_volume);
       await _controller!.play();
+      if (!mounted) {
+        _controller?.dispose();
+        _controller = null;
+        return;
+      }
 
       _controller!.addListener(() {
         if (!mounted) return;
@@ -125,6 +138,7 @@ class _RadioScreenState extends State<RadioScreen> {
       AnalyticsService.instance.trackFeature('radio_play');
     } catch (e) {
       logger.warning('Radio playback error', e);
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = 'Failed to play station';
@@ -281,19 +295,13 @@ class _RadioScreenState extends State<RadioScreen> {
           CircleAvatar(
             radius: 22,
             backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
-            child: _currentStation?.logo != null &&
-                    _currentStation!.logo!.isNotEmpty
-                ? ClipOval(
-                    child: Image.network(
-                      _currentStation!.logo!,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.radio, size: 24),
-                    ),
-                  )
-                : const Icon(Icons.radio, size: 24),
+            child: ClipOval(
+              child: SafeChannelLogo(
+                url: _currentStation?.logo,
+                size: 44,
+                fallbackIcon: Icons.radio,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
 
@@ -382,18 +390,13 @@ class _RadioScreenState extends State<RadioScreen> {
         backgroundColor: isActive
             ? theme.colorScheme.primary.withOpacity(0.3)
             : theme.colorScheme.surfaceContainerHighest,
-        child: station.logo != null && station.logo!.isNotEmpty
-            ? ClipOval(
-                child: Image.network(
-                  station.logo!,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.radio, size: 20),
-                ),
-              )
-            : const Icon(Icons.radio, size: 20),
+        child: ClipOval(
+          child: SafeChannelLogo(
+            url: station.logo,
+            size: 40,
+            fallbackIcon: Icons.radio,
+          ),
+        ),
       ),
       title: Text(
         station.name,

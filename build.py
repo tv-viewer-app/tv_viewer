@@ -242,7 +242,22 @@ def build_executable(onefile=True):
         if os.path.exists(src):
             sep = ";" if platform.system() == "Windows" else ":"
             cmd.extend(["--add-data", f"{src}{sep}{dst}"])
-    
+
+    # Optional libvlc bundling (#200) — when CI sets BUNDLE_LIBVLC_DIR,
+    # we ship libvlc.dll/libvlccore.dll + plugins/ inside the EXE so the
+    # app runs on a clean Windows install with no VLC prerequisite.
+    libvlc_dir = os.environ.get("BUNDLE_LIBVLC_DIR", "").strip()
+    if libvlc_dir and os.path.isdir(libvlc_dir):
+        sep = ";" if platform.system() == "Windows" else ":"
+        for fname in ("libvlc.dll", "libvlccore.dll"):
+            fpath = os.path.join(libvlc_dir, fname)
+            if os.path.isfile(fpath):
+                cmd.extend(["--add-binary", f"{fpath}{sep}."])
+        plugins_dir = os.path.join(libvlc_dir, "plugins")
+        if os.path.isdir(plugins_dir):
+            cmd.extend(["--add-data", f"{plugins_dir}{sep}plugins"])
+        print(f"Bundling libvlc from: {libvlc_dir}")
+
     # Add the main script
     cmd.append(MAIN_SCRIPT)
     

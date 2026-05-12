@@ -211,12 +211,12 @@ CREATE UNIQUE INDEX idx_mv_dau ON mv_daily_active_users (day, platform);
 DROP MATERIALIZED VIEW IF EXISTS mv_top_channels CASCADE;
 CREATE MATERIALIZED VIEW mv_top_channels AS
 SELECT
-    event_data->>'url_hash'              AS channel_hash,
-    event_data->>'country'               AS channel_country,
-    event_data->>'category'              AS channel_category,
-    COUNT(*)                             AS play_count,
-    COUNT(DISTINCT device_id)            AS unique_players,
-    MAX(created_at)                      AS last_played
+    event_data->>'url_hash'                              AS channel_hash,
+    COALESCE(NULLIF(event_data->>'country',  ''), 'XX') AS channel_country,
+    COALESCE(NULLIF(event_data->>'category', ''), '')   AS channel_category,
+    COUNT(*)                                             AS play_count,
+    COUNT(DISTINCT device_id)                            AS unique_players,
+    MAX(created_at)                                      AS last_played
 FROM analytics_events
 WHERE event_type = 'channel_play'
   AND event_data->>'url_hash' IS NOT NULL
@@ -224,7 +224,10 @@ GROUP BY 1, 2, 3
 ORDER BY play_count DESC
 LIMIT 1000;
 
-CREATE UNIQUE INDEX idx_mv_top ON mv_top_channels (channel_hash);
+-- Unique index spans the full GROUP BY tuple — required for
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY to upsert correctly. (#195)
+CREATE UNIQUE INDEX idx_mv_top
+    ON mv_top_channels (channel_hash, channel_country, channel_category);
 
 
 -- ── 3. Client Platform Breakdown ────────────────────────────────────────
