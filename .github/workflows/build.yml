@@ -158,14 +158,21 @@ jobs:
           }
           Write-Host "✅ customtkinter assets bundled ($($themes.Count) theme files)"
 
-          # libvlc must be bundled (#200) so app works on clean Windows installs
-          $libvlc = "dist\TVViewer\libvlc.dll"
+          # libvlc must be bundled (#200) so app works on clean Windows installs.
+          # PyInstaller 6.x onedir places --add-binary contents under _internal/.
+          $libvlc = "dist\TVViewer\_internal\libvlc.dll"
+          if (-not (Test-Path $libvlc)) {
+            # Fallback to legacy layout (root of dist folder)
+            $libvlc = "dist\TVViewer\libvlc.dll"
+          }
           if (-not (Test-Path $libvlc)) {
             Write-Error "❌ libvlc.dll not bundled — set BUNDLE_LIBVLC_DIR in CI"
             exit 1
           }
-          $plugins = (Get-ChildItem "dist\TVViewer\plugins" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue).Count
-          Write-Host "✅ libvlc bundled ($plugins plugin DLLs)"
+          $pluginsDir = "dist\TVViewer\_internal\plugins"
+          if (-not (Test-Path $pluginsDir)) { $pluginsDir = "dist\TVViewer\plugins" }
+          $plugins = (Get-ChildItem $pluginsDir -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue).Count
+          Write-Host "✅ libvlc bundled at $libvlc ($plugins plugin DLLs)"
 
       - name: Package EXE folder for release
         shell: pwsh
