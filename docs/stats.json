@@ -1,20 +1,20 @@
 {
-  "updated_at": "2026-05-14T08:29:13.078430+00:00",
-  "total_channels": 20730,
+  "updated_at": "2026-05-15T08:40:18.016855+00:00",
+  "total_channels": 20794,
   "countries": 31,
   "categories": 58,
   "top_countries": [
     {
       "name": "France",
-      "count": 363
+      "count": 347
     },
     {
       "name": "China",
-      "count": 144
+      "count": 158
     },
     {
       "name": "Brazil",
-      "count": 101
+      "count": 103
     },
     {
       "name": "Canada",
@@ -88,7 +88,7 @@
   "top_categories": [
     {
       "name": "Culture",
-      "count": 193
+      "count": 194
     },
     {
       "name": "Comedy",
@@ -96,15 +96,15 @@
     },
     {
       "name": "Animation",
-      "count": 94
+      "count": 95
     },
     {
       "name": "Business",
-      "count": 90
+      "count": 91
     },
     {
       "name": "Classic",
-      "count": 51
+      "count": 52
     },
     {
       "name": "Cooking",
@@ -116,7 +116,7 @@
     },
     {
       "name": "Documentary",
-      "count": 38
+      "count": 34
     },
     {
       "name": "Auto",
