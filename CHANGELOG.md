@@ -5,6 +5,37 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1] - 2026-05-16
+
+UX fixes for Android landscape mode based on direct user feedback.
+
+### Fixed
+- **Android landscape unusable on phones** (#204): Phones in landscape were routed
+  to the tablet layout (because `screenWidth > 600` is true on most landscape
+  phones), which stacked search + 2 rows of filters + stats above the channel
+  list — leaving room for ~1 channel on a 6" device. Phone-vs-tablet detection
+  now uses `MediaQuery.size.shortestSide > 600` (the Material Design definition),
+  so any real phone in landscape gets the dedicated phone-landscape layout with
+  filters in a drawer.
+- **Search field moved into the AppBar** in phone-landscape mode, reclaiming an
+  entire row of vertical space. Stats bar height halved (compact variant).
+
+### Added
+- **Filter persistence** (#205): The user's last-used filter selections
+  (category, country, language, media type, status, favorites-only) are now
+  saved in `SharedPreferences` and restored on app launch. Favorites were
+  already persisted via `FavoritesService`; this extends the same pattern to
+  all filter dropdowns through a new `FiltersService`. Search query is
+  intentionally NOT persisted (transient by design).
+- "Clear filters" now also resets the persisted values.
+
+### Files changed
+- `flutter_app/lib/services/filters_service.dart` (new)
+- `flutter_app/lib/providers/channel_provider.dart` (load on `fetchChannels`,
+  save on every `setX` / `toggleFavoritesFilter` / `clearFilters`)
+- `flutter_app/lib/screens/home_screen.dart` (`shortestSide` detection,
+  in-AppBar search field, compact stats bar)
+
 ## [2.10.0] - 2026-05-12
 
 This release was driven by Supabase telemetry analysis. Crash data showed that

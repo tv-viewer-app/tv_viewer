@@ -181,18 +181,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth > 600;
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final mq = MediaQuery.of(context);
+    final screenWidth = mq.size.width;
+    // Use shortestSide for the phone-vs-tablet decision — width alone treats
+    // every landscape phone as a tablet and breaks the layout (#212).
+    final isTablet = mq.size.shortestSide > 600;
+    final isLandscape = mq.orientation == Orientation.landscape;
     final compactAppBar = isLandscape && !isTablet;
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: compactAppBar ? 36 : null,
+        toolbarHeight: compactAppBar ? 40 : null,
         titleSpacing: compactAppBar ? 4 : null,
-        title: Text(
-          compactAppBar ? '📺 TV Viewer' : '📺 TV Viewer',
-          style: compactAppBar ? const TextStyle(fontSize: 14) : null,
-        ),
+        // In compact mode the title is replaced by an inline search field
+        // so the body can give 100% of its vertical space to the channel list.
+        title: compactAppBar
+            ? _buildAppBarSearch()
+            : Text(
+                '📺 TV Viewer',
+                style: compactAppBar ? const TextStyle(fontSize: 14) : null,
+              ),
         actions: [
           // Filter drawer toggle (landscape phone only)
           if (compactAppBar)
@@ -456,6 +463,49 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Compact inline search field rendered in the AppBar for landscape phones.
+  /// Replaces the title + inline search bar to reclaim vertical space (#212).
+  Widget _buildAppBarSearch() {
+    return SizedBox(
+      height: 32,
+      child: TextField(
+        controller: _searchController,
+        textInputAction: TextInputAction.search,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          hintText: 'Search channels…',
+          hintStyle: const TextStyle(fontSize: 13),
+          prefixIcon: const Icon(Icons.search, size: 18),
+          prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear, size: 16),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () {
+                    _searchController.clear();
+                    context.read<ChannelProvider>().setSearchQuery('');
+                    setState(() {});
+                  },
+                ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        onChanged: (v) {
+          context.read<ChannelProvider>().setSearchQuery(v);
+          setState(() {}); // refresh suffix clear icon
+        },
+      ),
+    );
+  }
+
   /// Builds the search bar widget.
   Widget _buildSearchBar({double padding = 12.0}) {
     return Padding(
@@ -494,34 +544,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Builds the stats bar showing channel counts.
-  Widget _buildStatsBar() {
+  Widget _buildStatsBar({bool compact = false}) {
+    final vPad = compact ? 2.0 : 6.0;
+    final hPad = compact ? 8.0 : 12.0;
+    final iconSize = compact ? 11.0 : 14.0;
     return Consumer<ChannelProvider>(
       builder: (context, provider, _) {
+        final base = Theme.of(context).textTheme.bodySmall;
+        final style = compact ? base?.copyWith(fontSize: 11) : base;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${provider.channels.length} channels',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text('${provider.channels.length} channels', style: style),
               Row(
                 children: [
-                  Icon(Icons.favorite, size: 14, color: Colors.red.shade300),
+                  Icon(Icons.favorite, size: iconSize, color: Colors.red.shade300),
                   const SizedBox(width: 4),
                   Text(
                     '${provider.favoritesCount}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.red.shade300,
-                        ),
+                    style: style?.copyWith(color: Colors.red.shade300),
                   ),
                   const SizedBox(width: 12),
                   Text(
                     '${provider.workingCount} working',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.green,
-                        ),
+                    style: style?.copyWith(color: Colors.green),
                   ),
                 ],
               ),
@@ -653,6 +701,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Landscape layout: side-by-side with filter sidebar (left) and channel list (right).
   /// Phone landscape layout: channel list (left) + embedded player (right).
   /// Filters accessible via drawer (swipe from left or tap filter icon).
+  /// Search lives in the AppBar in this mode, so the body is list-only.
   Widget _buildLandscapeBody() {
     return Column(
       children: [
@@ -661,13 +710,12 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: Row(
             children: [
-              // Left panel: compact search + channel list
+              // Left panel: stats + channel list (search is in the AppBar)
               Expanded(
                 flex: 2,
                 child: Column(
                   children: [
-                    _buildSearchBar(padding: 4.0),
-                    _buildStatsBar(),
+                    _buildStatsBar(compact: true),
                     Expanded(
                       child: Consumer<ChannelProvider>(
                         builder: (context, provider, _) {

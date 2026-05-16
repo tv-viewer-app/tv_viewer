@@ -7,6 +7,7 @@ import '../models/channel.dart';
 import '../repositories/channel_repository.dart';
 import '../services/m3u_service.dart';
 import '../services/favorites_service.dart';
+import '../services/filters_service.dart';
 import '../services/parental_controls_service.dart';
 import '../services/shared_db_service.dart';
 import '../services/epg_service.dart';
@@ -284,6 +285,7 @@ class ChannelProvider extends ChangeNotifier {
 
     // Load preferences
     await _loadFavorites();
+    await _loadPersistedFilters();
 
     // Try to load from cache first
     final cached = await _loadFromCache();
@@ -839,6 +841,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedCategory = category;
     _applyFilters();
     notifyListeners();
+    FiltersService.saveCategory(category);
   }
   
   /// Set country filter
@@ -846,6 +849,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedCountry = country;
     _applyFilters();
     notifyListeners();
+    FiltersService.saveCountry(country);
   }
   
   /// BL-017: Set language filter
@@ -853,6 +857,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedLanguage = language;
     _applyFilters();
     notifyListeners();
+    FiltersService.saveLanguage(language);
   }
   
   /// Set media type filter (TV/Radio)
@@ -860,6 +865,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedMediaType = mediaType;
     _applyFilters();
     notifyListeners();
+    FiltersService.saveMediaType(mediaType);
   }
 
   /// Set channel status filter (Working/Failed/Unchecked)
@@ -867,6 +873,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedStatus = status;
     _applyFilters();
     notifyListeners();
+    FiltersService.saveStatus(status);
   }
 
   /// Mark a channel as failed (user-reported broken).
@@ -887,6 +894,7 @@ class ChannelProvider extends ChangeNotifier {
     _showFavoritesOnly = !_showFavoritesOnly;
     _applyFilters();
     notifyListeners();
+    FiltersService.saveFavoritesOnly(_showFavoritesOnly);
   }
 
   /// Re-fetch channels after parental controls change (e.g. over-18 toggle).
@@ -927,6 +935,24 @@ class ChannelProvider extends ChangeNotifier {
     _searchQuery = '';
     _applyFilters();
     notifyListeners();
+    FiltersService.clear();
+  }
+
+  /// Load the user's last-used filter selections from SharedPreferences.
+  /// Called once during [fetchChannels] before any channels are loaded so the
+  /// filter state is correct by the time the list renders.
+  Future<void> _loadPersistedFilters() async {
+    try {
+      final s = await FiltersService.load();
+      _selectedCategory = s.category;
+      _selectedCountry = s.country;
+      _selectedLanguage = s.language;
+      _selectedMediaType = s.mediaType;
+      _selectedStatus = s.status;
+      _showFavoritesOnly = s.favoritesOnly;
+    } catch (e) {
+      logger.warning('Failed to restore persisted filters', e);
+    }
   }
 
   /// Check if any filters are active (BL-008)
