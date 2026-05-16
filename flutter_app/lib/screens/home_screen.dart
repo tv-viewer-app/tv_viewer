@@ -50,6 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Channel? _tabletSelectedChannel;
   int? _tabletSelectedIndex;
 
+  // True while the embedded PlayerScreen is in fullscreen mode (#206).
+  // When true, the home Scaffold hides its AppBar/drawer/channel list and
+  // gives 100% of the screen to the player.
+  bool _playerFullscreen = false;
+
   @override
   void initState() {
     super.initState();
@@ -189,7 +194,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final isLandscape = mq.orientation == Orientation.landscape;
     final compactAppBar = isLandscape && !isTablet;
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: _playerFullscreen ? Colors.black : null,
+      appBar: _playerFullscreen
+          ? null
+          : AppBar(
         toolbarHeight: compactAppBar ? 40 : null,
         titleSpacing: compactAppBar ? 4 : null,
         // In compact mode the title is replaced by an inline search field
@@ -399,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       // Filter drawer for landscape phone mode
-      drawer: compactAppBar ? _buildFilterDrawer() : null,
+      drawer: (_playerFullscreen || !compactAppBar) ? null : _buildFilterDrawer(),
       key: _scaffoldKey,
       body: isTablet && isLandscape
           ? _buildTabletLandscapeBody()
@@ -705,12 +713,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLandscapeBody() {
     return Column(
       children: [
-        _buildScanProgress(),
-        _buildErrorBanner(),
+        if (!_playerFullscreen) _buildScanProgress(),
+        if (!_playerFullscreen) _buildErrorBanner(),
         Expanded(
           child: Row(
             children: [
               // Left panel: stats + channel list (search is in the AppBar)
+              if (!_playerFullscreen)
               Expanded(
                 flex: 2,
                 child: Column(
@@ -763,7 +772,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              VerticalDivider(width: 1, color: Theme.of(context).dividerColor),
+              if (!_playerFullscreen)
+                VerticalDivider(width: 1, color: Theme.of(context).dividerColor),
               // Right panel: embedded player
               Expanded(
                 flex: 3,
@@ -773,6 +783,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         channel: _tabletSelectedChannel!,
                         channelList: context.read<ChannelProvider>().channels,
                         channelIndex: _tabletSelectedIndex,
+                        embedded: true,
+                        onFullscreenChanged: (fs) {
+                          if (mounted) setState(() => _playerFullscreen = fs);
+                        },
                       )
                     : Center(
                         child: Column(
@@ -1102,12 +1116,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTabletLandscapeBody() {
     return Column(
       children: [
-        _buildScanProgress(),
-        _buildErrorBanner(),
+        if (!_playerFullscreen) _buildScanProgress(),
+        if (!_playerFullscreen) _buildErrorBanner(),
         Expanded(
           child: Row(
             children: [
               // Left: channel list panel
+              if (!_playerFullscreen)
               Expanded(
                 flex: 2,
                 child: Column(
@@ -1169,6 +1184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               // Divider between panels
+              if (!_playerFullscreen)
               VerticalDivider(
                 width: 1,
                 color: Theme.of(context).dividerColor,
@@ -1182,6 +1198,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         channel: _tabletSelectedChannel!,
                         channelList: context.read<ChannelProvider>().channels,
                         channelIndex: _tabletSelectedIndex,
+                        embedded: true,
+                        onFullscreenChanged: (fs) {
+                          if (mounted) setState(() => _playerFullscreen = fs);
+                        },
                       )
                     : Center(
                         child: Column(

@@ -5,6 +5,20 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.2] - 2026-05-16
+
+Android UX fix for the embedded fullscreen experience.
+
+### Fixed
+- **Android fullscreen showed channel list and toolbar** (#206): On Android phones
+  in landscape and tablets, tapping the fullscreen button only hid the system
+  status bar — the left-hand channel list and app top bar stayed visible, so the
+  video occupied only a fraction of the screen. The embedded `PlayerScreen` now
+  notifies its parent (`HomeScreen`) via an `onFullscreenChanged` callback, and
+  the home Scaffold hides the AppBar, drawer, scan/error banners, channel-list
+  panel and divider while the player is fullscreen — giving the video 100% of
+  the screen until the user double-taps or presses the exit-fullscreen button.
+
 ## [2.10.1] - 2026-05-16
 
 UX fixes for Android landscape mode based on direct user feedback.

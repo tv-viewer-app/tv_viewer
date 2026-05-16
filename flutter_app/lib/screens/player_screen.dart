@@ -25,11 +25,27 @@ class PlayerScreen extends StatefulWidget {
   final List<Channel>? channelList;
   final int? channelIndex;
 
+  /// When true, this PlayerScreen is embedded inside another Scaffold
+  /// (e.g. the home screen's tablet/landscape layout). The fullscreen toggle
+  /// then notifies the parent via [onFullscreenChanged] so the parent can
+  /// hide its surrounding chrome (#206).
+  final bool embedded;
+
+  /// Initial fullscreen value when [embedded] is true.
+  final bool isFullscreen;
+
+  /// Callback invoked when the user toggles fullscreen via the controls
+  /// or a double-tap. Only meaningful when [embedded] is true.
+  final ValueChanged<bool>? onFullscreenChanged;
+
   const PlayerScreen({
     super.key,
     required this.channel,
     this.channelList,
     this.channelIndex,
+    this.embedded = false,
+    this.isFullscreen = false,
+    this.onFullscreenChanged,
   });
 
   @override
@@ -80,6 +96,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _isFullscreen = widget.isFullscreen;
     
     _initializePlayer();
     _initializeWakeLock();
@@ -405,6 +422,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _safeSetState(() {
       _isFullscreen = goingFullscreen;
     });
+    // Notify embedding parent (home screen) so it can hide its chrome (#206).
+    widget.onFullscreenChanged?.call(goingFullscreen);
     if (goingFullscreen) {
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
