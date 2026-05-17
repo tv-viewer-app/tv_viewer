@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider paths used for in-app APK self-update (#207).
+  The downloaded APK lives in the app's external files dir (getExternalFilesDir),
+  which path_provider exposes via getExternalStorageDirectory on Android.
+-->
+<paths>
+    <external-files-path name="updates" path="updates/"/>
+    <cache-path name="cache_updates" path="updates/"/>
+</paths>

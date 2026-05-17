@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/parental_controls_service.dart';
 import '../services/settings_service.dart';
+import '../services/update_service.dart';
 import '../widgets/pin_dialog.dart';
 import 'parental_settings_screen.dart';
 import 'repo_management_screen.dart';
@@ -202,6 +203,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(_appVersion),
                 ),
                 ListTile(
+                  title: const Text('Check for updates'),
+                  subtitle: const Text('Latest release on GitHub'),
+                  trailing: const Icon(Icons.system_update, size: 20),
+                  onTap: _checkForUpdates,
+                ),
+                ListTile(
                   title: const Text('Open Source Licenses'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -247,6 +254,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// Force a fresh GitHub Releases check, bypassing the 24h rate limit
+  /// and any user-dismissed flag. Shows a small snackbar while running.
+  Future<void> _checkForUpdates() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Checking for updates…'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+    final info = await UpdateService.checkForUpdate(force: true);
+    if (!mounted) return;
+    if (info == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text("You're up to date")),
+      );
+      return;
+    }
+    await UpdateService.showUpdateDialog(context, info);
   }
 
   Future<void> _openParentalSettings() async {

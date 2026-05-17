@@ -97,9 +97,11 @@ class _HomeScreenState extends State<HomeScreen> {
   
   /// Check for app updates via GitHub Releases API
   Future<void> _checkForUpdates() async {
-    final newVersion = await UpdateService.checkForUpdate();
-    if (newVersion != null && mounted) {
-      UpdateService.showUpdateBanner(context, newVersion);
+    final info = await UpdateService.checkForUpdate();
+    if (info != null && mounted) {
+      // Use the rich dialog directly — release notes + in-app install
+      // path (#207). Banner is no longer used on auto-check.
+      UpdateService.showUpdateDialog(context, info);
     }
   }
   

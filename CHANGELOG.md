@@ -5,6 +5,34 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.3] - 2026-05-17
+
+In-app update install (no more "hunt-for-the-APK-on-GitHub").
+
+### Added
+- **In-app APK install on Android** (#207): The update dialog now downloads
+  the APK directly from the GitHub release asset and hands it to the Android
+  package installer. Three days post-2.10.0 our analytics showed 0% adoption —
+  every user had to visit the releases page, find the right asset, allow
+  "install from unknown sources" and tap install. Now it's one button.
+  - Added `REQUEST_INSTALL_PACKAGES` permission + `FileProvider` (authority
+    `${applicationId}.fileprovider`, paths in `res/xml/file_paths.xml`).
+  - New dep `open_filex` to launch the installer with the correct MIME type.
+  - APKs are cached in the app's external files dir under `updates/` and
+    re-used if a previous attempt already pulled the same byte count.
+- **Release notes + progress in the update dialog** (#207): The dialog now
+  shows the GitHub release `body` (markdown text) and a live download
+  progress bar instead of a one-line "new version available" banner.
+- **"Check for updates" in Settings → About** (#207): Forces a fresh API
+  call that bypasses both the 24-hour rate limit and the "Later" dismissal.
+
+### Changed
+- `UpdateService.checkForUpdate()` now returns a structured `UpdateInfo`
+  (version, tag, release notes, APK asset URL, size, html_url) instead of a
+  bare version string. The legacy banner helper still works via the new
+  rich dialog so any third-party callers keep functioning.
+- Auto-check on app open now opens the rich dialog directly (no banner step).
+
 ## [2.10.2] - 2026-05-16
 
 Android UX fix for the embedded fullscreen experience.
