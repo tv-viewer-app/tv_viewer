@@ -907,114 +907,140 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                     ),
                   ),
                   child: SafeArea(
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        // Previous channel button
-                        if (_hasChannelList)
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        children: [
                           IconButton(
-                            icon: Icon(Icons.skip_previous,
-                                color: _hasPrevious ? Colors.white : Colors.white24),
-                            tooltip: 'Previous channel',
-                            onPressed: _hasPrevious ? _previousChannel : null,
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            iconSize: 22,
+                            padding: const EdgeInsets.all(6),
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            onPressed: () => Navigator.pop(context),
                           ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                children: [
-                                  // LIVE badge (BL-027)
-                                  const LiveBadge(),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      widget.channel.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    const LiveBadge(),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        widget.channel.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                ],
-                              ),
-                              // Show quality badge and bitrate
-                              Row(
-                                children: [
-                                  if (_resolution != null || widget.channel.resolution != null) ...[
-                                    QualityBadge(
-                                      resolution: _resolution ?? widget.channel.resolution,
-                                    ),
-                                    const SizedBox(width: 8),
                                   ],
-                                  if (widget.channel.formattedBitrate != null)
-                                    Text(
-                                      widget.channel.formattedBitrate!,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
+                                ),
+                                Row(
+                                  children: [
+                                    if (_resolution != null || widget.channel.resolution != null) ...[
+                                      QualityBadge(
+                                        resolution: _resolution ?? widget.channel.resolution,
                                       ),
-                                    ),
-                                ],
+                                      const SizedBox(width: 6),
+                                    ],
+                                    if (widget.channel.formattedBitrate != null)
+                                      Text(
+                                        widget.channel.formattedBitrate!,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Fullscreen toggle stays on the top bar as the
+                          // primary visible CTA. Secondary actions live in
+                          // the overflow menu to keep the top bar readable
+                          // on narrow phones (#209).
+                          IconButton(
+                            icon: Icon(
+                              _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                              color: Colors.white,
+                            ),
+                            iconSize: 22,
+                            padding: const EdgeInsets.all(6),
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            tooltip: _isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
+                            onPressed: _toggleFullscreen,
+                          ),
+                          // Overflow menu — Cast / Report / External / PiP
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, color: Colors.white),
+                            iconSize: 22,
+                            padding: const EdgeInsets.all(6),
+                            tooltip: 'More',
+                            onSelected: (v) {
+                              switch (v) {
+                                case 'pip':
+                                  _enablePip();
+                                  break;
+                                case 'cast':
+                                  _showCastDialog();
+                                  break;
+                                case 'report':
+                                  if (!_reportSent) _reportBroken();
+                                  break;
+                                case 'external':
+                                  _openInExternalPlayer();
+                                  break;
+                              }
+                            },
+                            itemBuilder: (ctx) => [
+                              if (_isPipSupported && !_isPipMode)
+                                const PopupMenuItem(
+                                  value: 'pip',
+                                  child: ListTile(
+                                    leading: Icon(Icons.picture_in_picture_alt),
+                                    title: Text('Picture in Picture'),
+                                    dense: true,
+                                  ),
+                                ),
+                              const PopupMenuItem(
+                                value: 'cast',
+                                child: ListTile(
+                                  leading: Icon(Icons.cast),
+                                  title: Text('Cast'),
+                                  dense: true,
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'report',
+                                enabled: !_reportSent,
+                                child: ListTile(
+                                  leading: Icon(
+                                    _reportSent ? Icons.check_circle : Icons.report_problem,
+                                    color: _reportSent ? Colors.green : Colors.amber,
+                                  ),
+                                  title: Text(_reportSent ? 'Reported' : 'Report broken'),
+                                  dense: true,
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'external',
+                                child: ListTile(
+                                  leading: Icon(Icons.open_in_new),
+                                  title: Text('Open in External App'),
+                                  dense: true,
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        // Next channel button
-                        if (_hasChannelList)
-                          IconButton(
-                            icon: Icon(Icons.skip_next,
-                                color: _hasNext ? Colors.white : Colors.white24),
-                            tooltip: 'Next channel',
-                            onPressed: _hasNext ? _nextChannel : null,
-                          ),
-                        // PiP button (only show if supported and not in PiP mode)
-                        if (_isPipSupported && !_isPipMode)
-                          IconButton(
-                            icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white),
-                            tooltip: 'Picture in Picture',
-                            onPressed: _enablePip,
-                          ),
-                        // Cast button
-                        IconButton(
-                          icon: const Icon(Icons.cast, color: Colors.white),
-                          tooltip: 'Cast',
-                          onPressed: _showCastDialog,
-                        ),
-                        // Report broken channel button
-                        IconButton(
-                          icon: Icon(
-                            _reportSent ? Icons.check_circle : Icons.report_problem,
-                            color: _reportSent ? Colors.green : Colors.amber,
-                          ),
-                          tooltip: _reportSent ? 'Reported' : 'Report broken',
-                          onPressed: _reportSent ? null : _reportBroken,
-                        ),
-                        // External player button
-                        IconButton(
-                          icon: const Icon(Icons.open_in_new, color: Colors.white),
-                          tooltip: 'Open in External App',
-                          onPressed: _openInExternalPlayer,
-                        ),
-                        // Fullscreen toggle (#189)
-                        IconButton(
-                          icon: Icon(
-                            _isFullscreen
-                                ? Icons.fullscreen_exit
-                                : Icons.fullscreen,
-                            color: Colors.white,
-                          ),
-                          tooltip: _isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
-                          onPressed: _toggleFullscreen,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1063,6 +1089,46 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Transport controls: prev / play-pause / next (#209)
+                      Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_hasChannelList)
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.skip_previous,
+                                    color: _hasPrevious ? Colors.white : Colors.white24,
+                                  ),
+                                  iconSize: 32,
+                                  tooltip: 'Previous channel',
+                                  onPressed: _hasPrevious ? _previousChannel : null,
+                                ),
+                              const SizedBox(width: 12),
+                              IconButton(
+                                icon: Icon(
+                                  _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                  color: Colors.white,
+                                ),
+                                iconSize: 44,
+                                tooltip: _isPlaying ? 'Pause' : 'Play',
+                                onPressed: _togglePlayPause,
+                              ),
+                              const SizedBox(width: 12),
+                              if (_hasChannelList)
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.skip_next,
+                                    color: _hasNext ? Colors.white : Colors.white24,
+                                  ),
+                                  iconSize: 32,
+                                  tooltip: 'Next channel',
+                                  onPressed: _hasNext ? _nextChannel : null,
+                                ),
+                            ],
+                          ),
+                        ),
                       // Volume control
                       Row(
                         children: [

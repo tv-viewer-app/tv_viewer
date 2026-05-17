@@ -5,6 +5,25 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.5] - 2026-05-17
+
+Player top bar redesign — fits on narrow phones.
+
+### Fixed
+- **Top toolbar overflow / fullscreen button half-cut** (#209): The player
+  top bar packed 7-9 IconButtons (back, prev, next, PiP, cast, report,
+  external, fullscreen) plus the channel title at default 48 dp width each,
+  overflowing portrait-phone widths and clipping the fullscreen button.
+
+### Changed
+- **Compact top bar**: back / title (+ live badge / quality / bitrate) /
+  fullscreen / "more". Secondary actions (PiP, Cast, Report, External) moved
+  into a 3-dot overflow menu. Icons shrunk to 22 px with 6 px padding.
+- **Transport controls moved to bottom OSD**: Previous / Play-Pause / Next
+  are now centered above the volume slider in the bottom control bar.
+  Disabled prev/next still render (dimmed) to keep the layout stable while
+  navigating.
+
 ## [2.10.4] - 2026-05-17
 
 Help & Support screen layout fixes.
