@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-05-16T07:51:47.110920+00:00",
-  "total_channels": 20794,
+  "updated_at": "2026-05-17T08:11:26.347102+00:00",
+  "total_channels": 20822,
   "countries": 31,
-  "categories": 58,
+  "categories": 57,
   "top_countries": [
     {
       "name": "France",
@@ -92,7 +92,7 @@
     },
     {
       "name": "Comedy",
-      "count": 100
+      "count": 101
     },
     {
       "name": "Animation",
