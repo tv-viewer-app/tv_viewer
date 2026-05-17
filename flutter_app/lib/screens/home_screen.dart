@@ -39,7 +39,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _filterAreaKey = GlobalKey();
   
   bool _hasShownOnboarding = false;
-  bool _filtersCollapsed = false;
+  bool _filtersCollapsed = true;
+  bool _recentCollapsed = false;
   int _currentTooltipIndex = 0;
   List<String> _tooltipsToShow = [];
   
@@ -1044,65 +1045,79 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
         ],
-        _buildStatsBar(),
-        // Recently Played Section
+        _buildStatsBar(compact: true),
+        // Recently Played Section (collapsible)
         if (_recentChannels.isNotEmpty)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.history, size: 16,
-                        color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Recently Played',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                height: 52,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: _recentChannels.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final entry = _recentChannels[index];
-                    final name = entry['name'] as String? ?? '';
-                    final url = entry['url'] as String? ?? '';
-                    final country = entry['country'] as String? ?? '';
-                    final category = entry['category'] as String? ?? '';
-                    return ActionChip(
-                      avatar: const Icon(Icons.play_circle_fill, size: 18),
-                      label: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+              InkWell(
+                onTap: () => setState(() => _recentCollapsed = !_recentCollapsed),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _recentCollapsed ? Icons.expand_more : Icons.expand_less,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                      tooltip: [name, country, category]
-                          .where((s) => s.isNotEmpty)
-                          .join(' • '),
-                      onPressed: () {
-                        final channel = Channel(
-                          name: name,
-                          url: url,
-                          country: country.isNotEmpty ? country : null,
-                          category: category.isNotEmpty ? category : null,
-                          logo: entry['logo'] as String?,
-                        );
-                        _playChannel(channel);
-                      },
-                    );
-                  },
+                      const SizedBox(width: 2),
+                      Icon(Icons.history, size: 14,
+                          color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Recently Played (${_recentChannels.length})',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              if (!_recentCollapsed)
+                SizedBox(
+                  height: 44,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: _recentChannels.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                    itemBuilder: (context, index) {
+                      final entry = _recentChannels[index];
+                      final name = entry['name'] as String? ?? '';
+                      final url = entry['url'] as String? ?? '';
+                      final country = entry['country'] as String? ?? '';
+                      final category = entry['category'] as String? ?? '';
+                      return ActionChip(
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        avatar: const Icon(Icons.play_circle_fill, size: 16),
+                        labelStyle: const TextStyle(fontSize: 12),
+                        label: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        tooltip: [name, country, category]
+                            .where((s) => s.isNotEmpty)
+                            .join(' • '),
+                        onPressed: () {
+                          final channel = Channel(
+                            name: name,
+                            url: url,
+                            country: country.isNotEmpty ? country : null,
+                            category: category.isNotEmpty ? category : null,
+                            logo: entry['logo'] as String?,
+                          );
+                          _playChannel(channel);
+                        },
+                      );
+                    },
+                  ),
+                ),
               const Divider(height: 1),
             ],
           ),

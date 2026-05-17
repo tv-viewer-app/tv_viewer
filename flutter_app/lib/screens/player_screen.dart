@@ -879,9 +879,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     super.dispose();
   }
 
+  Future<bool> _handleBack() async {
+    if (_isFullscreen) {
+      _toggleFullscreen();
+      return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: _handleBack,
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTap: _toggleControls,
@@ -916,7 +926,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                             iconSize: 22,
                             padding: const EdgeInsets.all(6),
                             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () async {
+                              if (await _handleBack()) {
+                                if (mounted) Navigator.pop(context);
+                              }
+                            },
                           ),
                           Expanded(
                             child: Column(
@@ -1247,6 +1261,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
               ),
           ],
         ),
+      ),
       ),
     );
   }

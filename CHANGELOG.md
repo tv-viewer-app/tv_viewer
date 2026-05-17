@@ -5,6 +5,23 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.6] - 2026-05-17
+
+### Fixed
+- **Back from fullscreen → black screen** (#210): Pressing system back or the
+  top-bar back arrow while the embedded player was in fullscreen used to pop
+  the HomeScreen route and leave a black screen. Back now first exits
+  fullscreen and returns to the channel-list playback view; a second back
+  exits to the previous screen.
+
+### Changed
+- **Portrait layout compacted** (#211): Filters now start collapsed in
+  portrait so the channel list is visible immediately. Recently Played is
+  also collapsible (still 1-tap to expand), uses compact chips, and a
+  smaller header with a count. Stats bar uses the compact density. Net
+  vertical savings ~120-160 px on a typical phone, enough to show 2-3 more
+  channel rows above the fold.
+
 ## [2.10.5] - 2026-05-17
 
 Player top bar redesign — fits on narrow phones.
