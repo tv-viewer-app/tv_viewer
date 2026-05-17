@@ -200,7 +200,7 @@ class UpdateService {
       logger.info('OpenFilex result: ${result.type} ${result.message}');
       return result.type == ResultType.done;
     } catch (e, st) {
-      logger.warning('downloadAndInstallApk failed', e, st);
+      logger.error('downloadAndInstallApk failed', e, st);
       return false;
     }
   }

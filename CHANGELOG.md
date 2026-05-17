@@ -5,6 +5,27 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.7] - 2026-05-17
+
+### Fixed
+- **CI release pipeline unblocked** (#212): ``logger.warning(msg, error,
+  stackTrace)`` in update_service.dart used 3 positional args, but the
+  project's ``LoggerService.warning`` only accepts 2. ``flutter analyze``
+  treated it as a hard error, failing the Release Gate on v2.10.3, .4, .5,
+  and .6 — none of those tags ever published an APK to GitHub Releases.
+  Switched to ``logger.error(msg, error, stackTrace)`` which has the right
+  signature. v2.10.7 is the first build to ship the in-app updater +
+  portrait compaction + back-from-fullscreen fixes the user has been
+  testing visually for the last several iterations.
+
+### Note for users still on v2.10.2
+v2.10.7 carries forward everything from v2.10.3-2.10.6:
+- In-app APK download + install with release notes (v2.10.3)
+- "Check for updates" button in Settings → About (v2.10.3)
+- Help & Support empty section + nav-bar overlap fix (v2.10.4)
+- Compact player top bar + bottom-OSD transport controls (v2.10.5)
+- Back-from-fullscreen black-screen fix + portrait compaction (v2.10.6)
+
 ## [2.10.6] - 2026-05-17
 
 ### Fixed
