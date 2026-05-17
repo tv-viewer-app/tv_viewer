@@ -177,9 +177,13 @@ class _HelpScreenState extends State<HelpScreen> {
         title: const Text('Help & Support'),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
+      body: SafeArea(
+        // Avoid having the last items (Export Logs, Legal, etc.) hidden
+        // behind the Android navigation bar / gesture handle (#208).
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
           // FAQ Section
           _buildSectionHeader('Frequently Asked Questions'),
           _buildFaqItem(
@@ -477,11 +481,6 @@ class _HelpScreenState extends State<HelpScreen> {
 
           const SizedBox(height: 16),
 
-          // Settings Section
-          _buildSectionHeader('Settings'),
-
-          const SizedBox(height: 16),
-
           // Legal Section
           _buildSectionHeader('Legal'),
           Padding(
@@ -501,7 +500,8 @@ class _HelpScreenState extends State<HelpScreen> {
           ),
 
           const SizedBox(height: 32),
-        ],
+          ],
+        ),
       ),
     );
   }

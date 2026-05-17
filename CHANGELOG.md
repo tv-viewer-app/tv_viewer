@@ -5,6 +5,21 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.4] - 2026-05-17
+
+Help & Support screen layout fixes.
+
+### Fixed
+- **Empty "Settings" section header in Help & Support** (#208): A bare
+  ``_buildSectionHeader('Settings')`` was rendered with no content below it,
+  leaving an orphan heading. Removed.
+- **"Export Logs" hidden behind Android navigation bar** (#208): The Help
+  & Support ``ListView`` had a fixed 8 px bottom padding, so on Android
+  devices with a software nav bar / gesture handle the last few list items
+  (Export Logs, Reset Onboarding, App Version, Legal) were partially or fully
+  covered. The body is now wrapped in ``SafeArea(top: false)`` so the system
+  bottom inset is honored.
+
 ## [2.10.3] - 2026-05-17
 
 In-app update install (no more "hunt-for-the-APK-on-GitHub").
