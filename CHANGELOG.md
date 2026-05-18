@@ -5,6 +5,34 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.9] - 2026-05-18
+
+### Added
+- **Pull-to-refresh** on channel list — drag down to refresh channels and
+  check for app updates simultaneously.
+- **Radio favorites** — select favorite radio stations with heart icon, filter
+  by favorites using toggle button or chip in genre row.
+
+### Fixed
+- **Israeli channels stale** (#193): Custom verified CDN channels now load
+  first (priority) before M3U repository fetch, ensuring working Israeli
+  streams aren't overshadowed by stale repo-sourced duplicates.
+- **Map favorites toggle unresponsive**: Replaced `GestureDetector` with
+  `Material` + `InkWell` in FilterChip for stable hit area when toggling.
+
+### Closed (confirmed fixed in earlier releases)
+- #192 Country code normalization (fixed in 2.10.7)
+- #196 Null check setState crashes (fixed in 2.10.6)
+- #199 Logo URL crash (fixed in 2.10.6)
+- #204 Phone landscape tablet layout (fixed in 2.10.1)
+- #205 Persist filter selections (fixed in 2.10.4)
+- #206 Fullscreen leaves channel list (fixed in 2.10.2)
+- #208 Help screen layout (fixed in 2.10.5)
+- #209 Player toolbar overflow (fixed in 2.10.5)
+- #210 Black screen after fullscreen (fixed in 2.10.6)
+- #211 Portrait filters space (fixed in 2.10.4)
+- #212 Logger arity mismatch (fixed in 2.10.7)
+
 ## [2.10.8] - 2026-05-18
 
 ### Added
