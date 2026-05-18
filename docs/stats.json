@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-05-17T08:11:26.347102+00:00",
-  "total_channels": 20822,
+  "updated_at": "2026-05-18T09:43:16.554813+00:00",
+  "total_channels": 20848,
   "countries": 31,
   "categories": 57,
   "top_countries": [
@@ -88,7 +88,7 @@
   "top_categories": [
     {
       "name": "Culture",
-      "count": 194
+      "count": 195
     },
     {
       "name": "Comedy",
@@ -116,7 +116,7 @@
     },
     {
       "name": "Documentary",
-      "count": 34
+      "count": 33
     },
     {
       "name": "Auto",
