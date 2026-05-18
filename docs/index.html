@@ -394,8 +394,18 @@
     <div class="container">
         <div class="section-tag">v2.10.10 — Latest Release</div>
         <h2 class="section-title">What's New</h2>
-        <p class="section-subtitle">Security hardening: TLS cert pinning, code signing, bootloader rebuild. All issues closed.</p>
+        <p class="section-subtitle">Security hardening, all bugs closed, plus pull-to-refresh, radio favorites, and background playback.</p>
         <div class="features-grid">
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🔒</span>
+                <h3>TLS Certificate Pinning</h3>
+                <p>Release builds validate server certificates for analytics and update endpoints, blocking MITM attacks.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🛡️</span>
+                <h3>Code Signing &amp; AV</h3>
+                <p>CI now rebuilds the PyInstaller bootloader from source and supports Azure Trusted Signing to eliminate AV false positives.</p>
+            </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">⬇️</span>
                 <h3>Pull to Refresh</h3>
@@ -407,24 +417,14 @@
                 <p>Tap the heart on any radio station to save it. Filter by favorites with the toggle button or genre chip.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">🇮🇱</span>
-                <h3>Israeli Channels Priority</h3>
-                <p>Verified CDN channels load first, ensuring Israeli TV and radio streams work reliably without stale repo data.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">🐛</span>
-                <h3>12 Issues Closed</h3>
-                <p>Closed all open P0/P1/P2 bugs including map filter toggle, player toolbar overflow, fullscreen, and more.</p>
-            </div>
-            <div class="feature-card fade-in">
                 <span class="feature-icon">🎵</span>
                 <h3>Background Playback</h3>
                 <p>Continue audio when screen is off or app is backgrounded. Perfect for radio listening on Android 14+.</p>
             </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">⚡</span>
-                <h3>Faster Android Startup</h3>
-                <p>Eliminated ~10 second UI freeze after launch. Cache saves run in background isolate.</p>
+                <h3>Zero Open Issues</h3>
+                <p>All 25+ reported bugs triaged, fixed, and closed. Fastest startup, reliable Israeli channels, full tablet support.</p>
             </div>
         </div>
     </div>

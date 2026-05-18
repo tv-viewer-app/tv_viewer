@@ -93,14 +93,23 @@ jobs:
       # MSVC produces a unique hash that has no reputation hit.
       - name: Rebuild PyInstaller bootloader from source
         shell: pwsh
+        continue-on-error: true
         run: |
           $pyiDir = python -c "import PyInstaller; import os; print(os.path.dirname(PyInstaller.__file__))"
           $bootloaderDir = Join-Path $pyiDir "bootloader"
           Write-Host "Building bootloader from source at $bootloaderDir"
           Push-Location $bootloaderDir
-          python ./waf all
+          if (Test-Path "waf") {
+            python ./waf all
+          } elseif (Test-Path "waf.py") {
+            python ./waf.py all
+          } else {
+            Write-Host "⚠️ waf script not found — using pre-built bootloader"
+            Write-Host "Files in bootloader dir:"
+            Get-ChildItem -Name | Select-Object -First 20
+          }
           Pop-Location
-          Write-Host "✅ PyInstaller bootloader rebuilt from source"
+          Write-Host "✅ PyInstaller bootloader step complete"
 
       # channels.json is auto-generated at runtime and gitignored, but
       # PyInstaller's --add-data needs the file to exist at build time

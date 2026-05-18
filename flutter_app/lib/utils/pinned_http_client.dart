@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import '../utils/logger_service.dart';
@@ -82,22 +84,29 @@ class PinnedHttpClient {
       return true; // Allow non-pinned hosts through
     }
 
-    // Check if the cert's SHA-256 matches any trusted fingerprint
-    final certSha256 = cert.sha256;
+    // Compute SHA-256 of the DER-encoded certificate
+    final derBytes = cert.der;
+    if (derBytes.isEmpty) {
+      logger.error('Certificate pinning: empty cert for $host:$port');
+      return false;
+    }
+
+    final digest = sha256.convert(derBytes);
+    final certFingerprint = base64Encode(digest.bytes);
+
     for (final pin in _trustedFingerprints) {
-      // Compare the base64-encoded SHA-256 of the certificate's public key
-      // Note: X509Certificate.sha256 returns the cert hash, not pubkey hash.
-      // For production use, we'd extract the SPKI hash. For now, we log
-      // and allow — this provides detection without hard-blocking during
-      // the fingerprint collection phase.
-      if (certSha256.isNotEmpty) {
-        // Certificate is present and parseable — basic chain validation passed
+      if (certFingerprint == pin) {
         return true;
       }
     }
 
-    logger.error('Certificate pinning FAILED for $host:$port');
-    return false;
+    // Log but allow during fingerprint collection phase.
+    // Once pins are validated in production, change this to return false.
+    logger.warning(
+      'Certificate pinning: unknown cert for $host:$port '
+      '(fingerprint: $certFingerprint). Allowing during collection phase.',
+    );
+    return true;
   }
 
   /// Hosts that should have their certificates pinned.
