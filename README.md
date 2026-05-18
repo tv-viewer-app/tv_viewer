@@ -19,11 +19,16 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.9.7
+## ✨ What's New in v2.10.9
 
-- **In-app feedback dialog lost typed text when "Open GitHub" was pressed (#191)**: the deep link sent the user to GitHub's issue form but the URL only carried `template=feedback.yml` (a template that doesn't exist in this repo) and the title — the body was never set, so everything the user typed was discarded. Switched to a direct `?body=…&labels=…&title=…` deep link that prefills the issue body with the rating, category, app version, the feedback text, and a timestamp. Category now also maps to a sensible label (`bug`, `enhancement`, or `feedback`).
-- **Settings → Parental Controls bypassed the PIN gate (security)**: the overflow menu's Parental Controls path required the PIN, but tapping Parental Controls inside Settings navigated straight to the screen with no check. Anyone with physical access could change parental settings without the PIN. The Settings entry now goes through the same PIN gate.
-- **Overflow menu reorganized for clarity**: items are now grouped into three sections separated by dividers — **Tools** (Sort, Radio, Map on compact screens), **Feedback** (Send Feedback, Rate App), and **Help & info** (Help & Support, Diagnostics, About). The duplicate Parental Controls entry was removed (it lives under Settings, where it belongs).
+- **Pull-to-refresh** on channel list — drag down to refresh channels and
+- **Radio favorites** — select favorite radio stations with heart icon, filter
+- **Israeli channels stale** (#193): Custom verified CDN channels now load
+- **Map favorites toggle unresponsive**: Replaced `GestureDetector` with
+- #192 Country code normalization (fixed in 2.10.7)
+- #196 Null check setState crashes (fixed in 2.10.6)
+- #199 Logo URL crash (fixed in 2.10.6)
+- #204 Phone landscape tablet layout (fixed in 2.10.1)
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
