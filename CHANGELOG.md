@@ -5,6 +5,20 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.10] - 2025-07-14
+
+### Security
+- **TLS certificate pinning** for Supabase analytics and GitHub update endpoints
+  — MITM protection in release builds (#171).
+- **PyInstaller bootloader rebuild** in CI — unique binary hash reduces AV false
+  positives (#201).
+- **Azure Trusted Signing** code-sign step added to Windows build workflow —
+  gracefully skips if secrets not configured (#202).
+
+### Fixed
+- Closed 20+ GitHub issues confirmed fixed in prior versions.
+- All remaining open infrastructure issues addressed (#200, #201, #202, #203).
+
 ## [2.10.9] - 2026-05-18
 
 ### Added
