@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../constants.dart';
 import '../models/channel.dart';
@@ -31,10 +32,12 @@ class FMStreamService {
       onProgress?.call(30, 100);
       
       if (response.statusCode == 200) {
-        logger.info('FMStream directory fetched successfully (${response.body.length} bytes)');
+        // Decode as UTF-8 explicitly to preserve non-ASCII station names
+        final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+        logger.info('FMStream directory fetched successfully (${response.bodyBytes.length} bytes)');
         
         // Validate content before parsing
-        if (response.body.isEmpty) {
+        if (body.isEmpty) {
           final error = _fmstreamError('empty', 'Response body is empty from FMStream.org');
           logger.error('FMStream fetch failed: ${error.getDetailedLog()}');
           throw error;
@@ -43,7 +46,7 @@ class FMStreamService {
         onProgress?.call(40, 100);
         
         // Parse HTML and extract stations
-        final stations = parseHTML(response.body);
+        final stations = parseHTML(body);
         
         onProgress?.call(80, 100);
         

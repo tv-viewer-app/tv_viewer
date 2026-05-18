@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../constants.dart';
 import '../models/channel.dart';
@@ -129,24 +130,30 @@ class M3UService {
       if (response.statusCode == 200) {
         // SEC-010: Enforce 50MB content size limit to prevent OOM on Android
         const maxContentSize = 50 * 1024 * 1024; // 50MB
-        if (response.body.length > maxContentSize) {
+        if (response.bodyBytes.length > maxContentSize) {
           final error = ErrorHandler.m3uError(
             'too_large',
-            'M3U content exceeds 50MB limit (${response.body.length} bytes) for URL: $url',
+            'M3U content exceeds 50MB limit (${response.bodyBytes.length} bytes) for URL: $url',
           );
           logger.error('M3U fetch rejected: ${error.getDetailedLog()}');
           throw error;
         }
-        logger.info('M3U playlist fetched successfully (${response.body.length} bytes)');
+        
+        // Decode as UTF-8 explicitly — many M3U sources serve Hebrew/Arabic
+        // without charset in Content-Type, causing Dart's http package to
+        // default to Latin-1 which garbles non-ASCII characters.
+        final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+        
+        logger.info('M3U playlist fetched successfully (${response.bodyBytes.length} bytes)');
         
         // Validate content before parsing
-        if (response.body.isEmpty) {
+        if (body.isEmpty) {
           final error = ErrorHandler.m3uError('empty', 'Response body is empty for URL: $url');
           logger.error('M3U fetch failed: ${error.getDetailedLog()}');
           throw error;
         }
         
-        if (!response.body.contains('#EXTM3U') && !response.body.contains('#EXTINF')) {
+        if (!body.contains('#EXTM3U') && !body.contains('#EXTINF')) {
           final error = ErrorHandler.m3uError(
             'invalid',
             'Content does not appear to be a valid M3U playlist for URL: $url',
@@ -155,7 +162,7 @@ class M3UService {
           // Continue parsing anyway - some playlists might work without header
         }
         
-        final channels = parseM3U(response.body);
+        final channels = parseM3U(body);
         logger.info('Parsed ${channels.length} channels from M3U');
         return channels;
       } else {

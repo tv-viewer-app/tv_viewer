@@ -17,6 +17,7 @@ class SettingsService {
   static const String _keyDefaultGroupBy = 'default_group_by';
   static const String _keyCustomRepos = 'custom_repos';
   static const String _keyAnalyticsEnabled = 'analytics_enabled';
+  static const String _keyBackgroundPlayback = 'background_playback';
 
   // ── Default values ───────────────────────────────────────────────
   static const int defaultStreamTimeout = 10;
@@ -24,6 +25,7 @@ class SettingsService {
   static const String defaultThemeMode = 'system'; // 'dark', 'light', 'system'
   static const String defaultGroupBy = 'category'; // 'category', 'country'
   static const bool defaultAnalyticsEnabled = true;
+  static const bool defaultBackgroundPlayback = false;
 
   SharedPreferences? _prefs;
 
@@ -126,5 +128,18 @@ class SettingsService {
   Future<void> setAnalyticsEnabled(bool enabled) async {
     final prefs = await _getPrefs();
     await prefs.setBool(_keyAnalyticsEnabled, enabled);
+  }
+
+  // ── Playback Settings ───────────────────────────────────────────
+
+  /// Whether audio/video continues playing when screen is off or app is backgrounded.
+  Future<bool> getBackgroundPlayback() async {
+    final prefs = await _getPrefs();
+    return prefs.getBool(_keyBackgroundPlayback) ?? defaultBackgroundPlayback;
+  }
+
+  Future<void> setBackgroundPlayback(bool enabled) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_keyBackgroundPlayback, enabled);
   }
 }

@@ -5,6 +5,27 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.8] - 2026-05-18
+
+### Added
+- **Background playback** (#213): New setting to continue audio/video when
+  screen is off or app is backgrounded. Works for both TV player and radio.
+  Off by default — enable in Settings → Stream Settings.
+- **Android foreground service permissions**: Added `FOREGROUND_SERVICE` and
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK` for reliable background audio on
+  Android 14+.
+
+### Fixed
+- **Hebrew/Arabic channel names garbled** (#214): M3U playlists served without
+  explicit charset header were decoded as Latin-1 (Dart http default), corrupting
+  non-ASCII characters. Now explicitly decoded as UTF-8 with `allowMalformed`.
+  Affects Israeli radio stations and all non-Latin channel names from IPTV-org.
+- **Android UI freeze ~10s after startup** (#215): Background channel fetch
+  called `_saveToCache()` synchronously before `notifyListeners()`, blocking
+  the UI thread with JSON encoding of thousands of channels. Cache save now
+  runs deferred via `compute()` in a background isolate. EPG generation also
+  yields every 50 channels to avoid frame drops.
+
 ## [2.10.7] - 2026-05-17
 
 ### Fixed

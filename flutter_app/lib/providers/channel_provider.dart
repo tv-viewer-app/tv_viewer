@@ -473,8 +473,9 @@ class ChannelProvider extends ChangeNotifier {
         _errorMessage = '';
         _updateCategories();
         _applyFilters();
-        await _saveToCache();
         notifyListeners();
+        // Save cache off the critical path — don't block UI rebuild
+        _saveToCacheDeferred();
       } else {
         logger.debug('Background fetch completed, no new channels');
       }
@@ -1233,6 +1234,13 @@ class ChannelProvider extends ChangeNotifier {
     return [];
   }
 
+  /// Deferred cache save — runs JSON encoding in a background isolate
+  /// so it doesn't block the UI thread after a large channel update.
+  void _saveToCacheDeferred() {
+    // Fire-and-forget; errors are logged internally
+    _saveToCache();
+  }
+
   Future<void> _saveToCache() async {
     // Use repository if available; otherwise fall back to direct SharedPreferences
     if (_channelRepo != null) {
@@ -1246,12 +1254,19 @@ class ChannelProvider extends ChangeNotifier {
     }
     try {
       final prefs = await SharedPreferences.getInstance();
-      final json = jsonEncode(_channels.map((c) => c.toJson()).toList());
+      // Encode JSON in a background isolate to avoid blocking UI
+      final channelMaps = _channels.map((c) => c.toJson()).toList();
+      final json = await compute(_encodeJsonInBackground, channelMaps);
       await prefs.setString('channels_cache', json);
       logger.debug('Saved ${_channels.length} channels to cache');
     } catch (e, stackTrace) {
       logger.error('Error saving cache', e, stackTrace);
     }
+  }
+
+  /// Top-level function for compute() — JSON encodes channel data in isolate.
+  static String _encodeJsonInBackground(List<Map<String, dynamic>> data) {
+    return jsonEncode(data);
   }
 
   // ========== Local Health Cache Management ==========

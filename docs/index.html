@@ -392,10 +392,25 @@
 <!-- ═══════════════ What's New ═══════════════ -->
 <section class="features" id="whats-new" style="padding-bottom: 0;">
     <div class="container">
-        <div class="section-tag">v2.9.7 — Latest Release</div>
+        <div class="section-tag">v2.10.8 — Latest Release</div>
         <h2 class="section-title">What's New</h2>
-        <p class="section-subtitle">In-app feedback dialog lost typed text when "Open GitHub" was pressed (#191); Settings → Parental Controls bypassed the PIN gate (security); Overflow menu reorganized for clarity.</p>
+        <p class="section-subtitle">Background playback keeps music playing when screen is off. Hebrew channel names fixed. Android startup freeze eliminated.</p>
         <div class="features-grid">
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🎵</span>
+                <h3>Background Playback</h3>
+                <p>New setting to continue audio when screen is off or app is backgrounded. Perfect for radio listening. Works on Android 14+.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🇮🇱</span>
+                <h3>Hebrew &amp; RTL Names Fixed</h3>
+                <p>Israeli radio and international channels now display correctly. Fixed UTF-8 decoding for all non-Latin character sets.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">⚡</span>
+                <h3>Faster Android Startup</h3>
+                <p>Eliminated ~10 second UI freeze after launch. Cache saves now run in background isolate; EPG yields to keep UI smooth.</p>
+            </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">📻</span>
                 <h3>Dedicated Radio Player</h3>
@@ -405,21 +420,6 @@
                 <span class="feature-icon">🔍</span>
                 <h3>Advanced Search</h3>
                 <p>Search with prefix syntax: <code>country:</code>, <code>category:</code>, <code>language:</code>, <code>type:</code>. Sort by name, country, or category.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">⚙️</span>
-                <h3>Settings &amp; Diagnostics</h3>
-                <p>Full settings screen (Android), network diagnostics with stream tester (Windows), and M3U repo management.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">🔒</span>
-                <h3>Play Integrity API</h3>
-                <p>Google Play attestation verifies app authenticity. First-run consent dialog with age verification on both platforms.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">🖼️</span>
-                <h3>Channel Thumbnails</h3>
-                <p>Cached network images for channel logos with smooth loading and fallback icons. Rich channel info popups.</p>
             </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">🔄</span>

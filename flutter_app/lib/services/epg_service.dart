@@ -152,6 +152,7 @@ class EpgService {
       // Yield to the event loop so the caller can continue immediately.
       await Future.delayed(Duration.zero);
 
+      int processed = 0;
       for (final channel in channels) {
         final key = _normalizeKey(channel.name);
         // Skip if we already have current data for this channel.
@@ -159,6 +160,12 @@ class EpgService {
 
         final epg = _generateSchedule(channel);
         _cache[key] = epg;
+
+        // Yield every 50 channels to avoid blocking the UI event loop
+        processed++;
+        if (processed % 50 == 0) {
+          await Future.delayed(Duration.zero);
+        }
       }
 
       _lastFetchTime = DateTime.now();

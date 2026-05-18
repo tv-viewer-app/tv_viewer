@@ -10,6 +10,7 @@ import 'dart:io' show Platform;
 import '../models/channel.dart';
 import '../services/pip_service.dart';
 import '../services/analytics_service.dart';
+import '../services/settings_service.dart';
 import '../services/shared_db_service.dart';
 import '../services/parental_controls_service.dart';
 import '../services/watch_history_service.dart';
@@ -61,6 +62,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   String? _resolution;
   String? _bitrate;
   double _volume = 1.0; // BL-018: Volume control
+  bool _backgroundPlayback = false; // Continue playback when screen off
   
   // Named listener for proper cleanup
   VoidCallback? _playerListener;
@@ -101,6 +103,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _initializePlayer();
     _initializeWakeLock();
     _initializePip();
+    _loadBackgroundPlaybackSetting();
     
     // Allow auto-rotation (portrait + landscape) for video playback
     SystemChrome.setPreferredOrientations([
@@ -127,6 +130,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     } catch (e) {
       logger.warning('Failed to enable wake lock', e);
     }
+  }
+
+  /// Load background playback preference
+  Future<void> _loadBackgroundPlaybackSetting() async {
+    _backgroundPlayback = await SettingsService.instance.getBackgroundPlayback();
   }
   
   /// Initialize PiP service
@@ -162,13 +170,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     switch (state) {
       case AppLifecycleState.paused:
         // App is in background (possibly in PiP)
-        if (!_isPipMode) {
+        // If background playback is enabled, keep playing audio
+        if (!_isPipMode && !_backgroundPlayback) {
           _videoController?.pause();
         }
         break;
       case AppLifecycleState.resumed:
         // App is back in foreground
-        if (!_isPipMode) {
+        if (!_isPipMode && !_backgroundPlayback) {
           _videoController?.play();
         }
         // Re-assert wake lock — Android may drop it on background/resume (#190)

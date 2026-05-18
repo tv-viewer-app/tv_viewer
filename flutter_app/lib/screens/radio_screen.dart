@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/channel.dart';
 import '../providers/channel_provider.dart';
+import '../services/settings_service.dart';
 import '../services/watch_history_service.dart';
 import '../services/analytics_service.dart';
 import '../utils/logger_service.dart';
@@ -16,7 +18,7 @@ class RadioScreen extends StatefulWidget {
   State<RadioScreen> createState() => _RadioScreenState();
 }
 
-class _RadioScreenState extends State<RadioScreen> {
+class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   Channel? _currentStation;
   bool _isPlaying = false;
@@ -25,6 +27,7 @@ class _RadioScreenState extends State<RadioScreen> {
   double _volume = 1.0;
   String _selectedGenre = 'All';
   String _searchQuery = '';
+  bool _backgroundPlayback = false;
   final TextEditingController _searchController = TextEditingController();
 
   List<Channel> get _radioChannels {
@@ -65,9 +68,45 @@ class _RadioScreenState extends State<RadioScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadBackgroundPlaybackSetting();
+  }
+
+  Future<void> _loadBackgroundPlaybackSetting() async {
+    _backgroundPlayback = await SettingsService.instance.getBackgroundPlayback();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (_controller == null || !_isPlaying) return;
+
+    switch (state) {
+      case AppLifecycleState.paused:
+        // Keep audio playing if background playback is enabled
+        if (!_backgroundPlayback) {
+          _controller?.pause();
+        }
+        break;
+      case AppLifecycleState.resumed:
+        if (!_backgroundPlayback) {
+          _controller?.play();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     _searchController.dispose();
+    // Release wake lock when leaving radio screen
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -126,6 +165,11 @@ class _RadioScreenState extends State<RadioScreen> {
       });
 
       setState(() => _isLoading = false);
+
+      // Keep screen/CPU awake for audio playback when background playback enabled
+      if (_backgroundPlayback) {
+        WakelockPlus.enable();
+      }
 
       // Record play history
       WatchHistoryService.recordPlay({

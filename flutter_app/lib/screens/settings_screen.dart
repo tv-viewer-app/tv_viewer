@@ -27,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _themeMode = 'system';
   String _defaultGroupBy = 'category';
   bool _analyticsEnabled = true;
+  bool _backgroundPlayback = false;
   String _appVersion = '';
   bool _isLoading = true;
 
@@ -43,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeMode = await _settings.getThemeMode();
     final groupBy = await _settings.getDefaultGroupBy();
     final analytics = await _settings.getAnalyticsEnabled();
+    final backgroundPlayback = await _settings.getBackgroundPlayback();
 
     String version = '';
     try {
@@ -59,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _themeMode = themeMode;
         _defaultGroupBy = groupBy;
         _analyticsEnabled = analytics;
+        _backgroundPlayback = backgroundPlayback;
         _appVersion = version;
         _isLoading = false;
       });
@@ -99,6 +102,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (v) {
                     setState(() => _requestTimeout = v);
                     _settings.setRequestTimeout(v.round());
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Background playback'),
+                  subtitle: const Text('Continue audio when screen is off'),
+                  value: _backgroundPlayback,
+                  onChanged: (v) {
+                    setState(() => _backgroundPlayback = v);
+                    _settings.setBackgroundPlayback(v);
                   },
                 ),
                 const Divider(),
