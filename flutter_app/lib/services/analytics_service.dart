@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/logger_service.dart';
+import '../utils/pinned_http_client.dart';
 
 /// Anonymous, privacy-first analytics service backed by Supabase REST API.
 ///
@@ -63,6 +64,7 @@ class AnalyticsService {
   static const Duration _httpTimeout = Duration(seconds: 10);
 
   final LoggerService _logger = LoggerService.instance;
+  late final http.Client _httpClient;
 
   bool _isInitialized = false;
   bool _userOptedIn = false;
@@ -101,6 +103,8 @@ class AnalyticsService {
   /// resolve app version and platform, and start the periodic flush timer.
   Future<void> initialize() async {
     if (_isInitialized) return;
+
+    _httpClient = PinnedHttpClient.create();
 
     try {
       // Resolve platform
@@ -393,7 +397,7 @@ class AnalyticsService {
     try {
       final url = Uri.parse('$_supabaseUrl/rest/v1/$_tableName');
 
-      final response = await http
+      final response = await _httpClient
           .post(
             url,
             headers: {

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/logger_service.dart';
+import '../utils/pinned_http_client.dart';
 
 /// Result of a release lookup against GitHub.
 class UpdateInfo {
@@ -59,7 +60,8 @@ class UpdateService {
         }
       }
 
-      final response = await http.get(
+      final client = PinnedHttpClient.create();
+      final response = await client.get(
         Uri.parse(_releasesApi),
         headers: {'Accept': 'application/vnd.github.v3+json'},
       ).timeout(const Duration(seconds: 10));

@@ -87,6 +87,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Rebuild PyInstaller bootloader from source (#201). Pre-compiled
+      # bootloaders are flagged by AV as "generic trojan" because thousands
+      # of malware samples use the same binary. Building from source with
+      # MSVC produces a unique hash that has no reputation hit.
+      - name: Rebuild PyInstaller bootloader from source
+        shell: pwsh
+        run: |
+          $pyiDir = python -c "import PyInstaller; import os; print(os.path.dirname(PyInstaller.__file__))"
+          $bootloaderDir = Join-Path $pyiDir "bootloader"
+          Write-Host "Building bootloader from source at $bootloaderDir"
+          Push-Location $bootloaderDir
+          python ./waf all
+          Pop-Location
+          Write-Host "✅ PyInstaller bootloader rebuilt from source"
+
       # channels.json is auto-generated at runtime and gitignored, but
       # PyInstaller's --add-data needs the file to exist at build time
       # (Issue #174). An empty list is a valid initial state.
@@ -173,6 +188,39 @@ jobs:
           if (-not (Test-Path $pluginsDir)) { $pluginsDir = "dist\TVViewer\plugins" }
           $plugins = (Get-ChildItem $pluginsDir -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue).Count
           Write-Host "✅ libvlc bundled at $libvlc ($plugins plugin DLLs)"
+
+      # Code-sign the EXE with Azure Trusted Signing (#202). Skipped
+      # gracefully if secrets are not configured — allows the workflow to
+      # succeed for forks and first-time setup. Once AZURE_SIGNING_*
+      # secrets are added to the repo, this step signs automatically.
+      - name: Code-sign Windows EXE (Azure Trusted Signing)
+        if: env.AZURE_SIGNING_ENDPOINT != ''
+        shell: pwsh
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          # Install Azure SignTool
+          dotnet tool install --global AzureSignTool
+          # Sign the main EXE
+          $exe = "dist\TVViewer\TVViewer.exe"
+          AzureSignTool sign `
+            --azure-key-vault-url "$env:AZURE_SIGNING_ENDPOINT" `
+            --azure-key-vault-tenant-id "$env:AZURE_TENANT_ID" `
+            --azure-key-vault-client-id "$env:AZURE_CLIENT_ID" `
+            --azure-key-vault-client-secret "$env:AZURE_CLIENT_SECRET" `
+            --azure-key-vault-certificate "$env:AZURE_SIGNING_PROFILE" `
+            --timestamp-rfc3161 "http://timestamp.acs.microsoft.com" `
+            --timestamp-digest sha256 `
+            --file-digest sha256 `
+            --description "TV Viewer — IPTV streaming application" `
+            --description-url "https://github.com/tv-viewer-app/tv_viewer" `
+            $exe
+          Write-Host "✅ EXE signed: $exe"
 
       - name: Package EXE folder for release
         shell: pwsh
