@@ -28,6 +28,7 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
   String _selectedGenre = 'All';
   String _searchQuery = '';
   bool _backgroundPlayback = false;
+  bool _showFavoritesOnly = false;
   final TextEditingController _searchController = TextEditingController();
 
   List<Channel> get _radioChannels {
@@ -39,6 +40,10 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
 
   List<Channel> get _filteredStations {
     var stations = _radioChannels;
+    if (_showFavoritesOnly) {
+      final provider = context.read<ChannelProvider>();
+      stations = stations.where((c) => provider.isFavorite(c)).toList();
+    }
     if (_selectedGenre != 'All') {
       stations = stations
           .where((c) =>
@@ -220,6 +225,22 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text('📻 Radio'),
         actions: [
+          // Favorites toggle
+          Consumer<ChannelProvider>(
+            builder: (context, provider, _) {
+              final favCount = _radioChannels.where((c) => provider.isFavorite(c)).length;
+              return IconButton(
+                icon: Icon(
+                  _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
+                  color: _showFavoritesOnly ? Colors.red : null,
+                ),
+                tooltip: _showFavoritesOnly
+                    ? 'Show all stations'
+                    : 'Show favorites ($favCount)',
+                onPressed: () => setState(() => _showFavoritesOnly = !_showFavoritesOnly),
+              );
+            },
+          ),
           if (_genres.length > 2)
             PopupMenuButton<String>(
               icon: const Icon(Icons.filter_list),
@@ -271,28 +292,42 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
             ),
           ),
 
-          // Genre chips
-          if (_genres.length > 2)
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _genres.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
-                itemBuilder: (_, i) {
-                  final genre = _genres[i];
-                  final selected = genre == _selectedGenre;
+          // Genre chips + Favorites chip
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: _genres.length + 1,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                // First chip is Favorites toggle
+                if (i == 0) {
                   return FilterChip(
-                    label: Text(genre, style: const TextStyle(fontSize: 12)),
-                    selected: selected,
+                    avatar: Icon(
+                      _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
+                      size: 16,
+                      color: _showFavoritesOnly ? Colors.red : null,
+                    ),
+                    label: const Text('Favorites', style: TextStyle(fontSize: 12)),
+                    selected: _showFavoritesOnly,
                     onSelected: (_) =>
-                        setState(() => _selectedGenre = genre),
+                        setState(() => _showFavoritesOnly = !_showFavoritesOnly),
                     visualDensity: VisualDensity.compact,
                   );
-                },
-              ),
+                }
+                final genre = _genres[i - 1];
+                final selected = genre == _selectedGenre;
+                return FilterChip(
+                  label: Text(genre, style: const TextStyle(fontSize: 12)),
+                  selected: selected,
+                  onSelected: (_) =>
+                      setState(() => _selectedGenre = genre),
+                  visualDensity: VisualDensity.compact,
+                );
+              },
             ),
+          ),
 
           const SizedBox(height: 4),
 
@@ -303,13 +338,17 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.radio, size: 64,
+                        Icon(
+                            _showFavoritesOnly ? Icons.favorite_border : Icons.radio,
+                            size: 64,
                             color: theme.colorScheme.onSurface.withOpacity(0.3)),
                         const SizedBox(height: 12),
                         Text(
-                          _radioChannels.isEmpty
-                              ? 'No radio stations found.\nScan channels to discover stations.'
-                              : 'No stations match your filter.',
+                          _showFavoritesOnly
+                              ? 'No favorite radio stations yet.\nTap the ♥ on a station to add it.'
+                              : _radioChannels.isEmpty
+                                  ? 'No radio stations found.\nScan channels to discover stations.'
+                                  : 'No stations match your filter.',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyLarge?.copyWith(
                             color: theme.colorScheme.onSurface.withOpacity(0.5),
@@ -429,6 +468,8 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
 
   Widget _buildStationTile(Channel station, ThemeData theme) {
     final isActive = _currentStation?.name == station.name;
+    final provider = context.read<ChannelProvider>();
+    final isFav = provider.isFavorite(station);
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: isActive
@@ -464,12 +505,33 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall,
       ),
-      trailing: isActive && _isPlaying
-          ? Icon(Icons.equalizer, color: theme.colorScheme.primary)
-          : station.isWorking
-              ? const Icon(Icons.play_arrow, size: 20)
-              : Icon(Icons.error_outline,
-                  size: 16, color: theme.colorScheme.error),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(
+              isFav ? Icons.favorite : Icons.favorite_border,
+              color: isFav ? Colors.red : theme.colorScheme.onSurface.withOpacity(0.4),
+              size: 20,
+            ),
+            tooltip: isFav ? 'Remove from favorites' : 'Add to favorites',
+            onPressed: () {
+              provider.toggleFavorite(station);
+              setState(() {});
+            },
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+          if (isActive && _isPlaying)
+            Icon(Icons.equalizer, color: theme.colorScheme.primary)
+          else if (station.isWorking)
+            const Icon(Icons.play_arrow, size: 20)
+          else
+            Icon(Icons.error_outline,
+                size: 16, color: theme.colorScheme.error),
+        ],
+      ),
       selected: isActive,
       onTap: () => _playStation(station),
     );

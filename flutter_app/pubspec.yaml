@@ -20,6 +20,11 @@ dependencies:
   # Video Player - use basic video_player, skip chewie
   video_player: ^2.8.2
   
+  # Audio Player - background-capable audio for radio streams
+  just_audio: ^0.9.39
+  audio_service: ^0.18.13
+  audio_session: ^0.1.21
+  
   # State Management
   provider: ^6.1.1
   

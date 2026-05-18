@@ -591,7 +591,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Pull-to-refresh: fetch channels + check for app updates.
+  Future<void> _onRefreshChannels() async {
+    final provider = context.read<ChannelProvider>();
+    await provider.fetchChannels();
+    // Also check for new app version (force bypasses 24h rate limit)
+    _checkForUpdates();
+  }
+
   /// Builds the channel list/grid content (loading, empty, or populated).
+  /// Wrapped in RefreshIndicator for pull-to-refresh.
   Widget _buildChannelList({bool useGridView = false}) {
     return Consumer<ChannelProvider>(
       builder: (context, provider, _) {
@@ -673,37 +682,45 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         if (useGridView) {
-          return GridView.builder(
-            padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 3.5,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 4,
+          return RefreshIndicator(
+            onRefresh: _onRefreshChannels,
+            child: GridView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(8),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 3.5,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 4,
+              ),
+              itemCount: provider.channels.length,
+              itemBuilder: (context, index) {
+                final channel = provider.channels[index];
+                return Card(
+                  margin: EdgeInsets.zero,
+                  child: ChannelTile(
+                    channel: channel,
+                    onTap: () => _playChannel(channel, index),
+                  ),
+                );
+              },
             ),
-            itemCount: provider.channels.length,
-            itemBuilder: (context, index) {
-              final channel = provider.channels[index];
-              return Card(
-                margin: EdgeInsets.zero,
-                child: ChannelTile(
-                  channel: channel,
-                  onTap: () => _playChannel(channel, index),
-                ),
-              );
-            },
           );
         }
 
-        return ListView.builder(
-          itemCount: provider.channels.length,
-          itemBuilder: (context, index) {
-            final channel = provider.channels[index];
-            return ChannelTile(
-              channel: channel,
-              onTap: () => _playChannel(channel, index),
-            );
-          },
+        return RefreshIndicator(
+          onRefresh: _onRefreshChannels,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: provider.channels.length,
+            itemBuilder: (context, index) {
+              final channel = provider.channels[index];
+              return ChannelTile(
+                channel: channel,
+                onTap: () => _playChannel(channel, index),
+              );
+            },
+          ),
         );
       },
     );

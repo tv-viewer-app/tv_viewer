@@ -747,39 +747,43 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? activeColor.withOpacity(0.2) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? activeColor : Colors.grey[600]!,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16,
-                color: active ? activeColor : Colors.grey[400]),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: active ? activeColor : Colors.grey[400],
-                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? activeColor.withOpacity(0.2) : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active ? activeColor : Colors.grey[600]!,
+              width: 1.5,
             ),
-            if (active) ...[
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16,
+                  color: active ? activeColor : Colors.grey[400]),
               const SizedBox(width: 4),
-              Icon(Icons.check, size: 14, color: activeColor),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: active ? activeColor : Colors.grey[400],
+                  fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+              if (active) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.check, size: 14, color: activeColor),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

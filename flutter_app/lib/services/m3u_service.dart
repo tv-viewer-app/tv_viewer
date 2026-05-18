@@ -283,6 +283,25 @@ class M3UService {
     final seenUrls = <String>{};
     final errors = <String, AppError>{};
 
+    // Add custom channels FIRST — verified working CDN URLs take priority
+    // over stale M3U-sourced duplicates (#193).
+    for (final custom in customChannels) {
+      final url = custom['url']!;
+      if (!seenUrls.contains(url)) {
+        seenUrls.add(url);
+        final group = custom['group'] ?? '';
+        allChannels.add(Channel(
+          name: custom['name']!,
+          url: url,
+          category: group,
+          country: custom['country'],
+          language: custom['language'],
+          mediaType: group.toLowerCase() == 'radio' ? 'Radio' : 'TV',
+        ));
+      }
+    }
+    logger.info('Added ${customChannels.length} custom channels (priority)');
+
     for (int i = 0; i < repos.length; i++) {
       onProgress?.call(i, repos.length);
       final repoUrl = repos[i];
@@ -313,24 +332,6 @@ class M3UService {
     }
 
     onProgress?.call(repos.length, repos.length);
-    
-    // Add custom Israeli channels (verified working CDN URLs)
-    for (final custom in customChannels) {
-      final url = custom['url']!;
-      if (!seenUrls.contains(url)) {
-        seenUrls.add(url);
-        final group = custom['group'] ?? '';
-        allChannels.add(Channel(
-          name: custom['name']!,
-          url: url,
-          category: group,
-          country: custom['country'],
-          language: custom['language'],
-          mediaType: group.toLowerCase() == 'radio' ? 'Radio' : 'TV',
-        ));
-      }
-    }
-    logger.info('Added ${customChannels.length} custom channels');
     
     // Fetch FMStream radio stations (#32)
     try {
