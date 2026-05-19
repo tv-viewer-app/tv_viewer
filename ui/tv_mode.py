@@ -58,6 +58,11 @@ except ImportError:
     VLCController = None
     VLC_AVAILABLE = False
 
+try:
+    from ui.spectrum_visualizer import SpectrumVisualizer
+except ImportError:
+    SpectrumVisualizer = None
+
 
 # ─── TV Mode Color Palette ──────────────────────────────────────────────────────────
 class TVColors:
@@ -255,6 +260,7 @@ class TVModeApp:
         self._player_frame: Optional[tk.Frame] = None
         self._player_channel: Optional[Dict[str, Any]] = None
         self._player_volume = 80
+        self._spectrum: Optional['SpectrumVisualizer'] = None
 
         # UI elements
         self._canvas: Optional[tk.Canvas] = None
@@ -1329,6 +1335,9 @@ class TVModeApp:
         self._show_player_osd(channel_name)
         self._info_label.config(text=f"\u25b6 {channel_name}")
 
+        # Check if this is a radio/audio-only channel — start spectrum visualizer
+        self._schedule_spectrum_check()
+
     def _show_player_osd(self, channel_name):
         """Show channel name overlay + live metadata strip (Issues #165 + #172)."""
         if self._osd_timer:
@@ -1407,6 +1416,68 @@ class TVModeApp:
         # Keep polling every 1s while playing
         self.root.after(1000, self._poll_player_metadata)
 
+    # ---- Spectrum visualizer for radio/audio channels -----------------------
+
+    def _schedule_spectrum_check(self):
+        """After a short delay, check if stream has video; if not, start spectrum."""
+        if self._state != "playing":
+            return
+        # Check if channel is explicitly radio
+        ch = self._player_channel
+        if ch and ch.get('media_type', '').lower() == 'radio':
+            self._start_spectrum()
+            return
+        # Otherwise wait 2s for video track to appear, then decide
+        self.root.after(2000, self._check_video_track)
+
+    def _check_video_track(self):
+        """If no video dimensions after buffering, treat as audio-only."""
+        if self._state != "playing" or not self._vlc:
+            return
+        w, h = self._vlc.get_video_dimensions()
+        if w == 0 and h == 0:
+            self._start_spectrum()
+
+    def _start_spectrum(self):
+        """Activate spectrum visualizer on the player canvas."""
+        if not SpectrumVisualizer or not self._vlc_canvas:
+            return
+        if self._spectrum:
+            return  # already running
+        self._spectrum = SpectrumVisualizer(self._vlc_canvas)
+        self._spectrum.start()
+        # Start feeding energy from VLC stats
+        self._feed_spectrum_energy()
+
+    def _stop_spectrum(self):
+        """Stop and clean up the spectrum visualizer."""
+        if self._spectrum:
+            self._spectrum.stop()
+            self._spectrum = None
+
+    def _feed_spectrum_energy(self):
+        """Poll VLC audio stats and feed energy level to spectrum."""
+        if not self._spectrum or self._state != "playing" or not self._vlc:
+            return
+        try:
+            stats = self._vlc.get_media_stats()
+            if stats:
+                # demux_bitrate is in MB/s — typical audio is 0.01–0.05 MB/s
+                bitrate = getattr(stats, 'demux_bitrate', 0.0)
+                # Normalize: 0.01 MB/s → low energy, 0.04+ → high energy
+                energy = min(1.0, max(0.1, bitrate * 25))
+                # Add slight randomness for natural feel
+                import random
+                energy *= random.uniform(0.85, 1.15)
+                energy = min(1.0, energy)
+                self._spectrum.set_energy(energy)
+            else:
+                self._spectrum.set_energy(0.4)
+        except Exception:
+            pass
+        # Poll every 200ms for responsive visuals
+        self.root.after(200, self._feed_spectrum_energy)
+
     def _hide_osd(self):
         try:
             if hasattr(self, '_osd_label') and self._osd_label:
@@ -1451,6 +1522,9 @@ class TVModeApp:
         """Stop VLC and return to browse state."""
         # Stop metadata polling
         self._meta_poll_active = False
+
+        # Stop spectrum visualizer
+        self._stop_spectrum()
 
         if self._osd_timer:
             self.root.after_cancel(self._osd_timer)
@@ -1685,22 +1759,23 @@ class TVModeApp:
         if self._search_active:
             self._close_search()
             return
-        if self._drill_category:
-            self._exit_drill_down()
-            return
         if self._state == "playing":
             self._stop_player()
+            return
+        if self._drill_category:
+            self._exit_drill_down()
             return
         self._on_close()
 
     def _on_backspace(self, event=None):
         if self._search_active:
             return
+        if self._state == "playing":
+            self._stop_player()
+            return
         if self._drill_category:
             self._exit_drill_down()
             return
-        if self._state == "playing":
-            self._stop_player()
 
     def _on_space(self, event=None):
         if self._state == "playing" and self._vlc:
