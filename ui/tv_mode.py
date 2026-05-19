@@ -535,17 +535,19 @@ class TVModeApp:
     # ---- Top Navigation Bar -------------------------------------------------
 
     def _create_nav_bar(self):
-        """Create top navigation bar with tabs."""
+        """Create top navigation bar with tabs and action buttons."""
         self._nav_frame = tk.Frame(self.root, bg=TVColors.NAV_BG, height=44)
         self._nav_frame.pack(fill=tk.X, side=tk.TOP)
         self._nav_frame.pack_propagate(False)
 
+        # App brand
         tk.Label(
             self._nav_frame, text=f"\U0001f4fa {config.APP_NAME}",
             bg=TVColors.NAV_BG, fg=TVColors.ACCENT,
             font=(FONT_FAMILY, 13, "bold")
-        ).pack(side=tk.LEFT, padx=16, pady=8)
+        ).pack(side=tk.LEFT, padx=(16, 8), pady=8)
 
+        # Navigation tabs
         tabs = [("home", "\U0001f3e0 Home"), ("favorites", "\u2b50 Favorites"), ("recent", "\U0001f550 Recent")]
         for tab_id, label_text in tabs:
             lbl = tk.Label(
@@ -553,61 +555,66 @@ class TVModeApp:
                 bg=TVColors.NAV_ACTIVE if tab_id == self._current_tab else TVColors.NAV_BG,
                 fg=TVColors.ACCENT if tab_id == self._current_tab else TVColors.TEXT_SECONDARY,
                 font=(FONT_FAMILY, 11, "bold" if tab_id == self._current_tab else "normal"),
-                padx=14, pady=8, cursor="hand2",
+                padx=12, pady=8, cursor="hand2",
             )
             lbl.pack(side=tk.LEFT, padx=2)
             lbl.bind("<Button-1>", lambda e, t=tab_id: self._switch_tab(t))
             self._nav_tabs[tab_id] = lbl
 
+        # ---- Right-side action buttons (packed RIGHT, so order = rightmost first)
+        # All use consistent font size 11, uniform padding
+
+        # Search (rightmost)
         search_btn = tk.Label(
-            self._nav_frame, text="\U0001f50d",
+            self._nav_frame, text="\U0001f50d Search",
             bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 14), padx=12, pady=8, cursor="hand2",
+            font=(FONT_FAMILY, 11), padx=10, pady=8, cursor="hand2",
         )
-        search_btn.pack(side=tk.RIGHT, padx=8)
+        search_btn.pack(side=tk.RIGHT, padx=(4, 12))
         search_btn.bind("<Button-1>", lambda e: self._toggle_search())
 
+        # Settings
         settings_btn = tk.Label(
-            self._nav_frame, text="\u2699",
+            self._nav_frame, text="\u2699\ufe0f Settings",
             bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 14), padx=12, pady=8, cursor="hand2",
+            font=(FONT_FAMILY, 11), padx=10, pady=8, cursor="hand2",
         )
         settings_btn.pack(side=tk.RIGHT, padx=4)
         settings_btn.bind("<Button-1>", lambda e: self._open_settings())
 
-        # Issue #161: Submit / Contribute Channel button
-        submit_btn = tk.Label(
-            self._nav_frame, text="\u2795 Add Channel",
-            bg=TVColors.NAV_BG, fg=TVColors.ACCENT,
-            font=(FONT_FAMILY, 11, "bold"), padx=12, pady=8, cursor="hand2",
-        )
-        submit_btn.pack(side=tk.RIGHT, padx=4)
-        submit_btn.bind("<Button-1>", lambda e: self._open_submit_dialog())
-
-        # Issue #167: Map view button
+        # Map
         map_btn = tk.Label(
-            self._nav_frame, text="\U0001f5fa",
+            self._nav_frame, text="\U0001f5fa Map",
             bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 14), padx=12, pady=8, cursor="hand2",
+            font=(FONT_FAMILY, 11), padx=10, pady=8, cursor="hand2",
         )
         map_btn.pack(side=tk.RIGHT, padx=4)
         map_btn.bind("<Button-1>", lambda e: self._open_map())
 
-        # Issue #160: Filter button
+        # Add Channel
+        submit_btn = tk.Label(
+            self._nav_frame, text="\u2795 Add Channel",
+            bg=TVColors.NAV_BG, fg=TVColors.ACCENT,
+            font=(FONT_FAMILY, 11, "bold"), padx=10, pady=8, cursor="hand2",
+        )
+        submit_btn.pack(side=tk.RIGHT, padx=4)
+        submit_btn.bind("<Button-1>", lambda e: self._open_submit_dialog())
+
+        # Filter
         filter_btn = tk.Label(
             self._nav_frame, text="\U0001f50e Filter",
             bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 11, "bold"), padx=12, pady=8, cursor="hand2",
+            font=(FONT_FAMILY, 11), padx=10, pady=8, cursor="hand2",
         )
         filter_btn.pack(side=tk.RIGHT, padx=4)
         filter_btn.bind("<Button-1>", lambda e: self._open_filter())
         self._filter_btn = filter_btn
 
-        # Issue #162: Help / tour button
+        # Help
         help_btn = tk.Label(
-            self._nav_frame, text="?",
+            self._nav_frame, text="\u2753 Help",
             bg=TVColors.NAV_BG, fg=TVColors.TEXT_SECONDARY,
-            font=(FONT_FAMILY, 14, "bold"), padx=12, pady=8, cursor="hand2",
+            font=(FONT_FAMILY, 11), padx=10, pady=8, cursor="hand2",
         )
         help_btn.pack(side=tk.RIGHT, padx=4)
         help_btn.bind("<Button-1>", lambda e: self._open_tour())
