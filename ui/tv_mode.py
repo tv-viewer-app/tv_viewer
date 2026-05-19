@@ -1430,8 +1430,9 @@ class TVModeApp:
                     pass
         except Exception:
             pass
-        # Keep polling every 1s while playing
-        self.root.after(1000, self._poll_player_metadata)
+        # Keep polling every 1s while still playing
+        if self._state == "playing" and self._meta_poll_active:
+            self.root.after(1000, self._poll_player_metadata)
 
     # ---- Spectrum visualizer for radio/audio channels -----------------------
 
@@ -1492,8 +1493,9 @@ class TVModeApp:
                 self._spectrum.set_energy(0.4)
         except Exception:
             pass
-        # Poll every 200ms for responsive visuals
-        self.root.after(200, self._feed_spectrum_energy)
+        # Poll every 200ms for responsive visuals (only if still playing)
+        if self._spectrum and self._state == "playing":
+            self.root.after(200, self._feed_spectrum_energy)
 
     def _hide_osd(self):
         try:
@@ -1544,7 +1546,10 @@ class TVModeApp:
         self._stop_spectrum()
 
         if self._osd_timer:
-            self.root.after_cancel(self._osd_timer)
+            try:
+                self.root.after_cancel(self._osd_timer)
+            except Exception:
+                pass
             self._osd_timer = None
         # Drop meta label reference
         if hasattr(self, '_osd_meta_label') and self._osd_meta_label is not None:
@@ -1556,15 +1561,39 @@ class TVModeApp:
 
         if self._vlc:
             try:
+                # Detach VLC from the window HWND before stopping
+                # This prevents VLC's video thread from writing to a destroyed window
+                if self._vlc.player:
+                    self._vlc.player.set_hwnd(0)
                 self._vlc.stop()
-                self._vlc.cleanup()
             except Exception:
                 pass
+            # Schedule cleanup + frame destruction with slight delay
+            # to let VLC's video thread fully disengage
+            vlc_ref = self._vlc
             self._vlc = None
-
-        if self._player_frame:
-            self._player_frame.destroy()
+            frame_ref = self._player_frame
             self._player_frame = None
+            self._vlc_canvas = None
+
+            def _finish_cleanup():
+                try:
+                    vlc_ref.cleanup()
+                except Exception:
+                    pass
+                try:
+                    if frame_ref and frame_ref.winfo_exists():
+                        frame_ref.destroy()
+                except Exception:
+                    pass
+
+            # Give VLC 50ms to stop writing to HWND, then destroy
+            self.root.after(50, _finish_cleanup)
+        else:
+            if self._player_frame:
+                self._player_frame.destroy()
+                self._player_frame = None
+            self._vlc_canvas = None
 
         self._state = "browse"
         self._canvas.pack(fill=tk.BOTH, expand=True)
