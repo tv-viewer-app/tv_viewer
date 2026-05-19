@@ -28,6 +28,7 @@ Keyboard Controls (player):
 __all__ = ['TVModeApp']
 
 import sys
+import os
 import tkinter as tk
 import time
 from datetime import datetime
@@ -191,6 +192,15 @@ class TVModeApp:
         if set_window_icon:
             try:
                 set_window_icon(self.root)
+            except Exception:
+                pass
+        else:
+            # Fallback: set icon directly from project root .ico file
+            try:
+                ico_path = os.path.join(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__))), "tv_viewer.ico")
+                if os.path.exists(ico_path):
+                    self.root.iconbitmap(default=ico_path)
             except Exception:
                 pass
 
