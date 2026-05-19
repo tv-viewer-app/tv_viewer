@@ -330,17 +330,46 @@ jobs:
 
       # Build AAB (Play Store) and APK (sideload + GitHub Release)
       # AAB is required by Play Store for new uploads since 2021.
+      # --split-debug-info generates Dart debug symbols for crash reporting.
+      # --obfuscate reduces APK size and protects source.
+      # NDK debugSymbolLevel 'FULL' in build.gradle handles native symbols.
       - name: Build APK + AAB
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          mkdir -p build/debug-info
           flutter build apk --release \
+            --split-debug-info=build/debug-info \
+            --obfuscate \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
           flutter build appbundle --release \
+            --split-debug-info=build/debug-info \
+            --obfuscate \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Package native debug symbols
+        run: |
+          # AGP generates native debug symbols alongside the AAB
+          SYMBOLS_DIR="build/app/intermediates/merged_native_libs/release/mergeReleaseNativeLibs/out/lib"
+          if [ -d "$SYMBOLS_DIR" ]; then
+            cd "$SYMBOLS_DIR"
+            zip -r /tmp/native-debug-symbols.zip .
+            echo "✅ Native debug symbols packaged"
+          else
+            # Fallback: check for stripped_native_libs
+            STRIPPED_DIR="build/app/intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib"
+            if [ -d "$STRIPPED_DIR" ]; then
+              cd "$STRIPPED_DIR"
+              zip -r /tmp/native-debug-symbols.zip .
+              echo "✅ Native debug symbols packaged (stripped dir)"
+            else
+              echo "⚠️ Native debug symbols directory not found"
+              find build/app/intermediates -name "*.so" -path "*/release/*" 2>/dev/null | head -5
+            fi
+          fi
 
       - name: Verify outputs
         run: |
@@ -348,6 +377,8 @@ jobs:
           AAB="build/app/outputs/bundle/release/app-release.aab"
           [ -f "$APK" ] && echo "✅ APK: $(du -h $APK | cut -f1)" || { echo "❌ APK missing"; exit 1; }
           [ -f "$AAB" ] && echo "✅ AAB: $(du -h $AAB | cut -f1)" || { echo "❌ AAB missing"; exit 1; }
+          [ -f "/tmp/native-debug-symbols.zip" ] && echo "✅ Symbols: $(du -h /tmp/native-debug-symbols.zip | cut -f1)" || echo "⚠️ No symbols zip"
+          ls build/debug-info/ 2>/dev/null | head -5 && echo "✅ Dart debug info present" || echo "⚠️ No Dart debug info"
 
       - name: Upload to Release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
@@ -369,6 +400,10 @@ jobs:
             if [ -n "$AAB_PATH" ]; then
               cp "$AAB_PATH" "/tmp/TV_Viewer_${VERSION}_Android.aab"
               gh release upload "$VERSION" "/tmp/TV_Viewer_${VERSION}_Android.aab" --clobber
+            fi
+            # Upload native debug symbols for Play Console crash reporting
+            if [ -f "/tmp/native-debug-symbols.zip" ]; then
+              gh release upload "$VERSION" "/tmp/native-debug-symbols.zip" --clobber
             fi
           fi
 

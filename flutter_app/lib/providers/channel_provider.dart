@@ -226,6 +226,8 @@ class ChannelProvider extends ChangeNotifier {
 
   // Getters
   List<Channel> get channels => _filteredChannels;
+  /// Unfiltered channel list — used by RadioScreen which applies its own filters.
+  List<Channel> get allChannels => List.unmodifiable(_channels);
   List<String> get categories => ['All', ..._categories.toList()..sort()];
   List<String> get countries => ['All', ..._countries.toList()..sort()];
   List<String> get languages => ['All', ..._languages.toList()..sort()]; // BL-017
@@ -887,6 +889,30 @@ class ChannelProvider extends ChangeNotifier {
       );
       _applyFilters();
       notifyListeners();
+      // Report to Supabase (fire-and-forget)
+      SharedDbService.reportChannelStatus(
+        url: channel.url,
+        status: 'failed',
+      );
+    }
+  }
+
+  /// Mark a channel as working after successful playback.
+  /// Called by the player when a "broken" channel actually plays fine.
+  /// Updates in-memory state + local cache + Supabase.
+  void markChannelWorking(String url, {int? workingUrlIndex}) {
+    final idx = _channels.indexWhere((c) => c.urls.contains(url));
+    if (idx >= 0 && !_channels[idx].isWorking) {
+      logger.info('Playback verified working: ${_channels[idx].name} (was marked broken)');
+      _channels[idx] = _channels[idx].copyWith(
+        isWorking: true,
+        lastChecked: DateTime.now(),
+        workingUrlIndex: workingUrlIndex ?? _channels[idx].urls.indexOf(url),
+      );
+      _applyFilters();
+      notifyListeners();
+      // Persist to local cache + Supabase
+      updateChannelHealth(url: url, isWorking: true);
     }
   }
 

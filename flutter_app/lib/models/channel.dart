@@ -1,5 +1,7 @@
 /// Channel model for IPTV streams (BL-031: Immutable)
 /// v2.1.0: Multi-URL support for channel health / failover
+import 'dart:convert';
+
 class Channel {
   final String name;
   /// List of alternate stream URLs for failover (v2.1.0)
@@ -294,6 +296,39 @@ class Channel {
     return inferred; // May return 'International' or null
   }
 
+  /// Repair double-encoded UTF-8 strings (Latin-1 interpretation of UTF-8 bytes).
+  /// Detects the characteristic pattern where Hebrew/Arabic/Cyrillic appear as
+  /// sequences like ×§×¨×™×ª (multiplication sign + high bytes).
+  static String _repairEncoding(String text) {
+    // Quick check: if text has the telltale sign of Latin-1 decoded UTF-8
+    // Hebrew UTF-8 bytes start with 0xD7 (×) or 0xD6, Arabic with 0xD8-0xDB
+    if (!text.contains('×') && !text.contains('Ã') && !text.contains('Ø')) {
+      return text; // No garbling detected
+    }
+    
+    // Check if most characters are in the Latin-1 high range (0x80-0xFF)
+    // which indicates double-encoding
+    final codeUnits = text.codeUnits;
+    int highByteCount = 0;
+    for (final cu in codeUnits) {
+      if (cu >= 0x80 && cu <= 0xFF) highByteCount++;
+    }
+    
+    // If more than 30% of chars are high-byte Latin-1, likely double-encoded
+    if (highByteCount < text.length * 0.3) return text;
+    
+    try {
+      // Re-encode as Latin-1 bytes, then decode as UTF-8
+      final bytes = codeUnits.map((c) => c & 0xFF).toList();
+      final repaired = utf8.decode(bytes, allowMalformed: false);
+      // Verify the result has actual Unicode text (not replacement chars)
+      if (repaired.contains('\uFFFD')) return text;
+      return repaired;
+    } catch (_) {
+      return text; // If re-decode fails, keep original
+    }
+  }
+
   factory Channel.fromM3ULine(String info, String url) {
     String name = 'Unknown';
     String? category;
@@ -306,6 +341,9 @@ class Channel {
     if (info.contains(',')) {
       name = info.split(',').last.trim();
     }
+
+    // Repair double-encoded UTF-8 (Hebrew/Arabic names showing as ×§×¨×™×ª)
+    name = _repairEncoding(name);
 
     // Parse attributes
     final groupMatch = RegExp(r'group-title="([^"]*)"').firstMatch(info);
@@ -376,7 +414,8 @@ class Channel {
       };
 
   factory Channel.fromJson(Map<String, dynamic> json) {
-        final name = json['name'] ?? 'Unknown';
+        final rawName = json['name'] ?? 'Unknown';
+        final name = _repairEncoding(rawName is String ? rawName : rawName.toString());
         final language = json['language'] as String?;
 
         // v2.1.0: Parse both old "url" (string) and new "urls" (list) formats

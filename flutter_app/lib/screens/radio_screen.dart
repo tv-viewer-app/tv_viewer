@@ -33,7 +33,7 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
 
   List<Channel> get _radioChannels {
     final provider = context.read<ChannelProvider>();
-    return provider.channels
+    return provider.allChannels
         .where((c) => c.mediaType.toLowerCase() == 'radio')
         .toList();
   }
