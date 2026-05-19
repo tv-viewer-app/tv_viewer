@@ -1225,13 +1225,19 @@ class ChannelProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final json = prefs.getString('channels_cache');
       if (json != null) {
-        final List<dynamic> data = jsonDecode(json);
-        return data.map((e) => Channel.fromJson(e)).toList();
+        // Decode in background isolate to avoid blocking UI on large caches
+        return await compute(_decodeChannelCache, json);
       }
     } catch (e, stackTrace) {
       logger.error('Error loading cache', e, stackTrace);
     }
     return [];
+  }
+
+  /// Top-level function for compute() — decodes channel cache JSON in isolate.
+  static List<Channel> _decodeChannelCache(String json) {
+    final List<dynamic> data = jsonDecode(json);
+    return data.map((e) => Channel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   /// Deferred cache save — runs JSON encoding in a background isolate

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants.dart';
 import '../models/channel.dart';
@@ -162,7 +163,7 @@ class M3UService {
           // Continue parsing anyway - some playlists might work without header
         }
         
-        final channels = parseM3U(body);
+        final channels = await parseM3UAsync(body);
         logger.info('Parsed ${channels.length} channels from M3U');
         return channels;
       } else {
@@ -181,6 +182,22 @@ class M3UService {
       logger.error('Error details: ${error.getDetailedLog()}');
       throw error;
     }
+  }
+
+  /// Parse M3U content in a background isolate to avoid blocking the UI.
+  static Future<List<Channel>> parseM3UAsync(String content) async {
+    if (content.length < 100000) {
+      // Small playlists: parse inline
+      return parseM3U(content);
+    }
+    final maps = await compute(_parseM3UInIsolate, content);
+    return maps.map((m) => Channel.fromJson(m)).toList();
+  }
+
+  /// Top-level function for compute() — parses M3U in isolate.
+  static List<Map<String, dynamic>> _parseM3UInIsolate(String content) {
+    final channels = parseM3U(content);
+    return channels.map((c) => c.toJson()).toList();
   }
 
   /// Parse M3U content into Channel objects
@@ -387,7 +404,7 @@ class M3UService {
       }
     }
     
-    final consolidated = _consolidateChannels(mergedChannels);
+    final consolidated = await _consolidateChannelsAsync(mergedChannels);
     logger.info('Consolidated ${mergedChannels.length} → ${consolidated.length} channels (${supabaseChannels.length} from Supabase)');
     
     // Contribute newly discovered channels back to Supabase
@@ -541,6 +558,28 @@ class M3UService {
 
   /// Consolidate channels: merge entries with same normalized name + country
   /// into single multi-URL Channel objects for failover
+  /// Consolidate channels: merge entries with same normalized name + country
+  /// into single multi-URL Channel objects for failover.
+  /// Runs in a background isolate via compute() to avoid blocking the UI.
+  static Future<List<Channel>> _consolidateChannelsAsync(List<Channel> channels) async {
+    if (channels.length < 500) {
+      // Small lists: consolidate inline (isolate overhead not worth it)
+      return _consolidateChannels(channels);
+    }
+    // Serialize to JSON maps, consolidate in isolate, deserialize back
+    final maps = channels.map((c) => c.toJson()).toList();
+    final result = await compute(_consolidateInIsolate, maps);
+    return result.map((m) => Channel.fromJson(m)).toList();
+  }
+
+  /// Top-level function for compute() — consolidates channel data in isolate.
+  static List<Map<String, dynamic>> _consolidateInIsolate(
+      List<Map<String, dynamic>> channelMaps) {
+    final channels = channelMaps.map((m) => Channel.fromJson(m)).toList();
+    final consolidated = _consolidateChannels(channels);
+    return consolidated.map((c) => c.toJson()).toList();
+  }
+
   static List<Channel> _consolidateChannels(List<Channel> channels) {
     // Group by normalized name + country, with cross-country Unknown merging
     final groups = <String, List<Channel>>{};
