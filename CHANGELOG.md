@@ -5,6 +5,30 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-05-19
+
+### Added
+- **Category drill-down grid view** (Windows): Click any category label to see
+  all its channels in a full wrapping grid — no more left/right scrolling.
+  Back arrow, Escape, or Backspace returns to category browse.
+- **Spectrum analyzer** (Windows): Radio/audio-only channels display a live
+  32-bar animated frequency visualizer instead of a black screen. Energy
+  driven by VLC stats, runs at 24fps with low CPU usage.
+- **Native debug symbols** uploaded with Android AAB for better crash analysis
+  in Google Play Console.
+- **Playback → health feedback**: Channels marked broken that play successfully
+  are automatically updated to healthy in both local cache and Supabase.
+
+### Fixed
+- **Escape key crash** (Windows): Pressing Escape while playing a channel
+  entered from category drill-down no longer crashes the app. Fixed priority
+  order — playback state is checked before drill-down state.
+- **Hebrew channel names garbled** (Android): Double-encoded UTF-8 names
+  (×§×¨×™×ª pattern) are now auto-repaired on load and fetch.
+- **Radio favorites filter leak** (Android): Switching from TV (with favorites
+  active) to Radio no longer shows an empty list. Radio screen now uses
+  unfiltered channel source.
+
 ## [2.10.10] - 2025-07-14
 
 ### Security

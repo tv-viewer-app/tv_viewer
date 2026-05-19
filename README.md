@@ -19,16 +19,14 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.10.9
+## ✨ What's New in v2.11.0
 
-- **Pull-to-refresh** on channel list — drag down to refresh channels and
-- **Radio favorites** — select favorite radio stations with heart icon, filter
-- **Israeli channels stale** (#193): Custom verified CDN channels now load
-- **Map favorites toggle unresponsive**: Replaced `GestureDetector` with
-- #192 Country code normalization (fixed in 2.10.7)
-- #196 Null check setState crashes (fixed in 2.10.6)
-- #199 Logo URL crash (fixed in 2.10.6)
-- #204 Phone landscape tablet layout (fixed in 2.10.1)
+- **Category drill-down grid view** (Windows) — click any category to browse all channels in a full grid
+- **Spectrum analyzer** (Windows) — radio channels show a live animated frequency visualizer
+- **Hebrew encoding fix** (Android) — Israeli radio station names display correctly
+- **Escape crash fix** (Windows) — pressing Escape during playback no longer crashes
+- **Radio favorites filter fix** (Android) — switching modes no longer leaks filter state
+- **Health sync to cloud** — successful playback of "broken" channels updates Supabase
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 

@@ -392,39 +392,39 @@
 <!-- ═══════════════ What's New ═══════════════ -->
 <section class="features" id="whats-new" style="padding-bottom: 0;">
     <div class="container">
-        <div class="section-tag">v2.10.10 — Latest Release</div>
+        <div class="section-tag">v2.11.0 — Latest Release</div>
         <h2 class="section-title">What's New</h2>
-        <p class="section-subtitle">Security hardening, all bugs closed, plus pull-to-refresh, radio favorites, and background playback.</p>
+        <p class="section-subtitle">Category drill-down, radio spectrum visualizer, Hebrew fix, and critical crash fix.</p>
         <div class="features-grid">
             <div class="feature-card fade-in">
-                <span class="feature-icon">🔒</span>
-                <h3>TLS Certificate Pinning</h3>
-                <p>Release builds validate server certificates for analytics and update endpoints, blocking MITM attacks.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">🛡️</span>
-                <h3>Code Signing &amp; AV</h3>
-                <p>CI now rebuilds the PyInstaller bootloader from source and supports Azure Trusted Signing to eliminate AV false positives.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">⬇️</span>
-                <h3>Pull to Refresh</h3>
-                <p>Drag down on the channel list to refresh sources and check for app updates in one gesture.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">❤️</span>
-                <h3>Radio Favorites</h3>
-                <p>Tap the heart on any radio station to save it. Filter by favorites with the toggle button or genre chip.</p>
+                <span class="feature-icon">📂</span>
+                <h3>Category Drill-Down</h3>
+                <p>Click any category to see all channels in a full grid — no more horizontal scrolling. Back arrow or Escape to return.</p>
             </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">🎵</span>
-                <h3>Background Playback</h3>
-                <p>Continue audio when screen is off or app is backgrounded. Perfect for radio listening on Android 14+.</p>
+                <h3>Spectrum Analyzer</h3>
+                <p>Radio channels display a live 32-bar animated frequency visualizer instead of a black screen. Low CPU, smooth animations.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">⚡</span>
-                <h3>Zero Open Issues</h3>
-                <p>All 25+ reported bugs triaged, fixed, and closed. Fastest startup, reliable Israeli channels, full tablet support.</p>
+                <span class="feature-icon">🇮🇱</span>
+                <h3>Hebrew Names Fixed</h3>
+                <p>Israeli radio stations no longer show garbled characters. Auto-repair detects and fixes double-encoded UTF-8 on load.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">🔧</span>
+                <h3>Escape Crash Fixed</h3>
+                <p>Pressing Escape while watching a channel no longer crashes the Windows app. Critical bug in state machine resolved.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">📻</span>
+                <h3>Radio Filter Fix</h3>
+                <p>Switching from TV with favorites on to Radio no longer shows an empty list. Independent filter state per screen.</p>
+            </div>
+            <div class="feature-card fade-in">
+                <span class="feature-icon">☁️</span>
+                <h3>Health Sync to Cloud</h3>
+                <p>Channels that play successfully are reported as healthy to Supabase, improving community stream data for everyone.</p>
             </div>
         </div>
     </div>
