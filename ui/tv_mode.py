@@ -194,6 +194,11 @@ class TVModeApp:
         self._is_fullscreen = False
         self._all_channels: List[Dict[str, Any]] = []
 
+        # Category drill-down state
+        self._drill_category: Optional[Dict[str, Any]] = None  # Active drill row
+        self._drill_grid_index = 0  # Flat index into grid channels
+        self._drill_scroll_offset = 0.0  # Vertical scroll in drill view
+
         # Navigation state
         self._rows: List[Dict[str, Any]] = []
         self._row_index = 0
@@ -702,6 +707,12 @@ class TVModeApp:
         canvas = self._canvas
         if not canvas:
             return
+
+        # Category drill-down mode: render grid instead of rows
+        if self._drill_category:
+            self._draw_drill_down()
+            return
+
         canvas.delete("all")
 
         cw = canvas.winfo_width()
@@ -1038,11 +1049,32 @@ class TVModeApp:
     def _nav_up(self, event=None):
         if self._state == "playing":
             return
+        if self._drill_category:
+            cols = self._drill_grid_cols()
+            new_idx = self._drill_grid_index - cols
+            if new_idx >= 0:
+                self._drill_grid_index = new_idx
+                self._drill_ensure_visible()
+                self._draw()
+            return
         if self._row_index > 0:
             self._change_row(self._row_index - 1)
 
     def _nav_down(self, event=None):
         if self._state == "playing":
+            return
+        if self._drill_category:
+            cols = self._drill_grid_cols()
+            new_idx = self._drill_grid_index + cols
+            if new_idx < len(self._drill_category["channels"]):
+                self._drill_grid_index = new_idx
+            else:
+                # Clamp to last item
+                last = len(self._drill_category["channels"]) - 1
+                if self._drill_grid_index < last:
+                    self._drill_grid_index = last
+            self._drill_ensure_visible()
+            self._draw()
             return
         if self._rows and self._row_index < len(self._rows) - 1:
             self._change_row(self._row_index + 1)
@@ -1050,6 +1082,12 @@ class TVModeApp:
     def _nav_left(self, event=None):
         if self._state == "playing":
             self._channel_prev()
+            return
+        if self._drill_category:
+            if self._drill_grid_index > 0:
+                self._drill_grid_index -= 1
+                self._drill_ensure_visible()
+                self._draw()
             return
         if self._col_index > 0:
             self._col_index -= 1
@@ -1059,6 +1097,12 @@ class TVModeApp:
     def _nav_right(self, event=None):
         if self._state == "playing":
             self._channel_next()
+            return
+        if self._drill_category:
+            if self._drill_grid_index < len(self._drill_category["channels"]) - 1:
+                self._drill_grid_index += 1
+                self._drill_ensure_visible()
+                self._draw()
             return
         if not self._rows:
             return
@@ -1072,17 +1116,35 @@ class TVModeApp:
         if self._state == "playing":
             self._channel_prev()
             return
+        if self._drill_category:
+            cols = self._drill_grid_cols()
+            self._drill_grid_index = max(0, self._drill_grid_index - cols * 3)
+            self._drill_ensure_visible()
+            self._draw()
+            return
         self._change_row(max(0, self._row_index - 3))
 
     def _page_down(self, event=None):
         if self._state == "playing":
             self._channel_next()
             return
+        if self._drill_category:
+            cols = self._drill_grid_cols()
+            max_idx = len(self._drill_category["channels"]) - 1
+            self._drill_grid_index = min(max_idx, self._drill_grid_index + cols * 3)
+            self._drill_ensure_visible()
+            self._draw()
+            return
         if self._rows:
             self._change_row(min(len(self._rows) - 1, self._row_index + 3))
 
     def _jump_home(self, event=None):
         if self._state == "playing":
+            return
+        if self._drill_category:
+            self._drill_grid_index = 0
+            self._drill_scroll_offset = 0.0
+            self._draw()
             return
         self._col_index = 0
         if self._rows:
@@ -1187,6 +1249,28 @@ class TVModeApp:
         """Play the currently focused channel."""
         if self._state == "playing":
             return
+
+        # In drill-down mode, play from the grid
+        if self._drill_category:
+            channels = self._drill_category["channels"]
+            if 0 <= self._drill_grid_index < len(channels):
+                ch = channels[self._drill_grid_index]
+                if self._parental and self._parental.is_channel_blocked(ch):
+                    self._show_toast("Channel blocked by parental controls")
+                    return
+                url = ch.get('url', '')
+                if not url:
+                    self._show_toast("No stream URL")
+                    return
+                if self._watch_history:
+                    try:
+                        self._watch_history.record_play(ch)
+                    except Exception:
+                        pass
+                self._player_channel = ch
+                self._start_player(url, ch.get('name', 'Unknown'))
+            return
+
         ch = self._get_focused_channel()
         if not ch:
             return
@@ -1601,6 +1685,9 @@ class TVModeApp:
         if self._search_active:
             self._close_search()
             return
+        if self._drill_category:
+            self._exit_drill_down()
+            return
         if self._state == "playing":
             self._stop_player()
             return
@@ -1608,6 +1695,9 @@ class TVModeApp:
 
     def _on_backspace(self, event=None):
         if self._search_active:
+            return
+        if self._drill_category:
+            self._exit_drill_down()
             return
         if self._state == "playing":
             self._stop_player()
@@ -1635,8 +1725,24 @@ class TVModeApp:
     # ---- Mouse Support ------------------------------------------------------
 
     def _on_canvas_click(self, event):
-        if not self._rows or self._state != "browse":
+        if self._state != "browse":
             return
+
+        # If in drill-down mode, handle grid clicks
+        if self._drill_category:
+            self._drill_grid_click(event)
+            return
+
+        if not self._rows:
+            return
+
+        # Check if click is on a category label area
+        label_hit = self._hit_test_label(event.x, event.y)
+        if label_hit is not None:
+            self._change_row(label_hit)
+            self._enter_drill_down(label_hit)
+            return
+
         hit = self._hit_test(event.x, event.y)
         if hit is None:
             return
@@ -1654,11 +1760,257 @@ class TVModeApp:
     def _on_resize(self, event=None):
         self.root.after(50, self._draw)
 
+    # ---- Category Drill-Down ------------------------------------------------
+
+    def _enter_drill_down(self, row_idx=None):
+        """Enter grid view for the focused category row."""
+        if row_idx is None:
+            row_idx = self._row_index
+        if not self._rows or row_idx >= len(self._rows):
+            return
+        self._drill_category = self._rows[row_idx]
+        self._drill_grid_index = 0
+        self._drill_scroll_offset = 0.0
+        self._draw()
+
+    def _exit_drill_down(self):
+        """Return to normal category browse view."""
+        self._drill_category = None
+        self._drill_grid_index = 0
+        self._drill_scroll_offset = 0.0
+        self._draw()
+
+    def _drill_grid_cols(self) -> int:
+        """Number of columns that fit in the current canvas width."""
+        cw = (self._canvas.winfo_width() if self._canvas else 0) or 1280
+        return max(1, (cw - 64) // (CARD_WIDTH + CARD_GAP))
+
+    def _draw_drill_down(self):
+        """Render the drill-down grid view for a category."""
+        canvas = self._canvas
+        if not canvas or not self._drill_category:
+            return
+        canvas.delete("all")
+
+        cw = canvas.winfo_width() or 1280
+        ch_height = canvas.winfo_height() or 620
+
+        channels = self._drill_category["channels"]
+        label = self._drill_category["label"]
+        cols = self._drill_grid_cols()
+
+        # Header: back arrow + category name + count
+        header_h = 56
+        canvas.create_rectangle(0, 0, cw, header_h, fill=TVColors.BG_GRADIENT_TOP, outline="")
+
+        # Back arrow (clickable area)
+        canvas.create_text(
+            24, header_h // 2, text="\u2190",
+            fill=TVColors.ACCENT, font=(FONT_FAMILY, 22, "bold"), anchor="w",
+            tags="back_arrow"
+        )
+        canvas.create_text(
+            56, header_h // 2, text=label,
+            fill=TVColors.TEXT_PRIMARY, font=(FONT_FAMILY, 18, "bold"), anchor="w"
+        )
+        canvas.create_text(
+            cw - 24, header_h // 2,
+            text=f"{len(channels)} channels",
+            fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 12), anchor="e"
+        )
+
+        # Grid area
+        grid_y_start = header_h + 16
+        card_w = CARD_WIDTH
+        card_h = CARD_HEIGHT
+        gap = CARD_GAP
+        grid_width = cols * (card_w + gap) - gap
+        x_margin = max(32, (cw - grid_width) // 2)
+
+        # Scroll offset
+        scroll_y = int(self._drill_scroll_offset)
+        visible_start_row = max(0, scroll_y // (card_h + gap))
+        visible_end_row = visible_start_row + (ch_height // (card_h + gap)) + 2
+
+        for idx, channel in enumerate(channels):
+            row = idx // cols
+            col = idx % cols
+
+            if row < visible_start_row or row > visible_end_row:
+                continue
+
+            x = x_margin + col * (card_w + gap)
+            y = grid_y_start + row * (card_h + gap) - scroll_y
+
+            if y + card_h < grid_y_start or y > ch_height:
+                continue
+
+            is_focused = (idx == self._drill_grid_index)
+            self._draw_card(canvas, x, y, card_w, card_h, channel, is_focused, True)
+
+        # Scrollbar indicator
+        total_rows = (len(channels) + cols - 1) // cols
+        total_height = total_rows * (card_h + gap)
+        if total_height > ch_height - grid_y_start:
+            visible_ratio = (ch_height - grid_y_start) / total_height
+            bar_h = max(30, int(visible_ratio * (ch_height - grid_y_start)))
+            scroll_ratio = scroll_y / max(1, total_height - (ch_height - grid_y_start))
+            bar_y = grid_y_start + int(scroll_ratio * (ch_height - grid_y_start - bar_h))
+            canvas.create_rectangle(
+                cw - 8, bar_y, cw - 4, bar_y + bar_h,
+                fill=TVColors.TEXT_DIM, outline=""
+            )
+
+        self._update_info_bar()
+
+    def _drill_grid_click(self, event):
+        """Handle click in drill-down grid view."""
+        if not self._drill_category:
+            return
+        canvas = self._canvas
+        cw = (canvas.winfo_width() if canvas else 0) or 1280
+        ch_height = (canvas.winfo_height() if canvas else 0) or 620
+
+        # Check back arrow click (top-left region)
+        if event.y < 56 and event.x < 80:
+            self._exit_drill_down()
+            return
+
+        channels = self._drill_category["channels"]
+        cols = self._drill_grid_cols()
+        grid_y_start = 72  # header + padding
+        card_w = CARD_WIDTH
+        card_h = CARD_HEIGHT
+        gap = CARD_GAP
+        grid_width = cols * (card_w + gap) - gap
+        x_margin = max(32, (cw - grid_width) // 2)
+
+        scroll_y = int(self._drill_scroll_offset)
+        rel_y = event.y - grid_y_start + scroll_y
+        rel_x = event.x - x_margin
+
+        if rel_x < 0 or rel_y < 0:
+            return
+
+        col = int(rel_x // (card_w + gap))
+        row = int(rel_y // (card_h + gap))
+
+        if col >= cols:
+            return
+
+        idx = row * cols + col
+        if idx < 0 or idx >= len(channels):
+            return
+
+        if idx == self._drill_grid_index:
+            # Double-click / already selected → play
+            self._drill_grid_index = idx
+            ch = channels[idx]
+            if ch:
+                self._player_channel = ch
+                url = ch.get('url', '')
+                if url:
+                    if self._watch_history:
+                        try:
+                            self._watch_history.record_play(ch)
+                        except Exception:
+                            pass
+                    self._start_player(url, ch.get('name', 'Unknown'))
+        else:
+            self._drill_grid_index = idx
+            self._draw()
+
+    def _hit_test_label(self, mx, my):
+        """Return row_idx if click is on a category label area, else None."""
+        if not self._rows:
+            return None
+        y_offset = 80 + int(self._vertical_offset)
+        start_row = max(0, self._row_index - 1)
+        end_row = min(len(self._rows), start_row + VISIBLE_ROWS)
+        if end_row - start_row < VISIBLE_ROWS and start_row > 0:
+            start_row = max(0, end_row - VISIBLE_ROWS)
+        for row_idx in range(start_row, end_row):
+            # Label occupies the area above the cards
+            if y_offset <= my <= y_offset + ROW_LABEL_HEIGHT:
+                return row_idx
+            y_offset += ROW_LABEL_HEIGHT + CARD_HEIGHT_FOCUS + 20
+        return None
+
+    def _drill_ensure_visible(self):
+        """Scroll drill-down grid to keep focused item visible."""
+        if not self._drill_category:
+            return
+        cols = self._drill_grid_cols()
+        row = self._drill_grid_index // cols
+        card_h = CARD_HEIGHT
+        gap = CARD_GAP
+        grid_y_start = 72
+        ch_height = (self._canvas.winfo_height() if self._canvas else 0) or 620
+
+        item_y_top = row * (card_h + gap)
+        item_y_bottom = item_y_top + card_h
+
+        visible_height = ch_height - grid_y_start
+        if item_y_top < self._drill_scroll_offset:
+            self._drill_scroll_offset = max(0.0, float(item_y_top - gap))
+        elif item_y_bottom > self._drill_scroll_offset + visible_height:
+            self._drill_scroll_offset = float(item_y_bottom - visible_height + gap)
+
+    def _drill_scroll_wheel(self, direction):
+        """Scroll the drill-down grid view with mouse wheel."""
+        if not self._drill_category:
+            return
+        cols = self._drill_grid_cols()
+        total_rows = (len(self._drill_category["channels"]) + cols - 1) // cols
+        ch_height = (self._canvas.winfo_height() if self._canvas else 0) or 620
+        grid_y_start = 72
+        total_height = total_rows * (CARD_HEIGHT + CARD_GAP)
+        max_scroll = max(0.0, total_height - (ch_height - grid_y_start))
+
+        scroll_step = CARD_HEIGHT + CARD_GAP
+        self._drill_scroll_offset = max(0.0, min(max_scroll,
+            self._drill_scroll_offset + direction * scroll_step))
+        self._draw()
+
+    def _drill_hover(self, event):
+        """Update drill-down grid focus on mouse hover."""
+        if not self._drill_category or not self._canvas:
+            return
+        canvas = self._canvas
+        cw = canvas.winfo_width() or 1280
+        cols = self._drill_grid_cols()
+        grid_y_start = 72
+        card_w = CARD_WIDTH
+        card_h = CARD_HEIGHT
+        gap = CARD_GAP
+        grid_width = cols * (card_w + gap) - gap
+        x_margin = max(32, (cw - grid_width) // 2)
+
+        scroll_y = int(self._drill_scroll_offset)
+        rel_y = event.y - grid_y_start + scroll_y
+        rel_x = event.x - x_margin
+
+        if rel_x < 0 or rel_y < 0:
+            return
+        col = int(rel_x // (card_w + gap))
+        row = int(rel_y // (card_h + gap))
+        if col >= cols:
+            return
+        idx = row * cols + col
+        if idx < 0 or idx >= len(self._drill_category["channels"]):
+            return
+        if idx != self._drill_grid_index:
+            self._drill_grid_index = idx
+            self._draw()
+
     # ---- Mouse wheel & hover -----------------------------------------------
 
     def _on_mouse_wheel(self, event):
-        # Vertical wheel = move row up/down
+        # Vertical wheel = move row up/down (or scroll in drill-down)
         direction = -1 if event.delta > 0 else 1
+        if self._drill_category:
+            self._drill_scroll_wheel(direction)
+            return
         self._mouse_wheel_step(direction, vertical=True)
 
     def _on_shift_mouse_wheel(self, event):
@@ -1696,7 +2048,13 @@ class TVModeApp:
         to scroll vertically just from mouse motion. Only update the
         column focus within the currently-active row.
         """
-        if self._state != "browse" or not self._rows:
+        if self._state != "browse":
+            return
+        if self._drill_category:
+            # In drill-down, update grid focus on hover
+            self._drill_hover(event)
+            return
+        if not self._rows:
             return
         hit = self._hit_test(event.x, event.y)
         if hit is None:
