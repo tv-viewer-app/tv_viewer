@@ -477,51 +477,49 @@ function tryNextSource() {
 }
 
 function startStream(url, video, isRadio) {
-    // Set a loading timeout — if no playback in 8s, try next source or proxy
+    // Use proxy by default for HLS streams (most lack CORS headers)
+    let streamUrl = url;
+    if (!url.startsWith('/api/proxy') && url.includes('.m3u8')) {
+        streamUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+    }
+
+    // Timeout — try next source if nothing plays in 12s
     const loadTimer = setTimeout(() => {
-        if (video.readyState < 2) {
-            // Try proxy version before switching source
-            if (!url.startsWith('/api/proxy') && !isRadio) {
-                toast('Trying proxy...');
-                if (hls) { hls.destroy(); hls = null; }
-                startStream(`/api/proxy?url=${encodeURIComponent(url)}`, video, isRadio);
-            } else if (currentSources.length > 1) {
-                tryNextSource();
-            }
+        if (video.readyState < 2 && currentSources.length > 1) {
+            tryNextSource();
+        } else if (video.readyState < 2) {
+            toast('Stream unavailable');
         }
-    }, 8000);
+    }, 12000);
 
     video.addEventListener('playing', () => clearTimeout(loadTimer), { once: true });
 
-    if (url.includes('.m3u8') || url.includes('m3u8')) {
+    if (streamUrl.includes('.m3u8') || streamUrl.includes('m3u8')) {
         if (Hls.isSupported()) {
             hls = new Hls({
                 enableWorker: true,
+                lowLatencyMode: false,
                 xhrSetup: (xhr) => { xhr.withCredentials = false; }
             });
-            hls.loadSource(url);
+            hls.loadSource(streamUrl);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(()=>{}); });
             hls.on(Hls.Events.ERROR, (e, data) => {
                 if (data.fatal) {
                     clearTimeout(loadTimer);
                     hls.destroy(); hls = null;
-                    // If not already proxied, try proxy
-                    if (!url.startsWith('/api/proxy') && !isRadio) {
-                        toast('Trying proxy...');
-                        startStream(`/api/proxy?url=${encodeURIComponent(url)}`, video, isRadio);
-                    } else if (!tryNextSource()) {
-                        toast('Stream unavailable — may be geo-blocked');
+                    if (!tryNextSource()) {
+                        toast('Stream unavailable — try another source');
                     }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = url; video.play().catch(()=>{});
+            video.src = streamUrl; video.play().catch(()=>{});
         } else {
-            video.src = url; video.play().catch(()=> toast('HLS not supported in this browser'));
+            video.src = streamUrl; video.play().catch(()=> toast('HLS not supported'));
         }
     } else {
-        video.src = url;
+        video.src = streamUrl;
         video.play().catch(() => {
             clearTimeout(loadTimer);
             if (!tryNextSource()) toast('Stream unavailable');
