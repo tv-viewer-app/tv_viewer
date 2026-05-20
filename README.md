@@ -7,7 +7,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/tv-viewer-app/tv_viewer)](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
 ![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B.svg)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android-green.svg)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20Web%20%7C%20Docker-green.svg)
 
 > **🌐 [Visit the TV Viewer Landing Page →](https://tv-viewer-app.github.io/tv_viewer/)**
 
@@ -19,11 +19,14 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.12.0
+## ✨ What's New in v2.13.0
 
-- **Web UI feature parity** — Favorites, fullscreen, volume control, keyboard shortcuts, settings panel, parental controls, channel quick-jump
-- **Favorites API** — Server-side favorites management synced across web and desktop
-- **Keyboard shortcuts** — Space, F, M, Esc, arrows, number keys, / for search
+- **Web: CORS Proxy** — Streams route through server-side proxy, fixing playback for nearly all channels in the browser
+- **Web: Cast menu** — Cast to Chromecast/AirPlay, Picture-in-Picture, open in new tab, copy URL
+- **Web: Map channel browser** — Click countries on the map to see and play their channels
+- **Web: Stream stats** — Live resolution, buffer health, and bitrate overlay
+- **Docker deployment** — Run the web interface standalone: `docker run -p 8765:8765 tv-viewer-web`
+- **Automated web tests** — 23 API tests ensure release quality and stability
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
@@ -77,6 +80,7 @@ The heart of TV Viewer is its crowdsourced channel database. Help make it better
 |----------|----------|-------|
 | Android | [Latest APK](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 8.0+ (API 26) |
 | Windows | [Latest EXE](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Self-contained — VLC is bundled |
+| Web/Docker | `docker run -p 8765:8765 tv-viewer-web` | Any browser, any OS |
 | Linux | [From source](#from-source-windowslinux) | Python 3.12+ + VLC |
 
 ## Quick Start
@@ -96,6 +100,20 @@ git clone https://github.com/tv-viewer-app/tv_viewer.git
 cd tv_viewer
 pip install -r requirements.txt
 python main.py
+```
+
+### Web Interface (Docker)
+```bash
+docker build -t tv-viewer-web .
+docker run -p 8765:8765 tv-viewer-web
+# Open http://localhost:8765
+```
+
+### Web Interface (CLI)
+```bash
+pip install fastapi uvicorn aiohttp
+python -m web.server
+# Open http://localhost:8765
 ```
 
 ## Tech Stack

@@ -5,6 +5,42 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-05-20
+
+### Added
+- **Web: CORS Proxy** — All HLS streams route through server-side proxy by default,
+  fixing playback for the vast majority of IPTV channels that lack CORS headers.
+  Manifests are rewritten so segment URLs also proxy transparently.
+- **Web: Stream source switching** — Auto-retry with next available source when a
+  stream fails. Manual source selector dropdown in player controls.
+- **Web: Cast menu** — Cast to Chromecast/AirPlay (Remote Playback API), present
+  to external display, Picture-in-Picture, open in new tab, or copy URL.
+- **Web: Play/Pause button** — Visible transport control synced with Space key.
+- **Web: Enhanced EPG** — Now playing (accent-colored with time range) and Next
+  shown on separate lines, plus upcoming schedule strip.
+- **Web: Map channel browser** — Click a country on the map to see its channels
+  in a side panel. Play any channel directly from the map view.
+- **Web: Country/Category/Type filters** — Dropdown filters above channel grid
+  with proper event handling. Sidebar sorted alphabetically.
+- **Web: Stream stats overlay** — Live resolution, buffer health, and bitrate
+  displayed during playback (top-right corner).
+- **Web: Radio spectrum visualizer** — Animated frequency bars using Web Audio API
+  with fallback animation for CORS-restricted audio.
+- **Docker support** — `Dockerfile` for running the web interface standalone.
+  `docker build -t tv-viewer-web . && docker run -p 8765:8765 tv-viewer-web`
+- **Automated web tests** — `tests/test_web.py` validates API endpoints, proxy
+  functionality, and server startup.
+
+### Changed
+- Web player uses proxy by default instead of waiting for CORS failure (instant playback).
+- Sidebar categories and countries sorted alphabetically (was by channel count).
+- Player controls layout improved with play/pause and source selector.
+
+### Fixed
+- Map view now has proper channel browsing (was display-only with no interaction).
+- Favicon uses proper PNG icons (192/512) for modern browsers.
+- Filter dropdowns properly wired to reload channels on change.
+
 ## [2.12.0] - 2026-05-20
 
 ### Added

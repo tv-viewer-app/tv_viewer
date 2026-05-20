@@ -19,7 +19,7 @@ from typing import Optional, List, Dict, Any
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -168,13 +168,20 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
         raise HTTPException(status_code=400, detail="Invalid URL")
 
     timeout = aiohttp.ClientTimeout(total=30, sock_read=10)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "*/*",
+        "Referer": url,
+    }
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }) as resp:
+            async with session.get(url, headers=headers, ssl=False) as resp:
                 if resp.status != 200:
-                    raise HTTPException(status_code=resp.status, detail="Upstream error")
+                    return JSONResponse(
+                        status_code=resp.status,
+                        content={"detail": f"Upstream returned {resp.status}"},
+                        headers={"Access-Control-Allow-Origin": "*"}
+                    )
 
                 # For m3u8 manifests, rewrite URLs to go through proxy
                 if ".m3u8" in url or "mpegurl" in (resp.headers.get("content-type", "").lower()):
@@ -198,7 +205,11 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
                     headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
                 )
     except aiohttp.ClientError as e:
-        raise HTTPException(status_code=502, detail=f"Upstream connection failed: {str(e)}")
+        return JSONResponse(
+            status_code=502,
+            content={"detail": f"Upstream connection failed: {str(e)}"},
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
 
 
 def _rewrite_manifest(manifest: str, manifest_url: str, base_url: str) -> str:

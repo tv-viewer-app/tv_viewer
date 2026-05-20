@@ -138,7 +138,21 @@
         .map-header h3 { font-size: 14px; font-weight: 600; }
         .map-close { padding: 6px 12px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; margin-left: auto; }
         .map-close:hover { border-color: var(--accent); color: var(--accent); }
-        #map { flex: 1; width: 100%; }
+        .map-body { display: flex; flex: 1; overflow: hidden; }
+        #map { flex: 1; min-width: 0; }
+        .map-panel { width: 320px; background: var(--bg-card); border-left: 1px solid var(--border); overflow-y: auto; display: none; flex-direction: column; }
+        .map-panel.active { display: flex; }
+        .map-panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between; }
+        .map-panel-close { background: none; border: none; color: var(--text-sec); cursor: pointer; font-size: 16px; }
+        .map-panel-close:hover { color: var(--accent); }
+        .map-ch-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .map-ch-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s; }
+        .map-ch-item:hover { background: rgba(76,194,255,.1); }
+        .map-ch-item .ch-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+        .map-ch-item .ch-name { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .map-ch-item .ch-cat { font-size: 10px; color: var(--text-dim); }
+        .map-ch-item .ch-play { font-size: 11px; color: var(--accent); opacity: 0; transition: opacity .15s; }
+        .map-ch-item:hover .ch-play { opacity: 1; }
 
         /* Spinner & Empty */
         .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; gap: 12px; }
@@ -194,7 +208,13 @@
     </main>
     <div class="map-view" id="map-view">
         <div class="map-header"><h3>🗺 Channel Map</h3><span class="badge" id="map-badge"></span><button class="map-close" id="map-close">✕ Back to Channels</button></div>
-        <div id="map"></div>
+        <div class="map-body">
+            <div id="map"></div>
+            <div class="map-panel" id="map-panel">
+                <div class="map-panel-header"><span id="map-panel-title">Channels</span><button class="map-panel-close" id="map-panel-close">✕</button></div>
+                <div class="map-ch-list" id="map-ch-list"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -477,11 +497,13 @@ function tryNextSource() {
 }
 
 function startStream(url, video, isRadio) {
-    // Use proxy by default for HLS streams (most lack CORS headers)
+    // Use proxy for all streams (most lack CORS headers)
     let streamUrl = url;
-    if (!url.startsWith('/api/proxy') && url.includes('.m3u8')) {
+    if (!url.startsWith('/api/proxy')) {
         streamUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
     }
+
+    const isHls = url.includes('.m3u8') || url.includes('m3u8');
 
     // Timeout — try next source if nothing plays in 12s
     const loadTimer = setTimeout(() => {
@@ -494,7 +516,7 @@ function startStream(url, video, isRadio) {
 
     video.addEventListener('playing', () => clearTimeout(loadTimer), { once: true });
 
-    if (streamUrl.includes('.m3u8') || streamUrl.includes('m3u8')) {
+    if (isHls) {
         if (Hls.isSupported()) {
             hls = new Hls({
                 enableWorker: true,
@@ -828,14 +850,53 @@ async function toggleMap() {
         data.forEach(c => {
             if (!c.coords) return;
             const marker = L.circleMarker(c.coords, {radius: Math.min(20, 5 + Math.sqrt(c.count)), color:'#4CC2FF', fillColor:'#4CC2FF', fillOpacity:0.5, weight:1});
-            marker.bindPopup(`<b>${c.name}</b><br>${c.count} channels<br><small>${Object.entries(c.categories).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>`${k}: ${v}`).join(', ')}</small>`);
+            marker.bindTooltip(`${c.name} (${c.count})`);
+            marker.on('click', () => showMapCountryChannels(c.name));
             marker.addTo(mapInstance);
         });
         setTimeout(()=>mapInstance.invalidateSize(), 100);
     } else {
         mv.classList.remove('active');
+        document.getElementById('map-panel').classList.remove('active');
     }
 }
+
+async function showMapCountryChannels(country) {
+    const panel = document.getElementById('map-panel');
+    const list = document.getElementById('map-ch-list');
+    document.getElementById('map-panel-title').textContent = `${country}`;
+    panel.classList.add('active');
+    list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    setTimeout(()=>mapInstance.invalidateSize(), 50);
+
+    const chs = await api.channels({country});
+    if (chs.length === 0) {
+        list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center;">No channels found</div>';
+        return;
+    }
+    list.innerHTML = chs.map((ch, i) => `
+        <div class="map-ch-item" data-idx="${i}">
+            <span class="ch-dot" style="background:${ch.status==='working'?'var(--success)':ch.status==='offline'?'var(--live)':'var(--text-dim)'}"></span>
+            <span class="ch-name">${esc(ch.name)}</span>
+            <span class="ch-cat">${esc(ch.category||'')}</span>
+            <span class="ch-play">▶ Play</span>
+        </div>
+    `).join('');
+
+    // Store channels for playback and wire clicks
+    list.querySelectorAll('.map-ch-item').forEach((el, i) => {
+        el.onclick = () => {
+            // Set filtered to map channels so prev/next works within country
+            filtered = chs;
+            playChannel(i);
+        };
+    });
+}
+
+document.getElementById('map-panel-close').onclick = () => {
+    document.getElementById('map-panel').classList.remove('active');
+    setTimeout(()=>{ if(mapInstance) mapInstance.invalidateSize(); }, 50);
+};
 
 // ─── Refresh ────────────────────────────────────────────────────────────────
 async function refreshChannels() {

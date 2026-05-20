@@ -166,7 +166,7 @@
         .flow-arrow { color: var(--accent); font-size: 20px; }
 
         /* ── Platforms ── */
-        .platform-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+        .platform-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 48px; }
         .platform-card {
             background: var(--surface); border: 1px solid var(--border);
             border-radius: 14px; padding: 32px; text-align: center;
@@ -299,7 +299,7 @@
             .step-connector { display: none !important; }
             .features-grid { grid-template-columns: 1fr; }
             .community-grid { grid-template-columns: 1fr; }
-            .platform-cards { grid-template-columns: 1fr; }
+            .platform-cards { grid-template-columns: 1fr 1fr; }
             .section-title { font-size: 28px; }
             .beer-buttons { flex-direction: column; align-items: center; }
         }
@@ -371,7 +371,7 @@
             <div class="step fade-in">
                 <div class="step-num">📥</div>
                 <h3>Install</h3>
-                <p>Download for Android, Windows, or build from source on Linux. No account, no sign-up — just install and go.</p>
+                <p>Download for Android, Windows, Docker, or build from source on Linux. No account, no sign-up — just install and go.</p>
                 <div class="step-connector"></div>
             </div>
             <div class="step fade-in">
@@ -392,39 +392,39 @@
 <!-- ═══════════════ What's New ═══════════════ -->
 <section class="features" id="whats-new" style="padding-bottom: 0;">
     <div class="container">
-        <div class="section-tag">v2.12.0 — Latest Release</div>
+        <div class="section-tag">v2.13.0 — Latest Release</div>
         <h2 class="section-title">What's New</h2>
-        <p class="section-subtitle">Web UI feature parity — favorites, fullscreen, volume, keyboard shortcuts, settings, and parental controls.</p>
+        <p class="section-subtitle">Web CORS proxy, Docker deployment, cast menu, interactive map, and automated testing.</p>
         <div class="features-grid">
             <div class="feature-card fade-in">
-                <span class="feature-icon">🌐</span>
-                <h3>Web UI Enhanced</h3>
-                <p>Fullscreen player, volume control, favorites management, settings panel, and parental controls — all in the browser.</p>
+                <span class="feature-icon">🔄</span>
+                <h3>CORS Proxy</h3>
+                <p>Server-side stream proxy rewrites HLS manifests so channels play reliably in any browser — no extensions needed.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">⌨️</span>
-                <h3>Keyboard Shortcuts</h3>
-                <p>Space (play/pause), F (fullscreen), M (mute), arrows (navigate/volume), numbers (channel jump), / (search).</p>
+                <span class="feature-icon">🐳</span>
+                <h3>Docker Deployment</h3>
+                <p>Run the web interface anywhere with one command: <code>docker run -p 8765:8765 tv-viewer-web</code></p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">⭐</span>
-                <h3>Favorites Sync</h3>
-                <p>Add/remove favorites from the web interface — persisted server-side and synced with the desktop app.</p>
+                <span class="feature-icon">📺</span>
+                <h3>Cast Menu</h3>
+                <p>Cast to Chromecast, AirPlay, Picture-in-Picture, or open in a new tab — all from the player toolbar.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">🔒</span>
-                <h3>Parental Controls</h3>
-                <p>Hide 18+ channels with optional PIN protection. Available in both web and desktop settings.</p>
+                <span class="feature-icon">🗺️</span>
+                <h3>Map Channel Browser</h3>
+                <p>Click any country on the interactive map to browse and play its channels in a side panel.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">📻</span>
-                <h3>Radio Filter Fix</h3>
-                <p>Switching from TV with favorites on to Radio no longer shows an empty list. Independent filter state per screen.</p>
+                <span class="feature-icon">📊</span>
+                <h3>Stream Stats Overlay</h3>
+                <p>Live resolution, buffer health, bitrate, and dropped frames — toggle with the stats button during playback.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">☁️</span>
-                <h3>Health Sync to Cloud</h3>
-                <p>Channels that play successfully are reported as healthy to Supabase, improving community stream data for everyone.</p>
+                <span class="feature-icon">✅</span>
+                <h3>Automated Tests</h3>
+                <p>23 API tests validate health, channels, proxy, EPG, favorites, and Docker config before every release.</p>
             </div>
         </div>
     </div>
@@ -586,6 +586,12 @@
                 <h3>Linux</h3>
                 <p>Ubuntu, Debian, Fedora, Arch. Run from source with Python 3.12+ and VLC.</p>
                 <a href="https://github.com/tv-viewer-app/tv_viewer#from-source-windowslinux" class="btn btn-secondary">Build Instructions</a>
+            </div>
+            <div class="platform-card fade-in">
+                <span class="platform-icon">🐳</span>
+                <h3>Web / Docker</h3>
+                <p>Run in any browser. Deploy with Docker or run directly with Python + FastAPI.</p>
+                <a href="https://github.com/tv-viewer-app/tv_viewer#web-interface-docker" class="btn btn-secondary">Docker Guide</a>
             </div>
         </div>
     </div>
