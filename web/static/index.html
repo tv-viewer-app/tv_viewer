@@ -339,7 +339,7 @@ function renderSidebar(cats, countries) {
         html += `<div class="sb-item${currentCat===c.name?' active':''}" data-cat="${esc(c.name)}">${CAT_ICONS[c.name]||'📺'} ${esc(c.name)}<span class="sb-count">${c.count}</span></div>`;
     });
     html += '<div class="sb-section" style="margin-top:8px">Countries</div>';
-    sortedCountries.slice(0, 30).forEach(c => {
+    sortedCountries.forEach(c => {
         html += `<div class="sb-item${currentCountry===c.name?' active':''}" data-country="${esc(c.name)}">🌍 ${esc(c.name)}<span class="sb-count">${c.count}</span></div>`;
     });
     sb.innerHTML = html;
