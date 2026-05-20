@@ -11,15 +11,17 @@ import os
 import sys
 import json
 import asyncio
+import hashlib
 import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -151,6 +153,189 @@ async def get_status():
         "working_channels": working,
         "status": "running",
     }
+
+
+# ─── EPG endpoints ──────────────────────────────────────────────────────────
+
+@app.get("/api/epg/{channel_name}")
+async def get_epg(channel_name: str, hours: int = Query(6, ge=1, le=24)):
+    """Get EPG schedule for a channel."""
+    try:
+        from utils.epg import epg_service
+        # Try to initialize if not already done
+        if not epg_service._initialized:
+            try:
+                await epg_service.initialize()
+            except Exception:
+                pass
+
+        now_prog, next_prog = epg_service.get_now_next(channel_name=channel_name)
+        schedule = epg_service.get_schedule(channel_name=channel_name, hours=hours)
+
+        return {
+            "channel": channel_name,
+            "now": now_prog.to_dict() if now_prog else None,
+            "next": next_prog.to_dict() if next_prog else None,
+            "schedule": [p.to_dict() for p in schedule],
+        }
+    except ImportError:
+        raise HTTPException(status_code=503, detail="EPG service unavailable")
+    except Exception as e:
+        logger.warning(f"EPG error for {channel_name}: {e}")
+        return {"channel": channel_name, "now": None, "next": None, "schedule": []}
+
+
+# ─── Report broken channel ──────────────────────────────────────────────────
+
+class ReportRequest(BaseModel):
+    url: str
+    name: Optional[str] = None
+    reason: Optional[str] = None
+
+
+@app.post("/api/report")
+async def report_broken(report: ReportRequest):
+    """Report a channel as broken — increments report_count in Supabase."""
+    url_hash = hashlib.sha256(report.url.encode()).hexdigest()
+    try:
+        from utils import supabase_channels
+        if not supabase_channels.is_configured():
+            # Fall back to local marking
+            _mark_local_broken(report.url)
+            return {"status": "recorded_locally", "url_hash": url_hash}
+
+        success = await supabase_channels.report_channel(url_hash)
+        if success:
+            return {"status": "reported", "url_hash": url_hash}
+        else:
+            _mark_local_broken(report.url)
+            return {"status": "recorded_locally", "url_hash": url_hash}
+    except ImportError:
+        _mark_local_broken(report.url)
+        return {"status": "recorded_locally", "url_hash": url_hash}
+    except Exception as e:
+        logger.warning(f"Report error: {e}")
+        _mark_local_broken(report.url)
+        return {"status": "recorded_locally", "url_hash": url_hash}
+
+
+def _mark_local_broken(url: str):
+    """Mark a channel as broken in the local cache."""
+    channels_file = PROJECT_ROOT / config.CHANNELS_FILE
+    try:
+        with open(channels_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for ch in data.get("channels", []):
+            if ch.get("url") == url:
+                ch["status"] = "offline"
+                break
+        with open(channels_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Failed to mark broken locally: {e}")
+
+
+# ─── Refresh / pull channels ────────────────────────────────────────────────
+
+_refresh_lock = threading.Lock()
+_refresh_in_progress = False
+
+
+@app.post("/api/refresh")
+async def refresh_channels():
+    """Trigger a background channel refresh from repositories."""
+    global _refresh_in_progress
+    if _refresh_in_progress:
+        return {"status": "already_in_progress"}
+
+    def _do_refresh():
+        global _refresh_in_progress
+        _refresh_in_progress = True
+        try:
+            from core.channel_manager import ChannelManager
+            mgr = ChannelManager()
+            mgr.load_cached_channels()
+
+            # Run async fetch in a new event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from core.repository import RepositoryHandler
+                handler = RepositoryHandler()
+                channels = loop.run_until_complete(handler.fetch_all())
+                if channels:
+                    mgr.merge_channels(channels)
+                    mgr.save_channels()
+                    logger.info(f"Refresh complete: {len(mgr.channels)} channels")
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Refresh failed: {e}")
+        finally:
+            _refresh_in_progress = False
+
+    with _refresh_lock:
+        t = threading.Thread(target=_do_refresh, daemon=True)
+        t.start()
+
+    return {"status": "started"}
+
+
+@app.get("/api/refresh/status")
+async def refresh_status():
+    """Check if a refresh is in progress."""
+    return {"in_progress": _refresh_in_progress}
+
+
+# ─── Map data ───────────────────────────────────────────────────────────────
+
+# Country coordinates for map visualization
+COUNTRY_COORDS = {
+    "Israel": [31.77, 35.22], "United States": [39.83, -98.58], "United Kingdom": [55.38, -3.44],
+    "Germany": [51.17, 10.45], "France": [46.23, 2.21], "Spain": [40.46, -3.75],
+    "Italy": [41.87, 12.57], "Brazil": [-14.24, -51.93], "Russia": [61.52, 105.32],
+    "India": [20.59, 78.96], "Canada": [56.13, -106.35], "Australia": [-25.27, 133.78],
+    "Japan": [36.20, 138.25], "China": [35.86, 104.20], "Turkey": [38.96, 35.24],
+    "Saudi Arabia": [23.89, 45.08], "UAE": [23.42, 53.85], "Egypt": [26.82, 30.80],
+    "South Korea": [35.91, 127.77], "Mexico": [23.63, -102.55], "Argentina": [-38.42, -63.62],
+    "Netherlands": [52.13, 5.29], "Poland": [51.92, 19.15], "Portugal": [39.40, -8.22],
+    "Sweden": [60.13, 18.64], "Norway": [60.47, 8.47], "Greece": [39.07, 21.82],
+    "Romania": [45.94, 24.97], "Iran": [32.43, 53.69], "Iraq": [33.22, 43.68],
+    "Pakistan": [30.38, 69.35], "Thailand": [15.87, 100.99], "Indonesia": [-0.79, 113.92],
+    "Philippines": [12.88, 121.77], "Vietnam": [14.06, 108.28], "Colombia": [4.57, -74.30],
+    "Chile": [-35.68, -71.54], "Morocco": [31.79, -7.09], "Algeria": [28.03, 1.66],
+    "Nigeria": [9.08, 8.68], "South Africa": [-30.56, 22.94], "Kenya": [-0.02, 37.91],
+    "Ukraine": [48.38, 31.17], "Czech Republic": [49.82, 15.47], "Hungary": [47.16, 19.50],
+    "Belgium": [50.50, 4.47], "Switzerland": [46.82, 8.23], "Austria": [47.52, 14.55],
+    "Denmark": [56.26, 9.50], "Finland": [61.92, 25.75], "Ireland": [53.14, -7.69],
+}
+
+
+@app.get("/api/map")
+async def get_map_data():
+    """Get channel counts by country with coordinates for map display."""
+    channels = _load_channels()
+    country_data: Dict[str, Dict[str, Any]] = {}
+
+    for ch in channels:
+        if ch.get("status") == "offline":
+            continue
+        country = ch.get("country", "Unknown")
+        if country == "Unknown":
+            continue
+        if country not in country_data:
+            coords = COUNTRY_COORDS.get(country)
+            country_data[country] = {
+                "name": country,
+                "count": 0,
+                "coords": coords,
+                "categories": {},
+            }
+        country_data[country]["count"] += 1
+        cat = ch.get("category", "General")
+        country_data[country]["categories"][cat] = country_data[country]["categories"].get(cat, 0) + 1
+
+    return {"countries": list(country_data.values())}
 
 
 # ─── Embedded server control (used by Windows app) ───────────────────────────

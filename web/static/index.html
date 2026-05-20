@@ -1,658 +1,384 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TV Viewer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
         :root {
-            --bg: #0A0A0F;
-            --bg-card: #1A1A24;
-            --bg-card-hover: #222230;
-            --bg-sidebar: #0D0D14;
-            --bg-header: #0D1520;
-            --border: #2A2A35;
-            --border-focus: #4CC2FF;
-            --text: #FFFFFF;
-            --text-secondary: #B8B8C8;
-            --text-dim: #6E6E80;
-            --accent: #4CC2FF;
-            --accent-soft: #3A9AD9;
-            --success: #4ADE80;
-            --live: #EF4444;
-            --favorite: #FBBF24;
-            --radius: 12px;
-            --radius-sm: 8px;
-            --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            --bg: #0A0A0F; --bg-card: #1A1A24; --bg-hover: #222230;
+            --bg-sidebar: #0D0D14; --bg-header: #0D1520;
+            --border: #2A2A35; --border-focus: #4CC2FF;
+            --text: #FFF; --text-sec: #B8B8C8; --text-dim: #6E6E80;
+            --accent: #4CC2FF; --success: #4ADE80; --live: #EF4444;
+            --fav: #FBBF24; --radius: 12px; --radius-sm: 8px;
+            --font: 'Segoe UI', -apple-system, sans-serif;
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: var(--font);
-            background: var(--bg);
-            color: var(--text);
-            overflow: hidden;
-            height: 100vh;
-        }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
 
         /* Header */
-        .header {
-            display: flex;
-            align-items: center;
-            padding: 12px 24px;
-            background: var(--bg-header);
-            border-bottom: 1px solid var(--border);
-            gap: 16px;
-            height: 56px;
-            z-index: 100;
-        }
-        .header-brand {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--accent);
-            white-space: nowrap;
-        }
-        .header-nav {
-            display: flex;
-            gap: 4px;
-            margin-left: 24px;
-        }
-        .nav-btn {
-            padding: 8px 16px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 13px;
-            font-family: var(--font);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .nav-btn:hover { background: rgba(76, 194, 255, 0.1); color: var(--text); }
-        .nav-btn.active { background: rgba(76, 194, 255, 0.15); color: var(--accent); }
-
-        .search-box {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 6px 12px;
-            width: 280px;
-            transition: border-color 0.2s;
-        }
+        .header { display: flex; align-items: center; padding: 10px 20px; background: var(--bg-header); border-bottom: 1px solid var(--border); height: 52px; gap: 12px; z-index: 100; }
+        .brand { font-size: 16px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+        .nav { display: flex; gap: 2px; margin-left: 16px; }
+        .nav-btn { padding: 6px 14px; border: none; background: transparent; color: var(--text-sec); font-size: 12px; font-family: var(--font); border-radius: var(--radius-sm); cursor: pointer; transition: all .2s; }
+        .nav-btn:hover { background: rgba(76,194,255,.1); color: var(--text); }
+        .nav-btn.active { background: rgba(76,194,255,.15); color: var(--accent); }
+        .search-box { margin-left: auto; display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 10px; width: 260px; }
         .search-box:focus-within { border-color: var(--accent); }
-        .search-box input {
-            border: none;
-            background: transparent;
-            color: var(--text);
-            font-size: 13px;
-            width: 100%;
-            outline: none;
-            font-family: var(--font);
-        }
+        .search-box input { border: none; background: transparent; color: var(--text); font-size: 12px; width: 100%; outline: none; font-family: var(--font); }
         .search-box input::placeholder { color: var(--text-dim); }
-        .search-icon { color: var(--text-dim); margin-right: 8px; font-size: 14px; }
+        .badge { font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+        .header-actions { display: flex; gap: 6px; margin-left: 8px; }
+        .icon-btn { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-sec); border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; transition: all .2s; }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .icon-btn.active-btn { background: rgba(76,194,255,.15); border-color: var(--accent); color: var(--accent); }
 
-        .status-badge {
-            font-size: 11px;
-            color: var(--text-dim);
-            white-space: nowrap;
-        }
+        /* Layout */
+        .main { display: flex; height: calc(100vh - 52px); }
+        .sidebar { width: 200px; background: var(--bg-sidebar); border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 0; flex-shrink: 0; }
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .sb-section { padding: 8px 14px 4px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+        .sb-item { display: flex; align-items: center; padding: 6px 14px; cursor: pointer; color: var(--text-sec); font-size: 12px; transition: all .15s; gap: 6px; }
+        .sb-item:hover { background: rgba(76,194,255,.08); color: var(--text); }
+        .sb-item.active { background: rgba(76,194,255,.12); color: var(--accent); border-right: 2px solid var(--accent); }
+        .sb-count { margin-left: auto; font-size: 10px; color: var(--text-dim); background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 8px; }
 
-        /* Main layout */
-        .main {
-            display: flex;
-            height: calc(100vh - 56px);
-        }
+        /* Content */
+        .content { flex: 1; overflow-y: auto; padding: 20px; }
+        .content::-webkit-scrollbar { width: 6px; }
+        .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .content-title { font-size: 18px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+        .content-title .refresh-btn { font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-sec); border-radius: var(--radius-sm); cursor: pointer; }
+        .content-title .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-        /* Sidebar */
-        .sidebar {
-            width: 220px;
-            background: var(--bg-sidebar);
-            border-right: 1px solid var(--border);
-            overflow-y: auto;
-            padding: 12px 0;
-            flex-shrink: 0;
-        }
-        .sidebar-section {
-            padding: 8px 16px 4px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--text-dim);
-        }
-        .sidebar-item {
-            display: flex;
-            align-items: center;
-            padding: 8px 16px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 13px;
-            transition: all 0.15s;
-            gap: 8px;
-        }
-        .sidebar-item:hover { background: rgba(76, 194, 255, 0.08); color: var(--text); }
-        .sidebar-item.active { background: rgba(76, 194, 255, 0.12); color: var(--accent); border-right: 2px solid var(--accent); }
-        .sidebar-count {
-            margin-left: auto;
-            font-size: 11px;
-            color: var(--text-dim);
-            background: rgba(255,255,255,0.05);
-            padding: 1px 6px;
-            border-radius: 10px;
-        }
-
-        /* Content area */
-        .content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-        }
-        .content::-webkit-scrollbar { width: 8px; }
-        .content::-webkit-scrollbar-track { background: transparent; }
-        .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-        .content-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 16px;
-        }
-
-        /* Channel grid */
-        .channel-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 16px;
-        }
-
-        .channel-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            position: relative;
-            overflow: hidden;
-        }
-        .channel-card:hover {
-            border-color: var(--border-focus);
-            background: var(--bg-card-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        }
-        .channel-card.playing {
-            border-color: var(--accent);
-            box-shadow: 0 0 20px rgba(76, 194, 255, 0.2);
-        }
-
-        .card-logo {
-            width: 48px;
-            height: 48px;
-            border-radius: var(--radius-sm);
-            object-fit: cover;
-            background: rgba(255,255,255,0.05);
-        }
-        .card-monogram {
-            width: 48px;
-            height: 48px;
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text);
-            flex-shrink: 0;
-        }
+        /* Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all .2s; position: relative; }
+        .card:hover { border-color: var(--border-focus); background: var(--bg-hover); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+        .card.playing { border-color: var(--accent); box-shadow: 0 0 16px rgba(76,194,255,.2); }
+        .card-top { display: flex; align-items: center; gap: 10px; }
+        .card-logo { width: 40px; height: 40px; border-radius: var(--radius-sm); object-fit: cover; background: rgba(255,255,255,.05); flex-shrink: 0; }
+        .card-mono { width: 40px; height: 40px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; }
         .card-info { flex: 1; min-width: 0; }
-        .card-name {
-            font-size: 13px;
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .card-meta {
-            font-size: 11px;
-            color: var(--text-dim);
-            margin-top: 2px;
-        }
-        .card-top {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .card-status {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--success);
-        }
-        .card-status.offline { background: var(--text-dim); }
-        .card-status.live { background: var(--live); animation: pulse 1.5s infinite; }
+        .card-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-epg { font-size: 10px; color: var(--accent); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; }
+        .card-dot.live { background: var(--live); animation: pulse 1.5s infinite; }
+        .card-dot.ok { background: var(--success); }
+        .card-actions { display: flex; gap: 4px; margin-top: 8px; }
+        .card-actions button { font-size: 10px; padding: 3px 7px; border: 1px solid var(--border); background: transparent; color: var(--text-sec); border-radius: 4px; cursor: pointer; }
+        .card-actions button:hover { border-color: var(--accent); color: var(--accent); }
+        .card-actions .report-btn:hover { border-color: var(--live); color: var(--live); }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 
         /* Player overlay */
-        .player-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+        .player-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.97); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .player-overlay.active { display: flex; }
+        .player-box { width: 90vw; max-width: 1280px; aspect-ratio: 16/9; background: #000; border-radius: var(--radius); overflow: hidden; position: relative; }
+        .player-box video { width: 100%; height: 100%; object-fit: contain; }
+        .player-bar { display: flex; align-items: center; justify-content: space-between; width: 90vw; max-width: 1280px; padding: 14px 0; }
+        .player-name { font-size: 16px; font-weight: 600; }
+        .player-epg { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+        .player-btns { display: flex; gap: 8px; }
+        .p-btn { padding: 7px 14px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: var(--font); }
+        .p-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .p-btn.cast-btn { color: var(--fav); border-color: var(--fav); }
+        .p-btn.report-btn:hover { border-color: var(--live); color: var(--live); }
 
-        .player-container {
-            width: 90vw;
-            max-width: 1280px;
-            aspect-ratio: 16 / 9;
-            background: #000;
-            border-radius: var(--radius);
-            overflow: hidden;
-            position: relative;
-        }
-        .player-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-        .player-info {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 90vw;
-            max-width: 1280px;
-            padding: 16px 0;
-        }
-        .player-channel-name {
-            font-size: 18px;
-            font-weight: 600;
-        }
-        .player-controls {
-            display: flex;
-            gap: 12px;
-        }
-        .player-btn {
-            padding: 8px 16px;
-            border: 1px solid var(--border);
-            background: var(--bg-card);
-            color: var(--text);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 13px;
-            font-family: var(--font);
-            transition: all 0.2s;
-        }
-        .player-btn:hover { border-color: var(--accent); color: var(--accent); }
+        /* Map */
+        .map-view { display: none; position: absolute; inset: 0; z-index: 50; }
+        .map-view.active { display: block; }
+        #map { width: 100%; height: 100%; }
 
-        /* Loading */
-        .loading {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 300px;
-            gap: 16px;
-        }
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
+        /* Spinner & Empty */
+        .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; gap: 12px; }
+        .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-dim); gap: 8px; }
 
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 300px;
-            color: var(--text-dim);
-            gap: 8px;
-        }
-        .empty-state-icon { font-size: 48px; }
+        /* Toast */
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 10px 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 12px; z-index: 2000; opacity: 0; transition: opacity .3s; pointer-events: none; }
+        .toast.show { opacity: 1; }
 
-        /* Responsive */
         @media (max-width: 768px) {
             .sidebar { display: none; }
-            .header-nav { display: none; }
-            .search-box { width: 180px; }
-            .channel-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+            .nav { display: none; }
+            .search-box { width: 140px; }
+            .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
         }
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="header">
-        <span class="header-brand">📺 TV Viewer</span>
-        <nav class="header-nav">
-            <button class="nav-btn active" data-view="all">All</button>
-            <button class="nav-btn" data-view="favorites">⭐ Favorites</button>
-            <button class="nav-btn" data-view="recent">🕐 Recent</button>
-        </nav>
-        <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="search" placeholder="Search channels..." autocomplete="off">
-        </div>
-        <span class="status-badge" id="status-badge"></span>
-    </header>
-
-    <!-- Main -->
-    <div class="main">
-        <!-- Sidebar -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-section">Categories</div>
-            <div id="category-list"></div>
-        </aside>
-
-        <!-- Content -->
-        <main class="content" id="content">
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <span style="color: var(--text-secondary)">Loading channels...</span>
-            </div>
-            <div id="channel-view" style="display:none">
-                <h2 class="content-title" id="content-title">All Channels</h2>
-                <div class="channel-grid" id="channel-grid"></div>
-            </div>
-            <div class="empty-state" id="empty-state" style="display:none">
-                <div class="empty-state-icon">📡</div>
-                <div>No channels found</div>
-            </div>
-        </main>
+<header class="header">
+    <span class="brand">📺 TV Viewer</span>
+    <nav class="nav">
+        <button class="nav-btn active" data-view="all">All</button>
+        <button class="nav-btn" data-view="favorites">⭐ Favorites</button>
+        <button class="nav-btn" data-view="recent">🕐 Recent</button>
+    </nav>
+    <div class="search-box">
+        <input type="text" id="search" placeholder="Search channels..." autocomplete="off">
     </div>
+    <div class="header-actions">
+        <button class="icon-btn" id="btn-map" title="World Map">🗺</button>
+        <button class="icon-btn" id="btn-refresh" title="Refresh Channels">🔄</button>
+    </div>
+    <span class="badge" id="badge"></span>
+</header>
 
-    <!-- Player overlay -->
-    <div class="player-overlay" id="player-overlay">
-        <div class="player-container">
-            <video id="player" controls autoplay></video>
+<div class="main">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="content" id="content">
+        <div class="loading" id="loading"><div class="spinner"></div><span style="color:var(--text-sec)">Loading channels...</span></div>
+        <div id="channel-view" style="display:none">
+            <div class="content-title"><span id="title">All Channels</span></div>
+            <div class="grid" id="grid"></div>
         </div>
-        <div class="player-info">
-            <span class="player-channel-name" id="player-name"></span>
-            <div class="player-controls">
-                <button class="player-btn" id="btn-prev">⏮ Prev</button>
-                <button class="player-btn" id="btn-next">Next ⏭</button>
-                <button class="player-btn" id="btn-close">✕ Close (Esc)</button>
-            </div>
+        <div class="empty" id="empty" style="display:none"><div style="font-size:40px">📡</div><div>No channels found</div></div>
+    </main>
+    <div class="map-view" id="map-view"><div id="map"></div></div>
+</div>
+
+<!-- Player -->
+<div class="player-overlay" id="player-overlay">
+    <div class="player-box"><video id="player" controls autoplay></video></div>
+    <div class="player-bar">
+        <div>
+            <div class="player-name" id="player-name"></div>
+            <div class="player-epg" id="player-epg"></div>
+        </div>
+        <div class="player-btns">
+            <button class="p-btn" id="p-prev">⏮ Prev</button>
+            <button class="p-btn" id="p-next">Next ⏭</button>
+            <button class="p-btn cast-btn" id="p-cast">📡 Cast</button>
+            <button class="p-btn report-btn" id="p-report">⚠ Report Broken</button>
+            <button class="p-btn" id="p-close">✕ Close</button>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-    <script>
-        // ─── State ──────────────────────────────────────────────────────────────
-        let allChannels = [];
-        let filteredChannels = [];
-        let currentCategory = null;
-        let currentView = 'all';
-        let playingIndex = -1;
-        let hls = null;
+<div class="toast" id="toast"></div>
 
-        const MONOGRAM_COLORS = ['#1E3A5F', '#2D1B4E', '#1B4332', '#4A1D1D', '#3D3415', '#1A3A3A'];
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let channels = [], filtered = [], currentCat = null, currentView = 'all';
+let playIdx = -1, hls = null, mapInstance = null, mapVisible = false;
+const MONO_COLORS = ['#1E3A5F','#2D1B4E','#1B4332','#4A1D1D','#3D3415','#1A3A3A'];
+const CAT_ICONS = {'News':'📰','Sports':'⚽','Entertainment':'🎬','Music':'🎵','Kids':'🧸','Movies':'🎥','Documentary':'🌍','Science':'🔬','Education':'📚','Religious':'🕌','Business':'💼','Lifestyle':'🏡','Food':'🍳','Travel':'✈️','Comedy':'😂','Drama':'🎭','Technology':'💻','Health':'❤️','Gaming':'🎮','Animation':'🎞️'};
 
-        // ─── API ────────────────────────────────────────────────────────────────
-        async function fetchChannels(params = {}) {
-            const url = new URL('/api/channels', location.origin);
-            Object.entries(params).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
-            const res = await fetch(url);
-            return (await res.json()).channels || [];
+// ─── API ────────────────────────────────────────────────────────────────────
+const api = {
+    async channels(p={}) { const u=new URL('/api/channels',location.origin); Object.entries(p).forEach(([k,v])=>{if(v)u.searchParams.set(k,v)}); return (await(await fetch(u)).json()).channels||[]; },
+    async categories() { return (await(await fetch('/api/categories')).json()).categories||[]; },
+    async status() { return await(await fetch('/api/status')).json(); },
+    async epg(name) { try{return await(await fetch(`/api/epg/${encodeURIComponent(name)}`)).json();}catch(e){return {now:null,next:null,schedule:[]};} },
+    async report(url,name) { return await(await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,name})})).json(); },
+    async refresh() { return await(await fetch('/api/refresh',{method:'POST'})).json(); },
+    async mapData() { return (await(await fetch('/api/map')).json()).countries||[]; },
+};
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+function renderSidebar(cats) {
+    const sb = document.getElementById('sidebar');
+    let html = '<div class="sb-section">Categories</div>';
+    html += `<div class="sb-item${!currentCat?' active':''}" data-cat="">📺 All</div>`;
+    cats.forEach(c => {
+        html += `<div class="sb-item${currentCat===c.name?' active':''}" data-cat="${esc(c.name)}">${CAT_ICONS[c.name]||'📺'} ${esc(c.name)}<span class="sb-count">${c.count}</span></div>`;
+    });
+    sb.innerHTML = html;
+    sb.querySelectorAll('.sb-item').forEach(el => el.onclick = () => { currentCat = el.dataset.cat || null; loadChannels(); renderSidebarActive(); });
+}
+
+function renderSidebarActive() {
+    document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', (el.dataset.cat||null) === currentCat));
+}
+
+function renderChannels(chs) {
+    const grid = document.getElementById('grid');
+    document.getElementById('loading').style.display = 'none';
+    if (!chs.length) { document.getElementById('channel-view').style.display='none'; document.getElementById('empty').style.display='flex'; return; }
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('channel-view').style.display = 'block';
+    document.getElementById('title').textContent = currentCat || (currentView==='favorites'?'⭐ Favorites':'All Channels');
+
+    grid.innerHTML = chs.map((ch, i) => {
+        const logo = ch.logo ? `<img class="card-logo" src="${esc(ch.logo)}" onerror="this.outerHTML=mono('${esc(ch.name)}')">` : mono(ch.name);
+        const dot = ch.status==='working'?'live':(ch.status==='offline'?'':'ok');
+        return `<div class="card" data-idx="${i}">
+            ${dot?`<div class="card-dot ${dot}"></div>`:''}
+            <div class="card-top">${logo}<div class="card-info"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div></div></div>
+            <div class="card-epg" id="epg-${i}"></div>
+            <div class="card-actions"><button onclick="event.stopPropagation();playChannel(${i})">▶ Play</button><button onclick="event.stopPropagation();castChannel(${i})">📡 Cast</button><button class="report-btn" onclick="event.stopPropagation();reportBroken(${i})">⚠</button></div>
+        </div>`;
+    }).join('');
+
+    grid.querySelectorAll('.card').forEach(c => c.addEventListener('click', () => playChannel(+c.dataset.idx)));
+
+    // Load EPG for visible channels (first 30)
+    chs.slice(0, 30).forEach((ch, i) => loadEpgCard(ch.name, i));
+}
+
+async function loadEpgCard(name, idx) {
+    const el = document.getElementById(`epg-${idx}`);
+    if (!el) return;
+    const data = await api.epg(name);
+    if (data.now) el.textContent = `▶ ${data.now.title}`;
+    else el.textContent = '';
+}
+
+// ─── Player ─────────────────────────────────────────────────────────────────
+function playChannel(idx) {
+    const ch = filtered[idx]; if (!ch) return;
+    playIdx = idx;
+    const overlay = document.getElementById('player-overlay');
+    const video = document.getElementById('player');
+    document.getElementById('player-name').textContent = ch.name;
+    document.getElementById('player-epg').textContent = '';
+    overlay.classList.add('active');
+
+    if (hls) { hls.destroy(); hls = null; }
+    video.src = '';
+    const url = ch.url;
+    if (url.includes('.m3u8')) {
+        if (Hls.isSupported()) { hls = new Hls({enableWorker:true}); hls.loadSource(url); hls.attachMedia(video); hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play()); }
+        else if (video.canPlayType('application/vnd.apple.mpegurl')) { video.src=url; video.play(); }
+    } else { video.src=url; video.play(); }
+
+    // Load EPG
+    api.epg(ch.name).then(d => { if(d.now) document.getElementById('player-epg').textContent=`Now: ${d.now.title}`+(d.next?` • Next: ${d.next.title}`:''); });
+    saveRecent(ch);
+}
+
+function closePlayer() {
+    document.getElementById('player-overlay').classList.remove('active');
+    const v = document.getElementById('player');
+    if (hls) { hls.destroy(); hls=null; } v.pause(); v.src=''; playIdx=-1;
+}
+
+// ─── Cast ───────────────────────────────────────────────────────────────────
+async function castChannel(idx) {
+    const ch = filtered[idx]; if (!ch) return;
+    // Use Web Presentation API or fallback to open in new tab for TV/casting
+    if ('presentation' in navigator && navigator.presentation.defaultRequest) {
+        try {
+            const req = new PresentationRequest([ch.url]);
+            const conn = await req.start();
+            toast(`Casting ${ch.name}...`);
+        } catch(e) { window.open(ch.url, '_blank'); toast('Opened in new tab for casting'); }
+    } else {
+        // Fallback: copy URL for manual cast
+        try { await navigator.clipboard.writeText(ch.url); toast(`Stream URL copied — paste in your Cast app`); }
+        catch(e) { window.open(ch.url, '_blank'); }
+    }
+}
+
+// ─── Report ─────────────────────────────────────────────────────────────────
+async function reportBroken(idx) {
+    const ch = filtered[idx]; if (!ch) return;
+    if (!confirm(`Report "${ch.name}" as broken?`)) return;
+    const res = await api.report(ch.url, ch.name);
+    toast(`Reported: ${ch.name} (${res.status})`);
+}
+
+// ─── Map ────────────────────────────────────────────────────────────────────
+async function toggleMap() {
+    const mv = document.getElementById('map-view');
+    mapVisible = !mapVisible;
+    document.getElementById('btn-map').classList.toggle('active-btn', mapVisible);
+    if (mapVisible) {
+        mv.classList.add('active');
+        if (!mapInstance) {
+            mapInstance = L.map('map',{zoomControl:true}).setView([30, 20], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'©OSM ©CARTO',maxZoom:18}).addTo(mapInstance);
         }
+        // Load markers
+        const data = await api.mapData();
+        data.forEach(c => {
+            if (!c.coords) return;
+            const marker = L.circleMarker(c.coords, {radius: Math.min(20, 5 + Math.sqrt(c.count)), color:'#4CC2FF', fillColor:'#4CC2FF', fillOpacity:0.5, weight:1});
+            marker.bindPopup(`<b>${c.name}</b><br>${c.count} channels<br><small>${Object.entries(c.categories).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>`${k}: ${v}`).join(', ')}</small>`);
+            marker.addTo(mapInstance);
+        });
+        setTimeout(()=>mapInstance.invalidateSize(), 100);
+    } else {
+        mv.classList.remove('active');
+    }
+}
 
-        async function fetchCategories() {
-            const res = await fetch('/api/categories');
-            return (await res.json()).categories || [];
-        }
-
-        async function fetchStatus() {
-            const res = await fetch('/api/status');
-            return await res.json();
-        }
-
-        // ─── Render ─────────────────────────────────────────────────────────────
-        function renderCategories(categories) {
-            const container = document.getElementById('category-list');
-            container.innerHTML = '';
-            // "All" item
-            const allItem = document.createElement('div');
-            allItem.className = 'sidebar-item' + (!currentCategory ? ' active' : '');
-            allItem.innerHTML = `<span>📺</span><span>All Channels</span>`;
-            allItem.onclick = () => { currentCategory = null; loadChannels(); highlightCategory(); };
-            container.appendChild(allItem);
-
-            categories.forEach(cat => {
-                const item = document.createElement('div');
-                item.className = 'sidebar-item' + (currentCategory === cat.name ? ' active' : '');
-                item.innerHTML = `<span>${getCategoryIcon(cat.name)}</span><span>${cat.name}</span><span class="sidebar-count">${cat.count}</span>`;
-                item.onclick = () => { currentCategory = cat.name; loadChannels(); highlightCategory(); };
-                container.appendChild(item);
-            });
-        }
-
-        function highlightCategory() {
-            document.querySelectorAll('.sidebar-item').forEach((el, i) => {
-                el.classList.toggle('active', i === 0 ? !currentCategory : el.textContent.includes(currentCategory));
-            });
-        }
-
-        function renderChannels(channels) {
-            const grid = document.getElementById('channel-grid');
-            const loading = document.getElementById('loading');
-            const view = document.getElementById('channel-view');
-            const empty = document.getElementById('empty-state');
-
-            loading.style.display = 'none';
-
-            if (channels.length === 0) {
-                view.style.display = 'none';
-                empty.style.display = 'flex';
-                return;
-            }
-            empty.style.display = 'none';
-            view.style.display = 'block';
-
-            // Title
-            const title = document.getElementById('content-title');
-            if (currentCategory) title.textContent = currentCategory;
-            else if (currentView === 'favorites') title.textContent = '⭐ Favorites';
-            else title.textContent = 'All Channels';
-
-            grid.innerHTML = '';
-            channels.forEach((ch, idx) => {
-                const card = document.createElement('div');
-                card.className = 'channel-card';
-                card.onclick = () => playChannel(idx);
-
-                const status = ch.status === 'working' ? 'live' : (ch.status === 'offline' ? 'offline' : '');
-                const logo = ch.logo ? `<img class="card-logo" src="${ch.logo}" onerror="this.outerHTML=monogram('${escapeHtml(ch.name)}')">` : monogram(ch.name);
-
-                card.innerHTML = `
-                    ${status ? `<div class="card-status ${status}"></div>` : ''}
-                    <div class="card-top">
-                        ${logo}
-                        <div class="card-info">
-                            <div class="card-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</div>
-                            <div class="card-meta">${escapeHtml(ch.category || '')} ${ch.country ? '• ' + escapeHtml(ch.country) : ''}</div>
-                        </div>
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
-        }
-
-        function monogram(name) {
-            const letter = (name || '?')[0].toUpperCase();
-            const color = MONOGRAM_COLORS[Math.abs(hashCode(name)) % MONOGRAM_COLORS.length];
-            return `<div class="card-monogram" style="background:${color}">${letter}</div>`;
-        }
-
-        // ─── Player ─────────────────────────────────────────────────────────────
-        function playChannel(index) {
-            const ch = filteredChannels[index];
-            if (!ch) return;
-            playingIndex = index;
-
-            const overlay = document.getElementById('player-overlay');
-            const video = document.getElementById('player');
-            const nameEl = document.getElementById('player-name');
-
-            nameEl.textContent = ch.name;
-            overlay.classList.add('active');
-
-            // Destroy previous HLS instance
-            if (hls) { hls.destroy(); hls = null; }
-            video.src = '';
-
-            const url = ch.url;
-            if (url.includes('.m3u8') || url.includes('m3u8')) {
-                if (Hls.isSupported()) {
-                    hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-                    hls.loadSource(url);
-                    hls.attachMedia(video);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                    video.src = url;
-                    video.play();
-                }
-            } else {
-                video.src = url;
-                video.play();
-            }
-
-            // Save to recent
-            saveRecent(ch);
-        }
-
-        function closePlayer() {
-            const overlay = document.getElementById('player-overlay');
-            const video = document.getElementById('player');
-            overlay.classList.remove('active');
-            if (hls) { hls.destroy(); hls = null; }
-            video.pause();
-            video.src = '';
-            playingIndex = -1;
-        }
-
-        function playNext() {
-            if (playingIndex < filteredChannels.length - 1) playChannel(playingIndex + 1);
-        }
-        function playPrev() {
-            if (playingIndex > 0) playChannel(playingIndex - 1);
-        }
-
-        // ─── Data Loading ───────────────────────────────────────────────────────
-        async function loadChannels() {
-            const params = {};
-            if (currentCategory) params.category = currentCategory;
-            if (currentView === 'favorites') params.favorites_only = true;
-
-            const searchVal = document.getElementById('search').value.trim();
-            if (searchVal) params.search = searchVal;
-
-            filteredChannels = await fetchChannels(params);
-            renderChannels(filteredChannels);
-        }
-
-        async function init() {
-            // Load categories
-            const cats = await fetchCategories();
-            renderCategories(cats);
-
-            // Load channels
+// ─── Refresh ────────────────────────────────────────────────────────────────
+async function refreshChannels() {
+    toast('Refreshing channels...');
+    document.getElementById('btn-refresh').style.animation = 'spin .8s linear infinite';
+    await api.refresh();
+    // Poll for completion
+    const poll = setInterval(async () => {
+        const s = await fetch('/api/refresh/status').then(r=>r.json());
+        if (!s.in_progress) {
+            clearInterval(poll);
+            document.getElementById('btn-refresh').style.animation = '';
             await loadChannels();
-
-            // Status
-            const status = await fetchStatus();
-            document.getElementById('status-badge').textContent =
-                `${status.working_channels} channels • v${status.version}`;
+            toast('Channels refreshed!');
         }
+    }, 3000);
+}
 
-        // ─── Events ─────────────────────────────────────────────────────────────
-        document.querySelectorAll('.nav-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentView = btn.dataset.view;
-                currentCategory = null;
-                loadChannels();
-                highlightCategory();
-            });
-        });
+// ─── Data Loading ───────────────────────────────────────────────────────────
+async function loadChannels() {
+    const p = {};
+    if (currentCat) p.category = currentCat;
+    if (currentView === 'favorites') p.favorites_only = true;
+    const q = document.getElementById('search').value.trim();
+    if (q) p.search = q;
+    filtered = await api.channels(p);
+    renderChannels(filtered);
+}
 
-        document.getElementById('search').addEventListener('input', debounce(loadChannels, 300));
-        document.getElementById('btn-close').addEventListener('click', closePlayer);
-        document.getElementById('btn-next').addEventListener('click', playNext);
-        document.getElementById('btn-prev').addEventListener('click', playPrev);
+async function init() {
+    const [cats, status] = await Promise.all([api.categories(), api.status()]);
+    renderSidebar(cats);
+    await loadChannels();
+    document.getElementById('badge').textContent = `${status.working_channels||status.total_channels} ch • v${status.version}`;
+}
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closePlayer();
-            if (document.getElementById('player-overlay').classList.contains('active')) {
-                if (e.key === 'ArrowRight') playNext();
-                if (e.key === 'ArrowLeft') playPrev();
-            }
-        });
+// ─── Events ─────────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => {
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); currentView=btn.dataset.view; currentCat=null; loadChannels(); renderSidebarActive();
+});
+document.getElementById('search').addEventListener('input', debounce(loadChannels, 300));
+document.getElementById('p-close').onclick = closePlayer;
+document.getElementById('p-next').onclick = () => { if(playIdx<filtered.length-1) playChannel(playIdx+1); };
+document.getElementById('p-prev').onclick = () => { if(playIdx>0) playChannel(playIdx-1); };
+document.getElementById('p-cast').onclick = () => { if(playIdx>=0) castChannel(playIdx); };
+document.getElementById('p-report').onclick = () => { if(playIdx>=0) reportBroken(playIdx); };
+document.getElementById('btn-map').onclick = toggleMap;
+document.getElementById('btn-refresh').onclick = refreshChannels;
+document.addEventListener('keydown', e => {
+    if (e.key==='Escape') { closePlayer(); if(mapVisible) toggleMap(); }
+    if (document.getElementById('player-overlay').classList.contains('active')) {
+        if (e.key==='ArrowRight') { if(playIdx<filtered.length-1) playChannel(playIdx+1); }
+        if (e.key==='ArrowLeft') { if(playIdx>0) playChannel(playIdx-1); }
+    }
+});
 
-        // ─── Utilities ──────────────────────────────────────────────────────────
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str || '';
-            return div.innerHTML;
-        }
+// ─── Utils ──────────────────────────────────────────────────────────────────
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function hash(s) { let h=0; for(let i=0;i<(s||'').length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return h; }
+function mono(name) { const l=(name||'?')[0].toUpperCase(); const c=MONO_COLORS[Math.abs(hash(name))%MONO_COLORS.length]; return `<div class="card-mono" style="background:${c}">${l}</div>`; }
+function debounce(fn,ms) { let t; return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}; }
+function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,category:ch.category});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,20)));}catch(e){} }
 
-        function hashCode(str) {
-            let hash = 0;
-            for (let i = 0; i < (str || '').length; i++) {
-                hash = ((hash << 5) - hash) + str.charCodeAt(i);
-                hash |= 0;
-            }
-            return hash;
-        }
-
-        function debounce(fn, ms) {
-            let timer;
-            return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
-        }
-
-        const CATEGORY_ICONS = {
-            'News': '📰', 'Sports': '⚽', 'Entertainment': '🎬', 'Music': '🎵',
-            'Kids': '🧸', 'Movies': '🎥', 'Documentary': '🌍', 'Science': '🔬',
-            'Education': '📚', 'Religious': '🕌', 'Business': '💼', 'Lifestyle': '🏡',
-            'Food': '🍳', 'Travel': '✈️', 'Comedy': '😂', 'Drama': '🎭',
-            'Technology': '💻', 'Health': '❤️', 'Gaming': '🎮', 'Animation': '🎞️',
-        };
-        function getCategoryIcon(name) { return CATEGORY_ICONS[name] || '📺'; }
-
-        function saveRecent(ch) {
-            try {
-                let recent = JSON.parse(localStorage.getItem('tv_recent') || '[]');
-                recent = recent.filter(r => r.url !== ch.url);
-                recent.unshift({ name: ch.name, url: ch.url, category: ch.category });
-                recent = recent.slice(0, 20);
-                localStorage.setItem('tv_recent', JSON.stringify(recent));
-            } catch (e) {}
-        }
-
-        // ─── Init ───────────────────────────────────────────────────────────────
-        init();
-    </script>
+// ─── Init ───────────────────────────────────────────────────────────────────
+init();
+</script>
 </body>
 </html>

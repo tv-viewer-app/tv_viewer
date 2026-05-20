@@ -3,16 +3,15 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install only web server dependencies
-RUN pip install --no-cache-dir fastapi uvicorn[standard] aiohttp
+RUN pip install --no-cache-dir fastapi uvicorn[standard] aiohttp defusedxml certifi
 
 # Copy only what the web server needs
 COPY config.py .
 COPY channels.json .
 COPY channels_config.json .
 COPY web/ web/
-COPY utils/logger.py utils/logger.py
-COPY utils/__init__.py utils/__init__.py
-COPY utils/helpers.py utils/helpers.py
+COPY utils/ utils/
+COPY core/ core/
 
 # Create required directories
 RUN mkdir -p logs
