@@ -5,6 +5,15 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] - 2026-05-20
+
+### Fixed
+- **VLC crash on Escape** (Windows): Fixed segfault when pressing Escape during
+  video playback. Root cause was a race condition — the player frame's HWND was
+  destroyed while VLC's video thread was still writing to it. Fix detaches VLC
+  from the HWND before stopping, delays frame destruction, and guards polling
+  timers from re-scheduling after player stops.
+
 ## [2.11.0] - 2026-05-19
 
 ### Added
