@@ -31,6 +31,7 @@ import sys
 import os
 import tkinter as tk
 import time
+import threading
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Set
 
@@ -1568,27 +1569,37 @@ class TVModeApp:
                 self._vlc.stop()
             except Exception:
                 pass
-            # Schedule cleanup + frame destruction with slight delay
-            # to let VLC's video thread fully disengage
+            # Capture references then null them immediately so no UI code touches them
             vlc_ref = self._vlc
             self._vlc = None
             frame_ref = self._player_frame
             self._player_frame = None
             self._vlc_canvas = None
 
-            def _finish_cleanup():
+            # Run cleanup in a background thread to avoid blocking the main thread
+            # (cleanup() has up to 5s timeout with thread joins)
+            root_ref = self.root
+
+            def _bg_cleanup():
                 try:
                     vlc_ref.cleanup()
                 except Exception:
                     pass
+                # Schedule frame destruction on main thread after cleanup
                 try:
-                    if frame_ref and frame_ref.winfo_exists():
-                        frame_ref.destroy()
+                    root_ref.after(0, lambda: _destroy_frame(frame_ref))
                 except Exception:
                     pass
 
-            # Give VLC 50ms to stop writing to HWND, then destroy
-            self.root.after(50, _finish_cleanup)
+            def _destroy_frame(fr):
+                try:
+                    if fr and fr.winfo_exists():
+                        fr.destroy()
+                except Exception:
+                    pass
+
+            t = threading.Thread(target=_bg_cleanup, daemon=True)
+            t.start()
         else:
             if self._player_frame:
                 self._player_frame.destroy()

@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.11.1] - 2026-05-20
 
 ### Fixed
-- **VLC crash on Escape** (Windows): Fixed segfault when pressing Escape during
-  video playback. Root cause was a race condition — the player frame's HWND was
-  destroyed while VLC's video thread was still writing to it. Fix detaches VLC
-  from the HWND before stopping, delays frame destruction, and guards polling
-  timers from re-scheduling after player stops.
+- **VLC crash on Escape** (Windows): Fixed crash/freeze when pressing Escape during
+  video playback. Root causes: (1) VLC's video thread wrote to a destroyed HWND —
+  fixed by detaching HWND before stopping; (2) VLC cleanup (up to 5s blocking) ran
+  on the main thread causing "Not Responding" — moved to background daemon thread.
+  Frame is now destroyed only after cleanup completes.
 
 ## [2.11.0] - 2026-05-19
 
