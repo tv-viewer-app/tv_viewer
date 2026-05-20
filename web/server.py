@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -156,6 +156,17 @@ async def get_status():
 
 
 # ─── EPG endpoints ──────────────────────────────────────────────────────────
+
+@app.get("/api/sources/{channel_name}")
+async def get_sources(channel_name: str):
+    """Get all alternative stream URLs for a channel by name."""
+    channels = _load_channels()
+    sources = []
+    for ch in channels:
+        if ch.get("name", "").lower() == channel_name.lower() and ch.get("status") != "offline":
+            sources.append({"url": ch["url"], "status": ch.get("status", "unchecked")})
+    return {"channel": channel_name, "sources": sources}
+
 
 @app.get("/api/epg/{channel_name}")
 async def get_epg(channel_name: str, hours: int = Query(6, ge=1, le=24)):
