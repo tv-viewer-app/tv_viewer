@@ -287,6 +287,43 @@ async def refresh_status():
     return {"in_progress": _refresh_in_progress}
 
 
+# ─── Favorites management ───────────────────────────────────────────────────
+
+def _save_favorites(urls: set):
+    """Save favorites to disk."""
+    fav_file = PROJECT_ROOT / "favorites.json"
+    try:
+        with open(fav_file, "w", encoding="utf-8") as f:
+            json.dump({"urls": list(urls)}, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Failed to save favorites: {e}")
+
+
+@app.get("/api/favorites")
+async def get_favorites():
+    """Get all favorite channel URLs."""
+    favs = _load_favorites()
+    return {"urls": list(favs)}
+
+
+class FavoriteRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/favorites/toggle")
+async def toggle_favorite(req: FavoriteRequest):
+    """Toggle a channel as favorite. Returns new state."""
+    favs = _load_favorites()
+    if req.url in favs:
+        favs.discard(req.url)
+        is_fav = False
+    else:
+        favs.add(req.url)
+        is_fav = True
+    _save_favorites(favs)
+    return {"url": req.url, "is_favorite": is_fav}
+
+
 # ─── Map data ───────────────────────────────────────────────────────────────
 
 # Country coordinates for map visualization

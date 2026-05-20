@@ -19,9 +19,11 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.11.1
+## ✨ What's New in v2.12.0
 
-- **VLC crash fix** (Windows) — fixed segfault when pressing Escape during video playback (race condition with HWND destruction)
+- **Web UI feature parity** — Favorites, fullscreen, volume control, keyboard shortcuts, settings panel, parental controls, channel quick-jump
+- **Favorites API** — Server-side favorites management synced across web and desktop
+- **Keyboard shortcuts** — Space, F, M, Esc, arrows, number keys, / for search
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 

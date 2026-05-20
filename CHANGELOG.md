@@ -5,6 +5,32 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-05-20
+
+### Added
+- **Web UI: Favorites management** — Add/remove favorites from web interface with
+  server-side persistence (synced with desktop favorites.json). Heart icon on cards
+  and dedicated Favorites view.
+- **Web UI: Fullscreen player** — Press F or click Fullscreen button for immersive
+  video playback. Uses Fullscreen API with CSS fallback.
+- **Web UI: Volume control** — Slider + mute button in player. Volume persists
+  across sessions. Arrow keys (↑/↓) adjust volume.
+- **Web UI: Keyboard shortcuts** — Space (play/pause), F (fullscreen), M (mute),
+  Escape (close), arrows (prev/next/volume), / (focus search), 0-9 (channel jump).
+- **Web UI: Settings panel** — Theme selector, stream quality, parental controls
+  with PIN, keyboard shortcuts reference.
+- **Web UI: Parental controls** — Hide 18+ channels with optional PIN protection.
+- **Web UI: Channel quick-jump** — Type channel numbers (0-9) to jump directly.
+- **Web UI: Recent channels** — Stores last 50 channels in localStorage with
+  full metadata for the Recent view.
+- **Server: Favorites API** — `GET /api/favorites` and `POST /api/favorites/toggle`
+  endpoints for server-side favorite management.
+
+### Changed
+- Web player now saves volume preference and restores it across sessions.
+- Card actions show favorite toggle (★/☆) with visual state feedback.
+- Feature parity audit completed across Windows, Android, and Web platforms.
+
 ## [2.11.1] - 2026-05-20
 
 ### Fixed
