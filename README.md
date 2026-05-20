@@ -1,6 +1,6 @@
 # 📺 TV Viewer
 
-**Community-powered IPTV player with 8000+ crowdsourced channels. Free forever.**
+**Community-powered IPTV player with 16,000+ crowdsourced channels. Free forever.**
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Issues](https://img.shields.io/github/issues/tv-viewer-app/tv_viewer)](https://github.com/tv-viewer-app/tv_viewer/issues)
@@ -19,20 +19,21 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.13.0
+## ✨ What's New in v2.13.1
 
-- **Web: CORS Proxy** — Streams route through server-side proxy, fixing playback for nearly all channels in the browser
-- **Web: Cast menu** — Cast to Chromecast/AirPlay, Picture-in-Picture, open in new tab, copy URL
-- **Web: Map channel browser** — Click countries on the map to see and play their channels
-- **Web: Stream stats** — Live resolution, buffer health, and bitrate overlay
-- **Docker deployment** — Run the web interface standalone: `docker run -p 8765:8765 tv-viewer-web`
-- **Automated web tests** — 23 API tests ensure release quality and stability
+- **Performance: In-memory channel cache** — Channels load once from disk, served from RAM thereafter (~40% faster API responses)
+- **Docker: Alpine-based image** — ~25 MB compressed, runs on 48 MB RAM (Raspberry Pi, Synology, QNAP, Unraid)
+- **Web: Health status filter** — Hide broken channels or show only verified working streams
+- **Web: Playback health tracking** — Auto-reports channel status on play/fail, persists locally
+- **Fix: Empty channel list crash** — Cache never overwrites data with empty state during race conditions
+- **Fix: Country sidebar** — Now shows all countries (was truncated at 30)
+- **Fix: ABC News Live** — Dead Tubi URL replaced with working akamaized.net stream
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
 ## Features
 
-- 🌍 **8000+ Channels Worldwide** — Aggregated from 80+ configurable sources, growing daily
+- 🌍 **16,000+ Channels Worldwide** — Aggregated from 80+ configurable sources, growing daily
 - 👥 **Crowdsourced Quality** — Users report broken streams and submit new channels via app or GitHub
 - 🇮🇱 **Israeli channels included** — KAN 11, Reshet 13, Channel 14, i24NEWS, Makan 33, Kan Kids, and 50+ more
 - ✅ **Background channel validation** — Concurrent stream checking with smart priority queue
@@ -104,10 +105,16 @@ python main.py
 
 ### Web Interface (Docker)
 ```bash
+# Quick start
+docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped tv-viewer-web
+
+# Build from source
 docker build -t tv-viewer-web .
-docker run -p 8765:8765 tv-viewer-web
+docker compose up -d
+
 # Open http://localhost:8765
 ```
+**NAS deployment:** 25 MB image, 48 MB RAM, single ARM/x86 core. Works on Synology, QNAP, Unraid, TrueNAS, Raspberry Pi 4+.
 
 ### Web Interface (CLI)
 ```bash

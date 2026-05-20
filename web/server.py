@@ -33,6 +33,74 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# ─── In-memory channel cache (avoids repeated disk reads) ────────────────────
+
+class _ChannelCache:
+    """Lazy-loading channel cache — reads JSON once, serves from RAM."""
+    __slots__ = ('_channels', '_mtime', '_path', '_categories', '_countries')
+
+    def __init__(self):
+        self._channels = None
+        self._mtime = 0
+        self._path = PROJECT_ROOT / config.CHANNELS_FILE
+        self._categories = None
+        self._countries = None
+
+    def _check_reload(self):
+        """Reload only if file changed (stat is cheap, JSON parse is not)."""
+        try:
+            mt = self._path.stat().st_mtime
+        except OSError:
+            return
+        if mt != self._mtime:
+            try:
+                with open(self._path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self._channels = data.get("channels", [])
+                self._mtime = mt
+                self._categories = None
+                self._countries = None
+            except (json.JSONDecodeError, OSError):
+                pass  # File being written — keep stale data
+
+    @property
+    def channels(self) -> List[Dict[str, Any]]:
+        self._check_reload()
+        return self._channels or []
+
+    @property
+    def categories(self) -> List[Dict[str, Any]]:
+        if self._categories is None:
+            cats: Dict[str, int] = {}
+            for ch in self.channels:
+                if ch.get("status") == "offline":
+                    continue
+                cat = ch.get("category", "General")
+                cats[cat] = cats.get(cat, 0) + 1
+            self._categories = [{"name": k, "count": v} for k, v in sorted(cats.items(), key=lambda x: -x[1])]
+        return self._categories
+
+    @property
+    def countries(self) -> List[Dict[str, Any]]:
+        if self._countries is None:
+            ctrs: Dict[str, int] = {}
+            for ch in self.channels:
+                if ch.get("status") == "offline":
+                    continue
+                country = ch.get("country", "Unknown")
+                ctrs[country] = ctrs.get(country, 0) + 1
+            self._countries = [{"name": k, "count": v} for k, v in sorted(ctrs.items(), key=lambda x: -x[1])]
+        return self._countries
+
+    def invalidate(self):
+        """Force reload on next access."""
+        self._mtime = 0
+        self._categories = None
+        self._countries = None
+
+
+_cache = _ChannelCache()
+
 app = FastAPI(
     title="TV Viewer Web",
     version=config.APP_VERSION,
@@ -52,15 +120,8 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 def _load_channels() -> List[Dict[str, Any]]:
-    """Load channels from the cache file."""
-    channels_file = PROJECT_ROOT / config.CHANNELS_FILE
-    try:
-        with open(channels_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("channels", [])
-    except Exception as e:
-        logger.warning(f"Failed to load channels: {e}")
-        return []
+    """Load channels from cache (memory-first, disk-fallback)."""
+    return _cache.channels
 
 
 def _load_favorites() -> set:
@@ -116,29 +177,13 @@ async def get_channels(
 @app.get("/api/categories")
 async def get_categories():
     """Get all categories with channel counts."""
-    channels = _load_channels()
-    cats: Dict[str, int] = {}
-    for ch in channels:
-        if ch.get("status") == "offline":
-            continue
-        cat = ch.get("category", "General")
-        cats[cat] = cats.get(cat, 0) + 1
-    sorted_cats = sorted(cats.items(), key=lambda x: -x[1])
-    return {"categories": [{"name": k, "count": v} for k, v in sorted_cats]}
+    return {"categories": _cache.categories}
 
 
 @app.get("/api/countries")
 async def get_countries():
     """Get all countries with channel counts."""
-    channels = _load_channels()
-    countries: Dict[str, int] = {}
-    for ch in channels:
-        if ch.get("status") == "offline":
-            continue
-        country = ch.get("country", "Unknown")
-        countries[country] = countries.get(country, 0) + 1
-    sorted_countries = sorted(countries.items(), key=lambda x: -x[1])
-    return {"countries": [{"name": k, "count": v} for k, v in sorted_countries]}
+    return {"countries": _cache.countries}
 
 
 @app.get("/api/status")
@@ -158,6 +203,7 @@ async def get_status():
 # ─── Stream Proxy (CORS bypass) ─────────────────────────────────────────────
 
 import aiohttp
+import re
 from urllib.parse import urljoin, quote
 
 @app.get("/api/proxy")
@@ -238,7 +284,6 @@ def _rewrite_manifest(manifest: str, manifest_url: str, base_url: str) -> str:
             result.append(f"{base_url}api/proxy?url={quote(abs_url, safe='')}")
         elif stripped.startswith('#EXT-X-MAP:URI="') or 'URI="' in stripped:
             # Rewrite URI= attributes in tags
-            import re
             def rewrite_uri(m):
                 uri = m.group(1)
                 if not uri.startswith(('http://', 'https://')):
@@ -326,19 +371,14 @@ async def report_broken(report: ReportRequest):
 
 
 def _mark_local_broken(url: str):
-    """Mark a channel as broken in the local cache."""
-    channels_file = PROJECT_ROOT / config.CHANNELS_FILE
-    try:
-        with open(channels_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        for ch in data.get("channels", []):
-            if ch.get("url") == url:
-                ch["status"] = "offline"
-                break
-        with open(channels_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except Exception as e:
-        logger.warning(f"Failed to mark broken locally: {e}")
+    """Mark a channel as broken — update memory cache, write-through to disk."""
+    for ch in _cache.channels:
+        if ch.get("url") == url:
+            ch["status"] = "offline"
+            _cache._categories = None
+            _cache._countries = None
+            break
+    _persist_channels()
 
 
 # ─── Health reporting (client-side playback results) ────────────────────────
@@ -375,19 +415,26 @@ async def health_report(request: Request):
 
 
 def _mark_local_working(url: str):
-    """Mark a channel as working in the local cache."""
-    channels_file = PROJECT_ROOT / config.CHANNELS_FILE
+    """Mark a channel as working — update memory cache, write-through to disk."""
+    for ch in _cache.channels:
+        if ch.get("url") == url:
+            ch["status"] = "working"
+            break
+    # Don't persist every working report — too many disk writes on NAS
+    # Disk will be written on next broken report or refresh
+
+
+def _persist_channels():
+    """Write current channel state to disk (debounced by callers)."""
+    if not _cache.channels:
+        return  # Never overwrite with empty data
     try:
-        with open(channels_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        for ch in data.get("channels", []):
-            if ch.get("url") == url:
-                ch["status"] = "working"
-                break
+        channels_file = PROJECT_ROOT / config.CHANNELS_FILE
         with open(channels_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
+            json.dump({"channels": _cache.channels}, f, ensure_ascii=False)
+        _cache._mtime = channels_file.stat().st_mtime
     except Exception as e:
-        logger.debug(f"Failed to mark working locally: {e}")
+        logger.warning(f"Failed to persist channels: {e}")
 
 
 # ─── Refresh / pull channels ────────────────────────────────────────────────

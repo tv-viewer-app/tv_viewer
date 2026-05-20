@@ -14,15 +14,15 @@ services:
       - TV_VIEWER_WEB_PORT=8765
       - TZ=Asia/Jerusalem
     restart: unless-stopped
-    # NAS-friendly resource limits (works on 1GB RAM devices)
+    # NAS-friendly resource limits (runs on 512MB RAM devices)
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: "1.0"
+          memory: 128M
+          cpus: "0.5"
         reservations:
-          memory: 64M
-          cpus: "0.25"
+          memory: 48M
+          cpus: "0.1"
     logging:
       driver: json-file
       options:

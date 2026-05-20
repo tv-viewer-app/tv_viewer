@@ -7,8 +7,8 @@ client is built with Python (CustomTkinter + VLC); the Android client is built
 with Flutter. Both platforms share a common data model and connect to the same
 Supabase backend for crowd-sourced channel health and anonymous telemetry.
 
-**Version:** 2.1.4
-**Platforms:** Windows (primary), Android (Flutter)
+**Version:** 2.13.1
+**Platforms:** Windows (primary), Android (Flutter), Web/Docker (FastAPI)
 
 ## Technology Stack
 
@@ -40,6 +40,17 @@ Supabase backend for crowd-sourced channel health and anonymous telemetry.
 | Maps | flutter_map 6.1.x | Channel world map |
 | Backend | Supabase (REST) | Shared with Windows client |
 | Telemetry | services/analytics_service.dart | Privacy-first anonymous events |
+
+### Web / Docker (Python)
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Framework | FastAPI + Uvicorn | Async web server |
+| Frontend | Vanilla JS + HLS.js | Single-page app |
+| Proxy | aiohttp | CORS-free stream proxying |
+| Caching | In-memory (_ChannelCache) | Serve channels from RAM |
+| Container | Alpine Linux | 25 MB Docker image |
+| Health | localStorage + Supabase | Per-channel status tracking |
 
 ## Project Structure
 
@@ -94,6 +105,10 @@ tv_viewer_project/
 │       └── data/              # Constants, API config
 │
 ├── tests/                     # Test suite
+├── web/                       # Web/Docker interface
+│   ├── server.py              # FastAPI backend + CORS proxy + cache
+│   └── static/
+│       └── index.html         # Single-page web app (HLS.js)
 ├── docs/                      # Documentation
 ├── scripts/                   # Build & utility scripts
 ├── thumbnails/                # Cached thumbnails

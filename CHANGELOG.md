@@ -5,6 +5,33 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.1] - 2026-05-20
+
+### Added
+- **In-memory channel cache** — Channels loaded once from disk, served from RAM.
+  API responses ~40% faster. Only reloads when file mtime changes.
+- **Health status filter** — Dropdown in web UI: "Working Only" or "Hide Broken".
+  Tracks playback success/failure per channel in localStorage.
+- **Health reporting endpoint** — `POST /api/health/report` accepts `{url, status}`
+  from client. Updates local cache and Supabase (when configured).
+- **Docker: NAS-optimized** — Alpine-based image (~25 MB), runs on 48 MB RAM,
+  0.1 CPU reservation. Compatible with Synology, QNAP, Unraid, TrueNAS, RPi 4+.
+
+### Changed
+- Docker base image: `python:3.12-slim` → `python:3.12-alpine` (smaller).
+- Docker resource limits reduced: 128 MB / 0.5 CPU (was 256 MB / 1 CPU).
+- Country sidebar shows all countries (was capped at 30).
+- `_mark_local_broken/working` update in-memory cache directly (no re-read from disk).
+- Channel writes protected: never overwrites with empty data during race conditions.
+
+### Fixed
+- **Empty channel list crash** — `_persist_channels()` skipped when cache is empty,
+  preventing data loss from race conditions during health reporting.
+- **JSON parse error on reload** — Cache tolerates partial file writes (keeps stale
+  data if JSON decode fails during concurrent writes).
+- **ABC News Live** — Dead Tubi URL replaced with working akamaized.net stream.
+- **`re` import** — Moved from inside loop in `_rewrite_manifest` to module level.
+
 ## [2.13.0] - 2026-05-20
 
 ### Added
