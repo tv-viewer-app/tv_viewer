@@ -174,36 +174,47 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
         "Referer": url,
     }
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, headers=headers, ssl=False) as resp:
-                if resp.status != 200:
-                    return JSONResponse(
-                        status_code=resp.status,
-                        content={"detail": f"Upstream returned {resp.status}"},
-                        headers={"Access-Control-Allow-Origin": "*"}
-                    )
+        session = aiohttp.ClientSession(timeout=timeout)
+        resp = await session.get(url, headers=headers, ssl=False)
 
-                # For m3u8 manifests, rewrite URLs to go through proxy
-                if ".m3u8" in url or "mpegurl" in (resp.headers.get("content-type", "").lower()):
-                    body = await resp.text()
-                    rewritten = _rewrite_manifest(body, url, str(request.base_url))
-                    return StreamingResponse(
-                        iter([rewritten.encode()]),
-                        media_type="application/vnd.apple.mpegurl",
-                        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
-                    )
+        if resp.status != 200:
+            status = resp.status
+            await resp.release()
+            await session.close()
+            return JSONResponse(
+                status_code=status,
+                content={"detail": f"Upstream returned {status}"},
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
 
-                # For segments (.ts, .mp4, etc.) — stream directly
-                async def stream_generator():
-                    async for chunk in resp.content.iter_chunked(65536):
-                        yield chunk
+        # For m3u8 manifests, rewrite URLs to go through proxy
+        if ".m3u8" in url or "mpegurl" in (resp.headers.get("content-type", "").lower()):
+            body = await resp.text()
+            await resp.release()
+            await session.close()
+            rewritten = _rewrite_manifest(body, url, str(request.base_url))
+            return StreamingResponse(
+                iter([rewritten.encode()]),
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
+            )
 
-                media_type = resp.headers.get("content-type", "video/mp2t")
-                return StreamingResponse(
-                    stream_generator(),
-                    media_type=media_type,
-                    headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
-                )
+        # For segments (.ts, .mp4, etc.) — stream and close when done
+        media_type = resp.headers.get("content-type", "video/mp2t")
+
+        async def stream_generator():
+            try:
+                async for chunk in resp.content.iter_chunked(65536):
+                    yield chunk
+            finally:
+                await resp.release()
+                await session.close()
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type=media_type,
+            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
+        )
     except aiohttp.ClientError as e:
         return JSONResponse(
             status_code=502,
