@@ -341,6 +341,55 @@ def _mark_local_broken(url: str):
         logger.warning(f"Failed to mark broken locally: {e}")
 
 
+# ─── Health reporting (client-side playback results) ────────────────────────
+
+@app.post("/api/health/report")
+async def health_report(request: Request):
+    """Report channel playback health from client. Accepts {url, status}."""
+    try:
+        body = await request.json()
+        url = body.get("url", "")
+        status = body.get("status", "")
+        if not url or status not in ("working", "broken"):
+            return {"status": "ignored"}
+
+        if status == "working":
+            _mark_local_working(url)
+        else:
+            _mark_local_broken(url)
+
+        # Best-effort Supabase push
+        try:
+            from utils import supabase_channels
+            if supabase_channels.is_configured():
+                url_hash = hashlib.sha256(url.encode()).hexdigest()
+                if status == "broken":
+                    await supabase_channels.report_channel(url_hash)
+        except Exception:
+            pass
+
+        return {"status": "recorded", "channel_status": status}
+    except Exception as e:
+        logger.debug(f"Health report error: {e}")
+        return {"status": "error"}
+
+
+def _mark_local_working(url: str):
+    """Mark a channel as working in the local cache."""
+    channels_file = PROJECT_ROOT / config.CHANNELS_FILE
+    try:
+        with open(channels_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for ch in data.get("channels", []):
+            if ch.get("url") == url:
+                ch["status"] = "working"
+                break
+        with open(channels_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        logger.debug(f"Failed to mark working locally: {e}")
+
+
 # ─── Refresh / pull channels ────────────────────────────────────────────────
 
 _refresh_lock = threading.Lock()

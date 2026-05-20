@@ -1,27 +1,44 @@
+# Multi-stage build for minimum NAS image (~45MB)
+# Supports: Synology, QNAP, Unraid, TrueNAS (amd64 + arm64)
+
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+COPY web/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt aiohttp
+
+# ─── Final image ─────────────────────────────────────────────────────────────
 FROM python:3.12-slim
+
+LABEL org.opencontainers.image.title="TV Viewer Web" \
+      org.opencontainers.image.description="Lightweight IPTV streaming web interface" \
+      org.opencontainers.image.version="2.13.0" \
+      org.opencontainers.image.source="https://github.com/tv-viewer-app/tv_viewer"
 
 WORKDIR /app
 
-# Install only web server dependencies
-RUN pip install --no-cache-dir fastapi uvicorn[standard] aiohttp defusedxml certifi
+# Copy only pip packages (no build tools in final image)
+COPY --from=builder /install /usr/local
 
-# Copy only what the web server needs
+# Copy minimal runtime files
 COPY config.py .
 COPY channels.json .
 COPY channels_config.json .
 COPY web/ web/
-COPY utils/ utils/
-COPY core/ core/
+COPY utils/logger.py utils/logger.py
+COPY utils/__init__.py utils/__init__.py
 
-# Create required directories
-RUN mkdir -p logs
+# Create required dirs with non-root user
+RUN mkdir -p logs && \
+    adduser --system --no-create-home tvviewer && \
+    chown -R tvviewer /app/logs
 
-# Default port
+USER tvviewer
+
 ENV TV_VIEWER_WEB_PORT=8765
-
 EXPOSE 8765
 
-HEALTHCHECK --interval=30s --timeout=3s \
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=2 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/status')" || exit 1
 
 CMD ["python", "-m", "web.server", "--host", "0.0.0.0", "--port", "8765"]

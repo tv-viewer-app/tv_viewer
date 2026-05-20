@@ -3,12 +3,28 @@ version: "3.8"
 services:
   tv-viewer-web:
     build: .
+    image: tv-viewer-web:latest
+    container_name: tv-viewer
     ports:
       - "8765:8765"
     volumes:
-      # Mount channels.json so the container uses your local channel data
       - ./channels.json:/app/channels.json:ro
       - ./channels_config.json:/app/channels_config.json:ro
     environment:
       - TV_VIEWER_WEB_PORT=8765
+      - TZ=Asia/Jerusalem
     restart: unless-stopped
+    # NAS-friendly resource limits (works on 1GB RAM devices)
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+        reservations:
+          memory: 64M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

@@ -201,6 +201,7 @@
                 <select id="filter-category"><option value="">All Categories</option></select>
                 <select id="filter-country"><option value="">All Countries</option></select>
                 <select id="filter-type"><option value="">All Types</option><option value="TV">📺 TV</option><option value="Radio">📻 Radio</option></select>
+                <select id="filter-status"><option value="">All Status</option><option value="working">✅ Working Only</option><option value="hide-broken">🚫 Hide Broken</option></select>
             </div>
             <div class="grid" id="grid"></div>
         </div>
@@ -307,6 +308,7 @@ let playIdx = -1, hls = null, mapInstance = null, mapVisible = false;
 let favorites = new Set();
 let settings = JSON.parse(localStorage.getItem('tv_settings') || '{}');
 let numberBuf = '', numberTimer = null;
+let channelHealth = JSON.parse(localStorage.getItem('tv_channel_health') || '{}');
 const MONO_COLORS = ['#1E3A5F','#2D1B4E','#1B4332','#4A1D1D','#3D3415','#1A3A3A'];
 const CAT_ICONS = {'News':'📰','Sports':'⚽','Entertainment':'🎬','Music':'🎵','Kids':'🧸','Movies':'🎥','Documentary':'🌍','Science':'🔬','Education':'📚','Religious':'🕌','Business':'💼','Lifestyle':'🏡','Food':'🍳','Travel':'✈️','Comedy':'😂','Drama':'🎭','Technology':'💻','Health':'❤️','Gaming':'🎮','Animation':'🎞️'};
 
@@ -378,6 +380,13 @@ function renderChannels(chs) {
     const typeFilter = document.getElementById('filter-type').value;
     if (typeFilter) {
         displayChs = displayChs.filter(ch => (ch.media_type || 'TV') === typeFilter);
+    }
+    // Apply status filter
+    const statusFilter = document.getElementById('filter-status').value;
+    if (statusFilter === 'working') {
+        displayChs = displayChs.filter(ch => channelHealth[ch.url] === 'working' || ch.status === 'working');
+    } else if (statusFilter === 'hide-broken') {
+        displayChs = displayChs.filter(ch => channelHealth[ch.url] !== 'broken' && ch.status !== 'offline');
     }
 
     grid.innerHTML = displayChs.map((ch, i) => {
@@ -508,13 +517,14 @@ function startStream(url, video, isRadio) {
     // Timeout — try next source if nothing plays in 12s
     const loadTimer = setTimeout(() => {
         if (video.readyState < 2 && currentSources.length > 1) {
+            markBroken(url);
             tryNextSource();
         } else if (video.readyState < 2) {
             toast('Stream unavailable');
         }
     }, 12000);
 
-    video.addEventListener('playing', () => clearTimeout(loadTimer), { once: true });
+    video.addEventListener('playing', () => { clearTimeout(loadTimer); markPlaying(url); }, { once: true });
 
     if (isHls) {
         if (Hls.isSupported()) {
@@ -1073,6 +1083,10 @@ document.getElementById('filter-type').onchange = (e) => {
     // Client-side type filter applied during render
     loadChannels();
 };
+document.getElementById('filter-status').onchange = (e) => {
+    // Client-side health filter applied during render
+    renderChannels(filtered);
+};
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
@@ -1126,6 +1140,27 @@ function mono(name) { const l=(name||'?')[0].toUpperCase(); const c=MONO_COLORS[
 function debounce(fn,ms) { let t; return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}; }
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
 function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,category:ch.category,country:ch.country,logo:ch.logo,status:ch.status});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,50)));}catch(e){} }
+
+// ─── Channel Health ─────────────────────────────────────────────────────────
+function reportHealth(url, status) {
+    // Update local state
+    channelHealth[url] = status;
+    localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth));
+    // Report to server (async, fire-and-forget)
+    fetch('/api/health/report', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url, status})
+    }).catch(() => {});
+}
+
+function markPlaying(url) {
+    reportHealth(url, 'working');
+}
+
+function markBroken(url) {
+    reportHealth(url, 'broken');
+}
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 init();
