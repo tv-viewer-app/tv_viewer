@@ -9,7 +9,7 @@ certifi>=2023.7.22   # CA certificate bundle for SSL pinning (Issue #97)
 customtkinter>=5.2.0  # Modern Fluent-style widgets (used by UI components)
 # ttkbootstrap>=1.10.0  # Optional: enhanced UI styling (not required)
 tkintermapview>=1.29  # OpenStreetMap map widget
-Pillow>=10.2.0  # Image processing for thumbnails
+Pillow>=12.2.0  # Image processing for thumbnails
 defusedxml>=0.7.1  # Safe XML parsing — prevents XXE and billion-laughs attacks
 
 # Web interface (optional — enables browser-based TV viewing)
