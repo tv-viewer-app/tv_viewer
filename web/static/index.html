@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TV Viewer</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
         :root {
@@ -94,7 +97,8 @@
         .volume-label { font-size: 11px; color: var(--text-dim); min-width: 30px; }
         .player-bar { display: flex; align-items: center; justify-content: space-between; width: 90vw; max-width: 1280px; padding: 8px 0; }
         .player-name { font-size: 16px; font-weight: 600; }
-        .player-epg { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+        .player-epg { font-size: 13px; color: var(--accent); margin-top: 4px; }
+        .player-epg-next { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
         .player-btns { display: flex; gap: 8px; flex-wrap: wrap; }
         .p-btn { padding: 7px 14px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: var(--font); }
         .p-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -206,6 +210,7 @@
     </div>
     <div class="player-controls">
         <div class="volume-group">
+            <button class="p-btn" id="p-playpause" title="Play/Pause (Space)">⏸</button>
             <button class="p-btn" id="p-mute" title="Mute (M)">🔊</button>
             <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="80">
             <span class="volume-label" id="volume-label">80%</span>
@@ -217,6 +222,7 @@
         <div style="flex:1;min-width:0">
             <div class="player-name" id="player-name"></div>
             <div class="player-epg" id="player-epg"></div>
+            <div class="player-epg-next" id="player-epg-next"></div>
             <div class="player-schedule" id="player-schedule"></div>
         </div>
         <div class="player-btns">
@@ -303,13 +309,15 @@ let allCategories = [], allCountries = [];
 
 function renderSidebar(cats, countries) {
     const sb = document.getElementById('sidebar');
+    const sortedCats = [...cats].sort((a,b) => a.name.localeCompare(b.name));
+    const sortedCountries = [...countries].sort((a,b) => a.name.localeCompare(b.name));
     let html = '<div class="sb-section">Categories</div>';
     html += `<div class="sb-item${!currentCat&&!currentCountry?' active':''}" data-cat="" data-country="">📺 All</div>`;
-    cats.forEach(c => {
+    sortedCats.forEach(c => {
         html += `<div class="sb-item${currentCat===c.name?' active':''}" data-cat="${esc(c.name)}">${CAT_ICONS[c.name]||'📺'} ${esc(c.name)}<span class="sb-count">${c.count}</span></div>`;
     });
     html += '<div class="sb-section" style="margin-top:8px">Countries</div>';
-    countries.slice(0, 30).forEach(c => {
+    sortedCountries.slice(0, 30).forEach(c => {
         html += `<div class="sb-item${currentCountry===c.name?' active':''}" data-country="${esc(c.name)}">🌍 ${esc(c.name)}<span class="sb-count">${c.count}</span></div>`;
     });
     sb.innerHTML = html;
@@ -399,6 +407,9 @@ function updatePlayerFavBtn() {
 // ─── Player ─────────────────────────────────────────────────────────────────
 let audioCtx = null, analyser = null, animFrameId = null, statsInterval = null;
 
+let currentSources = []; // All available sources for current channel
+let currentSourceIdx = 0; // Current source index
+
 function playChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
     playIdx = idx;
@@ -426,7 +437,11 @@ function playChannel(idx) {
 
     const isRadio = ch.media_type === 'Radio' || (ch.category && ch.category.toLowerCase().includes('radio'));
 
-    startStream(ch.url, video);
+    // Reset sources
+    currentSources = [ch.url];
+    currentSourceIdx = 0;
+
+    startStream(ch.url, video, isRadio);
 
     // Show radio visualizer if audio-only
     if (isRadio) {
@@ -436,7 +451,7 @@ function playChannel(idx) {
     // Start stats monitoring
     startStats(video);
 
-    // Load sources
+    // Load sources (also enables auto-retry with alternatives)
     loadSources(ch.name, ch.url);
 
     // Load EPG with schedule
@@ -445,7 +460,39 @@ function playChannel(idx) {
     saveRecent(ch);
 }
 
-function startStream(url, video) {
+function tryNextSource() {
+    if (currentSources.length <= 1) return false;
+    currentSourceIdx = (currentSourceIdx + 1) % currentSources.length;
+    const url = currentSources[currentSourceIdx];
+    const video = document.getElementById('player');
+    stopStats();
+    if (hls) { hls.destroy(); hls = null; }
+    toast(`Switching to source ${currentSourceIdx + 1}/${currentSources.length}...`);
+    // Update source selector dropdown
+    const sel = document.getElementById('p-sources');
+    if (sel.style.display !== 'none') sel.value = url;
+    startStream(url, video, false);
+    startStats(video);
+    return true;
+}
+
+function startStream(url, video, isRadio) {
+    // Set a loading timeout — if no playback in 8s, try next source or proxy
+    const loadTimer = setTimeout(() => {
+        if (video.readyState < 2) {
+            // Try proxy version before switching source
+            if (!url.startsWith('/api/proxy') && !isRadio) {
+                toast('Trying proxy...');
+                if (hls) { hls.destroy(); hls = null; }
+                startStream(`/api/proxy?url=${encodeURIComponent(url)}`, video, isRadio);
+            } else if (currentSources.length > 1) {
+                tryNextSource();
+            }
+        }
+    }, 8000);
+
+    video.addEventListener('playing', () => clearTimeout(loadTimer), { once: true });
+
     if (url.includes('.m3u8') || url.includes('m3u8')) {
         if (Hls.isSupported()) {
             hls = new Hls({
@@ -457,9 +504,15 @@ function startStream(url, video) {
             hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(()=>{}); });
             hls.on(Hls.Events.ERROR, (e, data) => {
                 if (data.fatal) {
+                    clearTimeout(loadTimer);
                     hls.destroy(); hls = null;
-                    video.src = url;
-                    video.play().catch(()=> toast('Stream unavailable — may be geo-blocked'));
+                    // If not already proxied, try proxy
+                    if (!url.startsWith('/api/proxy') && !isRadio) {
+                        toast('Trying proxy...');
+                        startStream(`/api/proxy?url=${encodeURIComponent(url)}`, video, isRadio);
+                    } else if (!tryNextSource()) {
+                        toast('Stream unavailable — may be geo-blocked');
+                    }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -469,7 +522,10 @@ function startStream(url, video) {
         }
     } else {
         video.src = url;
-        video.play().catch(() => toast('Stream unavailable'));
+        video.play().catch(() => {
+            clearTimeout(loadTimer);
+            if (!tryNextSource()) toast('Stream unavailable');
+        });
     }
 }
 
@@ -535,14 +591,25 @@ async function loadSources(name, currentUrl) {
 // ─── Player EPG ─────────────────────────────────────────────────────────────
 async function loadPlayerEpg(name) {
     const epgEl = document.getElementById('player-epg');
+    const epgNextEl = document.getElementById('player-epg-next');
     const schedEl = document.getElementById('player-schedule');
     try {
         const d = await api.epg(name);
         if (d.now) {
-            epgEl.textContent = `▶ Now: ${d.now.title}` + (d.next ? ` • Next: ${d.next.title}` : '');
+            const nowTime = d.now.start_time ? d.now.start_time.slice(11,16) : '';
+            const endTime = d.now.end_time ? d.now.end_time.slice(11,16) : '';
+            epgEl.textContent = `▶ Now: ${d.now.title}` + (nowTime ? ` (${nowTime}–${endTime})` : '');
+        } else {
+            epgEl.textContent = '';
+        }
+        if (d.next) {
+            const nextTime = d.next.start_time ? d.next.start_time.slice(11,16) : '';
+            epgNextEl.textContent = `⏭ Next: ${d.next.title}` + (nextTime ? ` at ${nextTime}` : '');
+        } else {
+            epgNextEl.textContent = '';
         }
         if (d.schedule && d.schedule.length > 0) {
-            schedEl.textContent = d.schedule.slice(0, 4).map(p => `${p.start_time ? p.start_time.slice(11,16) : ''} ${p.title}`).join('  |  ');
+            schedEl.textContent = d.schedule.slice(0, 5).map(p => `${p.start_time ? p.start_time.slice(11,16) : ''} ${p.title}`).join('  │  ');
         }
     } catch(e) {}
 }
@@ -660,16 +727,84 @@ function toggleMute() {
 // ─── Cast ───────────────────────────────────────────────────────────────────
 async function castChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
-    if ('presentation' in navigator && navigator.presentation.defaultRequest) {
-        try {
-            const req = new PresentationRequest([ch.url]);
-            const conn = await req.start();
-            toast(`Casting ${ch.name}...`);
-        } catch(e) { window.open(ch.url, '_blank'); toast('Opened in new tab for casting'); }
-    } else {
-        try { await navigator.clipboard.writeText(ch.url); toast(`Stream URL copied — paste in your Cast app`); }
-        catch(e) { window.open(ch.url, '_blank'); }
+    const url = ch.url;
+
+    // Build cast options menu
+    const options = [];
+
+    // 1. Remote Playback API (Chromecast, AirPlay, smart TVs)
+    const video = document.getElementById('player');
+    if (video.remote && typeof video.remote.prompt === 'function') {
+        options.push({ label: '📺 Cast to TV (Chromecast/AirPlay)', action: async () => {
+            try {
+                await video.remote.prompt();
+                toast(`Casting ${ch.name} to remote device...`);
+            } catch(e) { toast('Cast cancelled or unavailable'); }
+        }});
     }
+
+    // 2. Presentation API
+    if ('presentation' in navigator) {
+        options.push({ label: '🖥 Present to external display', action: async () => {
+            try {
+                const req = new PresentationRequest([url]);
+                await req.start();
+                toast(`Presenting ${ch.name}...`);
+            } catch(e) { toast('Presentation failed: ' + e.message); }
+        }});
+    }
+
+    // 3. Picture-in-Picture
+    if (document.pictureInPictureEnabled && video.readyState >= 2) {
+        options.push({ label: '🪟 Picture-in-Picture', action: async () => {
+            try {
+                await video.requestPictureInPicture();
+                toast('Playing in Picture-in-Picture');
+            } catch(e) { toast('PiP unavailable'); }
+        }});
+    }
+
+    // 4. Open stream URL in new tab (for VLC/other player)
+    options.push({ label: '🔗 Open stream in new tab', action: () => {
+        window.open(url, '_blank');
+        toast('Opened stream URL in new tab');
+    }});
+
+    // 5. Copy URL
+    options.push({ label: '📋 Copy stream URL', action: async () => {
+        try { await navigator.clipboard.writeText(url); toast('Stream URL copied to clipboard'); }
+        catch(e) { toast('Copy failed'); }
+    }});
+
+    // Show cast menu
+    showCastMenu(options);
+}
+
+function showCastMenu(options) {
+    // Remove existing menu
+    const existing = document.getElementById('cast-menu');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'cast-menu';
+    menu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;z-index:4000;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+    menu.innerHTML = `<div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text);">📡 Cast / Send to...</div>` +
+        options.map((o, i) => `<button class="cast-option" data-idx="${i}" style="display:block;width:100%;text-align:left;padding:10px 12px;margin:4px 0;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-family:var(--font);">${o.label}</button>`).join('') +
+        `<button id="cast-menu-close" style="display:block;width:100%;text-align:center;padding:8px;margin-top:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-sec);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:var(--font);">Cancel</button>`;
+
+    document.body.appendChild(menu);
+
+    // Wire up buttons
+    menu.querySelectorAll('.cast-option').forEach(btn => {
+        btn.onmouseenter = () => { btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; };
+        btn.onmouseleave = () => { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text)'; };
+        btn.onclick = () => { const idx = +btn.dataset.idx; options[idx].action(); menu.remove(); };
+    });
+    document.getElementById('cast-menu-close').onclick = () => menu.remove();
+
+    // Close on Escape
+    const esc = (e) => { if (e.key === 'Escape') { menu.remove(); document.removeEventListener('keydown', esc); } };
+    document.addEventListener('keydown', esc);
 }
 
 // ─── Report ─────────────────────────────────────────────────────────────────
@@ -794,6 +929,11 @@ document.getElementById('p-report').onclick = () => { if(playIdx>=0) reportBroke
 document.getElementById('p-fav').onclick = () => { if(playIdx>=0) toggleFav(playIdx); };
 document.getElementById('p-fullscreen').onclick = toggleFullscreen;
 document.getElementById('p-mute').onclick = toggleMute;
+document.getElementById('p-playpause').onclick = () => {
+    const v = document.getElementById('player');
+    if (v.paused) { v.play(); document.getElementById('p-playpause').textContent = '⏸'; }
+    else { v.pause(); document.getElementById('p-playpause').textContent = '▶'; }
+};
 document.getElementById('btn-map').onclick = toggleMap;
 document.getElementById('btn-refresh').onclick = refreshChannels;
 document.getElementById('btn-settings').onclick = openSettings;
@@ -861,7 +1001,7 @@ document.addEventListener('keydown', e => {
     if (playerActive) {
         if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); }
         if (e.key === 'm' || e.key === 'M') { toggleMute(); }
-        if (e.key === ' ') { e.preventDefault(); const v=document.getElementById('player'); v.paused?v.play():v.pause(); }
+        if (e.key === ' ') { e.preventDefault(); const v=document.getElementById('player'); if(v.paused){v.play();document.getElementById('p-playpause').textContent='⏸';}else{v.pause();document.getElementById('p-playpause').textContent='▶';} }
         if (e.key === 'ArrowRight') { if(playIdx<filtered.length-1) playChannel(playIdx+1); }
         if (e.key === 'ArrowLeft') { if(playIdx>0) playChannel(playIdx-1); }
         if (e.key === 'ArrowUp') { e.preventDefault(); adjustVolume(5); }

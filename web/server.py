@@ -155,6 +155,79 @@ async def get_status():
     }
 
 
+# ─── Stream Proxy (CORS bypass) ─────────────────────────────────────────────
+
+import aiohttp
+from urllib.parse import urljoin, quote
+
+@app.get("/api/proxy")
+async def proxy_stream(request: Request, url: str = Query(..., description="Stream URL to proxy")):
+    """Proxy an HLS stream to bypass CORS restrictions.
+    Rewrites .m3u8 manifests so segment URLs also go through the proxy."""
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+
+    timeout = aiohttp.ClientTimeout(total=30, sock_read=10)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=resp.status, detail="Upstream error")
+
+                # For m3u8 manifests, rewrite URLs to go through proxy
+                if ".m3u8" in url or "mpegurl" in (resp.headers.get("content-type", "").lower()):
+                    body = await resp.text()
+                    rewritten = _rewrite_manifest(body, url, str(request.base_url))
+                    return StreamingResponse(
+                        iter([rewritten.encode()]),
+                        media_type="application/vnd.apple.mpegurl",
+                        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
+                    )
+
+                # For segments (.ts, .mp4, etc.) — stream directly
+                async def stream_generator():
+                    async for chunk in resp.content.iter_chunked(65536):
+                        yield chunk
+
+                media_type = resp.headers.get("content-type", "video/mp2t")
+                return StreamingResponse(
+                    stream_generator(),
+                    media_type=media_type,
+                    headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
+                )
+    except aiohttp.ClientError as e:
+        raise HTTPException(status_code=502, detail=f"Upstream connection failed: {str(e)}")
+
+
+def _rewrite_manifest(manifest: str, manifest_url: str, base_url: str) -> str:
+    """Rewrite URLs in HLS manifest to route through our proxy."""
+    lines = manifest.split('\n')
+    result = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith('#'):
+            # This is a URL line — make it absolute then wrap in proxy
+            if stripped.startswith(('http://', 'https://')):
+                abs_url = stripped
+            else:
+                abs_url = urljoin(manifest_url, stripped)
+            result.append(f"{base_url}api/proxy?url={quote(abs_url, safe='')}")
+        elif stripped.startswith('#EXT-X-MAP:URI="') or 'URI="' in stripped:
+            # Rewrite URI= attributes in tags
+            import re
+            def rewrite_uri(m):
+                uri = m.group(1)
+                if not uri.startswith(('http://', 'https://')):
+                    uri = urljoin(manifest_url, uri)
+                return f'URI="{base_url}api/proxy?url={quote(uri, safe="")}"'
+            result.append(re.sub(r'URI="([^"]+)"', rewrite_uri, stripped))
+        else:
+            result.append(line)
+    return '\n'.join(result)
+
+
 # ─── EPG endpoints ──────────────────────────────────────────────────────────
 
 @app.get("/api/sources/{channel_name}")
