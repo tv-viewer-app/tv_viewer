@@ -1,0 +1,23 @@
+# Docker ignore — keep image small
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+build/
+dist/
+flutter_app/
+android/
+tests/
+docs/
+play_store_assets/
+store_assets/
+thumbnails/
+logs/
+*.spec
+*.exe
+*.apk
+*.aab
+node_modules/
+.pytest_cache/

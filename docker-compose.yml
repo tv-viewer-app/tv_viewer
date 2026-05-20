@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  tv-viewer-web:
+    build: .
+    ports:
+      - "8765:8765"
+    volumes:
+      # Mount channels.json so the container uses your local channel data
+      - ./channels.json:/app/channels.json:ro
+      - ./channels_config.json:/app/channels_config.json:ro
+    environment:
+      - TV_VIEWER_WEB_PORT=8765
+    restart: unless-stopped

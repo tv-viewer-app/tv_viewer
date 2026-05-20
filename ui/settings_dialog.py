@@ -452,7 +452,73 @@ def show_settings_dialog(parent_window):
     telemetry_hint.grid(row=r, column=0, columnspan=3, sticky="w", padx=(18, 0))
     r += 1
 
-    # ── 6. Support the Project ─────────────────────────────────────
+    # ── 6. Web Interface ─────────────────────────────────────────────
+    r = _section(content, "🌐  Web Interface", r)
+
+    # Check if web server is currently running
+    _web_running = False
+    try:
+        from web.server import is_running as _web_is_running
+        _web_running = _web_is_running()
+    except ImportError:
+        pass
+
+    web_var = tk.BooleanVar(value=_web_running)
+
+    def _toggle_web_server():
+        try:
+            from web.server import start_server, stop_server, is_running, WEB_PORT
+            if web_var.get():
+                start_server(WEB_PORT)
+                web_status_label.config(text=f"✓ Running on http://localhost:{WEB_PORT}", foreground=CD.SUCCESS if hasattr(CD, 'SUCCESS') else "#4ADE80")
+            else:
+                stop_server()
+                web_status_label.config(text="Stopped", foreground=CD.TEXT_SECONDARY)
+        except ImportError:
+            web_status_label.config(text="⚠ Missing: pip install fastapi uvicorn", foreground="#EF4444")
+            web_var.set(False)
+        except Exception as ex:
+            web_status_label.config(text=f"⚠ {ex}", foreground="#EF4444")
+            web_var.set(False)
+
+    web_cb = ttk.Checkbutton(
+        content, text="Enable Web Interface",
+        variable=web_var, command=_toggle_web_server,
+    )
+    web_cb.grid(row=r, column=0, columnspan=3, sticky="w")
+    r += 1
+
+    web_hint = ttk.Label(
+        content,
+        text="Serves a browser-based TV viewing experience on your local network.\n"
+             "Access from any device at http://<your-ip>:8765",
+        font=FONT_SMALL, foreground=CD.TEXT_SECONDARY,
+        wraplength=440, justify="left",
+    )
+    web_hint.grid(row=r, column=0, columnspan=3, sticky="w", padx=(18, 0))
+    r += 1
+
+    # Status label
+    _web_status_text = "Stopped"
+    _web_status_fg = CD.TEXT_SECONDARY
+    if _web_running:
+        _web_port = 8765
+        try:
+            from web.server import WEB_PORT as _wp
+            _web_port = _wp
+        except Exception:
+            pass
+        _web_status_text = f"✓ Running on http://localhost:{_web_port}"
+        _web_status_fg = CD.SUCCESS if hasattr(CD, 'SUCCESS') else "#4ADE80"
+
+    web_status_label = ttk.Label(
+        content, text=_web_status_text,
+        font=FONT_SMALL, foreground=_web_status_fg,
+    )
+    web_status_label.grid(row=r, column=0, columnspan=3, sticky="w", padx=(18, 0), pady=(2, 8))
+    r += 1
+
+    # ── 7. Support the Project ─────────────────────────────────────
     r = _section(content, "🍺  Support the Project", r)
 
     import webbrowser as _webbrowser

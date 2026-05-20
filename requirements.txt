@@ -12,5 +12,9 @@ tkintermapview>=1.29  # OpenStreetMap map widget
 Pillow>=10.2.0  # Image processing for thumbnails
 defusedxml>=0.7.1  # Safe XML parsing — prevents XXE and billion-laughs attacks
 
+# Web interface (optional — enables browser-based TV viewing)
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
 # Build dependencies (for packaging)
 pyinstaller>=6.0.0  # For creating standalone executables

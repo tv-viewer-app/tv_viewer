@@ -289,8 +289,86 @@ class TVModeApp:
         self._create_ui()
         self._bind_keys()
 
+        # Show loading overlay
+        self._loading_active = True
+        self._loading_phase = 0
+        self._show_loading_overlay()
+
         # Initialise channels
         self.root.after(50, self._initialize)
+
+    # ---- Loading Overlay -------------------------------------------------------
+
+    def _show_loading_overlay(self):
+        """Draw an animated loading spinner on the canvas during startup."""
+        if not self._loading_active or not self._canvas:
+            return
+        self._canvas.delete("loading")
+        w = self._canvas.winfo_width() or 1280
+        h = self._canvas.winfo_height() or 720
+        cx, cy = w // 2, h // 2 - 30
+
+        # App name
+        self._canvas.create_text(
+            cx, cy - 80, text=f"\U0001f4fa {config.APP_NAME}",
+            fill=TVColors.TEXT_PRIMARY, font=(FONT_FAMILY, 28, "bold"),
+            tags="loading"
+        )
+
+        # Animated spinner — rotating arc segments
+        import math
+        radius = 30
+        num_segments = 12
+        for i in range(num_segments):
+            angle = (2 * math.pi / num_segments) * i
+            offset = (self._loading_phase + i) % num_segments
+            alpha = max(0.15, offset / num_segments)
+            # Map alpha to color brightness
+            brightness = int(76 + alpha * 179)  # 76..255
+            color = f"#{brightness:02x}{brightness:02x}{int(brightness * 1.1) if brightness * 1.1 < 256 else 255:02x}"
+            x1 = cx + int(math.cos(angle) * (radius - 8))
+            y1 = cy + int(math.sin(angle) * (radius - 8))
+            x2 = cx + int(math.cos(angle) * radius)
+            y2 = cy + int(math.sin(angle) * radius)
+            self._canvas.create_line(
+                x1, y1, x2, y2, fill=color, width=3, capstyle=tk.ROUND,
+                tags="loading"
+            )
+
+        # Status text
+        dots = "." * ((self._loading_phase // 3) % 4)
+        channel_count = len(self._all_channels)
+        if channel_count > 0:
+            status = f"Loading channels{dots} ({channel_count} found)"
+        else:
+            status = f"Connecting to channel sources{dots}"
+        self._canvas.create_text(
+            cx, cy + 50, text=status,
+            fill=TVColors.TEXT_SECONDARY, font=(FONT_FAMILY, 13),
+            tags="loading"
+        )
+
+        # Version
+        self._canvas.create_text(
+            cx, cy + 80, text=f"v{config.APP_VERSION}",
+            fill=TVColors.TEXT_DIM, font=(FONT_FAMILY, 10),
+            tags="loading"
+        )
+
+        self._loading_phase += 1
+        self._loading_timer = self.root.after(80, self._show_loading_overlay)
+
+    def _hide_loading_overlay(self):
+        """Remove the loading overlay and stop animation."""
+        self._loading_active = False
+        if hasattr(self, '_loading_timer') and self._loading_timer:
+            try:
+                self.root.after_cancel(self._loading_timer)
+            except Exception:
+                pass
+            self._loading_timer = None
+        if self._canvas:
+            self._canvas.delete("loading")
 
     # ---- Initialisation & Scanning ------------------------------------------
 
@@ -314,6 +392,7 @@ class TVModeApp:
         if loaded:
             self._all_channels = list(self._channel_manager.channels)
             logger.info(f"Loaded {len(self._all_channels)} cached channels")
+            self._hide_loading_overlay()
         else:
             self._all_channels = []
             logger.info("No cached channels found, starting fresh scan")
@@ -346,6 +425,7 @@ class TVModeApp:
     def _refresh_from_manager(self):
         """Refresh channel list from manager (main thread)."""
         self._all_channels = list(self._channel_manager.channels)
+        self._hide_loading_overlay()
         self._build_rows()
         self._draw()
         self._update_scan_bar(done=True)
