@@ -221,7 +221,7 @@
 <!-- Player -->
 <div class="player-overlay" id="player-overlay">
     <div class="player-box" id="player-box">
-        <video id="player" controls autoplay></video>
+        <video id="player" controls autoplay playsinline></video>
         <div class="player-stats" id="player-stats">
             <span id="stat-res">—</span>
             <span id="stat-buffer">●</span>
@@ -457,8 +457,8 @@ function playChannel(idx) {
 
     const isRadio = ch.media_type === 'Radio' || (ch.category && ch.category.toLowerCase().includes('radio'));
 
-    // Reset sources
-    currentSources = [ch.url];
+    // Reset sources — use all known URLs for auto-retry
+    currentSources = (ch.urls && ch.urls.length > 0) ? [...ch.urls] : [ch.url];
     currentSourceIdx = 0;
 
     startStream(ch.url, video, isRadio);
@@ -521,17 +521,39 @@ function startStream(url, video, isRadio) {
             hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: false,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
                 xhrSetup: (xhr) => { xhr.withCredentials = false; }
             });
             hls.loadSource(streamUrl);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(()=>{}); });
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(e => {
+                    // Autoplay blocked — show play button overlay
+                    console.warn('Autoplay blocked:', e.message);
+                    video.muted = true;
+                    video.play().catch(()=>{});
+                });
+            });
             hls.on(Hls.Events.ERROR, (e, data) => {
+                console.warn('HLS error:', data.type, data.details, data.fatal);
                 if (data.fatal) {
                     clearTimeout(loadTimer);
-                    hls.destroy(); hls = null;
-                    if (!tryNextSource()) {
-                        toast('Stream unavailable — try another source');
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.response && data.response.code < 400) {
+                        // Transient network error — try recovery once
+                        hls.startLoad();
+                        setTimeout(() => {
+                            if (video.readyState < 2) {
+                                hls.destroy(); hls = null;
+                                if (!tryNextSource()) toast('Stream unavailable — try another source');
+                            }
+                        }, 4000);
+                    } else {
+                        // HTTP error (404, 403, etc.) or media error — switch source immediately
+                        hls.destroy(); hls = null;
+                        if (!tryNextSource()) {
+                            toast('Stream unavailable — try another source');
+                        }
                     }
                 }
             });
@@ -597,6 +619,11 @@ async function loadSources(name, currentUrl) {
             sel.style.display = 'none';
             return;
         }
+        // Update currentSources with all available URLs
+        currentSources = sources.map(s => s.url);
+        currentSourceIdx = currentSources.indexOf(currentUrl);
+        if (currentSourceIdx < 0) currentSourceIdx = 0;
+
         sel.style.display = '';
         sel.innerHTML = sources.map((s, i) => {
             const selected = s.url === currentUrl ? ' selected' : '';
@@ -661,10 +688,12 @@ function hideRadioOverlay() {
 function startVisualizer(video, canvas) {
     try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioCtx.createMediaElementSource(video);
+        if (!video._audioSource) {
+            video._audioSource = audioCtx.createMediaElementSource(video);
+        }
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 128;
-        source.connect(analyser);
+        video._audioSource.connect(analyser);
         analyser.connect(audioCtx.destination);
 
         const bufLen = analyser.frequencyBinCount;
@@ -689,7 +718,7 @@ function startVisualizer(video, canvas) {
         }
         draw();
     } catch(e) {
-        // Fallback: simple animated bars without Web Audio
+        // Fallback: bars react to video's time/volume (not random)
         const ctx = canvas.getContext('2d');
         const W = canvas.width, H = canvas.height;
         const bars = 32;
@@ -700,9 +729,11 @@ function startVisualizer(video, canvas) {
             animFrameId = requestAnimationFrame(drawFake);
             ctx.fillStyle = '#0A0A0F';
             ctx.fillRect(0, 0, W, H);
+            const isPlaying = !video.paused && !video.ended && video.readyState > 2;
             for (let i = 0; i < bars; i++) {
-                heights[i] += (Math.random() * 0.4 - 0.15);
-                heights[i] = Math.max(0.05, Math.min(1, heights[i]));
+                const target = isPlaying ? (0.2 + Math.sin(Date.now()/800 + i*0.5) * 0.3 + Math.random() * 0.15) : 0.02;
+                heights[i] += (target - heights[i]) * 0.15;
+                heights[i] = Math.max(0.02, Math.min(1, heights[i]));
                 const barH = heights[i] * H * 0.8;
                 const x = i * (W / bars) + (W / bars - barW) / 2;
                 ctx.fillStyle = `hsla(${195 + heights[i]*20}, 85%, ${50 + heights[i]*25}%, 0.8)`;

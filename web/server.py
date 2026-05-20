@@ -167,7 +167,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL")
 
-    timeout = aiohttp.ClientTimeout(total=30, sock_read=10)
+    timeout = aiohttp.ClientTimeout(total=60, sock_read=30)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "*/*",
