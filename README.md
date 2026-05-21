@@ -21,11 +21,13 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 ## ✨ What's New in v2.13.2
 
-- **Docker instant-start** — Server launches immediately, channels load in background
-- **Supabase fast-start** — Pulls channels from shared DB first (~5s) before slow M3U fetch
-- **Docker crash fixed** — Healthcheck no longer fails during startup fetch
-- **Channel cleanup** — Removed 1,595 dead PlutoTV channels, fixed 1,626 mojibake names
-- **Simplified filters** — "All Channels" / "Hide Broken" with alphabetical sort
+- **Docker crash on startup** — Server was blocked fetching 34 M3U repositories
+- **Healthcheck reliability** — Changed from `localhost` to `127.0.0.1` (Alpine DNS),
+- **Supabase fast-start** — On first boot, tries Supabase channel pull first (~5s)
+- **Non-blocking startup** — Server responds to requests immediately; channels
+- **Channel cleanup** — Removed 1,595 non-working PlutoTV channels, fixed 1,626
+- **Status filter** — Simplified to "All Channels" / "Hide Broken" (removed "Working Only").
+- **Alphabetical sort** — Channel list sorted A-Z by default.
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
