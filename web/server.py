@@ -654,19 +654,43 @@ if __name__ == "__main__":
         need_fetch = True
 
     if need_fetch:
-        print("   ⏳ No channels found — fetching from repositories...")
-        try:
-            from core.repository import RepositoryHandler
+        # Start fetch in background thread so server starts immediately
+        def _startup_fetch():
             import asyncio as _aio
-            handler = RepositoryHandler()
-            channels = _aio.run(handler.fetch_all_repositories())
-            if channels:
-                with open(channels_path, "w", encoding="utf-8") as f:
-                    json.dump({"channels": channels}, f, ensure_ascii=False)
-                print(f"   ✅ Loaded {len(channels)} channels\n")
-            else:
-                print("   ⚠️  No channels fetched — will retry via /api/refresh\n")
-        except Exception as e:
-            print(f"   ⚠️  Fetch failed: {e} — will retry via /api/refresh\n")
+            print("   ⏳ Fetching channels in background...")
+
+            # Strategy 1: Try Supabase first (fast, ~5s)
+            try:
+                from utils.supabase_channels import fetch_channels, is_configured
+                if is_configured():
+                    print("   📡 Trying Supabase (fast)...")
+                    channels = _aio.run(fetch_channels())
+                    if channels:
+                        with open(channels_path, "w", encoding="utf-8") as f:
+                            json.dump({"channels": channels}, f, ensure_ascii=False)
+                        print(f"   ✅ Loaded {len(channels)} channels from Supabase\n")
+                        return
+            except Exception as e:
+                print(f"   ⚠️  Supabase failed: {e}")
+
+            # Strategy 2: Fall back to M3U repositories (slow, ~60-120s)
+            try:
+                print("   📡 Falling back to M3U repositories...")
+                from core.repository import RepositoryHandler
+                handler = RepositoryHandler()
+                channels = _aio.run(handler.fetch_all_repositories())
+                if channels:
+                    with open(channels_path, "w", encoding="utf-8") as f:
+                        json.dump({"channels": channels}, f, ensure_ascii=False)
+                    print(f"   ✅ Loaded {len(channels)} channels from repositories\n")
+                else:
+                    print("   ⚠️  No channels fetched — use /api/refresh later\n")
+            except Exception as e:
+                print(f"   ⚠️  Repository fetch failed: {e}\n")
+
+        import threading
+        t = threading.Thread(target=_startup_fetch, daemon=True)
+        t.start()
+        print("   🚀 Server starting (channels loading in background)...\n")
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
