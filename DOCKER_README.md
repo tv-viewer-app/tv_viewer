@@ -58,7 +58,6 @@ Then open **http://your-server-ip:8765** in any browser. That's it!
 |-------------|-----|
 | x86-64 | `amd64` |
 | ARM64 | `arm64` |
-| ARMv7 | `arm/v7` |
 
 Multi-arch manifest: `asummoner/tvviewerapp:latest` auto-selects the correct platform.
 

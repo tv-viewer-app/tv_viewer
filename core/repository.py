@@ -87,6 +87,12 @@ class RepositoryHandler:
                         chunks.append(chunk)
                     content = b''.join(chunks).decode('utf-8', errors='replace')
                     channels = parse_m3u(content)
+                    # Apply URL blocklist
+                    if config.BLOCKED_URL_PATTERNS:
+                        channels = [
+                            ch for ch in channels
+                            if not any(pat in ch.get('url', '').lower() for pat in config.BLOCKED_URL_PATTERNS)
+                        ]
                     logger.debug(f"Fetched {len(channels)} channels from {url}")
                     return channels
                 else:

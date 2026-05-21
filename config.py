@@ -75,6 +75,16 @@ SCAN_BATCH_DELAY = 0.5
 SCAN_SKIP_MINUTES = 30
 
 # =============================================================================
+# Channel Blocklist (URL patterns to exclude on import)
+# =============================================================================
+# Channels with URLs matching these substrings are removed during repository fetch.
+# PlutoTV streams require geo-locked authentication and never work via direct URL.
+BLOCKED_URL_PATTERNS = [
+    'pluto.tv',
+    'service-stitcher.clusters.pluto.tv',
+]
+
+# =============================================================================
 # Thumbnail Settings
 # =============================================================================
 THUMBNAIL_WIDTH = 64
