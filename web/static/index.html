@@ -980,19 +980,28 @@ function closeSettings() {
 
 // ─── Data Loading ───────────────────────────────────────────────────────────
 let currentOffset = 0, hasMore = false, totalChannels = 0;
+let allLoaded = [];  // Full channel list from server (unfiltered)
+
+function clientFilter(channels) {
+    const q = document.getElementById('search').value.trim().toLowerCase();
+    if (!q) return channels;
+    return channels.filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.category || '').toLowerCase().includes(q) ||
+        (c.country || '').toLowerCase().includes(q)
+    );
+}
 
 async function loadChannels(append = false) {
     const p = {};
     if (currentCat) p.category = currentCat;
     if (currentCountry) p.country = currentCountry;
     if (currentView === 'favorites') p.favorites_only = true;
-    const q = document.getElementById('search').value.trim();
-    if (q) p.search = q;
 
     if (currentView === 'recent') {
         try {
-            filtered = JSON.parse(localStorage.getItem('tv_recent') || '[]');
-        } catch(e) { filtered = []; }
+            allLoaded = JSON.parse(localStorage.getItem('tv_recent') || '[]');
+        } catch(e) { allLoaded = []; }
         hasMore = false;
     } else {
         if (!append) currentOffset = 0;
@@ -1000,13 +1009,14 @@ async function loadChannels(append = false) {
         p.offset = currentOffset;
         const resp = await api.channels(p);
         if (append) {
-            filtered = filtered.concat(resp.channels || []);
+            allLoaded = allLoaded.concat(resp.channels || []);
         } else {
-            filtered = resp.channels || [];
+            allLoaded = resp.channels || [];
         }
         hasMore = resp.has_more || false;
         totalChannels = resp.total || 0;
     }
+    filtered = clientFilter(allLoaded);
     renderChannels(filtered);
     renderLoadMore();
 }
@@ -1069,7 +1079,11 @@ document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => {
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); currentView=btn.dataset.view; currentCat=null; loadChannels(); renderSidebarActive();
 });
-document.getElementById('search').addEventListener('input', debounce(loadChannels, 300));
+document.getElementById('search').addEventListener('input', debounce(() => {
+    filtered = clientFilter(allLoaded);
+    renderChannels(filtered);
+    renderLoadMore();
+}, 150));
 document.getElementById('p-close').onclick = closePlayer;
 document.getElementById('p-next').onclick = () => { if(playIdx<filtered.length-1) playChannel(playIdx+1); };
 document.getElementById('p-prev').onclick = () => { if(playIdx>0) playChannel(playIdx-1); };

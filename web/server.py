@@ -84,6 +84,58 @@ def _normalize_country(raw: str) -> str:
     return raw.strip()
 
 
+def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge channels with the same normalized name into single entries with multiple URLs.
+
+    E.g., 3 separate "Fox Weather" entries become 1 entry with urls=[url1, url2, url3].
+    Prefers 'working' status over 'unchecked' over 'offline'.
+    """
+    import re
+    merged: Dict[str, Dict[str, Any]] = {}
+    STATUS_PRIORITY = {'working': 0, 'unchecked': 1, 'offline': 2}
+
+    for ch in channels:
+        name = (ch.get("name") or "").strip()
+        if not name:
+            continue
+        # Normalize key: lowercase, strip quality tags like (1080p), [Geo-blocked]
+        key = re.sub(r'\s*[\(\[][^\)\]]*[\)\]]', '', name).strip().lower()
+        url = ch.get("url", "")
+        urls = ch.get("urls") or ([url] if url else [])
+
+        if key in merged:
+            existing = merged[key]
+            # Add new URLs that aren't already present
+            for u in urls:
+                if u and u not in existing["urls"]:
+                    existing["urls"].append(u)
+            # Prefer better status
+            new_priority = STATUS_PRIORITY.get(ch.get("status", "unchecked"), 1)
+            old_priority = STATUS_PRIORITY.get(existing.get("status", "unchecked"), 1)
+            if new_priority < old_priority:
+                existing["status"] = ch.get("status", "unchecked")
+            # Prefer entry with logo/category if current doesn't have one
+            if not existing.get("logo") and ch.get("logo"):
+                existing["logo"] = ch["logo"]
+            if existing.get("category") in (None, "Other", "General") and ch.get("category") not in (None, "Other", "General"):
+                existing["category"] = ch["category"]
+        else:
+            merged[key] = {
+                "name": name,
+                "url": urls[0] if urls else url,
+                "urls": list(urls),
+                "category": ch.get("category", "General"),
+                "country": ch.get("country", "Unknown"),
+                "logo": ch.get("logo", ""),
+                "media_type": ch.get("media_type"),
+                "status": ch.get("status", "unchecked"),
+                "source": ch.get("source", ""),
+                "working_url_index": 0,
+            }
+
+    return list(merged.values())
+
+
 # ─── In-memory channel cache (avoids repeated disk reads) ────────────────────
 
 class _ChannelCache:
@@ -112,10 +164,12 @@ class _ChannelCache:
             try:
                 with open(self._path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self._channels = data.get("channels", [])
-                # Normalize country codes to full names on load
-                for ch in self._channels:
+                raw_channels = data.get("channels", [])
+                # Normalize country codes to full names
+                for ch in raw_channels:
                     ch["country"] = _normalize_country(ch.get("country") or "Unknown")
+                # Deduplicate: merge channels with same normalized name
+                self._channels = _deduplicate_channels(raw_channels)
                 # Pre-sort once on load: Israeli first, then alphabetical
                 self._sorted = sorted(self._channels,
                     key=lambda ch: (
@@ -338,6 +392,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
         "Accept": "*/*",
         "Referer": url,
     }
+    session = None
     try:
         connector = aiohttp.TCPConnector(limit=10, ttl_dns_cache=300)
         session = aiohttp.ClientSession(timeout=_proxy_timeout, connector=connector)
@@ -381,10 +436,21 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             media_type=media_type,
             headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
         )
-    except aiohttp.ClientError as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, asyncio.CancelledError, OSError) as e:
+        if session and not session.closed:
+            await session.close()
         return JSONResponse(
             status_code=502,
-            content={"detail": f"Upstream connection failed: {str(e)}"},
+            content={"detail": f"Upstream connection failed: {type(e).__name__}"},
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
+    except Exception as e:
+        if session and not session.closed:
+            await session.close()
+        logger.error(f"Proxy unexpected error: {e}")
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Proxy error"},
             headers={"Access-Control-Allow-Origin": "*"}
         )
 
