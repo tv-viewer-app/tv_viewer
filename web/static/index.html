@@ -1082,11 +1082,22 @@ document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => {
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); currentView=btn.dataset.view; currentCat=null; loadChannels(); renderSidebarActive();
 });
-document.getElementById('search').addEventListener('input', debounce(() => {
-    filtered = clientFilter(allLoaded);
+document.getElementById('search').addEventListener('input', debounce(async () => {
+    const q = document.getElementById('search').value.trim();
+    if (!q) {
+        // Empty search — reload normally
+        await loadChannels();
+        return;
+    }
+    // Search the full database via server (not just loaded page)
+    const resp = await api.channels({ search: q, limit: 500 });
+    allLoaded = resp.channels || [];
+    hasMore = resp.has_more || false;
+    totalChannels = resp.total || 0;
+    filtered = allLoaded;
     renderChannels(filtered);
     renderLoadMore();
-}, 150));
+}, 300));
 document.getElementById('p-close').onclick = closePlayer;
 document.getElementById('p-next').onclick = () => { if(playIdx<filtered.length-1) playChannel(playIdx+1); };
 document.getElementById('p-prev').onclick = () => { if(playIdx>0) playChannel(playIdx-1); };

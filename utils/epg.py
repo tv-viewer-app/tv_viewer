@@ -193,7 +193,7 @@ def parse_xmltv(xml_content: str) -> Tuple[Dict[str, str], Dict[str, List[EPGPro
     try:
         root = ET.fromstring(xml_content)
     except ET.ParseError as e:
-        logger.warning("Failed to parse XMLTV: %s", e)
+        logger.debug("Failed to parse XMLTV: %s", e)
         return channel_map, schedules
 
     # Parse <channel> elements
@@ -485,7 +485,7 @@ class EPGService:
         logger.debug("Fetching EPG: %s", url)
         async with session.get(url) as response:
             if response.status != 200:
-                logger.warning("EPG fetch failed (%d): %s", response.status, url)
+                logger.debug("EPG fetch failed (%d): %s", response.status, url)
                 return {}, {}
 
             data = await response.content.read(MAX_EPG_DOWNLOAD + 1)
@@ -512,6 +512,10 @@ class EPGService:
     # ------------------------------------------------------------------
 
     def _cache_path(self) -> str:
+        # Prefer DATA_DIR env var (Docker volume), fall back to BASE_DIR
+        data_dir = os.environ.get("DATA_DIR", "")
+        if data_dir:
+            return os.path.join(data_dir, EPG_CACHE_FILE)
         try:
             import config
             return os.path.join(config.BASE_DIR, EPG_CACHE_FILE)

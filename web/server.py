@@ -83,6 +83,26 @@ def _normalize_country(raw: str) -> str:
         return _COUNTRY_CODES[upper]
     return raw.strip()
 
+
+# Detect local country for "LOCAL" category — env var override or system locale
+def _detect_local_country() -> str:
+    env = os.environ.get("LOCAL_COUNTRY", "").strip()
+    if env:
+        upper = env.upper()
+        return _COUNTRY_CODES.get(upper, env)
+    try:
+        import locale
+        loc = locale.getlocale()
+        if loc and loc[0] and '_' in loc[0]:
+            code = loc[0].split('_')[1].upper()
+            return _COUNTRY_CODES.get(code, code)
+    except Exception:
+        pass
+    return "Israel"  # Default for this deployment
+
+
+_LOCAL_COUNTRY = _detect_local_country()
+
 
 def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Merge channels with the same normalized name into single entries with multiple URLs.
@@ -202,10 +222,14 @@ class _ChannelCache:
             country_names.update(k.lower() for k in _COUNTRY_CODES.keys())
             # Also collect actual country values from loaded channels
             actual_countries = set()
+            local_count = 0
             for ch in self.channels:
                 c = ch.get("country")
                 if c:
                     actual_countries.add(c.lower())
+                # Count LOCAL channels (same country as server)
+                if ch.get("status") != "offline" and (c or "").lower() == _LOCAL_COUNTRY.lower():
+                    local_count += 1
             country_names.update(actual_countries)
 
             for ch in self.channels:
@@ -216,7 +240,13 @@ class _ChannelCache:
                 if cat.lower() in country_names or (len(cat) == 2 and cat.upper() == cat):
                     cat = "General"
                 cats[cat] = cats.get(cat, 0) + 1
-            self._categories = [{"name": k, "count": v} for k, v in sorted(cats.items(), key=lambda x: -x[1])]
+
+            # Build final list with LOCAL pinned first
+            result = []
+            if local_count > 0:
+                result.append({"name": "LOCAL", "count": local_count})
+            result.extend({"name": k, "count": v} for k, v in sorted(cats.items(), key=lambda x: -x[1]))
+            self._categories = result
         return self._categories
 
     @property
@@ -316,7 +346,11 @@ async def get_channels(
     if favorites_only:
         channels = [c for c in channels if c.get("url") in favorites]
     if category:
-        channels = [c for c in channels if (c.get("category") or "").lower() == category.lower()]
+        if category.upper() == "LOCAL":
+            # LOCAL = channels from user's detected country
+            channels = [c for c in channels if (c.get("country") or "").lower() == _LOCAL_COUNTRY.lower()]
+        else:
+            channels = [c for c in channels if (c.get("category") or "").lower() == category.lower()]
     if country:
         channels = [c for c in channels if (c.get("country") or "").lower() == country.lower()]
     if media_type:
