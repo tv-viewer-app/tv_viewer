@@ -19,16 +19,13 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.13.1
+## ✨ What's New in v2.13.2
 
-- **In-memory channel cache** — Channels loaded once from disk, served from RAM.
-- **Health status filter** — Dropdown in web UI: "Working Only" or "Hide Broken".
-- **Health reporting endpoint** — `POST /api/health/report` accepts `{url, status}`
-- **Docker: NAS-optimized** — Alpine-based image (~25 MB), runs on 48 MB RAM,
-- Docker base image: `python:3.12-slim` → `python:3.12-alpine` (smaller).
-- Docker resource limits reduced: 128 MB / 0.5 CPU (was 256 MB / 1 CPU).
-- Country sidebar shows all countries (was capped at 30).
-- `_mark_local_broken/working` update in-memory cache directly (no re-read from disk).
+- **Docker instant-start** — Server launches immediately, channels load in background
+- **Supabase fast-start** — Pulls channels from shared DB first (~5s) before slow M3U fetch
+- **Docker crash fixed** — Healthcheck no longer fails during startup fetch
+- **Channel cleanup** — Removed 1,595 dead PlutoTV channels, fixed 1,626 mojibake names
+- **Simplified filters** — "All Channels" / "Hide Broken" with alphabetical sort
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 

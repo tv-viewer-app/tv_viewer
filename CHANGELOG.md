@@ -5,6 +5,25 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.2] - 2026-05-21
+
+### Fixed
+- **Docker crash on startup** — Server was blocked fetching 34 M3U repositories
+  before uvicorn started. Healthcheck failed with "Address not available" because
+  nothing was listening. Now fetches channels in a background thread.
+- **Healthcheck reliability** — Changed from `localhost` to `127.0.0.1` (Alpine DNS),
+  increased start-period to 30s, retries to 3.
+
+### Changed
+- **Supabase fast-start** — On first boot, tries Supabase channel pull first (~5s)
+  before falling back to slow M3U repository fetch (~60-120s).
+- **Non-blocking startup** — Server responds to requests immediately; channels
+  populate in background. Users see channels appear via automatic refresh.
+- **Channel cleanup** — Removed 1,595 non-working PlutoTV channels, fixed 1,626
+  mojibake channel names, added URL blocklist to prevent re-import.
+- **Status filter** — Simplified to "All Channels" / "Hide Broken" (removed "Working Only").
+- **Alphabetical sort** — Channel list sorted A-Z by default.
+
 ## [2.13.1] - 2026-05-20
 
 ### Added

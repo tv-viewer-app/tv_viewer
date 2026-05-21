@@ -83,10 +83,11 @@ services:
           cpus: '0.5'
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/status')"]
       interval: 60s
       timeout: 5s
-      retries: 2
+      start_period: 30s
+      retries: 3
 
 volumes:
   tv-viewer-data:
