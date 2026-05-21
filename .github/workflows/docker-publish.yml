@@ -12,7 +12,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: tvviewerapp/tv-viewer-web
+  IMAGE_NAME: asummoner/tvviewerapp
 
 jobs:
   build-and-push:

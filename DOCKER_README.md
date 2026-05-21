@@ -1,15 +1,15 @@
 # TV Viewer Web 📺
 
 [![GitHub Release](https://img.shields.io/github/v/release/tv-viewer-app/tv_viewer)](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
-[![Docker Image Size](https://img.shields.io/docker/image-size/tvviewerapp/tv-viewer-web/latest)](https://hub.docker.com/r/tvviewerapp/tv-viewer-web)
-[![Docker Pulls](https://img.shields.io/docker/pulls/tvviewerapp/tv-viewer-web)](https://hub.docker.com/r/tvviewerapp/tv-viewer-web)
+[![Docker Image Size](https://img.shields.io/docker/image-size/asummoner/tvviewerapp/latest)](https://hub.docker.com/r/asummoner/tvviewerapp)
+[![Docker Pulls](https://img.shields.io/docker/pulls/asummoner/tvviewerapp)](https://hub.docker.com/r/asummoner/tvviewerapp)
 
 **Lightweight IPTV streaming web interface with 16,000+ channels. Perfect for NAS devices.**
 
 ## Quick Start
 
 ```bash
-docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped tvviewerapp/tv-viewer-web
+docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp
 ```
 
 Open **http://your-nas-ip:8765** in any browser.
@@ -43,14 +43,14 @@ Open **http://your-nas-ip:8765** in any browser.
 | ARM64 | `arm64` |
 | ARMv7 | `arm/v7` |
 
-Multi-arch manifest: `tvviewerapp/tv-viewer-web:latest` auto-selects the correct platform.
+Multi-arch manifest: `asummoner/tvviewerapp:latest` auto-selects the correct platform.
 
 ## Docker Compose
 
 ```yaml
 services:
   tv-viewer:
-    image: tvviewerapp/tv-viewer-web:latest
+    image: asummoner/tvviewerapp:latest
     container_name: tv-viewer
     ports:
       - "8765:8765"
@@ -72,26 +72,26 @@ services:
 ## NAS Installation
 
 ### Synology (Container Manager)
-1. Open **Container Manager** → Registry → Search `tvviewerapp/tv-viewer-web`
+1. Open **Container Manager** → Registry → Search `asummoner/tvviewerapp`
 2. Download `latest` tag
 3. Create container: port 8765 → 8765, memory limit 128 MB
 4. Start and open `http://synology-ip:8765`
 
 ### QNAP (Container Station)
-1. Open **Container Station** → Create → Search `tvviewerapp/tv-viewer-web`
+1. Open **Container Station** → Create → Search `asummoner/tvviewerapp`
 2. Set port mapping: 8765 → 8765
 3. Set memory limit: 128 MB
 4. Apply and access via browser
 
 ### Unraid
 1. Go to **Docker** → Add Container
-2. Repository: `tvviewerapp/tv-viewer-web`
+2. Repository: `asummoner/tvviewerapp`
 3. Port: 8765 → 8765
 4. Apply
 
 ### TrueNAS SCALE
 1. Apps → Launch Docker Image
-2. Image: `tvviewerapp/tv-viewer-web:latest`
+2. Image: `asummoner/tvviewerapp:latest`
 3. Port: 8765
 4. Save
 
@@ -118,9 +118,9 @@ services:
 ## Updating
 
 ```bash
-docker pull tvviewerapp/tv-viewer-web:latest
+docker pull asummoner/tvviewerapp:latest
 docker stop tv-viewer && docker rm tv-viewer
-docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped tvviewerapp/tv-viewer-web
+docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp
 ```
 
 ## Source Code
