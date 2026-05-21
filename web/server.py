@@ -13,6 +13,7 @@ import json
 import asyncio
 import hashlib
 import threading
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -21,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
 # Add project root to path for imports
@@ -40,15 +42,20 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", str(PROJECT_ROOT)))
 # ─── In-memory channel cache (avoids repeated disk reads) ────────────────────
 
 class _ChannelCache:
-    """Lazy-loading channel cache — reads JSON once, serves from RAM."""
-    __slots__ = ('_channels', '_mtime', '_path', '_categories', '_countries')
+    """Lazy-loading channel cache — reads JSON once, serves from RAM.
+    Pre-sorts channels (IL first, then alphabetical) on load to avoid per-request sorting."""
+    __slots__ = ('_channels', '_sorted', '_mtime', '_path', '_categories', '_countries',
+                 '_favorites', '_fav_mtime')
 
     def __init__(self):
         self._channels = None
+        self._sorted = None
         self._mtime = 0
         self._path = DATA_DIR / "channels.json"
         self._categories = None
         self._countries = None
+        self._favorites = None
+        self._fav_mtime = 0
 
     def _check_reload(self):
         """Reload only if file changed (stat is cheap, JSON parse is not)."""
@@ -61,6 +68,12 @@ class _ChannelCache:
                 with open(self._path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self._channels = data.get("channels", [])
+                # Pre-sort once on load: Israeli first, then alphabetical
+                self._sorted = sorted(self._channels,
+                    key=lambda ch: (
+                        0 if (ch.get("country") or "").lower() in ("israel", "il") else 1,
+                        (ch.get("name") or "").lower()
+                    ))
                 self._mtime = mt
                 self._categories = None
                 self._countries = None
@@ -73,13 +86,19 @@ class _ChannelCache:
         return self._channels or []
 
     @property
+    def sorted_channels(self) -> List[Dict[str, Any]]:
+        """Pre-sorted channels (IL first, then A-Z). No per-request sort needed."""
+        self._check_reload()
+        return self._sorted or []
+
+    @property
     def categories(self) -> List[Dict[str, Any]]:
         if self._categories is None:
             cats: Dict[str, int] = {}
             for ch in self.channels:
                 if ch.get("status") == "offline":
                     continue
-                cat = ch.get("category", "General")
+                cat = ch.get("category") or "General"
                 cats[cat] = cats.get(cat, 0) + 1
             self._categories = [{"name": k, "count": v} for k, v in sorted(cats.items(), key=lambda x: -x[1])]
         return self._categories
@@ -91,14 +110,33 @@ class _ChannelCache:
             for ch in self.channels:
                 if ch.get("status") == "offline":
                     continue
-                country = ch.get("country", "Unknown")
+                country = ch.get("country") or "Unknown"
                 ctrs[country] = ctrs.get(country, 0) + 1
             self._countries = [{"name": k, "count": v} for k, v in sorted(ctrs.items(), key=lambda x: -x[1])]
         return self._countries
 
+    @property
+    def favorites(self) -> set:
+        """Cached favorites — reloads from disk only when file changes."""
+        fav_file = DATA_DIR / "favorites.json"
+        try:
+            mt = fav_file.stat().st_mtime
+        except OSError:
+            return self._favorites or set()
+        if mt != self._fav_mtime or self._favorites is None:
+            try:
+                with open(fav_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self._favorites = set(data.get("urls", []))
+                self._fav_mtime = mt
+            except Exception:
+                self._favorites = self._favorites or set()
+        return self._favorites
+
     def invalidate(self):
         """Force reload on next access."""
         self._mtime = 0
+        self._sorted = None
         self._categories = None
         self._countries = None
 
@@ -110,6 +148,9 @@ app = FastAPI(
     version=config.APP_VERSION,
     description="Browser-based IPTV streaming interface"
 )
+
+# GZip responses > 500 bytes — critical for constrained networks (saves 70-80% bandwidth)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,
@@ -129,14 +170,8 @@ def _load_channels() -> List[Dict[str, Any]]:
 
 
 def _load_favorites() -> set:
-    """Load favorite URLs."""
-    fav_file = DATA_DIR / "favorites.json"
-    try:
-        with open(fav_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return set(data.get("urls", []))
-    except Exception:
-        return set()
+    """Load favorite URLs from cache (memory, reloads when file changes)."""
+    return _cache.favorites
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -156,7 +191,8 @@ async def get_channels(
     offset: int = Query(0, ge=0),
 ):
     """Get channels with optional filtering. Local (IL) channels shown first."""
-    channels = _load_channels()
+    # Use pre-sorted list (IL first, A-Z) — no per-request sort needed
+    channels = _cache.sorted_channels
     favorites = _load_favorites() if favorites_only else set()
 
     if favorites_only:
@@ -174,18 +210,24 @@ async def get_channels(
     # Only return working channels by default, plus unchecked
     channels = [c for c in channels if c.get("status") != "offline"]
 
-    # Sort: Israeli channels first, then alphabetical
-    def _sort_key(ch):
-        c = (ch.get("country") or "").lower()
-        is_local = 1 if c not in ("israel", "il") else 0
-        return (is_local, (ch.get("name") or "").lower())
-    channels.sort(key=_sort_key)
-
     total = len(channels)
     channels = channels[offset:offset + limit]
 
+    # Strip heavy fields to reduce payload (logo URLs alone can add 30% to response size)
+    slim = []
+    for ch in channels:
+        slim.append({
+            "name": ch.get("name"),
+            "url": ch.get("url"),
+            "urls": ch.get("urls"),
+            "category": ch.get("category"),
+            "country": ch.get("country"),
+            "logo": ch.get("logo"),
+            "status": ch.get("status"),
+        })
+
     return {
-        "channels": channels,
+        "channels": slim,
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -225,6 +267,9 @@ import aiohttp
 import re
 from urllib.parse import urljoin, quote
 
+# Proxy timeout for upstream connections
+_proxy_timeout = aiohttp.ClientTimeout(total=60, sock_read=30)
+
 @app.get("/api/proxy")
 async def proxy_stream(request: Request, url: str = Query(..., description="Stream URL to proxy")):
     """Proxy an HLS stream to bypass CORS restrictions.
@@ -232,14 +277,14 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL")
 
-    timeout = aiohttp.ClientTimeout(total=60, sock_read=30)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "*/*",
         "Referer": url,
     }
     try:
-        session = aiohttp.ClientSession(timeout=timeout)
+        connector = aiohttp.TCPConnector(limit=10, ttl_dns_cache=300)
+        session = aiohttp.ClientSession(timeout=_proxy_timeout, connector=connector)
         resp = await session.get(url, headers=headers, ssl=False)
 
         if resp.status != 200:
@@ -264,7 +309,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
                 headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
             )
 
-        # For segments (.ts, .mp4, etc.) — stream and close when done
+        # For segments (.ts, .mp4, etc.) — stream through
         media_type = resp.headers.get("content-type", "video/mp2t")
 
         async def stream_generator():
