@@ -12,7 +12,7 @@ FROM python:3.12-alpine
 
 LABEL org.opencontainers.image.title="TV Viewer Web" \
       org.opencontainers.image.description="Lightweight IPTV streaming web interface" \
-      org.opencontainers.image.version="2.13.0" \
+      org.opencontainers.image.version="2.13.1" \
       org.opencontainers.image.source="https://github.com/tv-viewer-app/tv_viewer"
 
 WORKDIR /app

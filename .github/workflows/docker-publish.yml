@@ -1,0 +1,72 @@
+name: Docker Publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (e.g., latest, v2.13.1)'
+        required: false
+        default: 'latest'
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: tvviewerapp/tv-viewer-web
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up QEMU (multi-arch)
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Extract version from tag
+      id: meta
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build and push (multi-arch)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64,linux/arm/v7
+        push: true
+        tags: |
+          ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          ${{ env.IMAGE_NAME }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        labels: |
+          org.opencontainers.image.title=TV Viewer Web
+          org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+          org.opencontainers.image.source=https://github.com/tv-viewer-app/tv_viewer
+
+    - name: Update Docker Hub description
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ env.IMAGE_NAME }}
+        readme-filepath: ./DOCKER_README.md
+        short-description: "Lightweight IPTV web player — 16K+ channels, 25MB image, runs on any NAS"
