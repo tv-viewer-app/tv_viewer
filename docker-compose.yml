@@ -1,30 +1,39 @@
-version: "3.8"
+# TV Viewer - Docker Compose
+# Usage: docker compose up -d
+# Access: http://localhost:8765
 
 services:
-  tv-viewer-web:
-    build: .
-    image: tv-viewer-web:latest
+  tv-viewer:
+    image: asummoner/tvviewerapp:latest
     container_name: tv-viewer
     ports:
       - "8765:8765"
     volumes:
-      - ./channels.json:/app/channels.json:ro
-      - ./channels_config.json:/app/channels_config.json:ro
+      - tv-viewer-data:/data
     environment:
+      - TZ=${TZ:-UTC}
       - TV_VIEWER_WEB_PORT=8765
-      - TZ=Asia/Jerusalem
-    restart: unless-stopped
-    # NAS-friendly resource limits (runs on 512MB RAM devices)
+      - DATA_DIR=/data
+      - TELEMETRY_ENABLED=true
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     deploy:
       resources:
         limits:
           memory: 128M
-          cpus: "0.5"
-        reservations:
-          memory: 48M
-          cpus: "0.1"
+          cpus: '0.5'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/status')"]
+      interval: 60s
+      timeout: 5s
+      start_period: 15s
+      retries: 2
     logging:
       driver: json-file
       options:
         max-size: "5m"
         max-file: "3"
+
+volumes:
+  tv-viewer-data:

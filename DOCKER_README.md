@@ -24,7 +24,7 @@ TV Viewer is a self-hosted web application that aggregates free-to-air IPTV stre
 ## Quick Start
 
 ```bash
-docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp
+docker run -d --name tv-viewer -p 8765:8765 -v tv-viewer-data:/data --restart unless-stopped asummoner/tvviewerapp
 ```
 
 Then open **http://your-server-ip:8765** in any browser. That's it!
@@ -70,8 +70,12 @@ services:
     container_name: tv-viewer
     ports:
       - "8765:8765"
+    volumes:
+      - tv-viewer-data:/data
     environment:
       - TZ=Asia/Jerusalem
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     deploy:
       resources:
         limits:
@@ -83,7 +87,28 @@ services:
       interval: 60s
       timeout: 5s
       retries: 2
+
+volumes:
+  tv-viewer-data:
 ```
+
+## Data Persistence
+
+Favorites, channel cache, and health data are stored in `/data` inside the container. Mount a volume to preserve data across container upgrades:
+
+```bash
+# Named volume (recommended)
+docker run -d --name tv-viewer -p 8765:8765 -v tv-viewer-data:/data asummoner/tvviewerapp
+
+# Or bind mount to host directory
+docker run -d --name tv-viewer -p 8765:8765 -v /path/to/data:/data asummoner/tvviewerapp
+```
+
+**What's persisted in `/data`:**
+| File | Purpose |
+|------|---------|
+| `channels.json` | Channel cache (avoids re-fetching on restart) |
+| `favorites.json` | Your saved favorite channels |
 
 ## NAS Installation
 
@@ -117,6 +142,10 @@ services:
 |----------|---------|-------------|
 | `TV_VIEWER_WEB_PORT` | `8765` | Server listen port |
 | `TZ` | `UTC` | Timezone for EPG schedule |
+| `DATA_DIR` | `/data` | Persistent data directory |
+| `TELEMETRY_ENABLED` | `true` | Anonymous usage analytics (channel health) |
+| `SUPABASE_URL` | _(empty)_ | Supabase project URL for shared analytics |
+| `SUPABASE_ANON_KEY` | _(empty)_ | Supabase anon key (public, RLS-protected) |
 
 ## API Endpoints
 
@@ -133,10 +162,12 @@ services:
 
 ## Updating
 
+Your favorites and channel data persist in the `/data` volume across upgrades:
+
 ```bash
 docker pull asummoner/tvviewerapp:latest
 docker stop tv-viewer && docker rm tv-viewer
-docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp
+docker run -d --name tv-viewer -p 8765:8765 -v tv-viewer-data:/data --restart unless-stopped asummoner/tvviewerapp
 ```
 
 ## Source Code & Documentation

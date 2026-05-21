@@ -33,6 +33,10 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Persistent data directory — defaults to project root, override with DATA_DIR env var.
+# In Docker, DATA_DIR=/data (a volume) so favorites/channels survive container upgrades.
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(PROJECT_ROOT)))
+
 # ─── In-memory channel cache (avoids repeated disk reads) ────────────────────
 
 class _ChannelCache:
@@ -42,7 +46,7 @@ class _ChannelCache:
     def __init__(self):
         self._channels = None
         self._mtime = 0
-        self._path = PROJECT_ROOT / config.CHANNELS_FILE
+        self._path = DATA_DIR / "channels.json"
         self._categories = None
         self._countries = None
 
@@ -126,7 +130,7 @@ def _load_channels() -> List[Dict[str, Any]]:
 
 def _load_favorites() -> set:
     """Load favorite URLs."""
-    fav_file = PROJECT_ROOT / "favorites.json"
+    fav_file = DATA_DIR / "favorites.json"
     try:
         with open(fav_file, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -429,7 +433,7 @@ def _persist_channels():
     if not _cache.channels:
         return  # Never overwrite with empty data
     try:
-        channels_file = PROJECT_ROOT / config.CHANNELS_FILE
+        channels_file = DATA_DIR / "channels.json"
         with open(channels_file, "w", encoding="utf-8") as f:
             json.dump({"channels": _cache.channels}, f, ensure_ascii=False)
         _cache._mtime = channels_file.stat().st_mtime
@@ -493,7 +497,7 @@ async def refresh_status():
 
 def _save_favorites(urls: set):
     """Save favorites to disk."""
-    fav_file = PROJECT_ROOT / "favorites.json"
+    fav_file = DATA_DIR / "favorites.json"
     try:
         with open(fav_file, "w", encoding="utf-8") as f:
             json.dump({"urls": list(urls)}, f, ensure_ascii=False)
