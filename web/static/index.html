@@ -997,6 +997,9 @@ async function loadChannels(append = false) {
     if (currentCat) p.category = currentCat;
     if (currentCountry) p.country = currentCountry;
     if (currentView === 'favorites') p.favorites_only = true;
+    // Pass media_type filter to server so pagination works correctly
+    const typeFilter = document.getElementById('filter-type')?.value;
+    if (typeFilter) p.media_type = typeFilter;
 
     if (currentView === 'recent') {
         try {

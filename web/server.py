@@ -197,9 +197,17 @@ class _ChannelCache:
     def categories(self) -> List[Dict[str, Any]]:
         if self._categories is None:
             cats: Dict[str, int] = {}
-            # Country names that shouldn't appear as categories
+            # Country names that shouldn't appear as categories — use actual country set
             country_names = set(v.lower() for v in _COUNTRY_CODES.values())
             country_names.update(k.lower() for k in _COUNTRY_CODES.keys())
+            # Also collect actual country values from loaded channels
+            actual_countries = set()
+            for ch in self.channels:
+                c = ch.get("country")
+                if c:
+                    actual_countries.add(c.lower())
+            country_names.update(actual_countries)
+
             for ch in self.channels:
                 if ch.get("status") == "offline":
                     continue
@@ -293,6 +301,7 @@ async def index():
 async def get_channels(
     category: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
+    media_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     favorites_only: bool = Query(False),
     show_all: bool = Query(False),
@@ -310,6 +319,13 @@ async def get_channels(
         channels = [c for c in channels if (c.get("category") or "").lower() == category.lower()]
     if country:
         channels = [c for c in channels if (c.get("country") or "").lower() == country.lower()]
+    if media_type:
+        if media_type == "Radio":
+            channels = [c for c in channels if (c.get("media_type") or "") == "Radio"
+                        or "radio" in (c.get("category") or "").lower()]
+        else:
+            channels = [c for c in channels if (c.get("media_type") or "TV") == media_type
+                        and "radio" not in (c.get("category") or "").lower()]
     if search:
         q = search.lower()
         channels = [c for c in channels if q in (c.get("name") or "").lower()
@@ -334,6 +350,7 @@ async def get_channels(
             "country": ch.get("country"),
             "logo": ch.get("logo"),
             "status": ch.get("status"),
+            "media_type": ch.get("media_type"),
         })
 
     return {
