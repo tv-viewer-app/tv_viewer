@@ -107,8 +107,39 @@ def is_configured() -> bool:
     )
 
 
-async def fetch_channels(max_channels: int = 50_000) -> List[Dict[str, Any]]:
-    """Fetch all channels from Supabase.
+async def _fetch_working_hashes(session, headers, timeout) -> Optional[set]:
+    """Fetch url_hashes of working channels from channel_status table.
+
+    Returns set of hashes, or None if the table is unavailable (fall back to all).
+    """
+    hashes = set()
+    offset = 0
+    page_size = 5000  # Only fetching a single text column — large pages OK
+    status_url = f'{_SUPABASE_URL}/rest/v1/channel_status?select=url_hash&status=eq.working'
+    try:
+        while True:
+            page_url = f'{status_url}&limit={page_size}&offset={offset}'
+            async with session.get(page_url, headers=headers, timeout=timeout) as resp:
+                if resp.status != 200:
+                    logger.warning(f'channel_status fetch failed: {resp.status}')
+                    return None
+                data = await resp.json()
+                if not data:
+                    break
+                for row in data:
+                    hashes.add(row['url_hash'])
+                offset += page_size
+                if len(data) < page_size:
+                    break
+        logger.info(f'Fetched {len(hashes)} working channel hashes from channel_status')
+        return hashes if hashes else None
+    except Exception as e:
+        logger.warning(f'channel_status fetch error: {e}')
+        return None
+
+
+async def fetch_channels(max_channels: int = 50_000, working_only: bool = True) -> List[Dict[str, Any]]:
+    """Fetch channels from Supabase.
 
     Returns list of channel dicts with keys: name, urls, url, category,
     country, logo, media_type, source. Returns [] if unavailable.
@@ -116,12 +147,15 @@ async def fetch_channels(max_channels: int = 50_000) -> List[Dict[str, Any]]:
     Args:
         max_channels: Safety cap to prevent unbounded memory growth.
                       Default 50,000 (~50MB of channel dicts in memory).
+        working_only: If True (default), only returns channels whose url_hash
+                      appears in channel_status with status='working'.
+                      Reduces payload from ~21K to ~10K channels.
     """
     if not is_configured():
         return []
 
     try:
-        url = f'{_SUPABASE_URL}/rest/v1/{_TABLE}?select=*&order=name.asc'
+        url = f'{_SUPABASE_URL}/rest/v1/{_TABLE}?select=name,urls,category,country,logo,media_type,source,url_hash&order=name.asc'
         headers = _headers()
         del headers['Content-Type']  # GET doesn't need it
 
@@ -131,12 +165,17 @@ async def fetch_channels(max_channels: int = 50_000) -> List[Dict[str, Any]]:
 
         ssl_ctx = _get_ssl_context()
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(connector=connector) as session:
+            # Pre-fetch working hashes to skip failed channels (saves ~60% payload)
+            working_hashes = None
+            if working_only:
+                working_hashes = await _fetch_working_hashes(session, headers, timeout)
+
             while len(channels) < max_channels:
                 page_url = f'{url}&limit={page_size}&offset={offset}'
                 async with session.get(
-                    page_url, headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=30),
+                    page_url, headers=headers, timeout=timeout,
                 ) as resp:
                     if resp.status != 200:
                         body = await resp.text()
@@ -148,6 +187,10 @@ async def fetch_channels(max_channels: int = 50_000) -> List[Dict[str, Any]]:
                         break
 
                     for row in data:
+                        # Skip channels not in working set
+                        if working_hashes and row.get('url_hash') not in working_hashes:
+                            continue
+
                         urls = row.get('urls', [])
                         if isinstance(urls, str):
                             urls = json.loads(urls)

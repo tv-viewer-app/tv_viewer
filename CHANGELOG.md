@@ -5,6 +5,23 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.3] - 2026-05-21
+
+### Performance (Docker/NAS optimization)
+- **Only fetch working channels from Supabase** — Skips 14,500+ failed channels (59%),
+  reducing startup payload from ~21K to ~10K channels. Faster load, less RAM.
+- **GZip compression** — All API responses compressed (saves 70-80% bandwidth)
+- **Pre-sorted channel cache** — Israeli channels first, then A-Z. No per-request sort.
+- **Paginated API** — `/api/channels` returns 200 per page with `Load More` button
+- **Slim JSON responses** — Only essential fields sent (30% smaller payloads)
+- **Cached favorites** — Memory-cached with stat-based reload (no disk I/O per request)
+- **Selective Supabase columns** — `select=name,urls,...` instead of `select=*`
+
+### Fixed
+- **NoneType crash** — Channels with null country/category/name no longer cause 500 errors
+- **Source switcher** — Now reads `urls` array for multi-source channels from Supabase
+- **Sidebar categories** — Auto-retry after 10s if empty (background fetch race condition)
+
 ## [2.13.2] - 2026-05-21
 
 ### Fixed
