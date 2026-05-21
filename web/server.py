@@ -468,10 +468,15 @@ async def refresh_channels():
             try:
                 from core.repository import RepositoryHandler
                 handler = RepositoryHandler()
-                channels = loop.run_until_complete(handler.fetch_all())
+                channels = loop.run_until_complete(handler.fetch_all_repositories())
                 if channels:
                     mgr.merge_channels(channels)
-                    mgr.save_channels()
+                    # Save to DATA_DIR so Docker volume persists it
+                    channels_file = DATA_DIR / "channels.json"
+                    with open(channels_file, "w", encoding="utf-8") as f:
+                        json.dump({"channels": mgr.channels}, f, ensure_ascii=False)
+                    _cache._channels = None  # Force reload
+                    _cache._mtime = 0
                     logger.info(f"Refresh complete: {len(mgr.channels)} channels")
             finally:
                 loop.close()
@@ -638,4 +643,30 @@ if __name__ == "__main__":
 
     print(f"\n📺 TV Viewer Web v{config.APP_VERSION}")
     print(f"   Serving on http://{args.host}:{args.port}\n")
+
+    # Auto-fetch channels on first run if DATA_DIR has empty channels.json
+    channels_path = DATA_DIR / "channels.json"
+    try:
+        with open(channels_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        need_fetch = len(data.get("channels", [])) == 0
+    except Exception:
+        need_fetch = True
+
+    if need_fetch:
+        print("   ⏳ No channels found — fetching from repositories...")
+        try:
+            from core.repository import RepositoryHandler
+            import asyncio as _aio
+            handler = RepositoryHandler()
+            channels = _aio.run(handler.fetch_all_repositories())
+            if channels:
+                with open(channels_path, "w", encoding="utf-8") as f:
+                    json.dump({"channels": channels}, f, ensure_ascii=False)
+                print(f"   ✅ Loaded {len(channels)} channels\n")
+            else:
+                print("   ⚠️  No channels fetched — will retry via /api/refresh\n")
+        except Exception as e:
+            print(f"   ⚠️  Fetch failed: {e} — will retry via /api/refresh\n")
+
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
