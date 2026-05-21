@@ -21,13 +21,14 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 ## ✨ What's New in v2.13.1
 
-- **Performance: In-memory channel cache** — Channels load once from disk, served from RAM thereafter (~40% faster API responses)
-- **Docker: Alpine-based image** — ~25 MB compressed, runs on 48 MB RAM (Raspberry Pi, Synology, QNAP, Unraid)
-- **Web: Health status filter** — Hide broken channels or show only verified working streams
-- **Web: Playback health tracking** — Auto-reports channel status on play/fail, persists locally
-- **Fix: Empty channel list crash** — Cache never overwrites data with empty state during race conditions
-- **Fix: Country sidebar** — Now shows all countries (was truncated at 30)
-- **Fix: ABC News Live** — Dead Tubi URL replaced with working akamaized.net stream
+- **In-memory channel cache** — Channels loaded once from disk, served from RAM.
+- **Health status filter** — Dropdown in web UI: "Working Only" or "Hide Broken".
+- **Health reporting endpoint** — `POST /api/health/report` accepts `{url, status}`
+- **Docker: NAS-optimized** — Alpine-based image (~25 MB), runs on 48 MB RAM,
+- Docker base image: `python:3.12-slim` → `python:3.12-alpine` (smaller).
+- Docker resource limits reduced: 128 MB / 0.5 CPU (was 256 MB / 1 CPU).
+- Country sidebar shows all countries (was capped at 30).
+- `_mark_local_broken/working` update in-memory cache directly (no re-read from disk).
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
