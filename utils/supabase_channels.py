@@ -107,15 +107,16 @@ def is_configured() -> bool:
     )
 
 
-async def _fetch_working_hashes(session, headers, timeout) -> Optional[set]:
-    """Fetch url_hashes of working channels from channel_status table.
+async def _fetch_channel_statuses(session, headers, timeout) -> Optional[Dict[str, str]]:
+    """Fetch url_hash -> status mapping from channel_status table.
 
-    Returns set of hashes, or None if the table is unavailable (fall back to all).
+    Returns dict {url_hash: 'working'|'failed'}, or None if unavailable.
+    Channels NOT in this dict are 'unchecked' (never tested — show by default).
     """
-    hashes = set()
+    statuses = {}
     offset = 0
-    page_size = 5000  # Only fetching a single text column — large pages OK
-    status_url = f'{_SUPABASE_URL}/rest/v1/channel_status?select=url_hash&status=eq.working'
+    page_size = 5000
+    status_url = f'{_SUPABASE_URL}/rest/v1/channel_status?select=url_hash,status'
     try:
         while True:
             page_url = f'{status_url}&limit={page_size}&offset={offset}'
@@ -127,29 +128,32 @@ async def _fetch_working_hashes(session, headers, timeout) -> Optional[set]:
                 if not data:
                     break
                 for row in data:
-                    hashes.add(row['url_hash'])
+                    statuses[row['url_hash']] = row.get('status', 'unknown')
                 offset += page_size
                 if len(data) < page_size:
                     break
-        logger.info(f'Fetched {len(hashes)} working channel hashes from channel_status')
-        return hashes if hashes else None
+        logger.info(f'Fetched {len(statuses)} channel statuses ({sum(1 for v in statuses.values() if v == "working")} working)')
+        return statuses if statuses else None
     except Exception as e:
         logger.warning(f'channel_status fetch error: {e}')
         return None
 
 
-async def fetch_channels(max_channels: int = 50_000, working_only: bool = True) -> List[Dict[str, Any]]:
+async def fetch_channels(max_channels: int = 50_000, working_only: bool = False) -> List[Dict[str, Any]]:
     """Fetch channels from Supabase.
 
     Returns list of channel dicts with keys: name, urls, url, category,
-    country, logo, media_type, source. Returns [] if unavailable.
+    country, logo, media_type, source, status. Returns [] if unavailable.
+
+    All channels are fetched. The `status` field is set per-channel based on
+    channel_status table ('working' or 'unchecked'). Clients show all channels
+    but can hide non-working ones by default. When a channel plays successfully,
+    the client reports it as healthy — improving data for everyone.
 
     Args:
         max_channels: Safety cap to prevent unbounded memory growth.
-                      Default 50,000 (~50MB of channel dicts in memory).
-        working_only: If True (default), only returns channels whose url_hash
-                      appears in channel_status with status='working'.
-                      Reduces payload from ~21K to ~10K channels.
+        working_only: If True, only returns channels with status='working'.
+                      Default False — return all channels with status tag.
     """
     if not is_configured():
         return []
@@ -167,10 +171,8 @@ async def fetch_channels(max_channels: int = 50_000, working_only: bool = True) 
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(connector=connector) as session:
-            # Pre-fetch working hashes to skip failed channels (saves ~60% payload)
-            working_hashes = None
-            if working_only:
-                working_hashes = await _fetch_working_hashes(session, headers, timeout)
+            # Pre-fetch channel statuses to tag each channel
+            status_map = await _fetch_channel_statuses(session, headers, timeout)
 
             while len(channels) < max_channels:
                 page_url = f'{url}&limit={page_size}&offset={offset}'
@@ -187,8 +189,21 @@ async def fetch_channels(max_channels: int = 50_000, working_only: bool = True) 
                         break
 
                     for row in data:
-                        # Skip channels not in working set
-                        if working_hashes and row.get('url_hash') not in working_hashes:
+                        # Determine status: working, offline (failed), or unchecked (never tested)
+                        url_hash = row.get('url_hash', '')
+                        if status_map is not None:
+                            raw_status = status_map.get(url_hash)
+                            if raw_status == 'working':
+                                status = 'working'
+                            elif raw_status == 'failed':
+                                status = 'offline'
+                            else:
+                                status = 'unchecked'  # Not in status table = never tested
+                        else:
+                            status = 'unchecked'
+
+                        # Skip non-working if explicitly requested
+                        if working_only and status != 'working':
                             continue
 
                         urls = row.get('urls', [])
@@ -217,6 +232,7 @@ async def fetch_channels(max_channels: int = 50_000, working_only: bool = True) 
                             'logo': logo,
                             'media_type': row.get('media_type'),
                             'source': row.get('source', 'supabase'),
+                            'status': status,
                             'working_url_index': 0,
                         })
 

@@ -241,6 +241,7 @@ async def get_channels(
     country: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     favorites_only: bool = Query(False),
+    show_all: bool = Query(False),
     limit: int = Query(200, ge=1, le=5000),
     offset: int = Query(0, ge=0),
 ):
@@ -261,8 +262,9 @@ async def get_channels(
                     or q in (c.get("category") or "").lower()
                     or q in (c.get("country") or "").lower()]
 
-    # Only return working channels by default, plus unchecked
-    channels = [c for c in channels if c.get("status") != "offline"]
+    # Hide offline (failed) channels by default; show_all=true includes them
+    if not show_all:
+        channels = [c for c in channels if c.get("status") != "offline"]
 
     total = len(channels)
     channels = channels[offset:offset + limit]
