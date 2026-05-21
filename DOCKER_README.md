@@ -4,7 +4,22 @@
 [![Docker Image Size](https://img.shields.io/docker/image-size/asummoner/tvviewerapp/latest)](https://hub.docker.com/r/asummoner/tvviewerapp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/asummoner/tvviewerapp)](https://hub.docker.com/r/asummoner/tvviewerapp)
 
-**Lightweight IPTV streaming web interface with 16,000+ channels. Perfect for NAS devices.**
+**Lightweight IPTV streaming web interface with 16,000+ channels. Perfect for NAS devices, home servers, and self-hosted media setups.**
+
+🌐 **[Project Homepage](https://tv-viewer-app.github.io/tv_viewer/)** | 📦 **[Source Code](https://github.com/tv-viewer-app/tv_viewer)** | 📋 **[Changelog](https://github.com/tv-viewer-app/tv_viewer/blob/master/CHANGELOG.md)**
+
+---
+
+## What is TV Viewer?
+
+TV Viewer is a self-hosted web application that aggregates free-to-air IPTV streams from around the world into a beautiful, modern interface. Deploy it on your NAS or any Docker host and watch live TV from any browser — no app installs, no subscriptions, no VLC required.
+
+**Why use TV Viewer?**
+- **Zero configuration** — launches with 16,000+ channels pre-loaded
+- **Runs anywhere** — Synology, QNAP, Unraid, TrueNAS, Raspberry Pi, any Docker host
+- **Tiny footprint** — under 50 MB RAM, 0.1 CPU core minimum
+- **Browser-based** — works on phones, tablets, smart TVs, laptops
+- **Privacy-first** — no accounts, no tracking, no cloud dependency
 
 ## Quick Start
 
@@ -12,19 +27,21 @@
 docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp
 ```
 
-Open **http://your-nas-ip:8765** in any browser.
+Then open **http://your-server-ip:8765** in any browser. That's it!
 
 ## Features
 
-- 🌍 16,000+ live TV channels from 55+ countries
-- 🎬 In-browser HLS playback (no VLC needed)
-- 🔀 Automatic source switching on stream failure
-- 📡 CORS proxy — plays streams that normally block browsers
-- 🗺️ Interactive country map for channel discovery
-- ❤️ Favorites with server-side persistence
-- 📊 Health tracking — filters broken channels automatically
-- 📺 EPG program guide (Now/Next)
-- 🔒 Parental controls with PIN lock
+- 🌍 **16,000+ live TV channels** from 55+ countries
+- 🎬 **In-browser HLS playback** — no VLC or external player needed
+- 🔀 **Multi-source failover** — automatically switches to backup streams
+- 📡 **Built-in CORS proxy** — plays streams that normally block browsers
+- 🗺️ **Interactive world map** — browse channels by country
+- 🔤 **A-Z sorted channels** — easy to find what you want
+- ❤️ **Favorites** with server-side persistence
+- 📊 **Health tracking** — broken channels filtered automatically
+- 📺 **EPG program guide** (Now/Next)
+- 🔒 **Parental controls** with PIN lock
+- 🎨 **Dark/Light themes** — modern responsive UI
 
 ## Resource Requirements
 
@@ -123,9 +140,14 @@ docker stop tv-viewer && docker rm tv-viewer
 docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp
 ```
 
-## Source Code
+## Source Code & Documentation
 
-[GitHub: tv-viewer-app/tv_viewer](https://github.com/tv-viewer-app/tv_viewer)
+| Resource | Link |
+|----------|------|
+| 🌐 Homepage | [tv-viewer-app.github.io/tv_viewer](https://tv-viewer-app.github.io/tv_viewer/) |
+| 📦 GitHub | [tv-viewer-app/tv_viewer](https://github.com/tv-viewer-app/tv_viewer) |
+| 📋 Changelog | [CHANGELOG.md](https://github.com/tv-viewer-app/tv_viewer/blob/master/CHANGELOG.md) |
+| 🐛 Issues | [Report a bug](https://github.com/tv-viewer-app/tv_viewer/issues) |
 
 ## License
 

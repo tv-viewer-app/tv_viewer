@@ -69,4 +69,4 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         repository: ${{ env.IMAGE_NAME }}
         readme-filepath: ./DOCKER_README.md
-        short-description: "Lightweight IPTV web player — 16K+ channels, 25MB image, runs on any NAS"
+        short-description: "Lightweight IPTV streaming web app | 16,000+ channels | NAS-ready | Browser-based"
