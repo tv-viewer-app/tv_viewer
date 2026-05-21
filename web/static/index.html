@@ -201,7 +201,7 @@
                 <select id="filter-category"><option value="">All Categories</option></select>
                 <select id="filter-country"><option value="">All Countries</option></select>
                 <select id="filter-type"><option value="">All Types</option><option value="TV">📺 TV</option><option value="Radio">📻 Radio</option></select>
-                <select id="filter-status"><option value="">All Status</option><option value="working">✅ Working Only</option><option value="hide-broken">🚫 Hide Broken</option></select>
+                <select id="filter-status"><option value="">All Channels</option><option value="hide-broken">Hide Broken</option></select>
             </div>
             <div class="grid" id="grid"></div>
         </div>
@@ -383,11 +383,12 @@ function renderChannels(chs) {
     }
     // Apply status filter
     const statusFilter = document.getElementById('filter-status').value;
-    if (statusFilter === 'working') {
-        displayChs = displayChs.filter(ch => channelHealth[ch.url] === 'working' || ch.status === 'working');
-    } else if (statusFilter === 'hide-broken') {
+    if (statusFilter === 'hide-broken') {
         displayChs = displayChs.filter(ch => channelHealth[ch.url] !== 'broken' && ch.status !== 'offline');
     }
+
+    // Sort alphabetically by name
+    displayChs.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, {sensitivity: 'base'}));
 
     grid.innerHTML = displayChs.map((ch, i) => {
         const logo = ch.logo ? `<img class="card-logo" src="${esc(ch.logo)}" onerror="this.outerHTML=mono('${esc(ch.name)}')">` : mono(ch.name);

@@ -22,11 +22,13 @@ COPY --from=builder /install /usr/local
 
 # Copy minimal runtime files
 COPY config.py .
-COPY channels.json .
 COPY channels_config.json .
 COPY web/ web/
 COPY utils/logger.py utils/logger.py
 COPY utils/__init__.py utils/__init__.py
+
+# channels.json is runtime-generated; create empty if not present
+RUN echo '{"channels":[]}' > channels.json
 
 # Create required dirs with non-root user
 RUN mkdir -p logs && \
