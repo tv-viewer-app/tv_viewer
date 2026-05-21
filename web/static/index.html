@@ -314,7 +314,7 @@ const CAT_ICONS = {'News':'📰','Sports':'⚽','Entertainment':'🎬','Music':'
 
 // ─── API ────────────────────────────────────────────────────────────────────
 const api = {
-    async channels(p={}) { const u=new URL('/api/channels',location.origin); Object.entries(p).forEach(([k,v])=>{if(v)u.searchParams.set(k,v)}); return (await(await fetch(u)).json()).channels||[]; },
+    async channels(p={}) { const u=new URL('/api/channels',location.origin); Object.entries(p).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')u.searchParams.set(k,v)}); return await(await fetch(u)).json(); },
     async categories() { return (await(await fetch('/api/categories')).json()).categories||[]; },
     async countries() { return (await(await fetch('/api/countries')).json()).countries||[]; },
     async status() { return await(await fetch('/api/status')).json(); },
@@ -979,7 +979,9 @@ function closeSettings() {
 }
 
 // ─── Data Loading ───────────────────────────────────────────────────────────
-async function loadChannels() {
+let currentOffset = 0, hasMore = false, totalChannels = 0;
+
+async function loadChannels(append = false) {
     const p = {};
     if (currentCat) p.category = currentCat;
     if (currentCountry) p.country = currentCountry;
@@ -991,10 +993,42 @@ async function loadChannels() {
         try {
             filtered = JSON.parse(localStorage.getItem('tv_recent') || '[]');
         } catch(e) { filtered = []; }
+        hasMore = false;
     } else {
-        filtered = await api.channels(p);
+        if (!append) currentOffset = 0;
+        p.limit = 200;
+        p.offset = currentOffset;
+        const resp = await api.channels(p);
+        if (append) {
+            filtered = filtered.concat(resp.channels || []);
+        } else {
+            filtered = resp.channels || [];
+        }
+        hasMore = resp.has_more || false;
+        totalChannels = resp.total || 0;
     }
     renderChannels(filtered);
+    renderLoadMore();
+}
+
+function renderLoadMore() {
+    let btn = document.getElementById('load-more-btn');
+    if (!btn) {
+        btn = document.createElement('div');
+        btn.id = 'load-more-btn';
+        btn.style.cssText = 'text-align:center;padding:20px;';
+        document.getElementById('channel-view').appendChild(btn);
+    }
+    if (hasMore) {
+        btn.innerHTML = `<button onclick="loadMore()" style="padding:10px 32px;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;">Load More (${filtered.length} of ${totalChannels})</button>`;
+    } else {
+        btn.innerHTML = '';
+    }
+}
+
+async function loadMore() {
+    currentOffset += 200;
+    await loadChannels(true);
 }
 
 async function init() {
@@ -1007,6 +1041,20 @@ async function init() {
     populateFilters(cats, countries);
     await loadChannels();
     document.getElementById('badge').textContent = `${status.working_channels||status.total_channels} ch • v${status.version}`;
+
+    // If no categories yet (channels loading in background), retry in 10s
+    if (cats.length === 0) {
+        setTimeout(async () => {
+            const [c2, co2, st2] = await Promise.all([api.categories(), api.countries(), api.status()]);
+            if (c2.length > 0) {
+                allCategories = c2; allCountries = co2;
+                renderSidebar(c2, co2);
+                populateFilters(c2, co2);
+                await loadChannels();
+                document.getElementById('badge').textContent = `${st2.working_channels||st2.total_channels} ch • v${st2.version}`;
+            }
+        }, 10000);
+    }
 }
 
 function populateFilters(cats, countries) {

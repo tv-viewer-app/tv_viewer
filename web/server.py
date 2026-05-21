@@ -152,29 +152,44 @@ async def get_channels(
     country: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     favorites_only: bool = Query(False),
+    limit: int = Query(200, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
 ):
-    """Get channels with optional filtering."""
+    """Get channels with optional filtering. Local (IL) channels shown first."""
     channels = _load_channels()
     favorites = _load_favorites() if favorites_only else set()
 
     if favorites_only:
         channels = [c for c in channels if c.get("url") in favorites]
     if category:
-        channels = [c for c in channels if c.get("category", "").lower() == category.lower()]
+        channels = [c for c in channels if (c.get("category") or "").lower() == category.lower()]
     if country:
-        channels = [c for c in channels if c.get("country", "").lower() == country.lower()]
+        channels = [c for c in channels if (c.get("country") or "").lower() == country.lower()]
     if search:
         q = search.lower()
-        channels = [c for c in channels if q in c.get("name", "").lower()
-                    or q in c.get("category", "").lower()
-                    or q in c.get("country", "").lower()]
+        channels = [c for c in channels if q in (c.get("name") or "").lower()
+                    or q in (c.get("category") or "").lower()
+                    or q in (c.get("country") or "").lower()]
 
     # Only return working channels by default, plus unchecked
     channels = [c for c in channels if c.get("status") != "offline"]
 
+    # Sort: Israeli channels first, then alphabetical
+    def _sort_key(ch):
+        c = (ch.get("country") or "").lower()
+        is_local = 1 if c not in ("israel", "il") else 0
+        return (is_local, (ch.get("name") or "").lower())
+    channels.sort(key=_sort_key)
+
+    total = len(channels)
+    channels = channels[offset:offset + limit]
+
     return {
         "channels": channels,
-        "total": len(channels),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + limit < total,
     }
 
 
@@ -306,9 +321,21 @@ async def get_sources(channel_name: str):
     """Get all alternative stream URLs for a channel by name."""
     channels = _load_channels()
     sources = []
+    seen_urls = set()
     for ch in channels:
-        if ch.get("name", "").lower() == channel_name.lower() and ch.get("status") != "offline":
-            sources.append({"url": ch["url"], "status": ch.get("status", "unchecked")})
+        if (ch.get("name") or "").lower() == channel_name.lower() and ch.get("status") != "offline":
+            # Check urls array (multi-source channels from Supabase)
+            urls = ch.get("urls") or []
+            if urls:
+                for u in urls:
+                    if u and u not in seen_urls:
+                        seen_urls.add(u)
+                        sources.append({"url": u, "status": ch.get("status", "unchecked")})
+            # Also add the primary url if not already included
+            primary = ch.get("url")
+            if primary and primary not in seen_urls:
+                seen_urls.add(primary)
+                sources.append({"url": primary, "status": ch.get("status", "unchecked")})
     return {"channel": channel_name, "sources": sources}
 
 
