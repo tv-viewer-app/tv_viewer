@@ -166,6 +166,10 @@ docker run -d --name tv-viewer -p 8765:8765 -v /path/to/data:/data asummoner/tvv
 Your favorites and channel data persist in the `/data` volume across upgrades:
 
 ```bash
+# Docker Compose (recommended — keeps /data volume intact)
+docker compose pull && docker compose up -d
+
+# Manual Docker
 docker pull asummoner/tvviewerapp:latest
 docker stop tv-viewer && docker rm tv-viewer
 docker run -d --name tv-viewer -p 8765:8765 -v tv-viewer-data:/data --restart unless-stopped asummoner/tvviewerapp

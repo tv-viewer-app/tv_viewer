@@ -39,6 +39,51 @@ logger = get_logger(__name__)
 # In Docker, DATA_DIR=/data (a volume) so favorites/channels survive container upgrades.
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(PROJECT_ROOT)))
 
+# ─── Country code normalization (merge "AE" with "United Arab Emirates" etc.) ─
+
+_COUNTRY_CODES = {
+    "AD": "Andorra", "AE": "United Arab Emirates", "AF": "Afghanistan",
+    "AL": "Albania", "AM": "Armenia", "AO": "Angola", "AR": "Argentina",
+    "AT": "Austria", "AU": "Australia", "AZ": "Azerbaijan", "BA": "Bosnia",
+    "BD": "Bangladesh", "BE": "Belgium", "BG": "Bulgaria", "BH": "Bahrain",
+    "BO": "Bolivia", "BR": "Brazil", "BY": "Belarus", "CA": "Canada",
+    "CH": "Switzerland", "CL": "Chile", "CN": "China", "CO": "Colombia",
+    "CR": "Costa Rica", "CU": "Cuba", "CY": "Cyprus", "CZ": "Czech Republic",
+    "DE": "Germany", "DK": "Denmark", "DO": "Dominican Republic",
+    "DZ": "Algeria", "EC": "Ecuador", "EE": "Estonia", "EG": "Egypt",
+    "ES": "Spain", "FI": "Finland", "FR": "France", "GB": "United Kingdom",
+    "GE": "Georgia", "GH": "Ghana", "GR": "Greece", "GT": "Guatemala",
+    "HK": "Hong Kong", "HN": "Honduras", "HR": "Croatia", "HU": "Hungary",
+    "ID": "Indonesia", "IE": "Ireland", "IL": "Israel", "IN": "India",
+    "IQ": "Iraq", "IR": "Iran", "IS": "Iceland", "IT": "Italy",
+    "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya",
+    "KR": "South Korea", "KW": "Kuwait", "KZ": "Kazakhstan", "LB": "Lebanon",
+    "LT": "Lithuania", "LU": "Luxembourg", "LV": "Latvia", "LY": "Libya",
+    "MA": "Morocco", "MD": "Moldova", "ME": "Montenegro", "MK": "North Macedonia",
+    "MM": "Myanmar", "MN": "Mongolia", "MX": "Mexico", "MY": "Malaysia",
+    "NG": "Nigeria", "NL": "Netherlands", "NO": "Norway", "NZ": "New Zealand",
+    "OM": "Oman", "PA": "Panama", "PE": "Peru", "PH": "Philippines",
+    "PK": "Pakistan", "PL": "Poland", "PR": "Puerto Rico", "PS": "Palestine",
+    "PT": "Portugal", "PY": "Paraguay", "QA": "Qatar", "RO": "Romania",
+    "RS": "Serbia", "RU": "Russia", "SA": "Saudi Arabia", "SD": "Sudan",
+    "SE": "Sweden", "SG": "Singapore", "SI": "Slovenia", "SK": "Slovakia",
+    "SN": "Senegal", "SO": "Somalia", "SY": "Syria", "TH": "Thailand",
+    "TN": "Tunisia", "TR": "Turkey", "TT": "Trinidad", "TW": "Taiwan",
+    "UA": "Ukraine", "UK": "United Kingdom", "US": "USA", "UY": "Uruguay",
+    "UZ": "Uzbekistan", "VE": "Venezuela", "VN": "Vietnam", "ZA": "South Africa",
+}
+
+
+def _normalize_country(raw: str) -> str:
+    """Normalize country codes (2-letter) to full names, merge duplicates."""
+    if not raw or raw == "Unknown":
+        return "Unknown"
+    upper = raw.strip().upper()
+    if upper in _COUNTRY_CODES:
+        return _COUNTRY_CODES[upper]
+    return raw.strip()
+
+
 # ─── In-memory channel cache (avoids repeated disk reads) ────────────────────
 
 class _ChannelCache:
@@ -68,10 +113,13 @@ class _ChannelCache:
                 with open(self._path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self._channels = data.get("channels", [])
+                # Normalize country codes to full names on load
+                for ch in self._channels:
+                    ch["country"] = _normalize_country(ch.get("country") or "Unknown")
                 # Pre-sort once on load: Israeli first, then alphabetical
                 self._sorted = sorted(self._channels,
                     key=lambda ch: (
-                        0 if (ch.get("country") or "").lower() in ("israel", "il") else 1,
+                        0 if (ch.get("country") or "").lower() == "israel" else 1,
                         (ch.get("name") or "").lower()
                     ))
                 self._mtime = mt
@@ -95,10 +143,16 @@ class _ChannelCache:
     def categories(self) -> List[Dict[str, Any]]:
         if self._categories is None:
             cats: Dict[str, int] = {}
+            # Country names that shouldn't appear as categories
+            country_names = set(v.lower() for v in _COUNTRY_CODES.values())
+            country_names.update(k.lower() for k in _COUNTRY_CODES.keys())
             for ch in self.channels:
                 if ch.get("status") == "offline":
                     continue
                 cat = ch.get("category") or "General"
+                # Skip dirty data: country names mistakenly in category field
+                if cat.lower() in country_names or (len(cat) == 2 and cat.upper() == cat):
+                    cat = "General"
                 cats[cat] = cats.get(cat, 0) + 1
             self._categories = [{"name": k, "count": v} for k, v in sorted(cats.items(), key=lambda x: -x[1])]
         return self._categories
@@ -110,7 +164,7 @@ class _ChannelCache:
             for ch in self.channels:
                 if ch.get("status") == "offline":
                     continue
-                country = ch.get("country") or "Unknown"
+                country = _normalize_country(ch.get("country") or "Unknown")
                 ctrs[country] = ctrs.get(country, 0) + 1
             self._countries = [{"name": k, "count": v} for k, v in sorted(ctrs.items(), key=lambda x: -x[1])]
         return self._countries
