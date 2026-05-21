@@ -19,15 +19,16 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.13.2
+## ✨ What's New in v2.13.3
 
-- **Docker crash on startup** — Server was blocked fetching 34 M3U repositories
-- **Healthcheck reliability** — Changed from `localhost` to `127.0.0.1` (Alpine DNS),
-- **Supabase fast-start** — On first boot, tries Supabase channel pull first (~5s)
-- **Non-blocking startup** — Server responds to requests immediately; channels
-- **Channel cleanup** — Removed 1,595 non-working PlutoTV channels, fixed 1,626
-- **Status filter** — Simplified to "All Channels" / "Hide Broken" (removed "Working Only").
-- **Alphabetical sort** — Channel list sorted A-Z by default.
+- **Only fetch working channels from Supabase** — Skips 14,500+ failed channels (59%),
+- **GZip compression** — All API responses compressed (saves 70-80% bandwidth)
+- **Pre-sorted channel cache** — Israeli channels first, then A-Z. No per-request sort.
+- **Paginated API** — `/api/channels` returns 200 per page with `Load More` button
+- **Slim JSON responses** — Only essential fields sent (30% smaller payloads)
+- **Cached favorites** — Memory-cached with stat-based reload (no disk I/O per request)
+- **Selective Supabase columns** — `select=name,urls,...` instead of `select=*`
+- **NoneType crash** — Channels with null country/category/name no longer cause 500 errors
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
