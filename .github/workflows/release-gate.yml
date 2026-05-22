@@ -317,6 +317,7 @@ jobs:
             echo "- **Windows**: \`TV_Viewer-windows.zip\` (extract and run \`TV_Viewer.exe\`)"
             echo "- **Android**: \`TV_Viewer_v${VERSION}_Android.apk\`"
             echo "- **Linux**: \`TV_Viewer_v${VERSION}_linux_x86_64\`"
+            echo "- **Docker**: \`docker pull asummoner/tvviewerapp:${VERSION}\` — [Docker Hub](https://hub.docker.com/r/asummoner/tvviewerapp)"
           } > release_notes.md
           cat release_notes.md
 
