@@ -19,9 +19,9 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.14.1
+## ✨ What's New in v2.14.2
 
-- **CI: add httpx to requirements** — FastAPI TestClient requires httpx; was missing
+- **CI: web tests no longer require Supabase** — Tests validate API structure/format
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
