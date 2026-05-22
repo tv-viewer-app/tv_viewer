@@ -490,11 +490,19 @@ async def get_status():
     """Server status and version info."""
     channels = _load_channels()
     working = sum(1 for c in channels if c.get("status") == "working")
+    countries = set(c.get("country", "Unknown") for c in channels)
+    try:
+        from utils.supabase_channels import is_configured
+        cloud_db = "connected" if is_configured() else "not configured"
+    except Exception:
+        cloud_db = "unavailable"
     return {
         "version": config.APP_VERSION,
         "app_name": config.APP_NAME,
         "total_channels": len(channels),
         "working_channels": working,
+        "countries": len(countries),
+        "cloud_db": cloud_db,
         "status": "running",
         "refresh_in_progress": _refresh_in_progress,
     }
@@ -1043,7 +1051,7 @@ if __name__ == "__main__":
     print(f"\n📺 TV Viewer Web v{config.APP_VERSION}")
     print(f"   Serving on http://{args.host}:{args.port}\n")
 
-    # Auto-fetch channels on startup if Supabase is configured or channels are empty/stale
+    # Auto-fetch channels on startup if cloud DB is configured or channels are empty/stale
     channels_path = DATA_DIR / "channels.json"
     try:
         with open(channels_path, "r", encoding="utf-8") as f:
@@ -1052,15 +1060,16 @@ if __name__ == "__main__":
     except Exception:
         existing_count = 0
 
-    # Always fetch from Supabase if configured (fast, ~5s, gets full 15k+ DB)
+    # Always fetch from cloud DB if configured (fast, ~5s, gets full 15k+ channel database)
     # Also fetch if we have no channels or very few (M3U-only = ~650)
     try:
         from utils.supabase_channels import is_configured as _sb_configured
-        supabase_available = _sb_configured()
+        cloud_db_available = _sb_configured()
     except Exception:
-        supabase_available = False
+        cloud_db_available = False
 
-    need_fetch = existing_count == 0 or (supabase_available and existing_count < 5000)
+    need_fetch = existing_count == 0 or (cloud_db_available and existing_count < 5000)
+    print(f"   📊 Channel cache: {existing_count} channels | Cloud DB: {'connected' if cloud_db_available else 'not configured'} | Fetch needed: {need_fetch}")
 
     if need_fetch:
         # Start fetch in background thread so server starts immediately
@@ -1071,11 +1080,11 @@ if __name__ == "__main__":
             print("   ⏳ Fetching channels in background...")
 
             try:
-                # Strategy 1: Try Supabase first (fast, ~5s)
+                # Strategy 1: Try cloud channels database first (fast, ~5s)
                 try:
                     from utils.supabase_channels import fetch_channels, is_configured
                     if is_configured():
-                        print("   📡 Trying Supabase channel download...")
+                        print("   📡 Connecting to cloud channels database...")
                         import time as _t
                         _t0 = _t.time()
                         channels = _aio.run(fetch_channels())
@@ -1083,15 +1092,15 @@ if __name__ == "__main__":
                         if channels:
                             with open(channels_path, "w", encoding="utf-8") as f:
                                 json.dump({"channels": channels}, f, ensure_ascii=False)
-                            print(f"   ✅ Loaded {len(channels)} channels from Supabase in {_elapsed:.1f}s")
+                            print(f"   ✅ Loaded {len(channels)} channels from cloud DB in {_elapsed:.1f}s")
                             _cache.invalidate()
                             return
                         else:
-                            print(f"   ⚠️  Supabase returned 0 channels ({_elapsed:.1f}s)")
+                            print(f"   ⚠️  Cloud DB returned 0 channels ({_elapsed:.1f}s)")
                     else:
-                        print("   ℹ️  Supabase not configured (SUPABASE_URL/KEY missing)")
+                        print("   ℹ️  Cloud channels DB not configured (set SUPABASE_URL/KEY env vars)")
                 except Exception as e:
-                    print(f"   ⚠️  Supabase failed: {e}")
+                    print(f"   ⚠️  Cloud DB fetch failed: {e}")
 
                 # Strategy 2: Fall back to M3U repositories (slow, ~60-120s)
                 try:
