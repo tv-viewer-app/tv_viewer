@@ -379,9 +379,8 @@ def _validate_proxy_url(url: str) -> None:
     if parsed.hostname and _is_private_ip(parsed.hostname):
         raise HTTPException(403, "Access to internal network addresses is forbidden")
 
-    # Block non-standard ports (allow common streaming ports)
-    if parsed.port and parsed.port not in (80, 443, 8080, 8443, 1935, 554):
-        raise HTTPException(403, "Non-standard port not allowed for proxy")
+    # Allow any port — SSRF is prevented by private IP blocking above.
+    # Streaming servers commonly use non-standard ports (9443, 5000+, etc.)
 
 # Serve static files
 STATIC_DIR = Path(__file__).parent / "static"
@@ -530,10 +529,16 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     # SSRF protection
     _validate_proxy_url(url)
 
+    # Extract origin from URL for CDN compatibility
+    from urllib.parse import urlparse as _parse_url
+    _parsed = _parse_url(url)
+    _origin = f"{_parsed.scheme}://{_parsed.netloc}"
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         "Accept": "*/*",
-        "Referer": url,
+        "Referer": _origin + "/",
+        "Origin": _origin,
     }
     session = None
     try:
