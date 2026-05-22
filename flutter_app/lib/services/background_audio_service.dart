@@ -45,7 +45,6 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
     ));
 
     // Mark as playing
-    _isPlaying = true;
     _updatePlaybackState(playing: true);
     logger.info('Background audio attached: $channelName');
   }
@@ -53,7 +52,6 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
   /// Detach the controller (when player screen is disposed).
   void detachController() {
     _videoController = null;
-    _isPlaying = false;
     _updatePlaybackState(playing: false, state: AudioProcessingState.idle);
     mediaItem.add(const MediaItem(id: '', title: ''));
     logger.info('Background audio detached');
@@ -121,16 +119,13 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
 Future<BackgroundAudioHandler> initAudioService() async {
   final handler = await AudioService.init(
     builder: () => BackgroundAudioHandler(),
-    config: const AudioServiceConfig(
+    config: AudioServiceConfig(
       androidNotificationChannelId: 'com.tvviewer.app.audio',
       androidNotificationChannelName: 'TV Viewer Playback',
       androidNotificationChannelDescription: 'Shows when TV/Radio is playing',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: false,
       androidNotificationIcon: 'drawable/ic_notification',
-      // Keep notification while paused so user can resume
-      fastForwardInterval: Duration.zero,
-      rewindInterval: Duration.zero,
     ),
   );
   logger.info('Audio service initialized');

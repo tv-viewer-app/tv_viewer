@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'screens/home_screen.dart';
 import 'providers/channel_provider.dart';
 import 'utils/logger_service.dart';
-import 'utils/error_handler.dart';
 import 'di/service_locator.dart';
 import 'services/analytics_service.dart';
 import 'services/background_audio_service.dart';
