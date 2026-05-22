@@ -1121,16 +1121,23 @@ async function loadMore() {
 async function init() {
     // Load favorites from server
     try { const favUrls = await api.getFavorites(); favorites = new Set(favUrls); } catch(e) {}
-    const [cats, countries, status] = await Promise.all([api.categories(), api.countries(), api.status()]);
+
+    let cats = [], countries = [], status = {};
+    try {
+        [cats, countries, status] = await Promise.all([api.categories(), api.countries(), api.status()]);
+    } catch(e) {
+        console.warn('init: API calls failed, will retry', e);
+    }
     allCategories = cats;
     allCountries = countries;
     renderSidebar(cats, countries);
     populateFilters(cats, countries);
-    await loadChannels();
-    document.getElementById('badge').textContent = `${status.working_channels||status.total_channels} ch • v${status.version}`;
 
-    // If no channels yet (background startup fetch in progress), poll until ready
-    if (cats.length === 0 || (status.total_channels || 0) === 0) {
+    try { await loadChannels(); } catch(e) { console.warn('init: loadChannels failed', e); }
+    document.getElementById('badge').textContent = `${status.working_channels||status.total_channels||0} ch • v${status.version||''}`;
+
+    // Always poll if we have 0 channels displayed (handles startup fetch, slow loading, errors)
+    if (totalChannels === 0 || cats.length === 0) {
         let retries = 0;
         const maxRetries = 30; // 5 minutes max (10s intervals)
         const poll = setInterval(async () => {
@@ -1146,8 +1153,11 @@ async function init() {
                     document.getElementById('badge').textContent = `${st2.working_channels||st2.total_channels} ch • v${st2.version}`;
                     document.getElementById('loading').style.display = 'none';
                 }
-            } catch(e) {}
-            if (retries >= maxRetries) clearInterval(poll);
+            } catch(e) { console.warn('poll: retry failed', e); }
+            if (retries >= maxRetries) {
+                clearInterval(poll);
+                document.getElementById('loading').innerHTML = '<span style="color:var(--text-sec)">Failed to load channels. <a href="#" onclick="location.reload()" style="color:var(--accent)">Reload</a></span>';
+            }
         }, 10000);
     }
 }

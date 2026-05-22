@@ -1060,13 +1060,21 @@ if __name__ == "__main__":
                 try:
                     from utils.supabase_channels import fetch_channels, is_configured
                     if is_configured():
-                        print("   📡 Trying Supabase (fast)...")
+                        print("   📡 Trying Supabase channel download...")
+                        import time as _t
+                        _t0 = _t.time()
                         channels = _aio.run(fetch_channels())
+                        _elapsed = _t.time() - _t0
                         if channels:
                             with open(channels_path, "w", encoding="utf-8") as f:
                                 json.dump({"channels": channels}, f, ensure_ascii=False)
-                            print(f"   ✅ Loaded {len(channels)} channels from Supabase\n")
+                            print(f"   ✅ Loaded {len(channels)} channels from Supabase in {_elapsed:.1f}s")
+                            _cache.invalidate()
                             return
+                        else:
+                            print(f"   ⚠️  Supabase returned 0 channels ({_elapsed:.1f}s)")
+                    else:
+                        print("   ℹ️  Supabase not configured (SUPABASE_URL/KEY missing)")
                 except Exception as e:
                     print(f"   ⚠️  Supabase failed: {e}")
 
@@ -1079,11 +1087,12 @@ if __name__ == "__main__":
                     if channels:
                         with open(channels_path, "w", encoding="utf-8") as f:
                             json.dump({"channels": channels}, f, ensure_ascii=False)
-                        print(f"   ✅ Loaded {len(channels)} channels from repositories\n")
+                        print(f"   ✅ Loaded {len(channels)} channels from repositories")
+                        _cache.invalidate()
                     else:
-                        print("   ⚠️  No channels fetched — use /api/refresh later\n")
+                        print("   ⚠️  No channels fetched — use /api/refresh later")
                 except Exception as e:
-                    print(f"   ⚠️  Repository fetch failed: {e}\n")
+                    print(f"   ⚠️  Repository fetch failed: {e}")
             finally:
                 _refresh_in_progress = False
 
