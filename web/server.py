@@ -1051,25 +1051,47 @@ if __name__ == "__main__":
     print(f"\n📺 TV Viewer Web v{config.APP_VERSION}")
     print(f"   Serving on http://{args.host}:{args.port}\n")
 
-    # Auto-fetch channels on startup if cloud DB is configured or channels are empty/stale
+    # Auto-detect and update channels on startup
+    # Logic: always refresh from cloud DB if available and data is stale/incomplete
     channels_path = DATA_DIR / "channels.json"
     try:
         with open(channels_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         existing_count = len(data.get("channels", []))
+        # Check file age — refresh if older than 24 hours
+        import time as _time
+        file_age_hours = (_time.time() - channels_path.stat().st_mtime) / 3600
     except Exception:
         existing_count = 0
+        file_age_hours = 999  # Force fetch
 
-    # Always fetch from cloud DB if configured (fast, ~5s, gets full 15k+ channel database)
-    # Also fetch if we have no channels or very few (M3U-only = ~650)
+    # Check if cloud channels DB is available
     try:
         from utils.supabase_channels import is_configured as _sb_configured
         cloud_db_available = _sb_configured()
     except Exception:
         cloud_db_available = False
 
-    need_fetch = existing_count == 0 or (cloud_db_available and existing_count < 5000)
-    print(f"   📊 Channel cache: {existing_count} channels | Cloud DB: {'connected' if cloud_db_available else 'not configured'} | Fetch needed: {need_fetch}")
+    # Determine if fetch is needed:
+    # 1. No channels at all → always fetch
+    # 2. Cloud DB available + channel count below expected (stale M3U data) → fetch
+    # 3. Cloud DB available + data older than 24h → refresh for updated streams
+    # 4. No cloud DB + no channels → fall back to M3U repos
+    if existing_count == 0:
+        need_fetch = True
+        fetch_reason = "no channels in cache"
+    elif cloud_db_available and existing_count < 5000:
+        need_fetch = True
+        fetch_reason = f"cache has only {existing_count} channels (cloud DB has 15k+)"
+    elif cloud_db_available and file_age_hours > 24:
+        need_fetch = True
+        fetch_reason = f"cache is {file_age_hours:.0f}h old (refreshing from cloud DB)"
+    else:
+        need_fetch = False
+        fetch_reason = "cache is fresh"
+
+    print(f"   📊 Channel cache: {existing_count} channels ({file_age_hours:.1f}h old) | Cloud DB: {'connected' if cloud_db_available else 'not configured'}")
+    print(f"   {'🔄' if need_fetch else '✅'} {'Fetch needed: ' + fetch_reason if need_fetch else 'Using cached channels'}")
 
     if need_fetch:
         # Start fetch in background thread so server starts immediately
