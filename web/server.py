@@ -110,6 +110,83 @@ def _detect_local_country() -> str:
 _LOCAL_COUNTRY = _detect_local_country()
 
 
+# ─── Category normalization ───────────────────────────────────────────────────
+# Maps messy/vendor-prefixed categories to clean standard names
+_CATEGORY_MAP = {
+    # Xumous-prefixed → standard
+    "xumous: action & drama": "Action",
+    "xumous: animals & nature": "Nature",
+    "xumous: automotive": "Auto",
+    "xumous: black voices. black stories.": "Entertainment",
+    "xumous: classic tv": "Classic",
+    "xumous: combat sports": "Sports",
+    "xumous: comedy": "Comedy",
+    "xumous: crime tv": "Crime",
+    "xumous: daytime tv": "Entertainment",
+    "xumous: faith & family": "Religious",
+    "xumous: food": "Cooking",
+    "xumous: game shows": "Entertainment",
+    "xumous: history & learning": "Documentary",
+    "xumous: home & design": "Lifestyle",
+    "xumous: horror & sci-fi": "Movies",
+    "xumous: kids": "Kids",
+    "xumous: latino": "Entertainment",
+    "xumous: local news": "News",
+    "xumous: movies": "Movies",
+    "xumous: music & radio": "Music",
+    "xumous: news": "News",
+    "xumous: pop culture": "Entertainment",
+    "xumous: reality tv": "Entertainment",
+    "xumous: sports": "Sports",
+    "xumous: travel & lifestyle": "Lifestyle",
+    # Common messy values → standard
+    "undefined": "General",
+    "other": "General",
+    "uncategorized": "General",
+    "general": "General",
+    "shop": "Shopping",
+    "tv": "General",
+    "westerns + classics": "Classic",
+    "western": "Classic",
+    "vod movies (en)": "Movies",
+    "vod italy": "Movies",
+    "spain vod": "Movies",
+    "usa vod": "Movies",
+    "culture + lifestyle": "Lifestyle",
+    "culture;entertainment": "Culture",
+    "animation;entertainment": "Animation",
+    "animation;kids": "Kids",
+    "animation;kids;religious": "Kids",
+    "comedy drama": "Comedy",
+    "crime drama": "Crime",
+    "action sports": "Sports",
+    "bus./financial": "Business",
+    "children-music": "Kids",
+    "documentaries (ar)": "Documentary",
+    "documentaries (en)": "Documentary",
+    "en español": "Entertainment",
+    "en espa&ñol": "Entertainment",
+}
+
+
+def _normalize_category(cat: str) -> str:
+    """Normalize a category string to a clean standard name."""
+    if not cat:
+        return "General"
+    cat = cat.strip()
+    # Lookup in map (case-insensitive)
+    mapped = _CATEGORY_MAP.get(cat.lower())
+    if mapped:
+        return mapped
+    # Strip any "Xumous:" prefix not in map
+    if cat.lower().startswith("xumous:"):
+        cat = cat[7:].strip().title()
+    # Title-case cleanup
+    if cat == cat.lower() or cat == cat.upper():
+        cat = cat.title()
+    return cat if cat else "General"
+
+
 def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Merge channels with the same normalized name into single entries with multiple URLs.
 
@@ -191,9 +268,10 @@ class _ChannelCache:
                 with open(self._path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 raw_channels = data.get("channels", [])
-                # Normalize country codes to full names
+                # Normalize country codes and categories
                 for ch in raw_channels:
                     ch["country"] = _normalize_country(ch.get("country") or "Unknown")
+                    ch["category"] = _normalize_category(ch.get("category") or "General")
                 # Deduplicate: merge channels with same normalized name
                 self._channels = _deduplicate_channels(raw_channels)
                 # Pre-sort once on load: Israeli first, then alphabetical
