@@ -329,9 +329,17 @@ const api = {
 // ─── Analytics (anonymous usage telemetry) ──────────────────────────────────
 const analytics = (() => {
     const KEY = 'tv_device_id';
+    // crypto.randomUUID() requires secure context (HTTPS/localhost) — fallback for HTTP
+    function uuid() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+    }
     let deviceId = localStorage.getItem(KEY);
-    if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem(KEY, deviceId); }
-    const sessionId = crypto.randomUUID();
+    if (!deviceId) { deviceId = uuid(); localStorage.setItem(KEY, deviceId); }
+    const sessionId = uuid();
     const sessionStart = Date.now();
     let playCount = 0, failCount = 0, reportCount = 0;
 
