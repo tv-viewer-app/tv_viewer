@@ -1043,14 +1043,24 @@ if __name__ == "__main__":
     print(f"\n📺 TV Viewer Web v{config.APP_VERSION}")
     print(f"   Serving on http://{args.host}:{args.port}\n")
 
-    # Auto-fetch channels on first run if DATA_DIR has empty channels.json
+    # Auto-fetch channels on startup if Supabase is configured or channels are empty/stale
     channels_path = DATA_DIR / "channels.json"
     try:
         with open(channels_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        need_fetch = len(data.get("channels", [])) == 0
+        existing_count = len(data.get("channels", []))
     except Exception:
-        need_fetch = True
+        existing_count = 0
+
+    # Always fetch from Supabase if configured (fast, ~5s, gets full 15k+ DB)
+    # Also fetch if we have no channels or very few (M3U-only = ~650)
+    try:
+        from utils.supabase_channels import is_configured as _sb_configured
+        supabase_available = _sb_configured()
+    except Exception:
+        supabase_available = False
+
+    need_fetch = existing_count == 0 or (supabase_available and existing_count < 5000)
 
     if need_fetch:
         # Start fetch in background thread so server starts immediately
