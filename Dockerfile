@@ -43,11 +43,17 @@ VOLUME /data
 
 USER tvviewer
 
+# Supabase credentials (public anon key, RLS-protected — safe to embed)
+ARG SUPABASE_URL=""
+ARG SUPABASE_ANON_KEY=""
+
 ENV TV_VIEWER_WEB_PORT=8765 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
-    TELEMETRY_ENABLED=false
+    TELEMETRY_ENABLED=false \
+    SUPABASE_URL=${SUPABASE_URL} \
+    SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 
 EXPOSE 8765
 

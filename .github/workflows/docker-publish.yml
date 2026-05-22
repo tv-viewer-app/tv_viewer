@@ -55,6 +55,9 @@ jobs:
         tags: |
           ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           ${{ env.IMAGE_NAME }}:latest
+        build-args: |
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         labels: |
