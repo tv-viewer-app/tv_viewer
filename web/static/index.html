@@ -182,6 +182,7 @@
     </nav>
     <div class="search-box">
         <input type="text" id="search" placeholder="Search channels..." autocomplete="off">
+        <span id="search-clear" style="cursor:pointer;color:var(--text-dim);font-size:14px;display:none;padding:0 2px;" title="Clear search">✕</span>
     </div>
     <div class="header-actions">
         <button class="icon-btn" id="btn-map" title="World Map">🗺</button>
@@ -400,6 +401,9 @@ function renderSidebar(cats, countries) {
     sb.querySelectorAll('.sb-item').forEach(el => el.onclick = () => {
         currentCat = el.dataset.cat || null;
         currentCountry = el.dataset.country || null;
+        // Clear search filter when selecting category/country
+        document.getElementById('search').value = '';
+        document.getElementById('search-clear').style.display = 'none';
         // Sync filter dropdowns
         document.getElementById('filter-category').value = currentCat || '';
         document.getElementById('filter-country').value = currentCountry || '';
@@ -979,7 +983,8 @@ async function showMapCountryChannels(country) {
     list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     setTimeout(()=>mapInstance.invalidateSize(), 50);
 
-    const chs = await api.channels({country});
+    const resp = await api.channels({country, limit: 500});
+    const chs = resp.channels || [];
     if (chs.length === 0) {
         list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center;">No channels found</div>';
         return;
@@ -1184,6 +1189,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => {
 });
 document.getElementById('search').addEventListener('input', debounce(async () => {
     const q = document.getElementById('search').value.trim();
+    const clearBtn = document.getElementById('search-clear');
+    clearBtn.style.display = q ? 'inline' : 'none';
     if (!q) {
         // Empty search — reload normally
         await loadChannels();
@@ -1199,6 +1206,11 @@ document.getElementById('search').addEventListener('input', debounce(async () =>
     renderChannels(filtered);
     renderLoadMore();
 }, 300));
+document.getElementById('search-clear').onclick = () => {
+    document.getElementById('search').value = '';
+    document.getElementById('search-clear').style.display = 'none';
+    loadChannels();
+};
 document.getElementById('p-close').onclick = closePlayer;
 document.getElementById('p-next').onclick = () => { if(playIdx<filtered.length-1) playChannel(playIdx+1); };
 document.getElementById('p-prev').onclick = () => { if(playIdx>0) playChannel(playIdx-1); };
@@ -1247,6 +1259,8 @@ document.getElementById('filter-category').onchange = (e) => {
     currentCat = e.target.value || null;
     currentCountry = null;
     document.getElementById('filter-country').value = '';
+    document.getElementById('search').value = '';
+    document.getElementById('search-clear').style.display = 'none';
     loadChannels();
     renderSidebarActive();
 };
@@ -1254,6 +1268,8 @@ document.getElementById('filter-country').onchange = (e) => {
     currentCountry = e.target.value || null;
     currentCat = null;
     document.getElementById('filter-category').value = '';
+    document.getElementById('search').value = '';
+    document.getElementById('search-clear').style.display = 'none';
     loadChannels();
     renderSidebarActive();
 };
