@@ -19,16 +19,9 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.14.0
+## ✨ What's New in v2.14.1
 
-- **Anonymous usage analytics** — Lightweight telemetry tracks sessions, channel plays,
-- **LOCAL category** — Auto-detects user's country (env `LOCAL_COUNTRY` or system locale),
-- **Server-side search** — Search now queries the full database (up to 500 results)
-- **Health reporting to Supabase** — When channels play/fail, status is reported
-- **Radio channels not showing** — `media_type` field was stripped from API payload;
-- **EPG completely broken** — All previous sources (epg.pw, iptv-org) return 404.
-- **EPG cache permission denied** — Cache now writes to `DATA_DIR` volume in Docker.
-- **Categories showing country names** — Cross-references actual channel countries to
+- **CI: add httpx to requirements** — FastAPI TestClient requires httpx; was missing
 
 _See the [CHANGELOG](CHANGELOG.md) for the full release history._
 
