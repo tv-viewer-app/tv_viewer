@@ -12,17 +12,20 @@ import sys
 import json
 import asyncio
 import hashlib
+import ipaddress
 import threading
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from urllib.parse import urlparse
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 
 # Add project root to path for imports
@@ -38,6 +41,9 @@ logger = get_logger(__name__)
 # Persistent data directory — defaults to project root, override with DATA_DIR env var.
 # In Docker, DATA_DIR=/data (a volume) so favorites/channels survive container upgrades.
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(PROJECT_ROOT)))
+
+# Global refresh state (used by /api/status and /api/refresh)
+_refresh_in_progress = False
 
 # ─── Country code normalization (merge "AE" with "United Arab Emirates" etc.) ─
 
@@ -305,6 +311,78 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ─── Security Headers Middleware ──────────────────────────────────────────────
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Skip security headers for proxied streams (breaks video playback)
+        if not request.url.path.startswith("/api/proxy"):
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = (
+                "geolocation=(), microphone=(), camera=(), payment=()"
+            )
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+# ─── SSRF Protection ─────────────────────────────────────────────────────────
+
+_BLOCKED_IP_RANGES = [
+    ipaddress.ip_network('127.0.0.0/8'),
+    ipaddress.ip_network('10.0.0.0/8'),
+    ipaddress.ip_network('172.16.0.0/12'),
+    ipaddress.ip_network('192.168.0.0/16'),
+    ipaddress.ip_network('169.254.0.0/16'),
+    ipaddress.ip_network('::1/128'),
+    ipaddress.ip_network('fc00::/7'),
+]
+
+def _is_private_ip(hostname: str) -> bool:
+    """Check if a hostname resolves to a private/loopback IP (with DNS resolution)."""
+    import socket
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return True
+        return any(ip in net for net in _BLOCKED_IP_RANGES)
+    except ValueError:
+        # Hostname — resolve DNS and check all resolved IPs
+        lower = hostname.lower()
+        if lower in ('localhost', '0.0.0.0') or lower.endswith('.local'):
+            return True
+        try:
+            for info in socket.getaddrinfo(hostname, None, socket.AF_UNSPEC):
+                resolved_ip = ipaddress.ip_address(info[4][0])
+                if resolved_ip.is_private or resolved_ip.is_loopback or resolved_ip.is_link_local:
+                    return True
+                if any(resolved_ip in net for net in _BLOCKED_IP_RANGES):
+                    return True
+        except (socket.gaierror, ValueError, OSError):
+            pass
+        return False
+
+
+def _validate_proxy_url(url: str) -> None:
+    """Validate proxy URL against SSRF and abuse. Raises HTTPException."""
+    parsed = urlparse(url)
+
+    # Must be http/https
+    if parsed.scheme not in ('http', 'https'):
+        raise HTTPException(400, "Only HTTP/HTTPS URLs are allowed")
+
+    # Block private IPs
+    if parsed.hostname and _is_private_ip(parsed.hostname):
+        raise HTTPException(403, "Access to internal network addresses is forbidden")
+
+    # Block non-standard ports (allow common streaming ports)
+    if parsed.port and parsed.port not in (80, 443, 8080, 8443, 1935, 554):
+        raise HTTPException(403, "Non-standard port not allowed for proxy")
+
 # Serve static files
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -419,6 +497,7 @@ async def get_status():
         "total_channels": len(channels),
         "working_channels": working,
         "status": "running",
+        "refresh_in_progress": _refresh_in_progress,
     }
 
 
@@ -447,6 +526,9 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     Rewrites .m3u8 manifests so segment URLs also go through the proxy."""
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL")
+
+    # SSRF protection
+    _validate_proxy_url(url)
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -575,7 +657,7 @@ async def get_epg(channel_name: str, hours: int = Query(6, ge=1, le=24)):
     """Get EPG schedule for a channel."""
     try:
         from utils.epg import epg_service
-        # Try to initialize if not already done
+        # Initialize once (concurrent requests just wait for the first)
         if not epg_service._initialized:
             try:
                 await epg_service.initialize()
@@ -757,7 +839,6 @@ async def track_analytics(request: Request):
 # ─── Refresh / pull channels ────────────────────────────────────────────────
 
 _refresh_lock = threading.Lock()
-_refresh_in_progress = False
 
 
 @app.post("/api/refresh")
@@ -969,37 +1050,42 @@ if __name__ == "__main__":
     if need_fetch:
         # Start fetch in background thread so server starts immediately
         def _startup_fetch():
+            global _refresh_in_progress
+            _refresh_in_progress = True
             import asyncio as _aio
             print("   ⏳ Fetching channels in background...")
 
-            # Strategy 1: Try Supabase first (fast, ~5s)
             try:
-                from utils.supabase_channels import fetch_channels, is_configured
-                if is_configured():
-                    print("   📡 Trying Supabase (fast)...")
-                    channels = _aio.run(fetch_channels())
+                # Strategy 1: Try Supabase first (fast, ~5s)
+                try:
+                    from utils.supabase_channels import fetch_channels, is_configured
+                    if is_configured():
+                        print("   📡 Trying Supabase (fast)...")
+                        channels = _aio.run(fetch_channels())
+                        if channels:
+                            with open(channels_path, "w", encoding="utf-8") as f:
+                                json.dump({"channels": channels}, f, ensure_ascii=False)
+                            print(f"   ✅ Loaded {len(channels)} channels from Supabase\n")
+                            return
+                except Exception as e:
+                    print(f"   ⚠️  Supabase failed: {e}")
+
+                # Strategy 2: Fall back to M3U repositories (slow, ~60-120s)
+                try:
+                    print("   📡 Falling back to M3U repositories...")
+                    from core.repository import RepositoryHandler
+                    handler = RepositoryHandler()
+                    channels = _aio.run(handler.fetch_all_repositories())
                     if channels:
                         with open(channels_path, "w", encoding="utf-8") as f:
                             json.dump({"channels": channels}, f, ensure_ascii=False)
-                        print(f"   ✅ Loaded {len(channels)} channels from Supabase\n")
-                        return
-            except Exception as e:
-                print(f"   ⚠️  Supabase failed: {e}")
-
-            # Strategy 2: Fall back to M3U repositories (slow, ~60-120s)
-            try:
-                print("   📡 Falling back to M3U repositories...")
-                from core.repository import RepositoryHandler
-                handler = RepositoryHandler()
-                channels = _aio.run(handler.fetch_all_repositories())
-                if channels:
-                    with open(channels_path, "w", encoding="utf-8") as f:
-                        json.dump({"channels": channels}, f, ensure_ascii=False)
-                    print(f"   ✅ Loaded {len(channels)} channels from repositories\n")
-                else:
-                    print("   ⚠️  No channels fetched — use /api/refresh later\n")
-            except Exception as e:
-                print(f"   ⚠️  Repository fetch failed: {e}\n")
+                        print(f"   ✅ Loaded {len(channels)} channels from repositories\n")
+                    else:
+                        print("   ⚠️  No channels fetched — use /api/refresh later\n")
+                except Exception as e:
+                    print(f"   ⚠️  Repository fetch failed: {e}\n")
+            finally:
+                _refresh_in_progress = False
 
         import threading
         t = threading.Thread(target=_startup_fetch, daemon=True)

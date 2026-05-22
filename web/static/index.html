@@ -412,7 +412,18 @@ function renderSidebarActive() {
 function renderChannels(chs) {
     const grid = document.getElementById('grid');
     document.getElementById('loading').style.display = 'none';
-    if (!chs.length) { document.getElementById('channel-view').style.display='none'; document.getElementById('empty').style.display='flex'; return; }
+    if (!chs.length) {
+        // If server has 0 total channels, keep showing loading (startup fetch in progress)
+        if (totalChannels === 0 && currentView !== 'favorites' && currentView !== 'recent') {
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('channel-view').style.display='none';
+            document.getElementById('empty').style.display='none';
+        } else {
+            document.getElementById('channel-view').style.display='none';
+            document.getElementById('empty').style.display='flex';
+        }
+        return;
+    }
     document.getElementById('empty').style.display = 'none';
     document.getElementById('channel-view').style.display = 'block';
     document.getElementById('title').textContent = currentCat || (currentView==='favorites'?'⭐ Favorites':currentView==='recent'?'🕐 Recent':'All Channels');
@@ -1118,17 +1129,25 @@ async function init() {
     await loadChannels();
     document.getElementById('badge').textContent = `${status.working_channels||status.total_channels} ch • v${status.version}`;
 
-    // If no categories yet (channels loading in background), retry in 10s
-    if (cats.length === 0) {
-        setTimeout(async () => {
-            const [c2, co2, st2] = await Promise.all([api.categories(), api.countries(), api.status()]);
-            if (c2.length > 0) {
-                allCategories = c2; allCountries = co2;
-                renderSidebar(c2, co2);
-                populateFilters(c2, co2);
-                await loadChannels();
-                document.getElementById('badge').textContent = `${st2.working_channels||st2.total_channels} ch • v${st2.version}`;
-            }
+    // If no channels yet (background startup fetch in progress), poll until ready
+    if (cats.length === 0 || (status.total_channels || 0) === 0) {
+        let retries = 0;
+        const maxRetries = 30; // 5 minutes max (10s intervals)
+        const poll = setInterval(async () => {
+            retries++;
+            try {
+                const [c2, co2, st2] = await Promise.all([api.categories(), api.countries(), api.status()]);
+                if (c2.length > 0 && (st2.total_channels || 0) > 0) {
+                    clearInterval(poll);
+                    allCategories = c2; allCountries = co2;
+                    renderSidebar(c2, co2);
+                    populateFilters(c2, co2);
+                    await loadChannels();
+                    document.getElementById('badge').textContent = `${st2.working_channels||st2.total_channels} ch • v${st2.version}`;
+                    document.getElementById('loading').style.display = 'none';
+                }
+            } catch(e) {}
+            if (retries >= maxRetries) clearInterval(poll);
         }, 10000);
     }
 }

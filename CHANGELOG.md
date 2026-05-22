@@ -5,6 +5,28 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.5] - 2026-05-22
+
+### Security
+- **SSRF protection**: Proxy endpoint now blocks requests to private/internal IP ranges
+  (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, link-local)
+- **Security headers**: Added X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+  and Permissions-Policy headers to all non-proxy responses
+- **Docker telemetry default to opt-in**: TELEMETRY_ENABLED now defaults to `false` in
+  Docker for GDPR compliance (users must explicitly opt-in)
+
+### Fixed
+- **Docker channel loading**: Web UI now polls for up to 5 minutes during startup
+  (previously gave up after single 10s retry), showing loading spinner during fetch
+- **EPG cache permission denied in Docker**: Cache now writes to DATA_DIR volume
+  (/data) with proper directory creation, not /app (read-only)
+- **EPG log spam**: Fixed gzip decompression errors flooding logs when EPG sources
+  return error pages (HTML) instead of valid gzipped XML
+- **EPG concurrent initialization**: Added guard to prevent multiple simultaneous
+  EPG fetches when many channel pages request EPG data at once
+- **Startup fetch progress tracking**: `/api/status` now returns `refresh_in_progress`
+  flag so web UI can show loading state during background channel fetch
+
 ## [2.14.4] - 2026-05-22
 
 ### Fixed

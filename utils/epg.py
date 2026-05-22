@@ -293,10 +293,12 @@ class EPGService:
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._init_lock: Optional[asyncio.Lock] = None  # Created lazily in async context
         self._channel_map: Dict[str, str] = {}          # epg_id → display_name
         self._schedules: Dict[str, List[EPGProgram]] = {}  # epg_id → [programs]
         self._name_to_epg_id: Dict[str, str] = {}       # lowercase name → epg_id
         self._initialized = False
+        self._initializing = False
         self._last_fetch: float = 0
         self._epg_sources: List[str] = list(DEFAULT_EPG_SOURCES)
 
@@ -312,6 +314,22 @@ class EPGService:
 
     async def initialize(self, sources: Optional[List[str]] = None) -> None:
         """Fetch and parse EPG data from configured sources."""
+        # Lazy-create asyncio lock (can't create in __init__ outside event loop)
+        if self._init_lock is None:
+            self._init_lock = asyncio.Lock()
+
+        async with self._init_lock:
+            # Double-check after acquiring lock
+            if self._initializing:
+                return
+            self._initializing = True
+            try:
+                await self._do_initialize(sources)
+            finally:
+                self._initializing = False
+
+    async def _do_initialize(self, sources: Optional[List[str]] = None) -> None:
+        """Internal initialization logic."""
         if sources:
             self._epg_sources = sources
 
@@ -507,7 +525,10 @@ class EPGService:
                         logger.warning("EPG decompressed content too large (>50MB): %s", url)
                         return {}, {}
                 except Exception:
-                    pass  # might not actually be gzipped
+                    # If URL ends with .gz but decompression fails, content is not valid
+                    if url.endswith('.gz'):
+                        logger.debug("EPG gzip decompression failed (likely error page): %s", url)
+                        return {}, {}
 
             xml_content = data.decode('utf-8', errors='replace')
 
@@ -539,6 +560,8 @@ class EPGService:
             },
         }
         path = self._cache_path()
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(cache, f, ensure_ascii=False)
         logger.debug("EPG cache saved to %s", path)
