@@ -326,6 +326,52 @@ const api = {
     async toggleFavorite(url) { return await(await fetch('/api/favorites/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})})).json(); },
 };
 
+// ─── Analytics (anonymous usage telemetry) ──────────────────────────────────
+const analytics = (() => {
+    const KEY = 'tv_device_id';
+    let deviceId = localStorage.getItem(KEY);
+    if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem(KEY, deviceId); }
+    const sessionId = crypto.randomUUID();
+    const sessionStart = Date.now();
+    let playCount = 0, failCount = 0, reportCount = 0;
+
+    function send(eventType, data = {}) {
+        try {
+            fetch('/api/analytics', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    event_type: eventType,
+                    device_id: deviceId,
+                    platform: 'web',
+                    event_data: { session_id: sessionId, ...data }
+                })
+            }).catch(() => {});
+        } catch(e) {}
+    }
+
+    // Session start (once per page load)
+    send('session_start', { referrer: document.referrer ? 'yes' : 'direct', screen: `${screen.width}x${screen.height}`, lang: navigator.language });
+
+    // Session end on unload
+    window.addEventListener('beforeunload', () => {
+        const duration = Math.round((Date.now() - sessionStart) / 1000);
+        const blob = new Blob([JSON.stringify({
+            event_type: 'session_end', device_id: deviceId, platform: 'web',
+            event_data: { session_id: sessionId, duration_sec: duration, plays: playCount, fails: failCount, reports: reportCount }
+        })], {type: 'application/json'});
+        navigator.sendBeacon('/api/analytics', blob);
+    });
+
+    return {
+        play(ch) { playCount++; send('channel_play', { name: ch.name, category: ch.category || '', country: ch.country || '', media_type: ch.media_type || 'TV' }); },
+        fail(ch, reason) { failCount++; send('channel_fail', { name: ch.name, category: ch.category || '', reason: (reason||'').slice(0,50) }); },
+        report(ch) { reportCount++; send('channel_report', { name: ch.name }); },
+        search(q) { send('search', { query_length: q.length }); },
+        feature(name) { send('feature_use', { feature: name }); },
+    };
+})();
+
 // ─── Render ─────────────────────────────────────────────────────────────────
 let allCategories = [], allCountries = [];
 
@@ -419,8 +465,8 @@ async function loadEpgCard(name, idx) {
 async function toggleFav(idx) {
     const ch = filtered[idx]; if (!ch) return;
     const res = await api.toggleFavorite(ch.url);
-    if (res.is_favorite) { favorites.add(ch.url); toast(`★ Added to favorites: ${ch.name}`); }
-    else { favorites.delete(ch.url); toast(`☆ Removed from favorites: ${ch.name}`); }
+    if (res.is_favorite) { favorites.add(ch.url); toast(`★ Added to favorites: ${ch.name}`); analytics.feature('favorite_add'); }
+    else { favorites.delete(ch.url); toast(`☆ Removed from favorites: ${ch.name}`); analytics.feature('favorite_remove'); }
     renderChannels(filtered);
     updatePlayerFavBtn();
 }
@@ -443,6 +489,7 @@ let currentSourceIdx = 0; // Current source index
 function playChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
     playIdx = idx;
+    analytics.play(ch);
     const overlay = document.getElementById('player-overlay');
     const video = document.getElementById('player');
     const box = document.getElementById('player-box');
@@ -873,6 +920,7 @@ function showCastMenu(options) {
 async function reportBroken(idx) {
     const ch = filtered[idx]; if (!ch) return;
     if (!confirm(`Report "${ch.name}" as broken?`)) return;
+    analytics.report(ch);
     const res = await api.report(ch.url, ch.name);
     toast(`Reported: ${ch.name} (${res.status})`);
 }
@@ -883,6 +931,7 @@ async function toggleMap() {
     mapVisible = !mapVisible;
     document.getElementById('btn-map').classList.toggle('active-btn', mapVisible);
     if (mapVisible) {
+        analytics.feature('map');
         mv.classList.add('active');
         if (!mapInstance) {
             mapInstance = L.map('map',{zoomControl:true}).setView([30, 20], 2);
@@ -943,15 +992,29 @@ document.getElementById('map-panel-close').onclick = () => {
 // ─── Refresh ────────────────────────────────────────────────────────────────
 async function refreshChannels() {
     toast('Refreshing channels...');
+    analytics.feature('refresh');
     document.getElementById('btn-refresh').style.animation = 'spin .8s linear infinite';
     await api.refresh();
+    let pollCount = 0;
     const poll = setInterval(async () => {
-        const s = await fetch('/api/refresh/status').then(r=>r.json());
-        if (!s.in_progress) {
+        pollCount++;
+        if (pollCount > 60) { // Max 3 min (60 × 3s)
             clearInterval(poll);
             document.getElementById('btn-refresh').style.animation = '';
-            await loadChannels();
-            toast('Channels refreshed!');
+            toast('Refresh timed out — try again later');
+            return;
+        }
+        try {
+            const s = await fetch('/api/refresh/status').then(r=>r.json());
+            if (!s.in_progress) {
+                clearInterval(poll);
+                document.getElementById('btn-refresh').style.animation = '';
+                await loadChannels();
+                toast('Channels refreshed!');
+            }
+        } catch(e) {
+            clearInterval(poll);
+            document.getElementById('btn-refresh').style.animation = '';
         }
     }, 3000);
 }
@@ -1089,6 +1152,7 @@ document.getElementById('search').addEventListener('input', debounce(async () =>
         await loadChannels();
         return;
     }
+    analytics.search(q);
     // Search the full database via server (not just loaded page)
     const resp = await api.channels({ search: q, limit: 500 });
     allLoaded = resp.channels || [];
@@ -1237,6 +1301,8 @@ function markPlaying(url) {
 
 function markBroken(url) {
     reportHealth(url, 'broken');
+    const ch = filtered[playIdx];
+    if (ch) analytics.fail(ch, 'stream_timeout');
 }
 
 // ─── Init ───────────────────────────────────────────────────────────────────

@@ -5,6 +5,47 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-05-22
+
+### Added
+- **Anonymous usage analytics** — Lightweight telemetry tracks sessions, channel plays,
+  failures, and feature usage. No PII collected. Device ID is a random UUID stored in
+  localStorage. Data sent to Supabase `analytics_events` table via server-side proxy.
+- **LOCAL category** — Auto-detects user's country (env `LOCAL_COUNTRY` or system locale),
+  pins a "LOCAL" category first in sidebar showing only channels from that country.
+- **Server-side search** — Search now queries the full database (up to 500 results)
+  instead of filtering only loaded page channels.
+- **Health reporting to Supabase** — When channels play/fail, status is reported
+  to the server for community-driven health tracking.
+
+### Fixed
+- **Radio channels not showing** — `media_type` field was stripped from API payload;
+  added server-side media_type filter. Radio detection now checks both `media_type`
+  and `category` containing "radio" (covers 37 vs 9 channels).
+- **EPG completely broken** — All previous sources (epg.pw, iptv-org) return 404.
+  Replaced with 6 verified working sources (epgshare01 IL/UK, i.mjh.nz, dp247).
+- **EPG cache permission denied** — Cache now writes to `DATA_DIR` volume in Docker.
+- **Categories showing country names** — Cross-references actual channel countries to
+  filter dirty data like "Bosnia and Herzegovina" from categories list.
+- **Load More doing nothing with type filter** — Pagination now passes media_type
+  to server so subsequent pages respect the TV/Radio filter.
+- **Proxy session leak** — Replaced per-request TCP connectors with shared connection
+  pool (`connector_owner=False`). Fixes "Unclosed client session" log spam.
+- **Refresh polling infinite loop** — Added 3-minute timeout (60 polls × 3s) with
+  error handling to prevent indefinite polling if refresh stalls.
+- **EPG log spam** — Parse errors and 404s downgraded from WARNING to DEBUG level.
+
+### Performance
+- **Shared proxy connection pool** — Reuses TCP connections across proxy requests
+  instead of creating/destroying per request. Reduces latency and memory.
+- **Search debounce** — Increased to 300ms to reduce server load during typing.
+
+### Security
+- **Analytics input validation** — Server validates event_type length (≤100),
+  device_id length (≤64), and event_data size (≤5KB) before forwarding.
+- **RLS fix script** — `scripts/fix_analytics_rls.sql` restores anon INSERT policy
+  for analytics_events with proper field validation.
+
 ## [2.13.3] - 2026-05-21
 
 ### Performance (Docker/NAS optimization)

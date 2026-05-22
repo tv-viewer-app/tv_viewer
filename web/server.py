@@ -430,6 +430,16 @@ from urllib.parse import urljoin, quote
 
 # Proxy timeout for upstream connections
 _proxy_timeout = aiohttp.ClientTimeout(total=60, sock_read=30)
+# Shared connector pool — avoids creating per-request connectors (fixes session leak)
+_proxy_connector: Optional[aiohttp.TCPConnector] = None
+
+
+def _get_proxy_connector() -> aiohttp.TCPConnector:
+    global _proxy_connector
+    if _proxy_connector is None or _proxy_connector.closed:
+        _proxy_connector = aiohttp.TCPConnector(limit=50, ttl_dns_cache=300)
+    return _proxy_connector
+
 
 @app.get("/api/proxy")
 async def proxy_stream(request: Request, url: str = Query(..., description="Stream URL to proxy")):
@@ -445,8 +455,11 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     }
     session = None
     try:
-        connector = aiohttp.TCPConnector(limit=10, ttl_dns_cache=300)
-        session = aiohttp.ClientSession(timeout=_proxy_timeout, connector=connector)
+        session = aiohttp.ClientSession(
+            timeout=_proxy_timeout,
+            connector=_get_proxy_connector(),
+            connector_owner=False  # Don't close shared connector when session closes
+        )
         resp = await session.get(url, headers=headers, ssl=False)
 
         if resp.status != 200:
@@ -684,6 +697,61 @@ def _persist_channels():
         _cache._mtime = channels_file.stat().st_mtime
     except Exception as e:
         logger.warning(f"Failed to persist channels: {e}")
+
+
+# ─── Analytics (anonymous usage telemetry to Supabase) ──────────────────────
+
+_ANALYTICS_URL = f"{config.SUPABASE_URL}/rest/v1/analytics_events" if config.SUPABASE_URL else ""
+_ANALYTICS_HEADERS = {
+    "apikey": config.SUPABASE_ANON_KEY,
+    "Authorization": f"Bearer {config.SUPABASE_ANON_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=minimal",
+} if config.SUPABASE_ANON_KEY else {}
+
+
+@app.post("/api/analytics")
+async def track_analytics(request: Request):
+    """Accept analytics events from web clients and forward to Supabase.
+
+    Expected body: {event_type, device_id, event_data?, platform?, app_version?}
+    Fire-and-forget — never blocks client, always returns 200.
+    """
+    try:
+        body = await request.json()
+        event_type = body.get("event_type", "")
+        device_id = body.get("device_id", "")
+        if not event_type or not device_id or len(event_type) > 100:
+            return {"status": "ignored"}
+
+        # Sanitize — only allow expected fields, cap sizes
+        payload = {
+            "event_type": event_type[:100],
+            "device_id": device_id[:64],
+            "event_data": body.get("event_data", {}) if isinstance(body.get("event_data"), dict) else {},
+            "app_version": str(body.get("app_version", config.APP_VERSION))[:20],
+            "platform": str(body.get("platform", "web"))[:30],
+        }
+        # Cap event_data size
+        import json as _json
+        if len(_json.dumps(payload["event_data"])) > 5000:
+            payload["event_data"] = {"error": "payload_too_large"}
+
+        # Forward to Supabase (fire-and-forget)
+        if _ANALYTICS_URL and _ANALYTICS_HEADERS:
+            try:
+                connector = aiohttp.TCPConnector(limit=5, ttl_dns_cache=300)
+                timeout = aiohttp.ClientTimeout(total=5)
+                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                    async with session.post(_ANALYTICS_URL, json=payload, headers=_ANALYTICS_HEADERS, ssl=False) as resp:
+                        if resp.status not in (200, 201):
+                            logger.debug(f"Analytics forward: {resp.status}")
+            except Exception as e:
+                logger.debug(f"Analytics forward failed: {e}")
+
+        return {"status": "ok"}
+    except Exception:
+        return {"status": "error"}
 
 
 # ─── Refresh / pull channels ────────────────────────────────────────────────

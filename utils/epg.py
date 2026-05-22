@@ -55,14 +55,20 @@ logger = get_logger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Default EPG sources — community XMLTV mirrors
+# Default EPG sources — community XMLTV mirrors (verified working May 2026)
 DEFAULT_EPG_SOURCES = [
-    # epg.pw community XMLTV guides (country-based, updated daily)
-    "https://epg.pw/xmltv/epg_IL.xml.gz",
-    "https://epg.pw/xmltv/epg_US.xml.gz",
-    "https://epg.pw/xmltv/epg_GB.xml.gz",
-    "https://epg.pw/xmltv/epg_DE.xml.gz",
-    "https://epg.pw/xmltv/epg_FR.xml.gz",
+    # epgshare01 — Israeli EPG (Yes/HOT channels, updated daily)
+    "https://epgshare01.online/epgshare01/epg_ripper_IL1.xml.gz",
+    # epgshare01 — UK Freeview/Sky channels
+    "https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz",
+    # matthuisman/i.mjh.nz — Pluto TV US
+    "https://i.mjh.nz/PlutoTV/us.xml.gz",
+    # matthuisman/i.mjh.nz — Samsung TV Plus US
+    "https://i.mjh.nz/SamsungTVPlus/us.xml.gz",
+    # matthuisman/i.mjh.nz — Plex Live TV
+    "https://i.mjh.nz/Plex/us.xml.gz",
+    # dp247 — UK Freeview EPG
+    "https://raw.githubusercontent.com/dp247/Freeview-EPG/master/epg.xml",
 ]
 
 # Cache settings
