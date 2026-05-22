@@ -5,7 +5,7 @@ FROM python:3.12-alpine AS builder
 
 WORKDIR /build
 COPY web/requirements.txt .
-RUN pip install --no-cache-dir --no-compile --prefix=/install -r requirements.txt aiohttp
+RUN pip install --no-cache-dir --no-compile --prefix=/install -r requirements.txt aiohttp defusedxml certifi
 
 # ─── Final image ─────────────────────────────────────────────────────────────
 FROM python:3.12-alpine

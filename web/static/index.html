@@ -720,20 +720,20 @@ async function loadPlayerEpg(name) {
     try {
         const d = await api.epg(name);
         if (d.now) {
-            const nowTime = d.now.start_time ? d.now.start_time.slice(11,16) : '';
-            const endTime = d.now.end_time ? d.now.end_time.slice(11,16) : '';
+            const nowTime = d.now.start ? d.now.start.slice(11,16) : '';
+            const endTime = d.now.end ? d.now.end.slice(11,16) : '';
             epgEl.textContent = `▶ Now: ${d.now.title}` + (nowTime ? ` (${nowTime}–${endTime})` : '');
         } else {
             epgEl.textContent = '';
         }
         if (d.next) {
-            const nextTime = d.next.start_time ? d.next.start_time.slice(11,16) : '';
+            const nextTime = d.next.start ? d.next.start.slice(11,16) : '';
             epgNextEl.textContent = `⏭ Next: ${d.next.title}` + (nextTime ? ` at ${nextTime}` : '');
         } else {
             epgNextEl.textContent = '';
         }
         if (d.schedule && d.schedule.length > 0) {
-            schedEl.textContent = d.schedule.slice(0, 5).map(p => `${p.start_time ? p.start_time.slice(11,16) : ''} ${p.title}`).join('  │  ');
+            schedEl.textContent = d.schedule.slice(0, 5).map(p => `${p.start ? p.start.slice(11,16) : ''} ${p.title}`).join('  │  ');
         }
     } catch(e) {}
 }

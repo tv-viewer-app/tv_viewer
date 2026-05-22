@@ -74,7 +74,7 @@ DEFAULT_EPG_SOURCES = [
 # Cache settings
 EPG_CACHE_FILE = "epg_cache.json"
 EPG_CACHE_MAX_AGE_HOURS = 6
-EPG_FETCH_TIMEOUT = 30
+EPG_FETCH_TIMEOUT = 60
 EPG_MAX_PROGRAMS_PER_CHANNEL = 48  # ~24 hours of 30-min programs
 
 

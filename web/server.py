@@ -139,7 +139,12 @@ _CATEGORY_MAP = {
     "xumous: reality tv": "Entertainment",
     "xumous: sports": "Sports",
     "xumous: travel & lifestyle": "Lifestyle",
-    # Common messy values → standard
+    # Semicolon-delimited compound categories
+    "animation;entertainment": "Animation",
+    "animation;kids": "Kids",
+    "animation;kids;religious": "Kids",
+    "culture;entertainment": "Culture",
+    # Multi-word / messy → single clean word
     "undefined": "General",
     "other": "General",
     "uncategorized": "General",
@@ -153,10 +158,6 @@ _CATEGORY_MAP = {
     "spain vod": "Movies",
     "usa vod": "Movies",
     "culture + lifestyle": "Lifestyle",
-    "culture;entertainment": "Culture",
-    "animation;entertainment": "Animation",
-    "animation;kids": "Kids",
-    "animation;kids;religious": "Kids",
     "comedy drama": "Comedy",
     "crime drama": "Crime",
     "action sports": "Sports",
@@ -166,6 +167,19 @@ _CATEGORY_MAP = {
     "documentaries (en)": "Documentary",
     "en español": "Entertainment",
     "en espa&ñol": "Entertainment",
+    "en espaã±ol": "Entertainment",
+    # Sport variants
+    "baseball": "Sports",
+    "basketball": "Sports",
+    "boxing": "Sports",
+    "bullfighting": "Sports",
+    # Other normalizations
+    "animated": "Animation",
+    "computers": "Technology",
+    "auction": "Shopping",
+    "auto": "Auto",
+    "animals": "Nature",
+    "adventure": "Movies",
 }
 
 
@@ -181,6 +195,15 @@ def _normalize_category(cat: str) -> str:
     # Strip any "Xumous:" prefix not in map
     if cat.lower().startswith("xumous:"):
         cat = cat[7:].strip().title()
+    # Handle semicolon-delimited (e.g., "Culture;Entertainment") — take first
+    if ';' in cat:
+        cat = cat.split(';')[0].strip()
+    # Handle " + " compound (e.g., "Culture + Lifestyle") — take first
+    if ' + ' in cat:
+        cat = cat.split(' + ')[0].strip()
+    # Country names appearing as categories → General (handled elsewhere too)
+    if cat.lower().startswith("bosnia") or cat.lower() == "chad":
+        return "General"
     # Title-case cleanup
     if cat == cat.lower() or cat == cat.upper():
         cat = cat.title()
@@ -1171,6 +1194,23 @@ if __name__ == "__main__":
     print(f"   📊 Channel cache: {existing_count} channels ({file_age_hours:.1f}h old) | Cloud DB: {'connected' if cloud_db_available else 'not configured'}")
     print(f"   {'🔄' if need_fetch else '✅'} {'Fetch needed: ' + fetch_reason if need_fetch else 'Using cached channels'}")
 
+    def _preload_epg():
+        """Pre-load EPG data in background so it's ready when users browse."""
+        import asyncio as _aio
+        try:
+            from utils.epg import epg_service
+            print("   📺 Loading EPG program guide...")
+            import time as _t
+            _t0 = _t.time()
+            _aio.run(epg_service.initialize())
+            _elapsed = _t.time() - _t0
+            if epg_service.is_loaded:
+                print(f"   ✅ EPG loaded: {epg_service.channel_count} channels in {_elapsed:.1f}s")
+            else:
+                print(f"   ⚠️  EPG: no program data available ({_elapsed:.1f}s)")
+        except Exception as e:
+            print(f"   ⚠️  EPG load failed: {e}")
+
     if need_fetch:
         # Start fetch in background thread so server starts immediately
         def _startup_fetch():
@@ -1194,6 +1234,8 @@ if __name__ == "__main__":
                                 json.dump({"channels": channels}, f, ensure_ascii=False)
                             print(f"   ✅ Loaded {len(channels)} channels from cloud DB in {_elapsed:.1f}s")
                             _cache.invalidate()
+                            # Pre-load EPG data in background
+                            _preload_epg()
                             return
                         else:
                             print(f"   ⚠️  Cloud DB returned 0 channels ({_elapsed:.1f}s)")
@@ -1224,5 +1266,10 @@ if __name__ == "__main__":
         t = threading.Thread(target=_startup_fetch, daemon=True)
         t.start()
         print("   🚀 Server starting (channels loading in background)...\n")
+    else:
+        # Channels cached — just pre-load EPG in background
+        import threading
+        t = threading.Thread(target=_preload_epg, daemon=True)
+        t.start()
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
