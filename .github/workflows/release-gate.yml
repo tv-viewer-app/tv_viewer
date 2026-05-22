@@ -325,11 +325,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ needs.metadata.outputs.version }}"
-          # build.yml already uploaded the binaries via gh release upload.
-          # Here we ensure the release exists with the correct notes.
+          # build.yml already uploaded the binaries via gh release upload (as draft).
+          # Here we ensure the release exists with correct notes and publish it.
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "TV Viewer $TAG" --notes-file release_notes.md
-            echo "✅ Updated release $TAG"
+            gh release edit "$TAG" --title "TV Viewer $TAG" --notes-file release_notes.md --draft=false
+            echo "✅ Published release $TAG"
           else
             gh release create "$TAG" --title "TV Viewer $TAG" --notes-file release_notes.md
             echo "✅ Created release $TAG"
