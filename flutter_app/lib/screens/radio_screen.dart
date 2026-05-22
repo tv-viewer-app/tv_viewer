@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/channel.dart';
 import '../providers/channel_provider.dart';
+import '../services/background_audio_service.dart';
 import '../services/settings_service.dart';
 import '../services/watch_history_service.dart';
 import '../services/analytics_service.dart';
@@ -93,6 +94,13 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
         // Keep audio playing if background playback is enabled
         if (!_backgroundPlayback) {
           _controller?.pause();
+        } else {
+          // Ensure foreground service is active for background audio
+          BackgroundAudioHandler.instance?.attachController(
+            _controller!,
+            channelName: _currentStation?.name ?? 'Radio',
+            category: _currentStation?.category ?? 'Radio',
+          );
         }
         break;
       case AppLifecycleState.resumed:
@@ -108,6 +116,7 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    BackgroundAudioHandler.instance?.detachController();
     _controller?.dispose();
     _searchController.dispose();
     // Release wake lock when leaving radio screen
@@ -174,6 +183,12 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
       // Keep screen/CPU awake for audio playback when background playback enabled
       if (_backgroundPlayback) {
         WakelockPlus.enable();
+        // Attach to audio service for notification + background persistence
+        BackgroundAudioHandler.instance?.attachController(
+          _controller!,
+          channelName: station.name,
+          category: station.category ?? 'Radio',
+        );
       }
 
       // Record play history
@@ -205,6 +220,7 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
   }
 
   void _stop() {
+    BackgroundAudioHandler.instance?.detachController();
     _controller?.pause();
     _controller?.dispose();
     _controller = null;

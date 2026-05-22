@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import '../models/channel.dart';
+import '../services/background_audio_service.dart';
 import '../services/pip_service.dart';
 import '../services/analytics_service.dart';
 import '../services/settings_service.dart';
@@ -170,9 +171,16 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     switch (state) {
       case AppLifecycleState.paused:
         // App is in background (possibly in PiP)
-        // If background playback is enabled, keep playing audio
+        // If background playback is enabled, keep playing audio via foreground service
         if (!_isPipMode && !_backgroundPlayback) {
           _videoController?.pause();
+        } else if (_backgroundPlayback && _videoController != null) {
+          // Ensure audio service is attached for background playback
+          BackgroundAudioHandler.instance?.attachController(
+            _videoController!,
+            channelName: widget.channel.name,
+            category: widget.channel.category,
+          );
         }
         break;
       case AppLifecycleState.resumed:
@@ -279,6 +287,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           }
         };
         _videoController!.addListener(_playerListener!);
+        
+        // Attach to background audio service for notification
+        if (_backgroundPlayback) {
+          BackgroundAudioHandler.instance?.attachController(
+            _videoController!,
+            channelName: widget.channel.name,
+            category: widget.channel.category,
+          );
+        }
         
         // Report success
         _reportHealth(streamUrl, true);
@@ -406,6 +423,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         _videoController!.removeListener(_playerListener!);
         _playerListener = null;
       }
+      // Detach from background audio service
+      BackgroundAudioHandler.instance?.detachController();
       _videoController!.dispose();
       _videoController = null;
     }

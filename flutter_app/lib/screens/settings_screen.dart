@@ -106,7 +106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 SwitchListTile(
                   title: const Text('Background playback'),
-                  subtitle: const Text('Continue audio when screen is off'),
+                  subtitle: const Text('Continue audio when app is minimized (shows notification)'),
                   value: _backgroundPlayback,
                   onChanged: (v) {
                     setState(() => _backgroundPlayback = v);

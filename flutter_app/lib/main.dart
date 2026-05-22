@@ -8,6 +8,7 @@ import 'utils/logger_service.dart';
 import 'utils/error_handler.dart';
 import 'di/service_locator.dart';
 import 'services/analytics_service.dart';
+import 'services/background_audio_service.dart';
 import 'services/crashlytics_service.dart';
 import 'services/parental_controls_service.dart';
 import 'services/play_integrity_service.dart';
@@ -25,6 +26,14 @@ void main() async {
     logger.info('Dependency injection initialized');
   } catch (e, stackTrace) {
     logger.error('DI setup failed (non-fatal, using fallback)', e, stackTrace);
+  }
+  
+  // Initialize background audio service (foreground notification for playback)
+  try {
+    await initAudioService();
+    logger.info('Background audio service initialized');
+  } catch (e) {
+    logger.warning('Audio service init failed (non-fatal)', e);
   }
   
   // Initialize parental controls (fail-safe — uses defaults on error)
