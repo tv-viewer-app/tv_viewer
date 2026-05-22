@@ -5,6 +5,12 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.2] - 2026-05-22
+
+### Fixed
+- **CI: web tests no longer require Supabase** — Tests validate API structure/format
+  without asserting channel count > 0 (CI has no access to external data sources).
+
 ## [2.14.1] - 2026-05-22
 
 ### Fixed
