@@ -993,10 +993,8 @@ class ChannelProvider extends ChangeNotifier {
         _searchQuery.isNotEmpty;
   }
 
-  /// Known content categories — anything else in group-title is likely a country name
+  /// Known content categories — must match utils/normalize.py CANONICAL_CATEGORIES
   static const _knownCategories = {
-    'Animation', 'Auto', 'Business', 'Classic', 'Comedy', 'Cooking',
-    'Culture', 'Documentary', 'Education', 'Entertainment', 'Family',
     'Documentary', 'Education', 'Entertainment', 'General', 'Kids',
     'Lifestyle', 'Movies', 'Music', 'Nature', 'News', 'Radio',
     'Religious', 'Shopping', 'Sports',
