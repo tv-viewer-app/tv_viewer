@@ -5,6 +5,47 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.2] - 2026-05-23
+
+### Security
+- **PostgREST injection hardening**: `/api/health/report` now rejects channel
+  names containing PostgREST filter metacharacters (`,`, `(`, `)`, `*`, `:`)
+  and control characters before forwarding to Supabase. All shared-DB writes
+  use aiohttp's `params=` URL encoding instead of f-string interpolation,
+  closing a filter-syntax injection vector that could let a crafted request
+  alter rows other than the channel being reported.
+- **Rate limiting** on `/api/health/report`: 30 reports/min/IP (global) and
+  5 promote-writes/min/IP. Mitigates the "pinning attack" where an attacker
+  could spam `promote=true` with a bad URL to degrade popular channels for
+  all users. In-memory token bucket — no new dependency.
+- **Case-insensitive Supabase promote**: switched to `name=ilike` with %/_
+  escaped so "BBC News" and "bbc news" don't silently no-op the shared-DB
+  update.
+
+### Fixed
+- **EPG fuzzy matching false positives**: aggressive suffix-strip (` news`,
+  ` tv`, ` channel`, ` live`, ` stream`) and trailing-word removal now only
+  return a match when the stripped form maps to a **unique** EPG ID. Prevents
+  silent wrong-program bugs like "Discovery Channel" → some unrelated
+  "Discovery" feed, or "Sky Sports Live" → wrong "Sky Sports" entry. Safe
+  HD/SD/4K suffix matches remain unchanged.
+- **Test suite headless safety**: `tests/test_toast.py` now skips when no Tk
+  display is available, instead of erroring out on Linux dev machines without
+  DISPLAY set. CI runners with xvfb still execute the tests.
+
+### Changed
+- **CodeQL workflow**: removed `java-kotlin` from the language matrix. The
+  Flutter `android/` directory is generated Gradle/Kotlin boilerplate; CodeQL
+  Autobuild has been failing consistently with no actionable findings. Python
+  analysis (the real signal) continues to run.
+- **`favorites.json` is now gitignored** to stop user runtime data churn from
+  dirtying the working tree. The file is created on first run as needed.
+- **`.github/copilot-instructions.md` brought up to date**: reflects the
+  current architecture (FastAPI web/Docker + Flutter mobile + Python desktop
+  + Supabase shared DB), removes stale v1.8.2/Kivy references, and documents
+  the new untrusted-input → Supabase write convention so future contributions
+  follow the same pattern.
+
 ## [2.15.1] - 2026-05-23
 
 ### Added

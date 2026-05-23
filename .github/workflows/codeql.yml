@@ -2,7 +2,10 @@
 # CodeQL — GitHub-native security scanning (free for public repos)
 # =============================================================================
 # Catches: SQL injection, command injection, path traversal, hardcoded creds,
-# unsafe deserialization, XSS — across Python and Java (Android).
+# unsafe deserialization, XSS — across Python.
+# Java/Kotlin analysis is disabled: the Flutter android/ wrapper is generated
+# boilerplate and Autobuild fails consistently with no actionable signal.
+# Re-enable if/when we add real Kotlin code under android/.
 # =============================================================================
 
 name: CodeQL
@@ -12,14 +15,10 @@ on:
     branches: [master]
     paths:
       - '**/*.py'
-      - '**/*.java'
-      - '**/*.kt'
   pull_request:
     branches: [master]
     paths:
       - '**/*.py'
-      - '**/*.java'
-      - '**/*.kt'
   schedule:
     - cron: '23 4 * * 1'  # Monday 04:23 UTC
 
@@ -36,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [python, java-kotlin]
+        language: [python]
 
     steps:
       - uses: actions/checkout@v4

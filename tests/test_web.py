@@ -184,6 +184,71 @@ class TestMap:
             assert "count" in c
 
 
+# ─── Health report security (v2.15.2) ──────────────────────────────────────
+
+class TestHealthReportSecurity:
+    """Verify defences added in v2.15.2: PostgREST-metacharacter rejection,
+    rate limiting, and case-handling of channel names."""
+
+    def test_unsafe_channel_name_rejected(self, client):
+        # Import the validator directly to assert behaviour without hitting Supabase
+        from web.server import _is_safe_channel_name
+        # Safe names
+        assert _is_safe_channel_name("BBC News")
+        assert _is_safe_channel_name("Kan 11")
+        assert _is_safe_channel_name("Disney+ HD")
+        # PostgREST filter metacharacters — all must be rejected
+        # (these are the delimiters that can break out of `name=eq.{val}`
+        # or `name=ilike.{val}` even after URL-encoding via params=)
+        for bad in ["X,Y", "X(1)", "X)", "X*", "X:eq.0"]:
+            assert not _is_safe_channel_name(bad), f"should reject {bad!r}"
+        # Control chars
+        assert not _is_safe_channel_name("name\nwith newline")
+        assert not _is_safe_channel_name("name\twith tab")
+        # Empty / too long
+        assert not _is_safe_channel_name("")
+        assert not _is_safe_channel_name("X" * 201)
+        # Non-string
+        assert not _is_safe_channel_name(None)
+        assert not _is_safe_channel_name(123)
+
+    def test_health_report_accepts_safe_payload(self, client):
+        # Endpoint must accept well-formed reports without 500ing
+        r = client.post(
+            "/api/health/report",
+            json={"url": "https://example.com/stream.m3u8", "status": "working"},
+        )
+        assert r.status_code == 200
+        assert r.json().get("status") in ("recorded", "ignored")
+
+    def test_health_report_ignores_missing_fields(self, client):
+        r = client.post("/api/health/report", json={"url": ""})
+        assert r.status_code == 200
+        assert r.json() == {"status": "ignored"}
+
+    def test_health_report_rate_limit_global(self, client):
+        """Global bucket: 30 reports / 60s / IP. Burst above the cap returns 429."""
+        from web.server import _health_buckets, _health_buckets_lock
+        # Reset buckets to isolate from other tests
+        with _health_buckets_lock:
+            _health_buckets.clear()
+        payload = {
+            "url": "https://example.com/rl.m3u8",
+            "status": "working",
+        }
+        ok = 0
+        rate_limited = 0
+        for _ in range(40):
+            r = client.post("/api/health/report", json=payload)
+            if r.status_code == 429:
+                rate_limited += 1
+            else:
+                ok += 1
+        # We expect ~30 ok + ~10 rate-limited (the limit is 30/min)
+        assert ok <= 30
+        assert rate_limited >= 5
+
+
 # ─── Report ─────────────────────────────────────────────────────────────────
 
 class TestReport:

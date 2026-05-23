@@ -13,6 +13,27 @@ import pytest
 # Ensure project root is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+# Skip the whole module on environments without a working Tk display
+# (headless Linux CI runners, dev machines without DISPLAY). The CI image
+# provisions xvfb; locally we just skip these tests.
+def _tk_available() -> bool:
+    try:
+        _r = tk.Tk()
+    except tk.TclError:
+        return False
+    try:
+        _r.destroy()
+    except Exception:
+        pass
+    return True
+
+
+pytestmark = pytest.mark.skipif(
+    not _tk_available(),
+    reason="Tk display not available (set DISPLAY or run on platform with Tk)",
+)
+
 from ui.toast import ToastManager, _Toast, _TOAST_COLORS, _DEFAULT_TIMEOUT
 
 

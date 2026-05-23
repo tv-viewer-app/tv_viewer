@@ -485,56 +485,106 @@ class EPGService:
     # ------------------------------------------------------------------
 
     def _resolve_channel(self, name: str, epg_id: str) -> Optional[str]:
-        """Resolve a channel name or EPG ID to an EPG channel ID."""
+        """Resolve a channel name or EPG ID to an EPG channel ID.
+
+        Two-tier matching:
+        1. Safe matches (exact, no-space normalization, HD/SD/4K suffix strip,
+           country-suffix base): unambiguous — accepted directly.
+        2. Aggressive matches (strip trailing ' news', ' tv', ' channel',
+           ' live', ' stream'; trailing-word removal): only accepted when the
+           stripped key maps to a unique EPG ID. If multiple EPG IDs share the
+           same stripped form (e.g., "Discovery Channel" → "Discovery" collides
+           with a different "Discovery" feed), we return None rather than guess.
+        """
         if epg_id and epg_id in self._schedules:
             return epg_id
 
         if name:
             clean = name.lower().strip()
+            # ── Tier 1: safe lookups ──
             # Direct match
             if clean in self._name_to_epg_id:
                 return self._name_to_epg_id[clean]
-            # Fuzzy: try removing common suffixes
-            for suffix in [' hd', ' sd', ' fhd', ' uhd', ' 4k', ' (hd)', ' +1',
-                           ' news', ' tv', ' channel', ' live', ' stream']:
-                stripped = clean.replace(suffix, '').strip()
-                if stripped in self._name_to_epg_id:
-                    return self._name_to_epg_id[stripped]
-            # Try without spaces (e.g., "kan 11 news" → "kan11news" → "kan11")
+            # Safe suffix strip (HD/SD/4K variants — no semantic collision risk)
+            for suffix in (' hd', ' sd', ' fhd', ' uhd', ' 4k', ' (hd)', ' +1'):
+                if clean.endswith(suffix):
+                    stripped = clean[: -len(suffix)].strip()
+                    if stripped in self._name_to_epg_id:
+                        return self._name_to_epg_id[stripped]
+            # No-space normalization (e.g., "kan 11" → "kan11")
             no_spaces = re.sub(r'\s+', '', clean)
-            if no_spaces in self._name_to_epg_id:
+            if no_spaces != clean and no_spaces in self._name_to_epg_id:
                 return self._name_to_epg_id[no_spaces]
-            # Try removing trailing words one at a time
-            # "kan 11 news" → try "kan 11" → try "kan"
+
+            # ── Tier 2: aggressive — only accept if uniquely identified ──
+            def _unique_or_none(key: str) -> Optional[str]:
+                candidates = self._aggressive_name_to_epg_ids.get(key)
+                if candidates and len(candidates) == 1:
+                    return next(iter(candidates))
+                return None
+
+            # Aggressive suffix strip
+            for suffix in (' news', ' tv', ' channel', ' live', ' stream'):
+                if clean.endswith(suffix):
+                    stripped = clean[: -len(suffix)].strip()
+                    hit = _unique_or_none(stripped)
+                    if hit:
+                        return hit
+                    # Also try no-space variant of the stripped form
+                    hit = _unique_or_none(re.sub(r'\s+', '', stripped))
+                    if hit:
+                        return hit
+            # Trailing-word removal — only when unique
             words = clean.split()
             for i in range(len(words) - 1, 0, -1):
                 partial = ' '.join(words[:i])
-                if partial in self._name_to_epg_id:
-                    return self._name_to_epg_id[partial]
-                # Also try no-space version
-                partial_nospace = ''.join(words[:i])
-                if partial_nospace in self._name_to_epg_id:
-                    return self._name_to_epg_id[partial_nospace]
+                hit = _unique_or_none(partial)
+                if hit:
+                    return hit
+                hit = _unique_or_none(''.join(words[:i]))
+                if hit:
+                    return hit
 
         return None
 
     def _build_name_index(self) -> None:
-        """Build lowercase name → EPG ID index for fuzzy matching."""
+        """Build lowercase name → EPG ID indices for fuzzy matching.
+
+        Two indices:
+        - ``_name_to_epg_id``: for safe (unambiguous) lookups.
+        - ``_aggressive_name_to_epg_ids``: maps stripped key → set of EPG IDs.
+          Used by tier-2 matching, which only accepts when the set is a singleton.
+        """
         self._name_to_epg_id = {}
+        self._aggressive_name_to_epg_ids: Dict[str, set] = {}
+
+        def _add_aggressive(key: str, epg_id: str) -> None:
+            if not key:
+                return
+            self._aggressive_name_to_epg_ids.setdefault(key, set()).add(epg_id)
+
         for epg_id, name in self._channel_map.items():
             clean_name = name.lower().strip()
             self._name_to_epg_id[clean_name] = epg_id
-            # Also index without country suffix (e.g., "BBC One" from "BBC One.uk")
+            # Country-suffix base (e.g., "BBC One" from "BBC One.uk")
             if '.' in epg_id:
                 base = epg_id.rsplit('.', 1)[0]
                 self._name_to_epg_id[base.lower()] = epg_id
-            # Index normalized form (remove spaces between word and number)
-            # e.g., "kan 11" → matches EPG ID "Kan11.il"
+            # No-space normalization
             normalized = re.sub(r'\s+', '', clean_name)
             if normalized != clean_name:
                 self._name_to_epg_id[normalized] = epg_id
             # Index the EPG ID itself lowercased
             self._name_to_epg_id[epg_id.lower()] = epg_id
+
+            # Aggressive index: also key by partials so unique-match lookups work
+            _add_aggressive(clean_name, epg_id)
+            _add_aggressive(normalized, epg_id)
+            # Add each trailing-word partial as an aggressive candidate
+            words = clean_name.split()
+            for i in range(len(words) - 1, 0, -1):
+                _add_aggressive(' '.join(words[:i]), epg_id)
+                _add_aggressive(''.join(words[:i]), epg_id)
 
     async def _fetch_source(self, session: aiohttp.ClientSession,
                              url: str) -> Tuple[Dict[str, str], Dict[str, List[EPGProgram]]]:

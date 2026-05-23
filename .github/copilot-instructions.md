@@ -1,223 +1,194 @@
 # TV Viewer Project - Copilot Instructions
 
 ## Project Overview
-Cross-platform IPTV streaming application built with Python and CustomTkinter. Discovers, validates, and plays live TV streams from public IPTV repositories with Windows 11 Fluent Design UI.
+Community-powered IPTV streaming application with **three clients** sharing a
+common Supabase backend for channel data and analytics:
 
-**Version:** 1.8.2  
-**Platforms:** Windows, Linux, macOS, Android
+- **Desktop** (Python + CustomTkinter): Windows / Linux native app, VLC playback
+- **Mobile** (Flutter 3): Android (Play Store), iOS scaffolding
+- **Web / Docker** (FastAPI + vanilla JS): self-hosted server, browser UI
+
+**Version:** 2.15+ (semver, current latest tag tracked in `config.py` /
+`flutter_app/pubspec.yaml` / `Dockerfile`)
+**License:** MIT
+**Repo:** tv-viewer-app/tv_viewer (default branch: `master`)
+**Distribution:** GitHub Releases (Windows zip, Linux x86_64, Android APK + AAB),
+Docker Hub, Google Play Store
 
 ## Build, Test, and Lint Commands
 
-### Build
-```bash
-# Build Windows executable (current platform)
-python build.py
-
-# Build with specific options
-python build.py --onefile   # Single file executable (default)
-python build.py --onedir    # Directory-based build
-python build.py --debug     # With console for debugging
-python build.py --clean     # Clean build artifacts
-
-# Android APK
-cd android && buildozer android debug
-```
-
-### Test
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_core.py -v
-
-# Run post-build validation (critical before releases)
-python tests/validate_build.py
-python tests/validate_build.py --verbose  # Detailed output
-python tests/validate_build.py --quick    # Skip slow tests
-```
-
-### Run from Source
+### Desktop (Python)
 ```bash
 pip install -r requirements.txt
-python main.py
+python main.py                          # Run from source
+python build.py                         # Build Windows EXE (PyInstaller)
+python tests/validate_build.py --quick  # Pre-release validation
+python -m pytest tests/ -q              # 299+ unit tests
+```
+
+### Web / Docker
+```bash
+python -m web.server                    # Run FastAPI dev server on :8765
+docker build -t tv-viewer-web .         # Build container
+docker compose up                       # Run with persistent /data volume
+```
+
+### Flutter (Android)
+```bash
+cd flutter_app
+flutter pub get
+flutter test                            # Dart unit tests
+flutter build apk --release             # APK
+flutter build appbundle --release       # AAB for Play Store
+flutter analyze                         # Lint (release-blocking in CI)
 ```
 
 ## Tech Stack
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| UI Framework | CustomTkinter | Windows 11 Fluent Design UI |
-| Video Player | VLC (python-vlc) | Hardware-accelerated playback |
-| HTTP Client | aiohttp + requests | Async network operations |
-| Concurrency | asyncio + threading | Non-blocking operations |
-| Data Storage | JSON files | Channel cache and config |
-| Build | PyInstaller | Windows executable |
-| CI/CD | GitHub Actions | Automated Android builds |
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| Desktop UI | CustomTkinter + ttkbootstrap | Fluent 2 dark theme |
+| Desktop player | VLC via python-vlc | No hardware-accel flags (instability) |
+| Mobile | Flutter 3 + Material 3 | media_kit player, audio_service for background |
+| Web backend | FastAPI + uvicorn | Single-file `web/server.py` |
+| Web UI | Vanilla JS + HLS.js | `web/static/index.html` (~1500 LoC) |
+| Shared DB | Supabase (Postgres + PostgREST) | Anon key client-side, RLS-protected |
+| Analytics | Supabase `analytics_events` table | Opt-in only |
+| HTTP client | aiohttp (async) + requests | certifi CA bundle in Docker |
+| EPG | XMLTV (gzipped) from public sources | `utils/epg.py` |
+| Build | PyInstaller (desktop) / Flutter / Docker buildx | |
+| CI/CD | 20 GitHub Actions workflows | Release Gate is the merge bar |
 
 ## Architecture
 
-### Component Responsibilities
+### Desktop (Python)
+- `core/channel_manager.py` — single source of truth for in-memory channel list;
+  `__slots__` for memory; RLock-protected; URL→index map for O(1) lookups
+- `core/repository.py` — async M3U fetcher (aiohttp), configurable sources
+- `core/stream_checker.py` — background asyncio validation in daemon thread
+- `ui/main_window.py` — Tk main loop; **all UI updates from background threads
+  MUST use `root.after(0, ...)`** or segfault
+- `ui/player_window.py` — VLC player; Space/F/M/Esc keyboard shortcuts
 
-**ChannelManager** (`core/channel_manager.py`)
-- Single source of truth for channel data
-- Loads/saves channels, organizes by category/country
-- Memory-optimized with `__slots__` (40% memory savings)
-- Thread-safe with RLock
-- URL-to-index mapping for O(1) lookups
+### Flutter (Mobile)
+- `flutter_app/lib/services/` — `analytics_service.dart`, `shared_db_service.dart`,
+  `audio_handler.dart` (background playback), `epg_service.dart`
+- `flutter_app/lib/screens/` — `home_screen.dart`, `player_screen.dart`,
+  `radio_screen.dart`, `help_support_screen.dart`
+- Supabase credentials injected via `--dart-define=SUPABASE_URL=…` at build time
+- Pinned HTTPS via `lib/utils/pinned_http_client.dart` for *.supabase.co
 
-**RepositoryHandler** (`core/repository.py`)
-- Fetches M3U playlists from IPTV repositories
-- Async HTTP requests with aiohttp
-- Configurable in `channels_config.json`
+### Web / Docker
+- `web/server.py` — FastAPI app. Endpoints: `/api/channels`, `/api/refresh`,
+  `/api/health/report`, `/api/sources/{name}`, `/api/epg/{channel}`, `/proxy`
+  (SSRF-protected — blocks private IP ranges)
+- `web/static/index.html` — SPA, localStorage state, HLS.js, EPG overlay
+- Persistent state in `DATA_DIR` (`/data` volume in Docker): channels.json,
+  favorites.json, epg_cache.json
+- `utils/supabase_channels.py` — shared DB client: fetch, report broken,
+  report working (v2.15.1+)
+- `utils/normalize.py` — **single source of truth** for category/country
+  normalization (14 canonical categories). Ported by hand to Dart; risks drift.
 
-**StreamChecker** (`core/stream_checker.py`)
-- Background stream validation in daemon thread
-- Runs asyncio event loop in separate thread
-- Low thread priority to avoid UI blocking
-- Concurrent HTTP validation
-
-**MainWindow** (`ui/main_window.py`)
-- Main UI with channel list
-- Tkinter event loop on main thread
-- **CRITICAL:** All UI updates must use `root.after(0, ...)` when called from background threads
-
-**PlayerWindow** (`ui/player_window.py`)
-- Separate window for video playback
-- VLC integration with python-vlc
-- Keyboard shortcuts: Space (pause), F (fullscreen), M (mute), Esc (exit fullscreen)
-
-### Data Flow
-```
-RepositoryHandler → ChannelManager → StreamChecker
-                         ↓
-                    MainWindow
-                         ↓
-                   PlayerWindow
-```
+### Shared Backend (Supabase)
+- `channels` — `url_hash`, `name`, `urls[]`, `category`, `country`, `logo`,
+  `media_type`, `source`, etc.
+- `channel_status` — `url_hash`, `status` (working/broken), `last_checked`,
+  `report_count`
+- `analytics_events` — opt-in usage telemetry (sessions, plays, failures)
+- `v_channels_with_sources` — view with `security_invoker=true` (RLS honors caller)
+- `mv_daily_active_users` — materialized view, refreshed by GH Action
 
 ## Critical Conventions
 
-### Threading Rules (CRITICAL - Violating causes segfaults)
-
-**NEVER** modify tkinter UI directly from background threads. Always schedule updates on main thread:
-
+### Threading (Desktop)
+**Never** modify Tk widgets from background threads → segfault. Always:
 ```python
-# ✅ CORRECT - Schedule UI update on main thread
 self.root.after(0, lambda: self.label.configure(text="Updated"))
-
-# ❌ WRONG - Direct modification from background thread causes crash
-self.label.configure(text="Updated")
 ```
+The `StreamChecker` runs an asyncio loop on a daemon thread; its callbacks fire
+off-main and *must* schedule via `root.after`.
 
-**Background thread callbacks** must use `root.after(0, ...)`:
-```python
-def on_channel_validated(channel, current, total):
-    # This callback is called from StreamChecker's background thread
-    self.root.after(0, lambda: self._safe_update_ui(channel, current, total))
-```
+### Web — Untrusted Input → Supabase
+`/api/health/report` is the only client→shared-DB write surface. Every value
+forwarded to PostgREST **must** pass `_is_safe_channel_name` (rejects
+`,()*:` and control chars — PostgREST filter metacharacters) and go through
+aiohttp's `params=` encoding (never f-string into a query URL). The endpoint
+is rate-limited (30/min/IP global, 5/min/IP promote-writes).
 
-See `CHANGELOG.md` - Issue #32 for historical context on this critical fix.
+If you add a new write endpoint, replicate the pattern in
+`_promote_source_supabase` (web/server.py): validate → aiohttp `params=` →
+`Prefer: return=minimal`.
 
-### Memory Optimization
-
-Use `__slots__` for classes with many instances:
-```python
-class ChannelManager:
-    __slots__ = ('channels', 'categories', 'countries', ...)
-```
-
-Channels are stored once; categories/countries contain shared references (not copies).
-
-### UI Design System
-
-Use `FluentColors` from `ui/constants.py` for Windows 11 Fluent Design consistency:
-- `FluentColors.ACCENT` - Primary blue (#0078D4)
-- `FluentColors.BG_MICA`, `BG_ACRYLIC`, `BG_CARD` - Background layers
-- `FluentColors.TEXT_PRIMARY`, `TEXT_SECONDARY` - Text colors
-- `FluentColors.SUCCESS`, `ERROR`, `WARNING` - Status colors
+### Category Normalization
+Use `utils.normalize.normalize_category(raw, channel_name)`. Don't hardcode
+category lists. The 14 canonical set is in `CANONICAL_CATEGORIES`. If you add
+a category, update both Python (`utils/normalize.py`) and Dart
+(`flutter_app/lib/utils/normalize.dart`) — they share the same map structure.
 
 ### M3U Parsing Security
+`utils/helpers.parse_m3u()` enforces: max 100k lines, max 10k chars/line,
+string-type input check. Don't bypass for "trusted" sources — every public
+M3U is untrusted.
 
-The `parse_m3u()` function in `utils/helpers.py` includes security limits:
-- Max 100k lines per playlist (prevent DoS)
-- Max 10k chars per line (prevent memory attacks)
-- Input validation for string type
-
-### Configuration
-
-All tunable parameters in `config.py`:
-- `MAX_CONCURRENT_CHECKS` - Balance CPU/bandwidth vs speed
-- `STREAM_CHECK_TIMEOUT` - Balance speed vs reliability
-- `REQUEST_TIMEOUT` - Network timeout for repositories
-
-### Logger Usage
-
-Use module-level logger from `utils/logger`:
+### Logger
 ```python
 from utils.logger import get_logger
 logger = get_logger(__name__)
-
-logger.info("Starting channel scan")
-logger.error("VLC initialization failed", exc_info=True)
 ```
+Rotating logs in `logs/`. `logger.debug` for hot paths, `logger.info` for
+state changes, `logger.error(..., exc_info=True)` for unexpected.
 
-Logs saved to `logs/` directory with rotation.
+### VLC (Desktop)
+Multiple fallback init attempts (system VLC → PyInstaller bundle → minimal).
+**Never** pass `--avcodec-hw=vaapi` or other hardware-accel flags — cross-platform
+crashes. See git history for context.
 
-### VLC Initialization
-
-VLC initialization has multiple fallback attempts (see Issue #35):
-1. Standard system VLC
-2. PyInstaller bundle with environment vars
-3. Minimal configuration fallback
-
-**DO NOT** use hardware acceleration flags like `--avcodec-hw=vaapi` (causes instability across platforms).
-
-### Channel Data Structure
-
-Channels are dicts with standard keys:
+### Channel Data Schema
 ```python
 {
     'name': str,           # Display name
-    'url': str,            # Stream URL
-    'category': str,       # e.g., "News", "Sports"
-    'country': str,        # ISO country code or name
+    'url': str,            # Primary stream URL (== urls[0] in v2.15+)
+    'urls': list[str],     # All known sources for this channel
+    'url_hash': str,       # SHA-256 of primary url (Supabase key)
+    'category': str,       # One of CANONICAL_CATEGORIES
+    'country': str,        # ISO-2 or canonical name
     'logo': str,           # Logo URL (optional)
-    'media_type': str,     # 'TV', 'Radio', or None
-    'status': str,         # 'working', 'offline', 'unchecked'
-    'minimum_age': int,    # Age restriction (optional)
+    'media_type': str,     # 'TV' / 'Radio' / None
+    'status': str,         # 'working' / 'broken' / 'unchecked'
+    'source': str,         # Repository origin
 }
 ```
 
-## File Organization
+## File Organization (top-level)
 
 ```
-tv_viewer/
-├── main.py                    # Entry point with check_requirements()
-├── config.py                  # All configurable parameters
-├── channels.json              # Cached channels (auto-generated)
-├── channels_config.json       # User-configured repositories
-├── core/
-│   ├── channel_manager.py     # Central channel coordinator
-│   ├── repository.py          # Repository fetching (aiohttp)
-│   └── stream_checker.py      # Background validation (asyncio)
-├── ui/
-│   ├── constants.py           # FluentColors and design tokens
-│   ├── main_window.py         # Main window (must use root.after)
-│   ├── player_window.py       # Video player window
-│   └── scan_animation.py      # Loading animation
-├── utils/
-│   ├── helpers.py             # M3U parsing, JSON I/O
-│   ├── logger.py              # Logging setup
-│   ├── thumbnail.py           # Thumbnail capture/cache
-│   └── channel_lookup.py      # Channel metadata enrichment
-├── tests/
-│   ├── test_core.py           # Unit tests (pytest)
-│   └── validate_build.py      # Pre-release validation
-├── docs/
-│   ├── ARCHITECTURE.md        # Detailed architecture
-│   ├── SUPPORT_GUIDE.md       # Troubleshooting
-│   └── *.md                   # Other documentation
+tv_viewer_project/
+├── main.py                # Desktop entry point
+├── config.py              # APP_VERSION + tunables + Supabase env vars
+├── build.py               # PyInstaller wrapper
+├── requirements.txt
+├── Dockerfile + docker-compose.yml
+├── core/                  # Desktop channel/stream logic
+├── ui/                    # Desktop Tk UI
+├── utils/                 # Shared Python utilities
+│   ├── normalize.py       # ★ Category/country canonicalization
+│   ├── supabase_channels.py  # ★ Shared DB client
+│   ├── epg.py             # XMLTV fetch + fuzzy match
+│   ├── analytics.py       # Opt-in telemetry
+│   └── logger.py / helpers.py / thumbnail.py
+├── web/
+│   ├── server.py          # ★ FastAPI app (single file)
+│   └── static/index.html  # Web UI
+├── flutter_app/lib/       # Flutter mobile sources
+├── tests/                 # pytest (Python) — 299 tests
+├── scripts/               # One-off ops scripts (Supabase setup, dashboards)
+├── docs/                  # ARCHITECTURE, SUPPORT_GUIDE, PRIVACY (canonical)
+├── .github/
+│   ├── workflows/         # 20 CI workflows
+│   └── copilot-instructions.md  # This file
+└── .squad/                # Internal planning artifacts (not shipped)
+```
 └── android/                   # Android app (Kivy/Buildozer)
 ```
 

@@ -755,17 +755,116 @@ def _mark_local_broken(url: str):
 
 # ─── Health reporting (client-side playback results) ────────────────────────
 
+# Disallowed characters in user-supplied identifiers (channel names) before
+# we forward them to PostgREST. These have filter-syntax meaning in PostgREST
+# (https://postgrest.org/en/stable/api.html#horizontal-filtering-rows) and
+# allowing them lets a client break out of `name=eq.{val}` into arbitrary
+# row matching. We refuse rather than try to escape — channel names with these
+# chars do not exist in our shared DB.
+_POSTGREST_FORBIDDEN_CHARS = set(",()*:")
+_MAX_CHANNEL_NAME_LEN = 200
+
+
+def _is_safe_channel_name(name: str) -> bool:
+    if not name or not isinstance(name, str):
+        return False
+    if len(name) > _MAX_CHANNEL_NAME_LEN:
+        return False
+    # Reject any character that is a PostgREST filter delimiter
+    if any(c in _POSTGREST_FORBIDDEN_CHARS for c in name):
+        return False
+    # Reject control chars / newlines
+    if any(ord(c) < 32 for c in name):
+        return False
+    return True
+
+
+# Simple in-memory token bucket: cap promote-write traffic to the shared DB.
+# Two independent buckets per client IP:
+#   - global:  N requests per W seconds (all /api/health/report)
+#   - promote: N promote=true requests per W seconds (writes to Supabase)
+# In-memory only — fine for single-instance Docker. If you ever scale out
+# horizontally, move to Redis/Supabase. The bucket auto-prunes on the read
+# path to bound memory.
+_HEALTH_RATE_GLOBAL = (30, 60.0)   # 30 reports per 60s per IP
+_HEALTH_RATE_PROMOTE = (5, 60.0)   # 5 promotes per 60s per IP
+_health_buckets: Dict[str, Dict[str, List[float]]] = {}
+_health_buckets_lock = threading.Lock()
+
+
+def _client_ip(request: Request) -> str:
+    # Honor X-Forwarded-For when behind a trusted proxy (Docker reverse proxy);
+    # fall back to direct peer. We hash for the abuse log; we keep raw here
+    # because the bucket key only lives in memory.
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        # First entry is the original client
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit_check(ip: str, bucket: str, max_n: int, window: float) -> bool:
+    """Return True if request is allowed; False if rate-limited.
+
+    Token bucket via sliding window over a list of timestamps.
+    """
+    now = time.monotonic()
+    with _health_buckets_lock:
+        per_ip = _health_buckets.setdefault(ip, {})
+        timestamps = per_ip.setdefault(bucket, [])
+        # Prune stale
+        cutoff = now - window
+        while timestamps and timestamps[0] < cutoff:
+            timestamps.pop(0)
+        if len(timestamps) >= max_n:
+            return False
+        timestamps.append(now)
+        # Coarse memory bound: drop very-stale IPs entirely on each pass
+        if len(_health_buckets) > 10_000:
+            for stale_ip in [
+                k for k, v in _health_buckets.items()
+                if not any(v.values()) or all(
+                    (not ts) or ts[-1] < cutoff for ts in v.values()
+                )
+            ]:
+                _health_buckets.pop(stale_ip, None)
+        return True
+
+
 @app.post("/api/health/report")
 async def health_report(request: Request):
     """Report channel playback health from client. Accepts {url, status, promote?, name?}."""
+    ip = _client_ip(request)
+    # Global rate limit on the endpoint
+    if not _rate_limit_check(ip, "global",
+                             _HEALTH_RATE_GLOBAL[0], _HEALTH_RATE_GLOBAL[1]):
+        return JSONResponse({"status": "rate_limited"}, status_code=429)
+
     try:
         body = await request.json()
         url = body.get("url", "")
         status = body.get("status", "")
-        promote = body.get("promote", False)
-        ch_name = body.get("name", "")
+        promote = bool(body.get("promote", False))
+        ch_name = body.get("name", "") or ""
         if not url or status not in ("working", "broken"):
             return {"status": "ignored"}
+
+        # Drop unsafe channel names early (defence in depth — PostgREST injection,
+        # log injection, memory bloat from huge strings). Reporting still works,
+        # but we silently disable promotion.
+        if promote and not _is_safe_channel_name(ch_name):
+            logger.debug(
+                "health_report: rejecting promote (unsafe name) from %s len=%d",
+                ip[:16], len(ch_name) if isinstance(ch_name, str) else -1,
+            )
+            promote = False
+            ch_name = ""
+
+        # Per-IP cap on promote writes (these hit Supabase)
+        if promote and not _rate_limit_check(
+            ip, "promote", _HEALTH_RATE_PROMOTE[0], _HEALTH_RATE_PROMOTE[1]
+        ):
+            promote = False
 
         if status == "working":
             _mark_local_working(url)
@@ -820,12 +919,16 @@ def _promote_source(name: str, working_url: str):
 
 
 async def _promote_source_supabase(name: str, working_url: str):
-    """Update Supabase to set working_url as primary for this channel."""
+    """Update Supabase to set working_url as primary for this channel.
+
+    Uses PostgREST `name=ilike.{name}` (case-insensitive) with aiohttp's params
+    encoding to prevent filter-syntax injection. The caller must have already
+    validated `name` via `_is_safe_channel_name`.
+    """
+    if not _is_safe_channel_name(name):
+        return
     try:
-        from utils import supabase_channels
         url_hash = hashlib.sha256(working_url.encode()).hexdigest()
-        # Update the channel row: set url_hash to the working one and reorder urls
-        url = f'{config.SUPABASE_URL}/rest/v1/channels?name=eq.{name}'
         headers = {
             "apikey": config.SUPABASE_ANON_KEY,
             "Authorization": f"Bearer {config.SUPABASE_ANON_KEY}",
@@ -840,12 +943,16 @@ async def _promote_source_supabase(name: str, working_url: str):
         except ImportError:
             ssl_ctx = ssl.create_default_context()
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        base = f'{config.SUPABASE_URL}/rest/v1/channels'
+        # ilike pattern needs filter-syntax wildcards escaped to literals.
+        # PostgREST treats % and _ as wildcards; convert to literal match.
+        ilike_value = name.replace("%", r"\%").replace("_", r"\_")
+        name_filter = {"name": f"ilike.{ilike_value}"}
         async with aiohttp.ClientSession(connector=connector) as session:
-            # Get current channel data
-            get_url = f'{config.SUPABASE_URL}/rest/v1/channels?name=eq.{name}&select=urls,url_hash'
-            get_headers = dict(headers)
-            del get_headers['Content-Type']
-            async with session.get(get_url, headers=get_headers,
+            # Get current channel data — params dict ensures URL-encoding
+            get_headers = {k: v for k, v in headers.items() if k != "Content-Type"}
+            get_params = {**name_filter, "select": "urls,url_hash"}
+            async with session.get(base, headers=get_headers, params=get_params,
                                    timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
                     return
@@ -857,11 +964,11 @@ async def _promote_source_supabase(name: str, working_url: str):
                 if working_url in urls and urls[0] != working_url:
                     urls.remove(working_url)
                     urls.insert(0, working_url)
-                    # PATCH the urls array and url_hash
-                    patch_url = f'{config.SUPABASE_URL}/rest/v1/channels?name=eq.{name}'
                     payload = {"urls": urls, "url_hash": url_hash}
-                    async with session.patch(patch_url, json=payload, headers=headers,
-                                             timeout=aiohttp.ClientTimeout(total=10)) as patch_resp:
+                    async with session.patch(
+                        base, json=payload, headers=headers, params=name_filter,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as patch_resp:
                         if patch_resp.status in (200, 204):
                             logger.debug(f"Promoted source for {name} in Supabase")
     except Exception as e:
