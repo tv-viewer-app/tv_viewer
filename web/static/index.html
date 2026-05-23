@@ -479,12 +479,16 @@ function renderChannels(chs) {
 
     grid.innerHTML = displayChs.map((ch, i) => {
         const logo = ch.logo ? `<img class="card-logo" src="${esc(ch.logo)}" onerror="this.outerHTML=mono('${esc(ch.name)}')">` : mono(ch.name);
-        // Status dot: prefer locally-observed health (channelHealth) over server-side status.
-        // Color semantics: green=working, red=offline, dim-blue=unchecked.
+        // Status dot — precedence: (1) local 'broken' wins over any catalog
+        // status (user just reported it doesn't work), (2) local 'working' or
+        // catalog 'working' → green, (3) catalog 'offline' → red, (4) unknown.
         const localH = channelHealth[ch.url];
-        const eff = (localH === 'working' || ch.status === 'working') ? 'working'
-                  : (localH === 'broken'  || ch.status === 'offline') ? 'offline'
-                  : 'unchecked';
+        let eff;
+        if (localH === 'broken')             eff = 'offline';
+        else if (localH === 'working')       eff = 'working';
+        else if (ch.status === 'offline')    eff = 'offline';
+        else if (ch.status === 'working')    eff = 'working';
+        else                                  eff = 'unchecked';
         const dot = eff;
         const isFav = favorites.has(ch.url);
         return `<div class="card" data-idx="${i}" data-url="${esc(ch.url||'')}">
@@ -908,8 +912,13 @@ async function castChannel(idx) {
 
     // Build cast options menu
     const options = [];
+    const isSecure = window.isSecureContext;
 
-    // 1. Google Cast SDK (real Chromecast, plays HLS natively on the receiver)
+    // 1. Google Cast SDK (real Chromecast, plays HLS natively on the receiver).
+    // The Cast Web Sender SDK only registers in a secure context (HTTPS or
+    // localhost). On HTTP-LAN deployments (Docker on the home network) the
+    // SDK is silently disabled by the browser — surface that explicitly so
+    // users know to either enable HTTPS or use the browser's built-in cast.
     if (window.__castReady && window.cast && cast.framework) {
         const ctx = cast.framework.CastContext.getInstance();
         options.push({ label: '📺 Cast to Chromecast', action: async () => {
@@ -929,6 +938,23 @@ async function castChannel(idx) {
                 if (msg === 'cancel' || msg === 'CANCEL') toast('Cast cancelled');
                 else toast('Cast failed: ' + msg);
             }
+        }});
+    } else if (!isSecure) {
+        // Insecure context — explain *why* Chromecast option is missing.
+        options.push({ label: '🔒 Chromecast needs HTTPS — click for help', action: () => {
+            alert(
+                'Chromecast / Cast Web Sender requires a secure (HTTPS) context.\n\n' +
+                'You are accessing this app over HTTP, so the browser blocked ' +
+                'the Cast SDK from loading.\n\nWorkarounds:\n' +
+                '  • Use your browser\'s built-in cast feature (Chrome ⋮ menu → Cast…)\n' +
+                '  • Open this app over HTTPS (reverse-proxy with TLS, e.g. Caddy/Traefik)\n' +
+                '  • Or pick "Copy stream URL" below and paste into VLC on the cast device'
+            );
+        }});
+    } else {
+        // Secure but SDK still didn't load (network block / gstatic unreachable)
+        options.push({ label: '⚠ Chromecast SDK unavailable — see Copy URL below', action: () => {
+            toast('Cast SDK failed to load. Use Copy URL → VLC instead.');
         }});
     }
 
@@ -1012,6 +1038,18 @@ async function reportBroken(idx) {
     const ch = filtered[idx]; if (!ch) return;
     if (!confirm(`Report "${ch.name}" as broken?`)) return;
     analytics.report(ch);
+    // Local-first: flip the dot to red immediately and persist so the next
+    // render keeps it red. Also fire-and-forget the /api/health/report so the
+    // server can deprioritize/promote alternates in Supabase.
+    channelHealth[ch.url] = 'broken';
+    try { localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth)); } catch(e){}
+    reportHealth(ch.url, 'broken');
+    // Repaint the affected card without re-running the whole grid query.
+    const card = grid.querySelector(`.card[data-url="${(window.CSS&&CSS.escape)?CSS.escape(ch.url):ch.url.replace(/"/g,'\\"')}"]`);
+    if (card) {
+        const dot = card.querySelector('.card-dot');
+        if (dot) dot.className = 'card-dot offline';
+    }
     const res = await api.report(ch.url, ch.name);
     toast(`Reported: ${ch.name} (${res.status})`);
 }

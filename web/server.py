@@ -671,6 +671,39 @@ async def get_epg(channel_name: str, hours: int = Query(6, ge=1, le=24)):
         return {"channel": channel_name, "now": None, "next": None, "schedule": []}
 
 
+@app.get("/api/epg-status")
+async def get_epg_status():
+    """Return EPG loader diagnostics — channel count, last fetch, sources."""
+    try:
+        from utils.epg import epg_service
+        return {
+            "initialized": bool(epg_service._initialized),
+            "channel_count": epg_service.channel_count,
+            "last_fetch": epg_service._last_fetch,
+            "sources": epg_service.get_epg_sources(),
+        }
+    except Exception as e:
+        return {"initialized": False, "error": str(e)}
+
+
+@app.post("/api/epg/refresh")
+async def refresh_epg():
+    """Force a fresh EPG re-fetch (bypassing cache). Useful in Docker when
+    the initial startup fetch failed and left an empty cache."""
+    try:
+        from utils.epg import epg_service
+        epg_service._last_fetch = 0
+        epg_service._initialized = False
+        await epg_service.initialize()
+        return {
+            "status": "ok",
+            "channel_count": epg_service.channel_count,
+        }
+    except Exception as e:
+        logger.warning(f"EPG refresh failed: {e}")
+        raise HTTPException(status_code=500, detail=f"EPG refresh failed: {e}")
+
+
 # ─── Report broken channel ──────────────────────────────────────────────────
 
 class ReportRequest(BaseModel):

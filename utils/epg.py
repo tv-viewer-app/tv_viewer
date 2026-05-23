@@ -435,21 +435,34 @@ class EPGService:
             all_schedules[ch_id] = unique[:EPG_MAX_PROGRAMS_PER_CHANNEL]
 
         with self._lock:
+            # Refuse to overwrite a populated in-memory map with an empty
+            # result (all sources failed). Without this guard a transient
+            # network failure on the next refresh would wipe a working cache.
+            if not all_channels and self._channel_map:
+                logger.warning(
+                    "EPG fetch returned 0 channels — keeping existing %d-channel cache",
+                    len(self._channel_map),
+                )
+                # Reset fetch timestamp so we retry on next call.
+                self._last_fetch = 0
+                return
             self._channel_map = all_channels
             self._schedules = all_schedules
             self._build_name_index()
-            self._initialized = True
-            self._last_fetch = time.time()
+            self._initialized = bool(all_channels)
+            self._last_fetch = time.time() if all_channels else 0
 
         logger.info("EPG loaded: %d channels, %d programs",
                      len(all_channels),
                      sum(len(v) for v in all_schedules.values()))
 
-        # Save to cache
-        try:
-            self._save_cache()
-        except Exception as e:
-            logger.warning("Failed to save EPG cache: %s", e)
+        # Save to cache — only if we actually got data (don't poison disk
+        # cache with an empty result that would block future fetches).
+        if all_channels:
+            try:
+                self._save_cache()
+            except Exception as e:
+                logger.warning("Failed to save EPG cache: %s", e)
 
     def get_current_program(self, channel_name: str = "",
                              channel_id: str = "") -> Optional[EPGProgram]:
@@ -715,7 +728,19 @@ class EPGService:
             logger.info("EPG cache too old (%.1fh), will re-fetch", age_hours)
             return
 
-        self._channel_map = cache.get('channel_map', {})
+        channel_map = cache.get('channel_map', {})
+        # Don't trust an empty cache — a previous startup with no network would
+        # have written one, and we'd then refuse to re-fetch for 12h. Treat as
+        # cache-miss so initialize() will fetch fresh.
+        if not channel_map:
+            logger.info("EPG cache is empty, ignoring and will fetch fresh")
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            return
+
+        self._channel_map = channel_map
         self._schedules = {}
         for ch_id, programs in cache.get('schedules', {}).items():
             self._schedules[ch_id] = [

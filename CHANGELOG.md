@@ -5,6 +5,35 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.4] - 2026-05-23
+
+### Fixed
+- **EPG empty in Docker**: a transient network failure during container
+  startup poisoned the on-disk EPG cache with `{}`. `_load_cache` then
+  set `_initialized=True` for the empty cache, and `_do_initialize`
+  refused to re-fetch for 12 hours. Three guards added: (1) empty caches
+  on disk are now treated as cache-miss and deleted; (2) `_do_initialize`
+  no longer overwrites a populated in-memory map with an empty result
+  (preserves working data through transient failures); (3) the cache
+  file is only written when at least one channel was fetched.
+- **Broken-reported channels still showed green**: `reportBroken()` did
+  not update local `channelHealth` — only the server was notified. The
+  dot now flips to red immediately on report and persists via
+  localStorage. Also fixed the dot-priority rule so a local 'broken'
+  observation always overrides a catalog `status='working'`.
+
+### Added
+- `GET /api/epg-status` — diagnostics (channel count, last-fetch time,
+  configured sources). Useful for verifying Docker EPG state without
+  shelling into the container.
+- `POST /api/epg/refresh` — force a fresh EPG fetch bypassing cache.
+  Lets users recover from a poisoned cache without restarting the
+  container.
+- Cast menu now explains *why* Chromecast is unavailable on HTTP-LAN
+  Docker deployments (Cast Web Sender SDK requires HTTPS). Suggests
+  workarounds: browser-native cast menu, HTTPS reverse-proxy, or
+  Copy-URL → VLC.
+
 ## [2.15.3] - 2026-05-23
 
 ### Fixed
