@@ -420,6 +420,53 @@ async def report_channel(url_hash: str) -> bool:
         return False
 
 
+async def report_channel_working(url_hash: str) -> bool:
+    """Report a channel as working. Upserts into channel_status table.
+
+    Args:
+        url_hash: SHA-256 hash of the channel's primary URL.
+
+    Returns:
+        True if the status was recorded, False on any failure.
+    """
+    if not is_configured() or not url_hash:
+        return False
+
+    try:
+        ssl_ctx = _get_ssl_context()
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            url = f'{_SUPABASE_URL}/rest/v1/channel_status'
+            hdrs = _headers()
+            hdrs['Prefer'] = 'resolution=merge-duplicates,return=minimal'
+
+            payload = {
+                'url_hash': url_hash,
+                'status': 'working',
+                'last_checked': __import__('datetime').datetime.now(
+                    __import__('datetime').timezone.utc
+                ).isoformat(),
+            }
+
+            async with session.post(
+                url, json=payload, headers=hdrs,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status in (200, 201, 204):
+                    logger.debug(f'Marked channel {url_hash[:16]}… as working')
+                    return True
+                else:
+                    body = await resp.text()
+                    logger.debug(
+                        f'report_channel_working: {resp.status} - {body[:200]}'
+                    )
+                    return False
+
+    except Exception as e:
+        logger.debug(f'report_channel_working error: {e}')
+        return False
+
+
 def diff_channels(
     supabase_channels: List[Dict[str, Any]],
     m3u_channels: List[Dict[str, Any]],

@@ -347,8 +347,20 @@ class EPGService:
         all_channels: Dict[str, str] = {}
         all_schedules: Dict[str, List[EPGProgram]] = {}
 
+        # SSL context with certifi (fixes Docker/Alpine cert issues)
+        import ssl
+        try:
+            import certifi
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            ssl_ctx = ssl.create_default_context()
+
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        headers = {"User-Agent": "TVViewer/2.15 EPG-Fetcher"}
         async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=EPG_FETCH_TIMEOUT)
+            connector=connector,
+            timeout=aiohttp.ClientTimeout(total=EPG_FETCH_TIMEOUT),
+            headers=headers,
         ) as session:
             tasks = [self._fetch_source(session, url) for url in self._epg_sources]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -483,10 +495,26 @@ class EPGService:
             if clean in self._name_to_epg_id:
                 return self._name_to_epg_id[clean]
             # Fuzzy: try removing common suffixes
-            for suffix in [' hd', ' sd', ' fhd', ' uhd', ' 4k', ' (hd)', ' +1']:
+            for suffix in [' hd', ' sd', ' fhd', ' uhd', ' 4k', ' (hd)', ' +1',
+                           ' news', ' tv', ' channel', ' live', ' stream']:
                 stripped = clean.replace(suffix, '').strip()
                 if stripped in self._name_to_epg_id:
                     return self._name_to_epg_id[stripped]
+            # Try without spaces (e.g., "kan 11 news" → "kan11news" → "kan11")
+            no_spaces = re.sub(r'\s+', '', clean)
+            if no_spaces in self._name_to_epg_id:
+                return self._name_to_epg_id[no_spaces]
+            # Try removing trailing words one at a time
+            # "kan 11 news" → try "kan 11" → try "kan"
+            words = clean.split()
+            for i in range(len(words) - 1, 0, -1):
+                partial = ' '.join(words[:i])
+                if partial in self._name_to_epg_id:
+                    return self._name_to_epg_id[partial]
+                # Also try no-space version
+                partial_nospace = ''.join(words[:i])
+                if partial_nospace in self._name_to_epg_id:
+                    return self._name_to_epg_id[partial_nospace]
 
         return None
 
@@ -494,11 +522,19 @@ class EPGService:
         """Build lowercase name → EPG ID index for fuzzy matching."""
         self._name_to_epg_id = {}
         for epg_id, name in self._channel_map.items():
-            self._name_to_epg_id[name.lower().strip()] = epg_id
+            clean_name = name.lower().strip()
+            self._name_to_epg_id[clean_name] = epg_id
             # Also index without country suffix (e.g., "BBC One" from "BBC One.uk")
             if '.' in epg_id:
                 base = epg_id.rsplit('.', 1)[0]
                 self._name_to_epg_id[base.lower()] = epg_id
+            # Index normalized form (remove spaces between word and number)
+            # e.g., "kan 11" → matches EPG ID "Kan11.il"
+            normalized = re.sub(r'\s+', '', clean_name)
+            if normalized != clean_name:
+                self._name_to_epg_id[normalized] = epg_id
+            # Index the EPG ID itself lowercased
+            self._name_to_epg_id[epg_id.lower()] = epg_id
 
     async def _fetch_source(self, session: aiohttp.ClientSession,
                              url: str) -> Tuple[Dict[str, str], Dict[str, List[EPGProgram]]]:

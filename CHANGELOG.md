@@ -5,6 +5,28 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.1] - 2026-05-23
+
+### Added
+- **Promote working source**: When a stream successfully plays, that URL is
+  promoted to primary position in the channel's `urls` array — locally in the
+  in-memory cache and persisted to Supabase via PATCH. Over time the shared DB
+  self-heals: the most reliable source for each channel bubbles to position 0
+  for all users. New `report_channel_working()` upserts into `channel_status`.
+- **Web UI remembers working sources**: Browser localStorage tracks last
+  successful source per channel; player starts from the remembered URL on the
+  next play instead of cycling through dead sources first.
+
+### Fixed
+- **EPG SSL errors in Docker**: EPG fetcher now uses certifi CA bundle,
+  resolving certificate verification failures on Alpine-based images.
+- **EPG matching for Israeli channels**: Fuzzy matcher now strips trailing
+  ` news`, ` tv`, ` channel`, ` live`, ` stream` and also tries no-space
+  variants — so "Kan 11 news" correctly matches EPG ID "Kan11.il". Also
+  indexes the EPG ID itself (lowercased) for direct hits.
+- **EPG fetcher User-Agent**: Added `TVViewer/2.15 EPG-Fetcher` UA header
+  (some EPG sources 403 requests without one).
+
 ## [2.15.0] - 2026-05-22
 
 ### Changed

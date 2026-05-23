@@ -541,7 +541,18 @@ function playChannel(idx) {
     currentSources = (ch.urls && ch.urls.length > 0) ? [...ch.urls] : [ch.url];
     currentSourceIdx = 0;
 
-    startStream(ch.url, video, isRadio);
+    // Check for a remembered working source — start from it
+    let startUrl = ch.url;
+    try {
+        const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
+        const remembered = mem[ch.name];
+        if (remembered && currentSources.includes(remembered)) {
+            startUrl = remembered;
+            currentSourceIdx = currentSources.indexOf(remembered);
+        }
+    } catch(e) {}
+
+    startStream(startUrl, video, isRadio);
 
     // Show radio visualizer if audio-only
     if (isRadio) {
@@ -700,8 +711,18 @@ async function loadSources(name, currentUrl) {
             sel.style.display = 'none';
             return;
         }
-        // Update currentSources with all available URLs
+        // Put remembered working source first
+        let preferredUrl = currentUrl;
+        try {
+            const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
+            if (mem[name]) preferredUrl = mem[name];
+        } catch(e) {}
+
+        // Update currentSources with all available URLs, preferred first
         currentSources = sources.map(s => s.url);
+        if (preferredUrl && currentSources.includes(preferredUrl) && currentSources[0] !== preferredUrl) {
+            currentSources = [preferredUrl, ...currentSources.filter(u => u !== preferredUrl)];
+        }
         currentSourceIdx = currentSources.indexOf(currentUrl);
         if (currentSourceIdx < 0) currentSourceIdx = 0;
 
@@ -1349,7 +1370,36 @@ function reportHealth(url, status) {
 }
 
 function markPlaying(url) {
-    reportHealth(url, 'working');
+    // Remember this working source for the channel
+    const ch = filtered[playIdx];
+    const chName = ch ? ch.name : '';
+    if (ch) {
+        try {
+            const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
+            mem[ch.name] = url;
+            localStorage.setItem('tv_working_sources', JSON.stringify(mem));
+        } catch(e) {}
+    }
+    // Update local health state
+    channelHealth[url] = 'working';
+    localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth));
+    // Update channel dot to green in the grid
+    const chIdx = filtered.findIndex(c => c.url === url || (c.urls && c.urls.includes(url)));
+    if (chIdx >= 0) {
+        filtered[chIdx].status = 'working';
+        const card = grid.children[chIdx];
+        if (card) {
+            let dot = card.querySelector('.card-dot');
+            if (dot) { dot.className = 'card-dot live'; }
+            else { card.insertAdjacentHTML('afterbegin', '<div class="card-dot live"></div>'); }
+        }
+    }
+    // Single report to server: includes promote flag to set as primary source
+    fetch('/api/health/report', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url, status: 'working', promote: true, name: chName})
+    }).catch(() => {});
 }
 
 function markBroken(url) {

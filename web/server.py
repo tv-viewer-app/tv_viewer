@@ -757,16 +757,21 @@ def _mark_local_broken(url: str):
 
 @app.post("/api/health/report")
 async def health_report(request: Request):
-    """Report channel playback health from client. Accepts {url, status}."""
+    """Report channel playback health from client. Accepts {url, status, promote?, name?}."""
     try:
         body = await request.json()
         url = body.get("url", "")
         status = body.get("status", "")
+        promote = body.get("promote", False)
+        ch_name = body.get("name", "")
         if not url or status not in ("working", "broken"):
             return {"status": "ignored"}
 
         if status == "working":
             _mark_local_working(url)
+            # Promote this URL to primary position in the channel's urls array
+            if promote and ch_name:
+                _promote_source(ch_name, url)
         else:
             _mark_local_broken(url)
 
@@ -777,6 +782,11 @@ async def health_report(request: Request):
                 url_hash = hashlib.sha256(url.encode()).hexdigest()
                 if status == "broken":
                     await supabase_channels.report_channel(url_hash)
+                else:
+                    await supabase_channels.report_channel_working(url_hash)
+                    # Promote in Supabase too
+                    if promote and ch_name:
+                        await _promote_source_supabase(ch_name, url)
         except Exception:
             pass
 
@@ -789,11 +799,73 @@ async def health_report(request: Request):
 def _mark_local_working(url: str):
     """Mark a channel as working — update memory cache, write-through to disk."""
     for ch in _cache.channels:
-        if ch.get("url") == url:
+        if ch.get("url") == url or url in (ch.get("urls") or []):
             ch["status"] = "working"
             break
-    # Don't persist every working report — too many disk writes on NAS
-    # Disk will be written on next broken report or refresh
+
+
+def _promote_source(name: str, working_url: str):
+    """Promote a working URL to primary position in a channel's urls array."""
+    for ch in _cache.channels:
+        if (ch.get("name") or "").lower() == name.lower():
+            urls = ch.get("urls") or []
+            if working_url in urls and urls[0] != working_url:
+                urls.remove(working_url)
+                urls.insert(0, working_url)
+                ch["urls"] = urls
+                ch["url"] = working_url
+            elif not urls and ch.get("url") != working_url:
+                ch["url"] = working_url
+            break
+
+
+async def _promote_source_supabase(name: str, working_url: str):
+    """Update Supabase to set working_url as primary for this channel."""
+    try:
+        from utils import supabase_channels
+        url_hash = hashlib.sha256(working_url.encode()).hexdigest()
+        # Update the channel row: set url_hash to the working one and reorder urls
+        url = f'{config.SUPABASE_URL}/rest/v1/channels?name=eq.{name}'
+        headers = {
+            "apikey": config.SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {config.SUPABASE_ANON_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+        import aiohttp
+        import ssl
+        try:
+            import certifi
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            ssl_ctx = ssl.create_default_context()
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            # Get current channel data
+            get_url = f'{config.SUPABASE_URL}/rest/v1/channels?name=eq.{name}&select=urls,url_hash'
+            get_headers = dict(headers)
+            del get_headers['Content-Type']
+            async with session.get(get_url, headers=get_headers,
+                                   timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return
+                rows = await resp.json()
+                if not rows:
+                    return
+                row = rows[0]
+                urls = row.get("urls") or []
+                if working_url in urls and urls[0] != working_url:
+                    urls.remove(working_url)
+                    urls.insert(0, working_url)
+                    # PATCH the urls array and url_hash
+                    patch_url = f'{config.SUPABASE_URL}/rest/v1/channels?name=eq.{name}'
+                    payload = {"urls": urls, "url_hash": url_hash}
+                    async with session.patch(patch_url, json=payload, headers=headers,
+                                             timeout=aiohttp.ClientTimeout(total=10)) as patch_resp:
+                        if patch_resp.status in (200, 204):
+                            logger.debug(f"Promoted source for {name} in Supabase")
+    except Exception as e:
+        logger.debug(f"promote_source_supabase error: {e}")
 
 
 def _persist_channels():
