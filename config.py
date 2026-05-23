@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.14.5"
+APP_VERSION = "2.15.0"
 
 # =============================================================================
 # File Paths
@@ -170,22 +170,20 @@ MEDIA_TYPES = ["TV", "Radio", "All"]
 
 # Categories to organize channels
 DEFAULT_CATEGORIES = [
-    "General",
-    "News",
-    "Sports",
-    "Entertainment",
-    "Movies",
-    "Music",
-    "Kids",
     "Documentary",
     "Education",
+    "Entertainment",
+    "General",
+    "Kids",
     "Lifestyle",
-    "Comedy",
-    "Classic",
-    "Series",
-    "Religious",
+    "Movies",
+    "Music",
+    "Nature",
+    "News",
     "Radio",
-    "Other"
+    "Religious",
+    "Shopping",
+    "Sports",
 ]
 
 # =============================================================================

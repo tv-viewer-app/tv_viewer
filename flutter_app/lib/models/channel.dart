@@ -45,23 +45,182 @@ class Channel {
   }) : urls = urls ?? (url != null ? [url] : ['']);
   
   /// Normalize category by splitting on semicolons and taking first meaningful part
-  static String? normalizeCategory(String? rawCategory) {
-    if (rawCategory == null || rawCategory.isEmpty) return null;
-    
-    // Split by semicolons and take the first non-empty part
-    final parts = rawCategory.split(';')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    
-    if (parts.isEmpty) return null;
-    
-    // Return first part, capitalized
-    String category = parts.first;
-    if (category.isNotEmpty) {
-      category = category[0].toUpperCase() + category.substring(1).toLowerCase();
+  /// Canonical categories — must match utils/normalize.py CANONICAL_CATEGORIES
+  static const canonicalCategories = [
+    'Documentary', 'Education', 'Entertainment', 'General', 'Kids',
+    'Lifestyle', 'Movies', 'Music', 'Nature', 'News', 'Radio',
+    'Religious', 'Shopping', 'Sports',
+  ];
+
+  /// Full category normalization map — ported from utils/normalize.py
+  static const _categoryMap = <String, String>{
+    // Xumous-prefixed
+    'xumous: action & drama': 'Movies',
+    'xumous: animals & nature': 'Nature',
+    'xumous: automotive': 'Lifestyle',
+    'xumous: black voices. black stories.': 'Entertainment',
+    'xumous: classic tv': 'Entertainment',
+    'xumous: combat sports': 'Sports',
+    'xumous: comedy': 'Entertainment',
+    'xumous: crime tv': 'Movies',
+    'xumous: daytime tv': 'Entertainment',
+    'xumous: faith & family': 'Religious',
+    'xumous: food': 'Lifestyle',
+    'xumous: game shows': 'Entertainment',
+    'xumous: game show': 'Entertainment',
+    'xumous: history & learning': 'Documentary',
+    'xumous: home & design': 'Lifestyle',
+    'xumous: horror & sci-fi': 'Movies',
+    'xumous: kids': 'Kids',
+    'xumous: latino': 'Entertainment',
+    'xumous: local news': 'News',
+    'xumous: movies': 'Movies',
+    'xumous: music & radio': 'Music',
+    'xumous: music': 'Music',
+    'xumous: news': 'News',
+    'xumous: pop culture': 'Entertainment',
+    'xumous: reality tv': 'Entertainment',
+    'xumous: reality': 'Entertainment',
+    'xumous: sports': 'Sports',
+    'xumous: travel & lifestyle': 'Lifestyle',
+    'xumous: travel': 'Lifestyle',
+    'xumous: food & travel': 'Lifestyle',
+    'xumous: food+travel': 'Lifestyle',
+    'xumous: lifestyle': 'Lifestyle',
+    'xumous: documentary': 'Documentary',
+    'xumous: education': 'Education',
+    'xumous: shopping': 'Shopping',
+    'xumous: religious': 'Religious',
+    // Semicolon compounds
+    'animation;entertainment': 'Kids',
+    'animation;kids': 'Kids',
+    'animation;kids;religious': 'Kids',
+    'culture;entertainment': 'Entertainment',
+    'news;entertainment': 'News',
+    'sports;entertainment': 'Sports',
+    'music;entertainment': 'Music',
+    'music;lifestyle': 'Music',
+    'documentary;education': 'Documentary',
+    'kids;education': 'Kids',
+    'movies;entertainment': 'Movies',
+    'movies;drama': 'Movies',
+    'lifestyle;entertainment': 'Lifestyle',
+    'food;lifestyle': 'Lifestyle',
+    'food;travel': 'Lifestyle',
+    'travel;lifestyle': 'Lifestyle',
+    // Messy values
+    'undefined': 'General', 'other': 'General', 'uncategorized': 'General',
+    'general': 'General', 'none': 'General', 'n/a': 'General', 'tv': 'General',
+    // Merged categories
+    'action': 'Movies', 'action & drama': 'Movies', 'adventure': 'Movies',
+    'animation': 'Kids', 'animated': 'Kids', 'anime': 'Kids',
+    'classic': 'Entertainment', 'classic tv': 'Entertainment',
+    'classics': 'Entertainment', 'westerns + classics': 'Entertainment',
+    'western': 'Entertainment', 'comedy': 'Entertainment',
+    'comedy drama': 'Entertainment', 'crime': 'Movies', 'crime drama': 'Movies',
+    'crime tv': 'Movies', 'drama': 'Movies', 'fiction': 'Movies',
+    'horror': 'Movies', 'sci-fi': 'Movies', 'horror & sci-fi': 'Movies',
+    'series': 'Entertainment', 'reality': 'Entertainment',
+    'reality tv': 'Entertainment', 'talk': 'Entertainment',
+    'game shows': 'Entertainment', 'game show': 'Entertainment',
+    'daytime tv': 'Entertainment', 'pop culture': 'Entertainment',
+    // Lifestyle merges
+    'cooking': 'Lifestyle', 'food': 'Lifestyle', 'food & travel': 'Lifestyle',
+    'food+travel': 'Lifestyle', 'travel': 'Lifestyle',
+    'travel & lifestyle': 'Lifestyle', 'auto': 'Lifestyle',
+    'automotive': 'Lifestyle', 'culture': 'Lifestyle',
+    'culture + lifestyle': 'Lifestyle', 'home & design': 'Lifestyle',
+    'health': 'Lifestyle', 'relax': 'Lifestyle', 'outdoor': 'Lifestyle',
+    // Education merges
+    'business': 'Education', 'bus./financial': 'Education',
+    'technology': 'Education', 'computers': 'Education', 'tech': 'Education',
+    'science': 'Education', 'weather': 'Education', 'gaming': 'Education',
+    // Direct mappings
+    'movies': 'Movies', 'cinema': 'Movies', 'film': 'Movies',
+    'kids': 'Kids', 'family': 'Kids', 'children': 'Kids',
+    'children-music': 'Kids',
+    'sports': 'Sports', 'sport': 'Sports', 'baseball': 'Sports',
+    'basketball': 'Sports', 'boxing': 'Sports', 'football': 'Sports',
+    'soccer': 'Sports', 'tennis': 'Sports', 'cricket': 'Sports',
+    'golf': 'Sports', 'motorsport': 'Sports', 'wrestling': 'Sports',
+    'combat sports': 'Sports', 'action sports': 'Sports',
+    'shop': 'Shopping', 'shopping': 'Shopping', 'auction': 'Shopping',
+    'teleshopping': 'Shopping',
+    'documentary': 'Documentary', 'documentaries': 'Documentary',
+    'history': 'Documentary', 'history & learning': 'Documentary',
+    'news': 'News', 'local news': 'News', 'legislative': 'News',
+    'religious': 'Religious', 'faith & family': 'Religious',
+    'education': 'Education',
+    'music': 'Music', 'music & radio': 'Music',
+    'radio': 'Radio',
+    'nature': 'Nature', 'animals': 'Nature', 'animals & nature': 'Nature',
+    'wildlife': 'Nature',
+    'entertainment': 'Entertainment', 'lifestyle': 'Lifestyle',
+    'adult': 'General', 'xxx': 'General',
+  };
+
+  /// Name-based category patterns for channels with no/General category
+  static final _namePatterns = <String, RegExp>{
+    'Radio': RegExp(r'(?:\b\d{2,3}\.\d\s)|(?:\b(?:fm|radio)\b)', caseSensitive: false),
+    'Music': RegExp(r'\b(?:hits|jazz|rock|oldies|hitz|reggae|hip.?hop|r&b|soul|blues|techno|edm|salsa|symphony|orchestra|mizrahi|mizrahit|playlist|classic rock|smooth jazz|country music|pop music)\b', caseSensitive: false),
+    'News': RegExp(r'\b(?:news|noticias|cnn|bbc news|fox news|msnbc|cnbc|al.?jazeera|headline|infowars)\b', caseSensitive: false),
+    'Sports': RegExp(r'\b(?:sport|soccer|football|basketball|tennis|cricket|golf|racing|boxing|ufc|mma|nba|nfl|mlb|nhl|espn|bein|dazn)\b', caseSensitive: false),
+    'Religious': RegExp(r'\b(?:church|gospel|prayer|faith|islam|quran|torah|kabbalah|breslov|christian|bible|kol chai)\b', caseSensitive: false),
+    'Kids': RegExp(r'\b(?:kids|cartoon|nick|disney|toon|boomerang|pbs kids|sesame)\b', caseSensitive: false),
+    'Shopping': RegExp(r'\b(?:qvc|hsn|teleshopping|shop\s*tv|my\s*shop)\b', caseSensitive: false),
+  };
+
+  static String? normalizeCategory(String? rawCategory, {String? channelName}) {
+    if (rawCategory == null || rawCategory.isEmpty) {
+      // Try name-based inference
+      if (channelName != null && channelName.isNotEmpty) {
+        for (final entry in _namePatterns.entries) {
+          if (entry.value.hasMatch(channelName)) return entry.key;
+        }
+      }
+      return null;
     }
-    return category;
+
+    final key = rawCategory.trim().toLowerCase();
+
+    // Direct lookup
+    var mapped = _categoryMap[key];
+    if (mapped != null) return mapped;
+
+    // Strip vendor prefix
+    if (key.contains(':')) {
+      final afterColon = rawCategory.split(':').last.trim().toLowerCase();
+      mapped = _categoryMap[afterColon];
+      if (mapped != null) return mapped;
+    }
+
+    // Semicolon split
+    if (key.contains(';')) {
+      final first = rawCategory.split(';').first.trim().toLowerCase();
+      mapped = _categoryMap[first];
+      if (mapped != null) return mapped;
+    }
+
+    // " + " split
+    if (key.contains(' + ')) {
+      final first = rawCategory.split(' + ').first.trim().toLowerCase();
+      mapped = _categoryMap[first];
+      if (mapped != null) return mapped;
+    }
+
+    // Check canonical match
+    final title = rawCategory.trim();
+    final titleCased = title[0].toUpperCase() + title.substring(1).toLowerCase();
+    if (canonicalCategories.contains(titleCased)) return titleCased;
+
+    // Name-based fallback
+    if (channelName != null && channelName.isNotEmpty) {
+      for (final entry in _namePatterns.entries) {
+        if (entry.value.hasMatch(channelName)) return entry.key;
+      }
+    }
+
+    return 'General';
   }
   
   /// Extract resolution from channel name (e.g., "720p", "1080p")
@@ -348,7 +507,7 @@ class Channel {
     // Parse attributes
     final groupMatch = RegExp(r'group-title="([^"]*)"').firstMatch(info);
     if (groupMatch != null) {
-      category = normalizeCategory(groupMatch.group(1));
+      category = normalizeCategory(groupMatch.group(1), channelName: name);
     }
 
     final logoMatch = RegExp(r'tvg-logo="([^"]*)"').firstMatch(info);
@@ -437,7 +596,7 @@ class Channel {
           name: name,
           urls: urls,
           workingUrlIndex: workingUrlIndex is int ? workingUrlIndex : 0,
-          category: normalizeCategory(json['category']),
+          category: normalizeCategory(json['category'], channelName: name),
           logo: json['logo'],
           country: country,
           language: language,

@@ -5,6 +5,31 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.0] - 2026-05-22
+
+### Changed
+- **Category consolidation**: Reduced from 28+ categories to 14 canonical categories
+  across all clients (Web/Docker, Desktop Python, Flutter/Android)
+  - Merged: Action/Crime/Drama → Movies; Comedy/Classic/Series/Reality → Entertainment;
+    Cooking/Food/Travel/Auto/Culture → Lifestyle; Business/Tech/Science/Weather → Education;
+    Animation → Kids
+  - Eliminated: "Other" merged into "General"; all Xumous-prefixed categories normalized
+- **Shared normalization module**: New `utils/normalize.py` is the single source of truth
+  for category and country normalization. Desktop `categorize_channel()` now delegates to it.
+  Flutter `normalizeCategory()` ported with identical map.
+- **Name-based auto-classification**: Channels with "General" category are now auto-classified
+  by name patterns (FM frequencies → Radio, jazz/rock/hits → Music, news/CNN → News, etc.)
+  Reclassified ~500 channels from General into proper categories.
+
+### Fixed
+- **Docker channel loading**: Cloud DB auto-fetch triggers when cache < 5000 channels
+  or cache > 24h old (previously skipped refresh when any cache existed)
+- **EPG not showing in Docker**: EPG now preloads at startup; fixed field name mismatch
+  (`start_time`/`end_time` → `start`/`end`) in web UI
+- **Map country click**: Fixed channel loader showing spinner forever (API response
+  structure extraction)
+- **Search UX**: Added ✕ clear button; selecting category/country now clears search filter
+
 ## [2.14.5] - 2026-05-22
 
 ### Security

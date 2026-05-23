@@ -997,11 +997,9 @@ class ChannelProvider extends ChangeNotifier {
   static const _knownCategories = {
     'Animation', 'Auto', 'Business', 'Classic', 'Comedy', 'Cooking',
     'Culture', 'Documentary', 'Education', 'Entertainment', 'Family',
-    'General', 'Kids', 'Legislative', 'Lifestyle', 'Movies', 'Music',
-    'News', 'Outdoor', 'Radio', 'Relax', 'Religious', 'Science',
-    'Series', 'Shop', 'Sports', 'Travel', 'Weather', 'Xxx', 'Adult', 'Other',
-    'Undefined', 'Fiction', 'Food', 'Health', 'History', 'Nature',
-    'Technology', 'Gaming', 'Drama', 'Crime', 'Reality', 'Talk',
+    'Documentary', 'Education', 'Entertainment', 'General', 'Kids',
+    'Lifestyle', 'Movies', 'Music', 'Nature', 'News', 'Radio',
+    'Religious', 'Shopping', 'Sports',
   };
 
   void _updateCategories() {

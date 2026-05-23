@@ -320,153 +320,20 @@ def save_json_file(filepath: str, data: Any) -> bool:
 def categorize_channel(channel: Dict[str, Any]) -> str:
     """
     Determine the best category for a channel based on its metadata.
-    Uses external lookup for known channels when category is unclear.
+    Uses the shared normalize module for consistent categories across all clients.
     
     Args:
         channel: Channel dictionary
         
     Returns:
-        Category string (one of DEFAULT_CATEGORIES)
+        Category string (one of CANONICAL_CATEGORIES from utils.normalize)
     """
-    from config import DEFAULT_CATEGORIES
-    from .channel_lookup import COUNTRY_NAMES
+    from utils.normalize import normalize_category
     
     raw_category = channel.get('category', '') or ''
-    name = channel.get('name', '').lower()
+    name = channel.get('name', '') or ''
     
-    # Clean up category: take first part if semicolon-separated (e.g., "auto;series" -> "auto")
-    if ';' in raw_category:
-        raw_category = raw_category.split(';')[0].strip()
-    
-    category = raw_category.lower()
-    
-    # Map common category names to standard categories
-    category_mapping = {
-        'news': 'News',
-        'sports': 'Sports',
-        'sport': 'Sports',
-        'entertainment': 'Entertainment',
-        'movies': 'Movies',
-        'movie': 'Movies',
-        'cinema': 'Movies',
-        'film': 'Movies',
-        'music': 'Music',
-        'kids': 'Kids',
-        'children': 'Kids',
-        'infantil': 'Kids',
-        'cartoon': 'Kids',
-        'animation': 'Kids',
-        'anime': 'Entertainment',
-        'documentary': 'Documentary',
-        'education': 'Education',
-        'general': 'General',
-        'comedy': 'Comedy',
-        'classic': 'Classic',
-        'series': 'Series',
-        'lifestyle': 'Lifestyle',
-        'cooking': 'Lifestyle',
-        'food': 'Lifestyle',
-        'travel': 'Lifestyle',
-        'fashion': 'Lifestyle',
-        'religious': 'Religious',
-        'religion': 'Religious',
-        'faith': 'Religious',
-        'church': 'Religious',
-        'weather': 'News',
-        'business': 'News',
-        'science': 'Documentary',
-        'nature': 'Documentary',
-        'history': 'Documentary',
-        'cultura': 'Documentary',
-        'culture': 'Documentary',
-        'radio': 'Radio',
-        'fm': 'Radio',
-    }
-    
-    # Check category field first
-    for key, value in category_mapping.items():
-        if key in category:
-            return value
-    
-    # Check name field for category hints
-    name_category_keywords = {
-        'News': ['news', 'noticias', 'notizie', 'actualités', 'nachrichten', 'nouvelles', 'haber', 
-                 'cnn', 'bbc news', 'fox news', 'sky news', 'al jazeera', 'reuters'],
-        'Sports': ['sport', 'sports', 'futbol', 'football', 'soccer', 'basketball', 'tennis', 
-                   'golf', 'cricket', 'rugby', 'nfl', 'nba', 'mlb', 'espn', 'eurosport', 'bein',
-                   'sport 5', 'sky sports', 'bt sport', 'dazn'],
-        'Kids': ['kids', 'junior', 'cartoon', 'disney', 'nick', 'nickelodeon', 
-                 'boomerang', 'cbeebies', 'cbbc', 'baby', 'pbs kids', 'hop!', 'luli', 'hop ',
-                 'junior', 'kika', 'gulli', 'clan', 'boing'],
-        'Movies': ['movie', 'cinema', 'film', 'hbo', 'cinemax', 'starz', 'showtime', 
-                   'sundance', 'tcm', 'amc', 'yes action', 'hot cinema', 'film4'],
-        'Music': ['music', 'mtv', 'vh1', 'viva', 'trace', 'mezzo', 'music 24', 'vevo'],
-        'Documentary': ['documentary', 'discovery', 'national geographic', 'nat geo', 
-                       'history', 'science', 'animal planet', 'nature', 'arte', 'smithsonian'],
-        'Entertainment': ['entertainment', 'variety', 'show', 'comedy', 'drama', 'series',
-                         'fox', 'tbs', 'tnt', 'usa network', 'bravo', 'e!'],
-        'Religious': ['religious', 'church', 'god', 'christian', 'catholic', 'islamic', 
-                     'ewtn', 'daystar', 'tbn', 'god tv', 'prayer', 'bible', 'torah'],
-        'Lifestyle': ['lifestyle', 'home', 'garden', 'hgtv', 'food', 'cooking', 'travel', 
-                     'tlc', 'fashion', 'health', 'wellness'],
-        'Radio': ['radio', ' fm', 'fm ', '.fm', '88fm', '99fm', '100fm', '103fm', 'galatz', 
-                  'galgalatz', 'reshet bet', 'kol israel', 'army radio', 'bbc radio'],
-    }
-    
-    for cat, keywords in name_category_keywords.items():
-        for keyword in keywords:
-            if keyword in name:
-                return cat
-    
-    # If category from source data is valid (in DEFAULT_CATEGORIES and not a country), use it
-    # First, normalize the raw category for comparison
-    original_category = raw_category.strip() if raw_category else 'Other'
-    
-    # Check if it's a country name - if so, don't use it as category
-    # Case-insensitive: catches "Italy", "italy", "Uk", "RUSSIA", etc.
-    if original_category in COUNTRY_NAMES or original_category.upper() in COUNTRY_NAMES:
-        return 'Other'
-    oc_title = original_category.title()
-    if oc_title in COUNTRY_NAMES:
-        return 'Other'
-    # Also strip compound categories that embed a country (e.g., "Vod italy", "Local channels")
-    for word in original_category.split():
-        if word.title() in COUNTRY_NAMES or word.upper() in COUNTRY_NAMES:
-            return 'Other'
-    
-    # Map common non-standard category strings to standard ones
-    extra_category_map = {
-        'vod': 'Movies',
-        'shop': 'Lifestyle',
-        'shopping': 'Lifestyle',
-        'outdoor': 'Lifestyle',
-        'family': 'Entertainment',
-        'reality': 'Entertainment',
-        'gaming': 'Entertainment',
-        'auto': 'Entertainment',
-        'legislative': 'News',
-        'business': 'News',
-        'local': 'General',
-        'local channels': 'General',
-        'classic': 'Entertainment',
-        'animation': 'Kids',
-        'horror': 'Movies',
-        'drama': 'Entertainment',
-        'adult': 'Other',
-        'xxx': 'Other',
-    }
-    cat_lower = original_category.lower()
-    for key, val in extra_category_map.items():
-        if key in cat_lower:
-            return val
-    
-    # Check if it matches a default category (case-insensitive)
-    for default_cat in DEFAULT_CATEGORIES:
-        if original_category.lower() == default_cat.lower():
-            return default_cat
-    
-    # Default to Other for uncategorized channels
-    return 'Other'
+    return normalize_category(raw_category, name)
 
 
 def detect_media_type(channel: Dict[str, Any]) -> str:

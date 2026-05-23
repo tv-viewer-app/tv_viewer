@@ -315,6 +315,26 @@ exposes a **source selector** control.
 
 ## Key Classes
 
+### Category & Country Normalization (`utils/normalize.py`)
+
+Single source of truth for all category and country string normalization.
+All clients (Web/Docker, Desktop Python, Flutter/Android) produce identical results.
+
+**14 Canonical Categories:**
+Documentary, Education, Entertainment, General, Kids, Lifestyle, Movies,
+Music, Nature, News, Radio, Religious, Shopping, Sports.
+
+**Normalization Pipeline:**
+1. Direct map lookup (160+ raw → canonical mappings including all Xumous variants)
+2. Vendor prefix stripping (e.g., "Xumous: Comedy" → lookup "comedy")
+3. Semicolon/compound splitting (e.g., "animation;entertainment" → Kids)
+4. Name-based inference when category is General (FM frequency → Radio, etc.)
+
+**Client Integration:**
+- Desktop: `categorize_channel()` in `utils/helpers.py` delegates to `normalize_category()`
+- Web/Docker: `server.py` imports and calls `normalize_category()` during channel load
+- Flutter: `Channel.normalizeCategory()` in `channel.dart` is a Dart port of the same map
+
 ### ChannelManager (`core/channel_manager.py`)
 
 Central coordinator for channel data. Thread-safe with `RLock`.
