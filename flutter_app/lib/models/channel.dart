@@ -171,7 +171,7 @@ class Channel {
   };
 
   static String? normalizeCategory(String? rawCategory, {String? channelName}) {
-    if (rawCategory == null || rawCategory.isEmpty) {
+    if (rawCategory == null || rawCategory.trim().isEmpty) {
       // Try name-based inference
       if (channelName != null && channelName.isNotEmpty) {
         for (final entry in _namePatterns.entries) {
