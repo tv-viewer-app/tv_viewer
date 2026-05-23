@@ -42,53 +42,8 @@ def import_time_str() -> str:
     return datetime.now().isoformat()
 
 
-# ISO 3166-1 alpha-2 to country name mapping for normalizing tvg-country codes
-_ISO_TO_COUNTRY = {
-    'AF': 'Afghanistan', 'AL': 'Albania', 'DZ': 'Algeria', 'AR': 'Argentina',
-    'AM': 'Armenia', 'AU': 'Australia', 'AT': 'Austria', 'AZ': 'Azerbaijan',
-    'BH': 'Bahrain', 'BD': 'Bangladesh', 'BY': 'Belarus', 'BE': 'Belgium',
-    'BO': 'Bolivia', 'BA': 'Bosnia', 'BR': 'Brazil', 'BG': 'Bulgaria',
-    'CA': 'Canada', 'CL': 'Chile', 'CN': 'China', 'CO': 'Colombia',
-    'CR': 'Costa Rica', 'HR': 'Croatia', 'CU': 'Cuba', 'CY': 'Cyprus',
-    'CZ': 'Czech Republic', 'DK': 'Denmark', 'DO': 'Dominican Republic',
-    'EC': 'Ecuador', 'EG': 'Egypt', 'SV': 'El Salvador', 'EE': 'Estonia',
-    'ET': 'Ethiopia', 'FI': 'Finland', 'FR': 'France', 'GE': 'Georgia',
-    'DE': 'Germany', 'GH': 'Ghana', 'GR': 'Greece', 'GT': 'Guatemala',
-    'HN': 'Honduras', 'HK': 'Hong Kong', 'HU': 'Hungary', 'IS': 'Iceland',
-    'IN': 'India', 'ID': 'Indonesia', 'IR': 'Iran', 'IQ': 'Iraq',
-    'IE': 'Ireland', 'IL': 'Israel', 'IT': 'Italy', 'JM': 'Jamaica',
-    'JP': 'Japan', 'JO': 'Jordan', 'KZ': 'Kazakhstan', 'KE': 'Kenya',
-    'KW': 'Kuwait', 'LV': 'Latvia', 'LB': 'Lebanon', 'LY': 'Libya',
-    'LT': 'Lithuania', 'LU': 'Luxembourg', 'MY': 'Malaysia', 'MX': 'Mexico',
-    'MA': 'Morocco', 'MM': 'Myanmar', 'NP': 'Nepal', 'NL': 'Netherlands',
-    'NZ': 'New Zealand', 'NG': 'Nigeria', 'NO': 'Norway', 'OM': 'Oman',
-    'PK': 'Pakistan', 'PA': 'Panama', 'PY': 'Paraguay', 'PE': 'Peru',
-    'PH': 'Philippines', 'PL': 'Poland', 'PT': 'Portugal', 'QA': 'Qatar',
-    'RO': 'Romania', 'RU': 'Russia', 'SA': 'Saudi Arabia', 'RS': 'Serbia',
-    'SG': 'Singapore', 'SK': 'Slovakia', 'SI': 'Slovenia', 'ZA': 'South Africa',
-    'KR': 'South Korea', 'ES': 'Spain', 'LK': 'Sri Lanka', 'SD': 'Sudan',
-    'SE': 'Sweden', 'CH': 'Switzerland', 'SY': 'Syria', 'TW': 'Taiwan',
-    'TH': 'Thailand', 'TN': 'Tunisia', 'TR': 'Turkey', 'UA': 'Ukraine',
-    'AE': 'UAE', 'GB': 'UK', 'US': 'US', 'UY': 'Uruguay',
-    'UZ': 'Uzbekistan', 'VE': 'Venezuela', 'VN': 'Vietnam', 'YE': 'Yemen',
-}
-
-
-def _normalize_country(country_str: str) -> str:
-    """Normalize a country string — convert ISO codes to full names."""
-    if not country_str:
-        return 'Unknown'
-    country_str = country_str.strip()
-    # If it looks like a 2-letter ISO code, convert it
-    if len(country_str) == 2 and country_str.isalpha():
-        return _ISO_TO_COUNTRY.get(country_str.upper(), country_str)
-    # Handle semicolon-separated country lists (iptv-org format) — take first
-    if ';' in country_str:
-        first = country_str.split(';')[0].strip()
-        if len(first) == 2 and first.isalpha():
-            return _ISO_TO_COUNTRY.get(first.upper(), first)
-        return first
-    return country_str
+# Country normalization — single source of truth is utils.normalize.
+from utils.normalize import normalize_country as _normalize_country
 
 
 def _migrate_channel_urls(channel: Dict[str, Any]) -> Dict[str, Any]:

@@ -82,6 +82,51 @@ EPG_MAX_PROGRAMS_PER_CHANNEL = 48  # ~24 hours of 30-min programs
 # Data classes
 # ---------------------------------------------------------------------------
 
+# Hebrew/Arabic → English aliases for major Israeli/MENA channels.
+# Channel names on the user's side often arrive in their native script, but EPG
+# sources (e.g. epgshare01's IL1.xml.gz) publish display names in English. We
+# translate before fuzzy-matching so the existing tier-1/tier-2 logic can find
+# them.
+_LOCALE_CHANNEL_ALIASES: Dict[str, str] = {
+    # Israeli channels (Hebrew)
+    "ערוץ 14": "Channel 14",
+    "ערוץ 13": "Channel 13",
+    "ערוץ 12": "Channel 12",
+    "ערוץ 11": "Kan 11",
+    "ערוץ 10": "Channel 10",
+    "ערוץ 9": "Channel 9",
+    "ערוץ 24": "Channel 24",
+    "ערוץ 20": "Channel 20",
+    "כאן 11": "Kan 11",
+    "כאן": "Kan 11",
+    "קשת 12": "Keshet 12",
+    "קשת": "Keshet 12",
+    "רשת 13": "Reshet 13",
+    "רשת": "Reshet 13",
+    "ספורט 1": "Sport 1",
+    "ספורט 2": "Sport 2",
+    "ספורט 3": "Sport 3",
+    "ספורט 4": "Sport 4",
+    "ספורט 5": "Sport 5",
+    "ספורט": "Sport 1",
+    "ynet": "Ynet",
+    "ynet news": "Ynetnews",
+    "מאקו": "Mako",
+    "הכאן חדשות": "Kan News",
+    "הכנסת": "Knesset",
+    "כנסת": "Knesset",
+    "i24 news": "i24NEWS",
+}
+
+
+def _alias_channel(name: str) -> str:
+    """Map a localized channel name to its English equivalent if known."""
+    if not name:
+        return name
+    key = name.strip().lower()
+    return _LOCALE_CHANNEL_ALIASES.get(key, name)
+
+
 class EPGProgram:
     """A single TV program in the EPG."""
     __slots__ = ('title', 'start', 'end', 'description', 'category',
@@ -500,7 +545,10 @@ class EPGService:
             return epg_id
 
         if name:
-            clean = name.lower().strip()
+            # Locale alias: e.g. "ערוץ 14" → "Channel 14" so existing fuzzy
+            # logic can match against the English-name EPG index.
+            aliased = _alias_channel(name)
+            clean = aliased.lower().strip()
             # ── Tier 1: safe lookups ──
             # Direct match
             if clean in self._name_to_epg_id:

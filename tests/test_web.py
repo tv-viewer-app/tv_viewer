@@ -227,8 +227,11 @@ class TestHealthReportSecurity:
         assert r.json() == {"status": "ignored"}
 
     def test_health_report_rate_limit_global(self, client):
-        """Global bucket: 30 reports / 60s / IP. Burst above the cap returns 429."""
-        from web.server import _health_buckets, _health_buckets_lock
+        """Global bucket: large burst beyond the cap is throttled (HTTP 200,
+        status='throttled') rather than rejected with 429 — frontend uses a
+        fire-and-forget POST, and 429s would just create console noise without
+        any benefit."""
+        from web.server import _health_buckets, _health_buckets_lock, _HEALTH_RATE_GLOBAL
         # Reset buckets to isolate from other tests
         with _health_buckets_lock:
             _health_buckets.clear()
@@ -236,17 +239,19 @@ class TestHealthReportSecurity:
             "url": "https://example.com/rl.m3u8",
             "status": "working",
         }
-        ok = 0
-        rate_limited = 0
-        for _ in range(40):
+        cap, _window = _HEALTH_RATE_GLOBAL
+        # Send enough requests to overflow the global bucket comfortably.
+        total = cap + 20
+        statuses = {"recorded": 0, "ignored": 0, "throttled": 0, "other": 0}
+        for _ in range(total):
             r = client.post("/api/health/report", json=payload)
-            if r.status_code == 429:
-                rate_limited += 1
-            else:
-                ok += 1
-        # We expect ~30 ok + ~10 rate-limited (the limit is 30/min)
-        assert ok <= 30
-        assert rate_limited >= 5
+            assert r.status_code == 200, f"Unexpected status {r.status_code}"
+            body_status = r.json().get("status")
+            statuses[body_status if body_status in statuses else "other"] += 1
+        # At least some requests should be throttled (downgraded, not 429)
+        assert statuses["throttled"] >= 5, statuses
+        # And we should have at most `cap` non-throttled responses
+        assert statuses["recorded"] + statuses["ignored"] <= cap, statuses
 
 
 # ─── Report ─────────────────────────────────────────────────────────────────

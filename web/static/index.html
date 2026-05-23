@@ -75,8 +75,12 @@
         .card-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .card-epg { font-size: 10px; color: var(--accent); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .card-dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; }
-        .card-dot.live { background: var(--live); animation: pulse 1.5s infinite; }
-        .card-dot.ok { background: var(--success); }
+        .card-dot.working { background: var(--success); animation: pulse 1.5s infinite; }
+        .card-dot.offline { background: var(--live); }
+        .card-dot.unchecked { background: var(--accent); opacity: .55; }
+        /* Back-compat: keep .live/.ok as aliases so any legacy markup still renders */
+        .card-dot.live { background: var(--success); animation: pulse 1.5s infinite; }
+        .card-dot.ok { background: var(--accent); opacity: .55; }
         .card-actions { display: flex; gap: 4px; margin-top: 8px; }
         .card-actions button { font-size: 10px; padding: 3px 7px; border: 1px solid var(--border); background: transparent; color: var(--text-sec); border-radius: 4px; cursor: pointer; }
         .card-actions button:hover { border-color: var(--accent); color: var(--accent); }
@@ -171,6 +175,20 @@
             .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
         }
     </style>
+    <!-- Google Cast Web Sender SDK (loaded async; ignored if blocked/Chromecast unavailable) -->
+    <script>
+      window['__onGCastApiAvailable'] = function (loaded) {
+        try {
+          if (!loaded || !window.chrome || !chrome.cast) { window.__castReady = false; return; }
+          cast.framework.CastContext.getInstance().setOptions({
+            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+          });
+          window.__castReady = true;
+        } catch (e) { window.__castReady = false; }
+      };
+    </script>
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" async onerror="window.__castReady=false"></script>
 </head>
 <body>
 <header class="header">
@@ -461,10 +479,16 @@ function renderChannels(chs) {
 
     grid.innerHTML = displayChs.map((ch, i) => {
         const logo = ch.logo ? `<img class="card-logo" src="${esc(ch.logo)}" onerror="this.outerHTML=mono('${esc(ch.name)}')">` : mono(ch.name);
-        const dot = ch.status==='working'?'live':(ch.status==='offline'?'':'ok');
+        // Status dot: prefer locally-observed health (channelHealth) over server-side status.
+        // Color semantics: green=working, red=offline, dim-blue=unchecked.
+        const localH = channelHealth[ch.url];
+        const eff = (localH === 'working' || ch.status === 'working') ? 'working'
+                  : (localH === 'broken'  || ch.status === 'offline') ? 'offline'
+                  : 'unchecked';
+        const dot = eff;
         const isFav = favorites.has(ch.url);
-        return `<div class="card" data-idx="${i}">
-            ${dot?`<div class="card-dot ${dot}"></div>`:''}
+        return `<div class="card" data-idx="${i}" data-url="${esc(ch.url||'')}">
+            <div class="card-dot ${dot}"></div>
             <div class="card-top">${logo}<div class="card-info"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div></div></div>
             <div class="card-epg" id="epg-${i}"></div>
             <div class="card-actions"><button onclick="event.stopPropagation();playChannel(${i})">▶ Play</button><button onclick="event.stopPropagation();toggleFav(${i})" style="${isFav?'color:var(--fav);border-color:var(--fav)':''}">${isFav?'★':'☆'}</button><button onclick="event.stopPropagation();castChannel(${i})">📡</button><button class="report-btn" onclick="event.stopPropagation();reportBroken(${i})">⚠</button></div>
@@ -885,10 +909,33 @@ async function castChannel(idx) {
     // Build cast options menu
     const options = [];
 
-    // 1. Remote Playback API (Chromecast, AirPlay, smart TVs)
+    // 1. Google Cast SDK (real Chromecast, plays HLS natively on the receiver)
+    if (window.__castReady && window.cast && cast.framework) {
+        const ctx = cast.framework.CastContext.getInstance();
+        options.push({ label: '📺 Cast to Chromecast', action: async () => {
+            try {
+                await ctx.requestSession();
+                const session = ctx.getCurrentSession();
+                if (!session) { toast('No Chromecast device selected'); return; }
+                const mediaInfo = new chrome.cast.media.MediaInfo(url, 'application/x-mpegURL');
+                mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+                mediaInfo.metadata.title = ch.name;
+                if (ch.logo) mediaInfo.metadata.images = [new chrome.cast.Image(ch.logo)];
+                const request = new chrome.cast.media.LoadRequest(mediaInfo);
+                await session.loadMedia(request);
+                toast(`Casting ${ch.name} to Chromecast`);
+            } catch(e) {
+                const msg = (e && e.code) ? e.code : (e && e.message) || 'unknown error';
+                if (msg === 'cancel' || msg === 'CANCEL') toast('Cast cancelled');
+                else toast('Cast failed: ' + msg);
+            }
+        }});
+    }
+
+    // 2. Remote Playback API (AirPlay on Safari, some smart TVs)
     const video = document.getElementById('player');
     if (video.remote && typeof video.remote.prompt === 'function') {
-        options.push({ label: '📺 Cast to TV (Chromecast/AirPlay)', action: async () => {
+        options.push({ label: '📡 Cast via Remote Playback (AirPlay)', action: async () => {
             try {
                 await video.remote.prompt();
                 toast(`Casting ${ch.name} to remote device...`);
@@ -1357,10 +1404,22 @@ function toast(msg) { const t=document.getElementById('toast'); t.textContent=ms
 function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,category:ch.category,country:ch.country,logo:ch.logo,status:ch.status});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,50)));}catch(e){} }
 
 // ─── Channel Health ─────────────────────────────────────────────────────────
+// Per-session dedup: don't re-POST the same (url,status) within the session.
+// Avoids hammering /api/health/report on multi-source channel validation
+// flows where the same URL can be probed multiple times.
+const _healthReportedThisSession = new Set();
+function _shouldReport(url, status, promote) {
+    const k = `${status}|${promote ? 1 : 0}|${url}`;
+    if (_healthReportedThisSession.has(k)) return false;
+    _healthReportedThisSession.add(k);
+    return true;
+}
+
 function reportHealth(url, status) {
     // Update local state
     channelHealth[url] = status;
     localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth));
+    if (!_shouldReport(url, status, false)) return;
     // Report to server (async, fire-and-forget)
     fetch('/api/health/report', {
         method: 'POST',
@@ -1383,23 +1442,30 @@ function markPlaying(url) {
     // Update local health state
     channelHealth[url] = 'working';
     localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth));
-    // Update channel dot to green in the grid
-    const chIdx = filtered.findIndex(c => c.url === url || (c.urls && c.urls.includes(url)));
-    if (chIdx >= 0) {
-        filtered[chIdx].status = 'working';
-        const card = grid.children[chIdx];
-        if (card) {
-            let dot = card.querySelector('.card-dot');
-            if (dot) { dot.className = 'card-dot live'; }
-            else { card.insertAdjacentHTML('afterbegin', '<div class="card-dot live"></div>'); }
-        }
+    // Mark the channel as working in the master `filtered` array so subsequent
+    // renders pick up the green dot. The previous version updated grid.children
+    // by index, but grid renders `displayChs` (a filtered+sorted subset of
+    // `filtered`), so the indexes don't line up after any UI filter/sort.
+    // Instead: update model, then look up the card by data-url attribute.
+    const ch2 = filtered.find(c => c.url === url || (c.urls && c.urls.includes(url)));
+    if (ch2) ch2.status = 'working';
+    // grid cards are keyed by data-idx into displayChs at render time, but we
+    // also stash data-url so we can find the right card regardless of filter.
+    const card = grid.querySelector(`.card[data-url="${CSS.escape(url)}"]`);
+    if (card) {
+        let dot = card.querySelector('.card-dot');
+        if (dot) { dot.className = 'card-dot working'; }
+        else { card.insertAdjacentHTML('afterbegin', '<div class="card-dot working"></div>'); }
     }
-    // Single report to server: includes promote flag to set as primary source
-    fetch('/api/health/report', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url, status: 'working', promote: true, name: chName})
-    }).catch(() => {});
+    // Single report to server: includes promote flag to set as primary source.
+    // Dedup per-session so a re-play of the same URL doesn't hit the server again.
+    if (_shouldReport(url, 'working', true)) {
+        fetch('/api/health/report', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url, status: 'working', promote: true, name: chName})
+        }).catch(() => {});
+    }
 }
 
 function markBroken(url) {

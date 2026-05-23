@@ -346,36 +346,160 @@ def normalize_category(raw: str | None, channel_name: str | None = None) -> str:
 # ─── Country normalization ────────────────────────────────────────────────────
 # Canonical country names — ISO 3166-1 alpha-2 → full name
 COUNTRY_CODES: dict[str, str] = {
+    # A
     "AD": "Andorra", "AE": "United Arab Emirates", "AF": "Afghanistan",
-    "AL": "Albania", "AM": "Armenia", "AO": "Angola", "AR": "Argentina",
-    "AT": "Austria", "AU": "Australia", "AZ": "Azerbaijan", "BA": "Bosnia",
-    "BD": "Bangladesh", "BE": "Belgium", "BG": "Bulgaria", "BH": "Bahrain",
-    "BO": "Bolivia", "BR": "Brazil", "BY": "Belarus", "CA": "Canada",
-    "CH": "Switzerland", "CL": "Chile", "CN": "China", "CO": "Colombia",
-    "CR": "Costa Rica", "CU": "Cuba", "CY": "Cyprus", "CZ": "Czech Republic",
-    "DE": "Germany", "DK": "Denmark", "DO": "Dominican Republic",
-    "DZ": "Algeria", "EC": "Ecuador", "EE": "Estonia", "EG": "Egypt",
-    "ES": "Spain", "ET": "Ethiopia", "FI": "Finland", "FR": "France",
-    "GB": "United Kingdom", "GE": "Georgia", "GH": "Ghana", "GR": "Greece",
-    "GT": "Guatemala", "HK": "Hong Kong", "HN": "Honduras", "HR": "Croatia",
-    "HU": "Hungary", "ID": "Indonesia", "IE": "Ireland", "IL": "Israel",
-    "IN": "India", "IQ": "Iraq", "IR": "Iran", "IS": "Iceland", "IT": "Italy",
-    "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya",
-    "KR": "South Korea", "KW": "Kuwait", "KZ": "Kazakhstan", "LB": "Lebanon",
-    "LK": "Sri Lanka", "LT": "Lithuania", "LU": "Luxembourg", "LV": "Latvia",
-    "LY": "Libya", "MA": "Morocco", "MD": "Moldova", "ME": "Montenegro",
-    "MK": "North Macedonia", "MM": "Myanmar", "MN": "Mongolia", "MX": "Mexico",
-    "MY": "Malaysia", "NG": "Nigeria", "NL": "Netherlands", "NO": "Norway",
-    "NP": "Nepal", "NZ": "New Zealand", "OM": "Oman", "PA": "Panama",
-    "PE": "Peru", "PH": "Philippines", "PK": "Pakistan", "PL": "Poland",
-    "PR": "Puerto Rico", "PS": "Palestine", "PT": "Portugal", "PY": "Paraguay",
-    "QA": "Qatar", "RO": "Romania", "RS": "Serbia", "RU": "Russia",
-    "SA": "Saudi Arabia", "SD": "Sudan", "SE": "Sweden", "SG": "Singapore",
-    "SI": "Slovenia", "SK": "Slovakia", "SN": "Senegal", "SO": "Somalia",
-    "SV": "El Salvador", "SY": "Syria", "TH": "Thailand", "TN": "Tunisia",
-    "TR": "Turkey", "TT": "Trinidad", "TW": "Taiwan", "UA": "Ukraine",
-    "US": "USA", "UY": "Uruguay", "UZ": "Uzbekistan", "VE": "Venezuela",
-    "VN": "Vietnam", "YE": "Yemen", "ZA": "South Africa",
+    "AG": "Antigua and Barbuda", "AI": "Anguilla", "AL": "Albania",
+    "AM": "Armenia", "AO": "Angola", "AQ": "Antarctica", "AR": "Argentina",
+    "AS": "American Samoa", "AT": "Austria", "AU": "Australia",
+    "AW": "Aruba", "AX": "Aland Islands", "AZ": "Azerbaijan",
+    # B
+    "BA": "Bosnia", "BB": "Barbados", "BD": "Bangladesh", "BE": "Belgium",
+    "BF": "Burkina Faso", "BG": "Bulgaria", "BH": "Bahrain", "BI": "Burundi",
+    "BJ": "Benin", "BL": "Saint Barthelemy", "BM": "Bermuda", "BN": "Brunei",
+    "BO": "Bolivia", "BQ": "Caribbean Netherlands", "BR": "Brazil",
+    "BS": "Bahamas", "BT": "Bhutan", "BV": "Bouvet Island", "BW": "Botswana",
+    "BY": "Belarus", "BZ": "Belize",
+    # C
+    "CA": "Canada", "CC": "Cocos Islands", "CD": "Congo (DRC)",
+    "CF": "Central African Republic", "CG": "Congo", "CH": "Switzerland",
+    "CI": "Ivory Coast", "CK": "Cook Islands", "CL": "Chile", "CM": "Cameroon",
+    "CN": "China", "CO": "Colombia", "CR": "Costa Rica", "CU": "Cuba",
+    "CV": "Cape Verde", "CW": "Curacao", "CX": "Christmas Island",
+    "CY": "Cyprus", "CZ": "Czech Republic",
+    # D
+    "DE": "Germany", "DJ": "Djibouti", "DK": "Denmark", "DM": "Dominica",
+    "DO": "Dominican Republic", "DZ": "Algeria",
+    # E
+    "EC": "Ecuador", "EE": "Estonia", "EG": "Egypt", "EH": "Western Sahara",
+    "ER": "Eritrea", "ES": "Spain", "ET": "Ethiopia",
+    # F
+    "FI": "Finland", "FJ": "Fiji", "FK": "Falkland Islands",
+    "FM": "Micronesia", "FO": "Faroe Islands", "FR": "France",
+    # G
+    "GA": "Gabon", "GB": "United Kingdom", "GD": "Grenada", "GE": "Georgia",
+    "GF": "French Guiana", "GG": "Guernsey", "GH": "Ghana", "GI": "Gibraltar",
+    "GL": "Greenland", "GM": "Gambia", "GN": "Guinea", "GP": "Guadeloupe",
+    "GQ": "Equatorial Guinea", "GR": "Greece",
+    "GS": "South Georgia", "GT": "Guatemala", "GU": "Guam",
+    "GW": "Guinea-Bissau", "GY": "Guyana",
+    # H
+    "HK": "Hong Kong", "HM": "Heard Island", "HN": "Honduras", "HR": "Croatia",
+    "HT": "Haiti", "HU": "Hungary",
+    # I
+    "ID": "Indonesia", "IE": "Ireland", "IL": "Israel", "IM": "Isle of Man",
+    "IN": "India", "IO": "British Indian Ocean Territory", "IQ": "Iraq",
+    "IR": "Iran", "IS": "Iceland", "IT": "Italy",
+    # J
+    "JE": "Jersey", "JM": "Jamaica", "JO": "Jordan", "JP": "Japan",
+    # K
+    "KE": "Kenya", "KG": "Kyrgyzstan", "KH": "Cambodia", "KI": "Kiribati",
+    "KM": "Comoros", "KN": "Saint Kitts and Nevis", "KP": "North Korea",
+    "KR": "South Korea", "KW": "Kuwait", "KY": "Cayman Islands",
+    "KZ": "Kazakhstan",
+    # L
+    "LA": "Laos", "LB": "Lebanon", "LC": "Saint Lucia", "LI": "Liechtenstein",
+    "LK": "Sri Lanka", "LR": "Liberia", "LS": "Lesotho", "LT": "Lithuania",
+    "LU": "Luxembourg", "LV": "Latvia", "LY": "Libya",
+    # M
+    "MA": "Morocco", "MC": "Monaco", "MD": "Moldova", "ME": "Montenegro",
+    "MF": "Saint Martin", "MG": "Madagascar", "MH": "Marshall Islands",
+    "MK": "North Macedonia", "ML": "Mali", "MM": "Myanmar", "MN": "Mongolia",
+    "MO": "Macao", "MP": "Northern Mariana Islands", "MQ": "Martinique",
+    "MR": "Mauritania", "MS": "Montserrat", "MT": "Malta", "MU": "Mauritius",
+    "MV": "Maldives", "MW": "Malawi", "MX": "Mexico", "MY": "Malaysia",
+    "MZ": "Mozambique",
+    # N
+    "NA": "Namibia", "NC": "New Caledonia", "NE": "Niger", "NF": "Norfolk Island",
+    "NG": "Nigeria", "NI": "Nicaragua", "NL": "Netherlands", "NO": "Norway",
+    "NP": "Nepal", "NR": "Nauru", "NU": "Niue", "NZ": "New Zealand",
+    # O
+    "OM": "Oman",
+    # P
+    "PA": "Panama", "PE": "Peru", "PF": "French Polynesia",
+    "PG": "Papua New Guinea", "PH": "Philippines", "PK": "Pakistan",
+    "PL": "Poland", "PM": "Saint Pierre and Miquelon", "PN": "Pitcairn Islands",
+    "PR": "Puerto Rico", "PS": "Palestine", "PT": "Portugal", "PW": "Palau",
+    "PY": "Paraguay",
+    # Q
+    "QA": "Qatar",
+    # R
+    "RE": "Reunion", "RO": "Romania", "RS": "Serbia", "RU": "Russia",
+    "RW": "Rwanda",
+    # S
+    "SA": "Saudi Arabia", "SB": "Solomon Islands", "SC": "Seychelles",
+    "SD": "Sudan", "SE": "Sweden", "SG": "Singapore", "SH": "Saint Helena",
+    "SI": "Slovenia", "SJ": "Svalbard and Jan Mayen", "SK": "Slovakia",
+    "SL": "Sierra Leone", "SM": "San Marino", "SN": "Senegal", "SO": "Somalia",
+    "SR": "Suriname", "SS": "South Sudan", "ST": "Sao Tome and Principe",
+    "SV": "El Salvador", "SX": "Sint Maarten", "SY": "Syria", "SZ": "Eswatini",
+    # T
+    "TC": "Turks and Caicos", "TD": "Chad", "TF": "French Southern Territories",
+    "TG": "Togo", "TH": "Thailand", "TJ": "Tajikistan", "TK": "Tokelau",
+    "TL": "Timor-Leste", "TM": "Turkmenistan", "TN": "Tunisia", "TO": "Tonga",
+    "TR": "Turkey", "TT": "Trinidad", "TV": "Tuvalu", "TW": "Taiwan",
+    "TZ": "Tanzania",
+    # U
+    "UA": "Ukraine", "UG": "Uganda", "UK": "United Kingdom",
+    "UM": "US Minor Outlying Islands", "US": "USA", "UY": "Uruguay",
+    "UZ": "Uzbekistan",
+    # V
+    "VA": "Vatican City", "VC": "Saint Vincent and the Grenadines",
+    "VE": "Venezuela", "VG": "British Virgin Islands", "VI": "US Virgin Islands",
+    "VN": "Vietnam", "VU": "Vanuatu",
+    # W
+    "WF": "Wallis and Futuna", "WS": "Samoa",
+    # X (user-assigned / special)
+    "XK": "Kosovo",
+    # Y
+    "YE": "Yemen", "YT": "Mayotte",
+    # Z
+    "ZA": "South Africa", "ZM": "Zambia", "ZW": "Zimbabwe",
+}
+
+# ISO 3166-1 alpha-3 → alpha-2 (so the same lookup logic handles 3-letter codes).
+# Only entries that actually appear in IPTV/EPG sources; extend as needed.
+COUNTRY_CODES_ALPHA3: dict[str, str] = {
+    "AFG": "AF", "ALB": "AL", "DZA": "DZ", "AND": "AD", "AGO": "AO",
+    "ARG": "AR", "ARM": "AM", "AUS": "AU", "AUT": "AT", "AZE": "AZ",
+    "BHS": "BS", "BHR": "BH", "BGD": "BD", "BRB": "BB", "BLR": "BY",
+    "BEL": "BE", "BLZ": "BZ", "BEN": "BJ", "BMU": "BM", "BTN": "BT",
+    "BOL": "BO", "BIH": "BA", "BWA": "BW", "BRA": "BR", "BRN": "BN",
+    "BGR": "BG", "BFA": "BF", "BDI": "BI", "KHM": "KH", "CMR": "CM",
+    "CAN": "CA", "CPV": "CV", "CAF": "CF", "TCD": "TD", "CHL": "CL",
+    "CHN": "CN", "COL": "CO", "COM": "KM", "COG": "CG", "COD": "CD",
+    "CRI": "CR", "CIV": "CI", "HRV": "HR", "CUB": "CU", "CYP": "CY",
+    "CZE": "CZ", "DNK": "DK", "DJI": "DJ", "DMA": "DM", "DOM": "DO",
+    "ECU": "EC", "EGY": "EG", "SLV": "SV", "GNQ": "GQ", "ERI": "ER",
+    "EST": "EE", "ETH": "ET", "FRO": "FO", "FJI": "FJ", "FIN": "FI",
+    "FRA": "FR", "GUF": "GF", "PYF": "PF", "GAB": "GA", "GMB": "GM",
+    "GEO": "GE", "DEU": "DE", "GHA": "GH", "GIB": "GI", "GRC": "GR",
+    "GRL": "GL", "GRD": "GD", "GLP": "GP", "GUM": "GU", "GTM": "GT",
+    "GIN": "GN", "GNB": "GW", "GUY": "GY", "HTI": "HT", "HND": "HN",
+    "HKG": "HK", "HUN": "HU", "ISL": "IS", "IND": "IN", "IDN": "ID",
+    "IRN": "IR", "IRQ": "IQ", "IRL": "IE", "ISR": "IL", "ITA": "IT",
+    "JAM": "JM", "JPN": "JP", "JOR": "JO", "KAZ": "KZ", "KEN": "KE",
+    "KIR": "KI", "PRK": "KP", "KOR": "KR", "KWT": "KW", "KGZ": "KG",
+    "LAO": "LA", "LVA": "LV", "LBN": "LB", "LSO": "LS", "LBR": "LR",
+    "LBY": "LY", "LIE": "LI", "LTU": "LT", "LUX": "LU", "MAC": "MO",
+    "MKD": "MK", "MDG": "MG", "MWI": "MW", "MYS": "MY", "MDV": "MV",
+    "MLI": "ML", "MLT": "MT", "MHL": "MH", "MTQ": "MQ", "MRT": "MR",
+    "MUS": "MU", "MEX": "MX", "FSM": "FM", "MDA": "MD", "MCO": "MC",
+    "MNG": "MN", "MNE": "ME", "MAR": "MA", "MOZ": "MZ", "MMR": "MM",
+    "NAM": "NA", "NPL": "NP", "NLD": "NL", "NCL": "NC", "NZL": "NZ",
+    "NIC": "NI", "NER": "NE", "NGA": "NG", "NOR": "NO", "OMN": "OM",
+    "PAK": "PK", "PLW": "PW", "PSE": "PS", "PAN": "PA", "PNG": "PG",
+    "PRY": "PY", "PER": "PE", "PHL": "PH", "POL": "PL", "PRT": "PT",
+    "PRI": "PR", "QAT": "QA", "REU": "RE", "ROU": "RO", "RUS": "RU",
+    "RWA": "RW", "WSM": "WS", "SMR": "SM", "STP": "ST", "SAU": "SA",
+    "SEN": "SN", "SRB": "RS", "SYC": "SC", "SLE": "SL", "SGP": "SG",
+    "SVK": "SK", "SVN": "SI", "SLB": "SB", "SOM": "SO", "ZAF": "ZA",
+    "SSD": "SS", "ESP": "ES", "LKA": "LK", "SDN": "SD", "SUR": "SR",
+    "SWZ": "SZ", "SWE": "SE", "CHE": "CH", "SYR": "SY", "TWN": "TW",
+    "TJK": "TJ", "TZA": "TZ", "THA": "TH", "TLS": "TL", "TGO": "TG",
+    "TON": "TO", "TTO": "TT", "TUN": "TN", "TUR": "TR", "TKM": "TM",
+    "TUV": "TV", "UGA": "UG", "UKR": "UA", "ARE": "AE", "GBR": "GB",
+    "USA": "US", "URY": "UY", "UZB": "UZ", "VUT": "VU", "VAT": "VA",
+    "VEN": "VE", "VNM": "VN", "YEM": "YE", "ZMB": "ZM", "ZWE": "ZW",
 }
 
 # Common aliases that appear in M3U data
@@ -404,19 +528,28 @@ def normalize_country(raw: str | None) -> str:
 
     Rules:
     1. Empty/null → "Unknown"
-    2. 2-letter ISO code → lookup in COUNTRY_CODES
-    3. Known alias → canonical name
-    4. Semicolon-separated → take first, re-normalize
-    5. Otherwise return as-is (title-cased if all-lower/all-upper)
+    2. 3-letter ISO alpha-3 → map to alpha-2 → lookup
+    3. 2-letter ISO alpha-2 → lookup in COUNTRY_CODES (fallback to "Unknown" so
+       unrecognised codes don't pollute the UI with bare codes like "FO")
+    4. Known alias → canonical name
+    5. Semicolon-separated → take first, re-normalize
+    6. Otherwise return as-is (title-cased if all-lower/all-upper)
     """
     if not raw or not raw.strip() or raw.strip().lower() in ("unknown", "undefined", "n/a", ""):
         return "Unknown"
 
     country = raw.strip()
 
-    # ISO 2-letter code
+    # ISO 3-letter code → resolve to 2-letter then look up
+    if len(country) == 3 and country.isalpha():
+        alpha2 = COUNTRY_CODES_ALPHA3.get(country.upper())
+        if alpha2:
+            return COUNTRY_CODES.get(alpha2, "Unknown")
+
+    # ISO 2-letter code — must be in the canonical map. If unknown, fold to
+    # "Unknown" rather than show the bare code in the sidebar.
     if len(country) == 2 and country.isalpha():
-        return COUNTRY_CODES.get(country.upper(), country.upper())
+        return COUNTRY_CODES.get(country.upper(), "Unknown")
 
     # Alias lookup
     alias = _COUNTRY_ALIASES.get(country.lower())

@@ -47,47 +47,10 @@ _refresh_in_progress = False
 
 # ─── Country code normalization (merge "AE" with "United Arab Emirates" etc.) ─
 
-_COUNTRY_CODES = {
-    "AD": "Andorra", "AE": "United Arab Emirates", "AF": "Afghanistan",
-    "AL": "Albania", "AM": "Armenia", "AO": "Angola", "AR": "Argentina",
-    "AT": "Austria", "AU": "Australia", "AZ": "Azerbaijan", "BA": "Bosnia",
-    "BD": "Bangladesh", "BE": "Belgium", "BG": "Bulgaria", "BH": "Bahrain",
-    "BO": "Bolivia", "BR": "Brazil", "BY": "Belarus", "CA": "Canada",
-    "CH": "Switzerland", "CL": "Chile", "CN": "China", "CO": "Colombia",
-    "CR": "Costa Rica", "CU": "Cuba", "CY": "Cyprus", "CZ": "Czech Republic",
-    "DE": "Germany", "DK": "Denmark", "DO": "Dominican Republic",
-    "DZ": "Algeria", "EC": "Ecuador", "EE": "Estonia", "EG": "Egypt",
-    "ES": "Spain", "FI": "Finland", "FR": "France", "GB": "United Kingdom",
-    "GE": "Georgia", "GH": "Ghana", "GR": "Greece", "GT": "Guatemala",
-    "HK": "Hong Kong", "HN": "Honduras", "HR": "Croatia", "HU": "Hungary",
-    "ID": "Indonesia", "IE": "Ireland", "IL": "Israel", "IN": "India",
-    "IQ": "Iraq", "IR": "Iran", "IS": "Iceland", "IT": "Italy",
-    "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya",
-    "KR": "South Korea", "KW": "Kuwait", "KZ": "Kazakhstan", "LB": "Lebanon",
-    "LT": "Lithuania", "LU": "Luxembourg", "LV": "Latvia", "LY": "Libya",
-    "MA": "Morocco", "MD": "Moldova", "ME": "Montenegro", "MK": "North Macedonia",
-    "MM": "Myanmar", "MN": "Mongolia", "MX": "Mexico", "MY": "Malaysia",
-    "NG": "Nigeria", "NL": "Netherlands", "NO": "Norway", "NZ": "New Zealand",
-    "OM": "Oman", "PA": "Panama", "PE": "Peru", "PH": "Philippines",
-    "PK": "Pakistan", "PL": "Poland", "PR": "Puerto Rico", "PS": "Palestine",
-    "PT": "Portugal", "PY": "Paraguay", "QA": "Qatar", "RO": "Romania",
-    "RS": "Serbia", "RU": "Russia", "SA": "Saudi Arabia", "SD": "Sudan",
-    "SE": "Sweden", "SG": "Singapore", "SI": "Slovenia", "SK": "Slovakia",
-    "SN": "Senegal", "SO": "Somalia", "SY": "Syria", "TH": "Thailand",
-    "TN": "Tunisia", "TR": "Turkey", "TT": "Trinidad", "TW": "Taiwan",
-    "UA": "Ukraine", "UK": "United Kingdom", "US": "USA", "UY": "Uruguay",
-    "UZ": "Uzbekistan", "VE": "Venezuela", "VN": "Vietnam", "ZA": "South Africa",
-}
-
-
-def _normalize_country(raw: str) -> str:
-    """Normalize country codes (2-letter) to full names, merge duplicates."""
-    if not raw or raw == "Unknown":
-        return "Unknown"
-    upper = raw.strip().upper()
-    if upper in _COUNTRY_CODES:
-        return _COUNTRY_CODES[upper]
-    return raw.strip()
+from utils.normalize import (
+    normalize_country as _normalize_country,
+    COUNTRY_CODES as _COUNTRY_CODES,
+)
 
 
 # Detect local country for "LOCAL" category — env var override or system locale
@@ -786,8 +749,10 @@ def _is_safe_channel_name(name: str) -> bool:
 # In-memory only — fine for single-instance Docker. If you ever scale out
 # horizontally, move to Redis/Supabase. The bucket auto-prunes on the read
 # path to bound memory.
-_HEALTH_RATE_GLOBAL = (30, 60.0)   # 30 reports per 60s per IP
-_HEALTH_RATE_PROMOTE = (5, 60.0)   # 5 promotes per 60s per IP
+_HEALTH_RATE_GLOBAL = (600, 60.0)  # 600 reports per 60s per IP — generous;
+                                   # plain reports are local-only and cheap.
+_HEALTH_RATE_PROMOTE = (10, 60.0)  # 10 promotes per 60s per IP — these hit Supabase
+                                   # and can be used to manipulate channel ordering.
 _health_buckets: Dict[str, Dict[str, List[float]]] = {}
 _health_buckets_lock = threading.Lock()
 
@@ -833,12 +798,21 @@ def _rate_limit_check(ip: str, bucket: str, max_n: int, window: float) -> bool:
 
 @app.post("/api/health/report")
 async def health_report(request: Request):
-    """Report channel playback health from client. Accepts {url, status, promote?, name?}."""
+    """Report channel playback health from client. Accepts {url, status, promote?, name?}.
+
+    Rate-limiting strategy:
+      * Plain reports (no promote) are cheap and local-only — generous cap.
+      * Promote reports hit Supabase and can be used to manipulate channel
+        ordering for all users — tight cap, downgraded to a plain report when
+        exceeded (not 429'd, so the client doesn't see noise).
+    """
     ip = _client_ip(request)
-    # Global rate limit on the endpoint
+    # Global rate limit on the endpoint — only as a coarse abuse guard.
+    # Return 200 with status=throttled instead of 429 so the frontend's
+    # fire-and-forget POST stays quiet and doesn't pollute the console.
     if not _rate_limit_check(ip, "global",
                              _HEALTH_RATE_GLOBAL[0], _HEALTH_RATE_GLOBAL[1]):
-        return JSONResponse({"status": "rate_limited"}, status_code=429)
+        return {"status": "throttled"}
 
     try:
         body = await request.json()
@@ -860,7 +834,8 @@ async def health_report(request: Request):
             promote = False
             ch_name = ""
 
-        # Per-IP cap on promote writes (these hit Supabase)
+        # Per-IP cap on promote writes (these hit Supabase). Downgrade silently
+        # instead of rejecting — the report itself is still useful.
         if promote and not _rate_limit_check(
             ip, "promote", _HEALTH_RATE_PROMOTE[0], _HEALTH_RATE_PROMOTE[1]
         ):

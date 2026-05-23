@@ -5,6 +5,58 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.3] - 2026-05-23
+
+### Fixed
+- **Channel-status indicator colors were inverted**: working channels showed
+  a red dot and unchecked-but-likely-working showed green. Replaced the
+  ambiguous `.live`/`.ok` CSS with explicit `.working` (green pulse),
+  `.offline` (red), `.unchecked` (dim blue). Local observations from
+  `channelHealth` are now preferred over stale catalog `status`.
+- **2-letter ISO country codes leaking to the UI** (FO, GL, KP, MC, MO, MT,
+  etc.): consolidated three duplicate `_normalize_country` implementations
+  (`utils/normalize.py`, `web/server.py`, `core/channel_manager.py`) into a
+  single source of truth. `utils/normalize.COUNTRY_CODES` now covers all
+  active ISO 3166-1 alpha-2 codes, and `COUNTRY_CODES_ALPHA3` maps alpha-3 →
+  alpha-2. Unknown codes resolve to "Unknown" instead of leaking the bare
+  code into the sidebar.
+- **Cast button immediately failed** with "cast cancelled or unavailable":
+  Remote Playback API can't transfer a MediaSource (used by hls.js) to a
+  Chromecast. Loaded the Google Cast Web Sender SDK and added a real "Cast
+  to Chromecast" option that sends the HLS URL directly to the receiver
+  (which plays HLS natively). Remote Playback API kept as a secondary
+  option for AirPlay/Safari.
+- **EPG not appearing for Israeli channels**: added a Hebrew→English alias
+  table for major Israeli channels (Channel 14, Keshet 12, Reshet 13,
+  Kan 11, Sport 1-5, i24NEWS, etc.) so the existing fuzzy matcher can find
+  English-named EPG entries from epgshare01's IL1 source when the playlist
+  uses Hebrew names like "ערוץ 14".
+- **DOM-index mismatch in `markPlaying`**: status-dot updates now look up
+  cards by `data-url` attribute instead of `grid.children[idx]`, which was
+  pointing at the wrong card whenever the grid was sorted or paginated.
+
+### Changed
+- **Health-report rate limits relaxed** to fit real (non-adversarial) usage.
+  v2.15.2's global cap of 30/min/IP was rejecting legitimate single-user
+  traffic from multi-source validation flows with HTTP 429. Global limit
+  raised to 600/min, promote-limit to 10/min. When either is exceeded, the
+  endpoint now returns HTTP 200 with `{"status":"throttled"}` (downgrading
+  to a no-op or non-promote write) instead of 429 — the frontend's
+  fire-and-forget POSTs no longer generate console noise.
+- **Client-side dedup** for `/api/health/report`: each (URL, status,
+  promote) tuple is only POSTed once per session, eliminating the request
+  flood that caused the 429 burst in the first place.
+
+### Internal
+- `web/server.py` and `core/channel_manager.py` now import
+  `normalize_country` from `utils.normalize` rather than carrying their own
+  copies. Fixes pre-existing bugs in `core/channel_manager.py` where
+  `'US': 'US'`, `'GB': 'UK'`, and `'AE': 'UAE'` either returned the bare
+  code or used a non-standard short form.
+- `tests/test_web.py::TestHealthReportSecurity::test_health_report_rate_limit_global`
+  updated to assert the new "downgrade-not-reject" behavior (HTTP 200 +
+  `status: "throttled"` instead of HTTP 429).
+
 ## [2.15.2] - 2026-05-23
 
 ### Security
