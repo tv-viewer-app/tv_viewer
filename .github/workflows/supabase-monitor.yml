@@ -1,0 +1,127 @@
+name: Supabase Monitor
+
+# Read-only telemetry & error monitoring against the live Supabase project.
+# Uses the SUPABASE_SERVICE_ROLE_KEY repo secret — never exposed in logs.
+#
+# Trigger manually:
+#   gh workflow run supabase-monitor.yml -f query=errors -f hours=24
+#
+# Available queries (see scripts/supabase_monitor.py for details):
+#   health          schema version, row counts, 24h activity
+#   events          group recent events by (event_type, version, platform)
+#   errors          client_error / server_error rows with stack tops
+#   version         adoption by app_version × platform
+#   devices         unique device count per platform
+#   v_recent        raw events for a specific app version (use --version)
+#   app_launches    app_launch event distribution
+#   channel_plays   most-played categories / countries
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Query to run'
+        required: true
+        default: 'health'
+        type: choice
+        options:
+          - health
+          - events
+          - errors
+          - version
+          - devices
+          - v_recent
+          - app_launches
+          - channel_plays
+      hours:
+        description: 'Hours of history to scan (default 24)'
+        required: false
+        default: '24'
+      limit:
+        description: 'Row limit (errors/v_recent)'
+        required: false
+        default: '50'
+      version:
+        description: 'App version prefix (only used by v_recent, e.g. 2.16.2)'
+        required: false
+        default: ''
+  # Scheduled error sweep — every 6 hours, posts an alert if errors > 0
+  schedule:
+    - cron: '17 */6 * * *'
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write  # for the scheduled alert path
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Repo secrets SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
+            exit 1
+          fi
+
+      - name: Run query
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python scripts/supabase_monitor.py "${{ inputs.query }}" \
+            --hours "${{ inputs.hours }}" \
+            --limit "${{ inputs.limit }}" \
+            --version "${{ inputs.version }}" \
+            | tee monitor_output.txt
+          {
+            echo "## Supabase monitor — \`${{ inputs.query }}\`"
+            echo ""
+            echo '```'
+            cat monitor_output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Scheduled error sweep (every 6h): only opens an issue if errors are present.
+      - name: Scheduled error sweep
+        if: github.event_name == 'schedule'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python scripts/supabase_monitor.py errors --hours 6 --limit 25 > errors.txt
+          cat errors.txt
+          if grep -q 'none ✓' errors.txt; then
+            echo "No errors in last 6h — skipping issue."
+            echo "ERRORS_FOUND=0" >> "$GITHUB_ENV"
+          else
+            echo "ERRORS_FOUND=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Open issue on errors
+        if: github.event_name == 'schedule' && env.ERRORS_FOUND == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "Supabase monitor detected client/server errors in the last 6 hours."
+            echo ""
+            echo '```'
+            cat errors.txt
+            echo '```'
+            echo ""
+            echo "_Auto-filed by [supabase-monitor.yml](../actions/workflows/supabase-monitor.yml)._"
+          } > body.md
+          gh issue create \
+            --title "Telemetry: client/server errors detected $(date -u +%Y-%m-%d\ %H:%M)" \
+            --body-file body.md \
+            --label monitoring
