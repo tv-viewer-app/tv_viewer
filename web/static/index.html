@@ -1257,6 +1257,13 @@ function closeSettings() {
 // ─── Data Loading ───────────────────────────────────────────────────────────
 let currentOffset = 0, hasMore = false, totalChannels = 0;
 let allLoaded = [];  // Full channel list from server (unfiltered)
+// Race-condition guard: each loadChannels() call gets a sequence number.
+// Only the most-recent invocation is allowed to render — earlier in-flight
+// requests are aborted and their late responses discarded. Fixes the bug
+// where clicking sidebar items rapidly let an older response "win" and
+// show channels that didn't match the latest selection.
+let _loadSeq = 0;
+let _inFlightAbort = null;
 
 function clientFilter(channels) {
     const q = document.getElementById('search').value.trim().toLowerCase();
@@ -1269,13 +1276,32 @@ function clientFilter(channels) {
 }
 
 async function loadChannels(append = false) {
+    const mySeq = ++_loadSeq;
+    // Cancel any earlier in-flight fetch so we don't waste bandwidth on
+    // a response we're going to discard anyway.
+    if (_inFlightAbort) {
+        try { _inFlightAbort.abort(); } catch(_) {}
+    }
+    const abortCtl = new AbortController();
+    _inFlightAbort = abortCtl;
+
     const p = {};
     if (currentCat) p.category = currentCat;
     if (currentCountry) p.country = currentCountry;
     if (currentView === 'favorites') p.favorites_only = true;
-    // Pass media_type filter to server so pagination works correctly
     const typeFilter = document.getElementById('filter-type')?.value;
     if (typeFilter) p.media_type = typeFilter;
+
+    // Optimistic UI: show the loading state immediately so users get instant
+    // feedback that their click was received, even if the network is slow.
+    if (!append) {
+        const loading = document.getElementById('loading');
+        if (loading) loading.style.display = 'flex';
+        const view = document.getElementById('channel-view');
+        if (view) view.style.display = 'none';
+        const empty = document.getElementById('empty');
+        if (empty) empty.style.display = 'none';
+    }
 
     if (currentView === 'recent') {
         try {
@@ -1286,7 +1312,20 @@ async function loadChannels(append = false) {
         if (!append) currentOffset = 0;
         p.limit = 200;
         p.offset = currentOffset;
-        const resp = await api.channels(p);
+        let resp;
+        try {
+            const u = new URL('/api/channels', location.origin);
+            Object.entries(p).forEach(([k,v]) => {
+                if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, v);
+            });
+            const r = await fetch(u, { signal: abortCtl.signal });
+            resp = await r.json();
+        } catch (err) {
+            if (err && err.name === 'AbortError') return;  // superseded
+            throw err;
+        }
+        // Discard stale responses: another click came in while we were waiting.
+        if (mySeq !== _loadSeq) return;
         if (append) {
             allLoaded = allLoaded.concat(resp.channels || []);
         } else {
@@ -1295,6 +1334,8 @@ async function loadChannels(append = false) {
         hasMore = resp.has_more || false;
         totalChannels = resp.total || 0;
     }
+    // Final check before paint — sidebar may have been clicked again after fetch.
+    if (mySeq !== _loadSeq) return;
     filtered = clientFilter(allLoaded);
     renderChannels(filtered);
     renderLoadMore();

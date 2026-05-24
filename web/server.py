@@ -141,9 +141,12 @@ def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 class _ChannelCache:
     """Lazy-loading channel cache — reads JSON once, serves from RAM.
-    Pre-sorts channels (IL first, then alphabetical) on load to avoid per-request sorting."""
+    Pre-sorts channels (IL first, then alphabetical) on load to avoid per-request sorting.
+    Also pre-builds category/country indexes so /api/channels filtering is O(1)
+    instead of O(n) per request."""
     __slots__ = ('_channels', '_sorted', '_mtime', '_path', '_categories', '_countries',
-                 '_favorites', '_fav_mtime')
+                 '_favorites', '_fav_mtime',
+                 '_by_category', '_by_country', '_by_cat_country', '_local_channels')
 
     def __init__(self):
         self._channels = None
@@ -154,6 +157,11 @@ class _ChannelCache:
         self._countries = None
         self._favorites = None
         self._fav_mtime = 0
+        # O(1) lookup indexes (lowercased keys), built at load time
+        self._by_category: Dict[str, List[Dict[str, Any]]] = {}
+        self._by_country: Dict[str, List[Dict[str, Any]]] = {}
+        self._by_cat_country: Dict[tuple, List[Dict[str, Any]]] = {}
+        self._local_channels: List[Dict[str, Any]] = []
 
     def _check_reload(self):
         """Reload only if file changed (stat is cheap, JSON parse is not)."""
@@ -184,8 +192,52 @@ class _ChannelCache:
                 self._mtime = mt
                 self._categories = None
                 self._countries = None
+                self._build_indexes()
             except (json.JSONDecodeError, OSError):
                 pass  # File being written — keep stale data
+
+    def _build_indexes(self):
+        """Build O(1) lookup tables. Called once per file change."""
+        by_cat: Dict[str, List[Dict[str, Any]]] = {}
+        by_country: Dict[str, List[Dict[str, Any]]] = {}
+        by_cat_country: Dict[tuple, List[Dict[str, Any]]] = {}
+        local: List[Dict[str, Any]] = []
+        local_lc = _LOCAL_COUNTRY.lower()
+        for ch in (self._sorted or []):
+            cat_lc = (ch.get("category") or "").lower()
+            country_lc = (ch.get("country") or "").lower()
+            if cat_lc:
+                by_cat.setdefault(cat_lc, []).append(ch)
+            if country_lc:
+                by_country.setdefault(country_lc, []).append(ch)
+            if cat_lc and country_lc:
+                by_cat_country.setdefault((cat_lc, country_lc), []).append(ch)
+            if country_lc == local_lc:
+                local.append(ch)
+        self._by_category = by_cat
+        self._by_country = by_country
+        self._by_cat_country = by_cat_country
+        self._local_channels = local
+
+    @property
+    def by_category(self) -> Dict[str, List[Dict[str, Any]]]:
+        self._check_reload()
+        return self._by_category
+
+    @property
+    def by_country(self) -> Dict[str, List[Dict[str, Any]]]:
+        self._check_reload()
+        return self._by_country
+
+    @property
+    def by_cat_country(self) -> Dict[tuple, List[Dict[str, Any]]]:
+        self._check_reload()
+        return self._by_cat_country
+
+    @property
+    def local_channels(self) -> List[Dict[str, Any]]:
+        self._check_reload()
+        return self._local_channels
 
     @property
     def channels(self) -> List[Dict[str, Any]]:
@@ -270,6 +322,10 @@ class _ChannelCache:
         self._sorted = None
         self._categories = None
         self._countries = None
+        self._by_category = {}
+        self._by_country = {}
+        self._by_cat_country = {}
+        self._local_channels = []
 
 
 _cache = _ChannelCache()
@@ -560,20 +616,25 @@ async def get_channels(
     offset: int = Query(0, ge=0),
 ):
     """Get channels with optional filtering. Local (IL) channels shown first."""
-    # Use pre-sorted list (IL first, A-Z) — no per-request sort needed
-    channels = _cache.sorted_channels
-    favorites = _load_favorites() if favorites_only else set()
+    # ── Fast path: O(1) index lookup when category and/or country is specified ──
+    cat_lc = category.lower() if category else None
+    country_lc = country.lower() if country else None
 
+    if cat_lc == "local":
+        # LOCAL = channels from user's detected country (pre-built list)
+        channels = _cache.local_channels
+    elif cat_lc and country_lc:
+        channels = _cache.by_cat_country.get((cat_lc, country_lc), [])
+    elif cat_lc:
+        channels = _cache.by_category.get(cat_lc, [])
+    elif country_lc:
+        channels = _cache.by_country.get(country_lc, [])
+    else:
+        channels = _cache.sorted_channels
+
+    favorites = _cache.favorites if favorites_only else set()
     if favorites_only:
         channels = [c for c in channels if c.get("url") in favorites]
-    if category:
-        if category.upper() == "LOCAL":
-            # LOCAL = channels from user's detected country
-            channels = [c for c in channels if (c.get("country") or "").lower() == _LOCAL_COUNTRY.lower()]
-        else:
-            channels = [c for c in channels if (c.get("category") or "").lower() == category.lower()]
-    if country:
-        channels = [c for c in channels if (c.get("country") or "").lower() == country.lower()]
     if media_type:
         if media_type == "Radio":
             channels = [c for c in channels if (c.get("media_type") or "") == "Radio"
