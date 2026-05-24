@@ -308,6 +308,38 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 
 
+# ─── CSRF Middleware ─────────────────────────────────────────────────────────
+#
+# Wildcard CORS lets browsers fire cross-site POSTs at our state-changing
+# routes (refresh, favorites toggle, report, analytics).  Block any
+# state-changing request whose Origin/Referer doesn't match our own server
+# host.  Pure CLI/curl/mobile callers send no Origin/Referer and are still
+# allowed (no ambient browser credentials to abuse).
+
+_CSRF_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+# Endpoints that legitimately receive cross-origin POSTs and don't carry
+# state-changing side effects beyond their own rate-limited / validated logic.
+_CSRF_EXEMPT_PATH_PREFIXES = ("/api/health/report",)
+
+
+class CSRFOriginMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method in _CSRF_PROTECTED_METHODS and not any(
+            request.url.path.startswith(p) for p in _CSRF_EXEMPT_PATH_PREFIXES
+        ):
+            try:
+                _enforce_same_origin(request)
+            except HTTPException as exc:
+                return JSONResponse(
+                    status_code=exc.status_code,
+                    content={"detail": exc.detail},
+                )
+        return await call_next(request)
+
+
+app.add_middleware(CSRFOriginMiddleware)
+
+
 # ─── SSRF Protection ─────────────────────────────────────────────────────────
 
 _BLOCKED_IP_RANGES = [
@@ -319,6 +351,135 @@ _BLOCKED_IP_RANGES = [
     ipaddress.ip_network('::1/128'),
     ipaddress.ip_network('fc00::/7'),
 ]
+
+
+# ─── TLS helpers ─────────────────────────────────────────────────────────────
+#
+# Centralised SSL context construction so every aiohttp call uses certifi's
+# CA bundle and verifies hostnames by default.  The proxy upstream gets an
+# env-flag escape hatch (TV_VIEWER_PROXY_INSECURE_TLS=1) for legacy IPTV
+# servers with broken/self-signed certs — disabled by default.
+
+import ssl as _ssl
+try:
+    import certifi as _certifi
+    _CERTIFI_PATH = _certifi.where()
+except ImportError:
+    _CERTIFI_PATH = None
+
+_ssl_ctx_strict: Optional[_ssl.SSLContext] = None
+
+
+def _get_strict_ssl_context() -> _ssl.SSLContext:
+    """Return a process-wide SSL context with full hostname + chain verification."""
+    global _ssl_ctx_strict
+    if _ssl_ctx_strict is None:
+        ctx = (_ssl.create_default_context(cafile=_CERTIFI_PATH)
+               if _CERTIFI_PATH else _ssl.create_default_context())
+        ctx.check_hostname = True
+        ctx.verify_mode = _ssl.CERT_REQUIRED
+        ctx.minimum_version = _ssl.TLSVersion.TLSv1_2
+        _ssl_ctx_strict = ctx
+    return _ssl_ctx_strict
+
+
+_PROXY_TLS_INSECURE = os.environ.get(
+    "TV_VIEWER_PROXY_INSECURE_TLS", ""
+).strip().lower() in ("1", "true", "yes", "on")
+if _PROXY_TLS_INSECURE:
+    logger.warning(
+        "TV_VIEWER_PROXY_INSECURE_TLS is enabled — /api/proxy will NOT "
+        "verify upstream TLS certificates. Use only for legacy IPTV servers."
+    )
+
+
+def _proxy_ssl_param():
+    """SSL parameter for the /api/proxy upstream call.
+
+    Returns ``False`` only when the operator opted in via env var; otherwise
+    returns the strict SSL context (certifi CA, TLS 1.2+, hostname check).
+    """
+    return False if _PROXY_TLS_INSECURE else _get_strict_ssl_context()
+
+
+import socket as _socket
+
+
+def _resolve_once_and_check(hostname: str, port: int) -> List[tuple]:
+    """Resolve *hostname* once and return ``getaddrinfo`` records — or raise
+    ``HTTPException(403)`` if any resolved IP is in the SSRF blocklist.
+
+    The returned records are what the caller must connect to *directly*
+    (with ``Host:`` header set to the original hostname) so the validated
+    IP is also the one we actually dial — closing the DNS-rebinding window
+    that exists when validate and connect each do their own DNS lookup.
+    """
+    lower = hostname.lower()
+    if lower in ('localhost', '0.0.0.0') or lower.endswith('.local'):
+        raise HTTPException(403, "Access to internal network addresses is forbidden")
+    try:
+        records = _socket.getaddrinfo(hostname, port, _socket.AF_UNSPEC,
+                                      _socket.SOCK_STREAM)
+    except (_socket.gaierror, OSError) as exc:
+        raise HTTPException(502, f"DNS resolution failed: {exc}")
+    if not records:
+        raise HTTPException(502, "DNS resolution returned no addresses")
+    for info in records:
+        try:
+            resolved_ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            raise HTTPException(403, "Unresolvable address")
+        if (resolved_ip.is_private or resolved_ip.is_loopback
+                or resolved_ip.is_link_local or resolved_ip.is_reserved
+                or any(resolved_ip in net for net in _BLOCKED_IP_RANGES)):
+            raise HTTPException(403, "Access to internal network addresses is forbidden")
+    return records
+
+
+# ─── CSRF / Origin guard ─────────────────────────────────────────────────────
+#
+# CORS is wildcard so the browser will happily fire cross-site POSTs at our
+# unauthenticated state-changing routes.  This helper rejects POSTs whose
+# Origin/Referer doesn't match our own server (or an explicit allowlist).
+
+_CSRF_ALLOWED_ORIGINS = {
+    o.strip().rstrip('/')
+    for o in os.environ.get("TV_VIEWER_ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+}
+
+
+def _enforce_same_origin(request: Request) -> None:
+    """Reject cross-site state-changing requests.
+
+    Allowed when:
+      * the request's Origin/Referer matches our own ``base_url`` host, OR
+      * no Origin/Referer was sent (CLI / curl / mobile — no browser CSRF
+        risk since there's no ambient credential context), OR
+      * the origin is in ``TV_VIEWER_ALLOWED_ORIGINS``.
+    """
+    origin = request.headers.get("origin") or ""
+    referer = request.headers.get("referer") or ""
+    if not origin and not referer:
+        return
+    try:
+        own = urlparse(str(request.base_url))
+        own_host = f"{own.scheme}://{own.netloc}".rstrip('/')
+    except Exception:
+        own_host = ""
+    candidates = {origin.rstrip('/')}
+    if referer:
+        try:
+            rp = urlparse(referer)
+            candidates.add(f"{rp.scheme}://{rp.netloc}".rstrip('/'))
+        except Exception:
+            pass
+    if own_host and own_host in candidates:
+        return
+    if _CSRF_ALLOWED_ORIGINS & candidates:
+        return
+    raise HTTPException(403, "Cross-origin request rejected")
+
 
 def _is_private_ip(hostname: str) -> bool:
     """Check if a hostname resolves to a private/loopback IP (with DNS resolution)."""
@@ -340,8 +501,12 @@ def _is_private_ip(hostname: str) -> bool:
                     return True
                 if any(resolved_ip in net for net in _BLOCKED_IP_RANGES):
                     return True
-        except (socket.gaierror, ValueError, OSError):
-            pass
+        except (socket.gaierror, OSError):
+            # DNS error — fail closed so we don't accidentally permit a
+            # name that resolves later (e.g. after rebinding).
+            return True
+        except ValueError:
+            return True
         return False
 
 
@@ -533,7 +698,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             connector=_get_proxy_connector(),
             connector_owner=False  # Don't close shared connector when session closes
         )
-        resp = await session.get(url, headers=headers, ssl=False)
+        resp = await session.get(url, headers=headers, ssl=_proxy_ssl_param())
 
         if resp.status != 200:
             status = resp.status
@@ -1028,7 +1193,7 @@ async def track_analytics(request: Request):
                 connector = aiohttp.TCPConnector(limit=5, ttl_dns_cache=300)
                 timeout = aiohttp.ClientTimeout(total=5)
                 async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-                    async with session.post(_ANALYTICS_URL, json=payload, headers=_ANALYTICS_HEADERS, ssl=False) as resp:
+                    async with session.post(_ANALYTICS_URL, json=payload, headers=_ANALYTICS_HEADERS, ssl=_get_strict_ssl_context()) as resp:
                         if resp.status not in (200, 201):
                             logger.debug(f"Analytics forward: {resp.status}")
             except Exception as e:

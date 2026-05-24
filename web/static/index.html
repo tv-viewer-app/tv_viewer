@@ -8,7 +8,11 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer">
     <style>
         :root {
             --bg: #0A0A0F; --bg-card: #1A1A24; --bg-hover: #222230;
@@ -318,8 +322,14 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"
+        integrity="sha384-V5ruNBgmYcC3SJRUQeNykAAAgde5gOFq/Hu0CZj7bygDP0yRIhkvX8+w0u/7mRvr"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
 <script>
 // ─── State ──────────────────────────────────────────────────────────────────
 let channels = [], filtered = [], currentCat = null, currentCountry = null, currentView = 'all';
@@ -478,7 +488,15 @@ function renderChannels(chs) {
     displayChs.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, {sensitivity: 'base'}));
 
     grid.innerHTML = displayChs.map((ch, i) => {
-        const logo = ch.logo ? `<img class="card-logo" src="${esc(ch.logo)}" onerror="this.outerHTML=mono('${esc(ch.name)}')">` : mono(ch.name);
+        // SECURITY (v2.16.1): Do NOT inline `onerror="mono('${esc(ch.name)}')"`.
+        // HTML entity-decoding in attribute values lets `&#39;` collapse back
+        // to `'` *before* the JS string parser sees it, so a channel name
+        // containing `');alert(1);//` would break out of the string and
+        // execute as JS (stored XSS).  Instead we emit a data attribute and
+        // bind the fallback handler programmatically below.
+        const logo = ch.logo
+            ? `<img class="card-logo" src="${esc(ch.logo)}" data-fallback-name="${esc(ch.name||'')}">`
+            : mono(ch.name);
         // Status dot — precedence: (1) local 'broken' wins over any catalog
         // status (user just reported it doesn't work), (2) local 'working' or
         // catalog 'working' → green, (3) catalog 'offline' → red, (4) unknown.
@@ -500,6 +518,16 @@ function renderChannels(chs) {
     }).join('');
 
     grid.querySelectorAll('.card').forEach(c => c.addEventListener('click', () => playChannel(+c.dataset.idx)));
+    // Bind logo-error fallback programmatically (avoids XSS via inline handler).
+    grid.querySelectorAll('img.card-logo').forEach(img => {
+        img.addEventListener('error', () => {
+            const name = img.dataset.fallbackName || '?';
+            const wrapper = document.createElement('span');
+            wrapper.innerHTML = mono(name);
+            const replacement = wrapper.firstChild;
+            if (replacement && img.parentNode) img.parentNode.replaceChild(replacement, img);
+        }, { once: true });
+    });
     // Load EPG for visible channels (first 30)
     displayChs.slice(0, 30).forEach((ch, i) => loadEpgCard(ch.name, i));
 }

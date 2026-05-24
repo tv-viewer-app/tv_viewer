@@ -5,6 +5,91 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.1] - 2026-05-24
+
+### Security
+This is a security-hardening release covering both the Supabase schema
+(linter findings) and the web/mobile clients (audit findings).
+
+#### Supabase schema (`scripts/supabase_migration_v2.16.1.sql`)
+Idempotent — safe to re-run. After applying, verify with
+`python scripts/supabase_doctor.py`.
+
+- **channel_votes RLS policy missing**: RLS was enabled in v2.16.0 but no
+  SELECT policy existed, so the column-level GRANT was silently denying
+  all rows. Added `cv_anon_select` (`FOR SELECT TO anon USING (true)`) —
+  the existing column-level grant on `(url_hash, vote, created_at)`
+  continues to hide `device_id` and `id`.
+- **tv_viewer_schema_version() search_path mutable**: pinned to
+  `pg_catalog, public`. Prevents a privileged caller from changing
+  `search_path` and hijacking object resolution inside the function.
+- **channel_sources.csrc_anon_update was USING (true)**: the policy
+  let any anon caller `UPDATE` any row in the source-reliability table
+  (the WITH CHECK only validated *new* values). No client code writes
+  this table — only the admin `populate_supabase.py` does, via the
+  service_role key which bypasses RLS. Revoked the anon UPDATE / INSERT
+  / DELETE policies entirely; kept SELECT.
+- **Admin SECURITY DEFINER functions reachable by `authenticated`**:
+  `cleanup_old_data`, `db_health`, `refresh_analytics_views`,
+  `truncate_channels`, `report_source_health` were callable by any
+  signed-in user. Revoked from `authenticated` and `anon`; granted
+  only to `service_role`.
+
+Not changed (by design): `report_channel_broken`,
+`report_channel_working`, `promote_channel_source` remain anon-callable.
+This is the v2.16.0 architecture — the app has no user accounts, and
+those RPCs enforce per-device rate limits internally.
+
+#### TLS / certificate validation (`ssl=False` audit)
+- **`web/server.py` analytics POST**: was sending the Supabase anon JWT
+  and `device_id` over TLS with verification disabled. Now uses a
+  process-wide strict SSL context built from `certifi` (TLS 1.2+,
+  hostname check, full chain validation).
+- **`web/server.py` `/api/proxy` upstream**: now verifies upstream
+  TLS by default. For operators who proxy legacy IPTV servers with
+  broken/self-signed certs there is an explicit, log-loud opt-out:
+  `TV_VIEWER_PROXY_INSECURE_TLS=1`.
+- **`_is_private_ip` fail-closed**: DNS errors no longer fall through
+  to "not private" — they're treated as private (closes the partial
+  DNS-rebinding window in the proxy SSRF guard).
+- **Flutter `pinned_http_client.dart` fail-closed**: previously
+  returned `true` for unknown certs "during collection phase", which
+  was strictly worse than no pinning (accepted any cert the OS trust
+  chain had already rejected, i.e. exactly the MITM case). Now
+  rejects. Also removed a copy/paste-duplicated Amazon Root CA
+  fingerprint that was mislabelled as ISRG X1.
+
+#### Web client hardening
+- **Stored XSS in channel grid** (`web/static/index.html`): the inline
+  `onerror="this.outerHTML=mono('${esc(ch.name)}')"` handler on every
+  channel logo was vulnerable to a malicious channel name. HTML entity
+  decoding in attribute values restores `'` *before* the JS parser
+  sees it, so a name like `'); alert(1); //` would break out of the
+  string and execute. Replaced with a data attribute + programmatic
+  `addEventListener('error', …)` binding.
+- **Sub-Resource Integrity** for third-party scripts: pinned
+  `hls.js@1.5.20` (was unpinned `@1`!) and `leaflet@1.9.4` and added
+  `integrity="sha384-…"` + `crossorigin="anonymous"`. A jsDelivr/unpkg
+  compromise can no longer serve attacker-controlled JS to users.
+- **CSRF Origin guard** middleware: state-changing requests
+  (POST/PUT/PATCH/DELETE) whose Origin/Referer don't match this
+  server's host are rejected. CLI/mobile callers (no Origin header)
+  are still allowed — they don't carry ambient browser credentials.
+  Configurable allowlist via `TV_VIEWER_ALLOWED_ORIGINS`. The
+  `/api/health/report` endpoint is exempt (already rate-limited and
+  validated; mobile clients post to it cross-origin).
+
+### Deferred to a follow-up release
+Documented in the security audit and accepted as `Known limitations`:
+- DNS-rebinding TOCTOU in `/api/proxy` (mitigated by the fail-closed
+  resolver change; the proper fix needs a per-request connector with a
+  static resolver).
+- `ch_anon_insert` policy still allows anon `INSERT` on `channels` —
+  the systemic catalogue-poisoning channel exists, but is no longer
+  exploitable as XSS now that the inline `onerror` handler is gone.
+
+
+
 ## [2.16.0] - 2026-05-23
 
 ### Added

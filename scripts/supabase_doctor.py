@@ -118,10 +118,13 @@ def check_schema_version() -> bool:
             version = next(iter(version.values()), None)
     except Exception:
         version = body.strip().strip('"')
-    if version == '2.16.0':
+    if version == '2.16.1':
         _ok(f'Schema version = {version}')
         return True
-    _fail(f'Schema version mismatch (got {version!r}, expected 2.16.0)')
+    if version == '2.16.0':
+        _warn(f'Schema version = {version} (run supabase_migration_v2.16.1.sql to apply linter fixes)')
+        return True
+    _fail(f'Schema version mismatch (got {version!r}, expected 2.16.1)')
     return False
 
 

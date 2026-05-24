@@ -36,10 +36,12 @@ class PinnedHttpClient {
     'C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
     // Cloudflare Inc ECC CA-3
     'Vz/Y1KQmRLeBY1xtd/WkR1CbfDhQj81gdCBM7DiIGLQ=',
-    // ISRG Root X1 (Let's Encrypt)
-    'C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
     // DigiCert Global Root G2 (common Supabase intermediate)
     'i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=',
+    // NOTE: ISRG Root X1 (Let's Encrypt) — previously listed with a
+    // copy/paste-duplicated fingerprint; removed in v2.16.1 to avoid
+    // confusion.  Re-add the correct ISRG X1 SPKI pin if Supabase ever
+    // switches to Let's Encrypt for the *.supabase.co wildcard.
   ];
 
   /// Whether pinning is enabled. Disabled in debug builds to allow
@@ -100,13 +102,15 @@ class PinnedHttpClient {
       }
     }
 
-    // Log but allow during fingerprint collection phase.
-    // Once pins are validated in production, change this to return false.
-    logger.warning(
-      'Certificate pinning: unknown cert for $host:$port '
-      '(fingerprint: $certFingerprint). Allowing during collection phase.',
+    // Fail closed — unknown cert for a pinned host is treated as MITM.
+    // (Previously returned `true` "during collection phase" — that was
+    // strictly worse than no pinning because it accepted *any* cert the
+    // OS trust chain rejected. See SECURITY-AUDIT v2.16.1.)
+    logger.error(
+      'Certificate pinning: REJECTED unknown cert for $host:$port '
+      '(fingerprint: $certFingerprint).',
     );
-    return true;
+    return false;
   }
 
   /// Hosts that should have their certificates pinned.
