@@ -313,6 +313,198 @@ def q_channel_plays(hours: int) -> None:
         print(f"    {n:>4}  {co}")
 
 
+def _error_signature(event_data: dict) -> str:
+    """Stable signature for grouping/dedup. Combines error_type + cleaned message.
+
+    The message can contain noisy bits (URLs, timestamps, IDs); we keep a
+    short, normalized prefix. Same signature across releases = same bug.
+    """
+    et = (event_data.get("error_type") or "UnknownError").strip()
+    msg = (event_data.get("error_message") or "").strip()
+    # Strip URLs, hex IDs, timestamps to keep signature stable.
+    import re
+    msg = re.sub(r"https?://\S+", "<url>", msg)
+    msg = re.sub(r"\b[0-9a-f]{8,}\b", "<hex>", msg, flags=re.I)
+    msg = re.sub(r"\b\d{4}-\d{2}-\d{2}T?\S*\b", "<ts>", msg)
+    msg = re.sub(r"\s+", " ", msg)[:120]
+    return f"{et}::{msg}"
+
+
+def q_weekly_pulse(hours: int) -> None:
+    """L4 — Weekly Pulse. Multi-section markdown-friendly report for humans.
+
+    Designed to be captured as workflow step output and committed to
+    docs/pulse/YYYY-WW.md by the weekly-pulse.yml workflow.
+    """
+    print(f"# Weekly Pulse — last {hours}h")
+    print()
+
+    rows = _events(hours, limit=50000)
+    devs = {r["device_id"] for r in rows if r.get("device_id")}
+    print(f"- **Events:** {len(rows):,}")
+    print(f"- **Unique devices:** {len(devs):,}")
+    print()
+
+    # Health: error rate
+    errs = [r for r in rows if r.get("event_type") in ("client_error", "server_error")]
+    play_count = sum(1 for r in rows if r.get("event_type") == "channel_play")
+    err_rate = (len(errs) / max(len(rows), 1)) * 100
+    print(f"- **Errors:** {len(errs)} ({err_rate:.2f}% of events)")
+    print(f"- **Channel plays:** {play_count:,}")
+    print()
+
+    # Version adoption
+    print("## Version adoption (by unique device)")
+    devs_by_ver: dict[tuple, set] = collections.defaultdict(set)
+    for r in rows:
+        if r.get("device_id"):
+            devs_by_ver[(r.get("platform", "?"), r.get("app_version", "?"))].add(
+                r["device_id"]
+            )
+    print()
+    print("| Platform | Version | Devices |")
+    print("|---|---|---|")
+    for (plat, ver), ids in sorted(devs_by_ver.items(), key=lambda kv: -len(kv[1]))[:20]:
+        print(f"| {plat} | v{ver} | {len(ids)} |")
+    print()
+
+    # Top errors grouped by signature
+    print("## Top error signatures")
+    sigs: dict[str, list[dict]] = collections.defaultdict(list)
+    for r in errs:
+        sigs[_error_signature(r.get("event_data") or {})].append(r)
+    print()
+    if not sigs:
+        print("_No errors in window._ ✓")
+    else:
+        print("| Count | Platforms | Versions | Signature |")
+        print("|---|---|---|---|")
+        for sig, grp in sorted(sigs.items(), key=lambda kv: -len(kv[1]))[:15]:
+            plats = ",".join(sorted({(r.get("platform") or "?") for r in grp}))
+            vers = ",".join(sorted({(r.get("app_version") or "?") for r in grp}))
+            # Escape pipes in signature for markdown table
+            safe_sig = sig.replace("|", "\\|")[:120]
+            print(f"| {len(grp)} | {plats} | {vers} | `{safe_sig}` |")
+    print()
+
+    # Top channels played
+    print("## Top channels played")
+    plays = [r for r in rows if r.get("event_type") == "channel_play"]
+    by_channel: collections.Counter = collections.Counter()
+    by_cat: collections.Counter = collections.Counter()
+    by_country: collections.Counter = collections.Counter()
+    for r in plays:
+        d = r.get("event_data") or {}
+        if d.get("channel_name"):
+            by_channel[d["channel_name"]] += 1
+        if d.get("category"):
+            by_cat[d["category"]] += 1
+        if d.get("country"):
+            by_country[d["country"]] += 1
+    print()
+    if not by_channel:
+        print("_No channel plays in window._")
+    else:
+        print("| Plays | Channel |")
+        print("|---|---|")
+        for name, n in by_channel.most_common(15):
+            print(f"| {n} | {name} |")
+    print()
+
+    # Categories + countries
+    if by_cat or by_country:
+        print("## Engagement by category / country")
+        print()
+        print("**Categories:** " + ", ".join(
+            f"{cat} ({n})" for cat, n in by_cat.most_common(8)
+        ) or "_none_")
+        print()
+        print("**Countries:** " + ", ".join(
+            f"{co} ({n})" for co, n in by_country.most_common(8)
+        ) or "_none_")
+        print()
+
+    # Activity by platform
+    print("## Activity by platform")
+    by_plat_events: collections.Counter = collections.Counter()
+    by_plat_devs: dict[str, set] = collections.defaultdict(set)
+    for r in rows:
+        plat = r.get("platform", "?")
+        by_plat_events[plat] += 1
+        if r.get("device_id"):
+            by_plat_devs[plat].add(r["device_id"])
+    print()
+    print("| Platform | Events | Devices |")
+    print("|---|---|---|")
+    for plat, n in by_plat_events.most_common():
+        print(f"| {plat} | {n:,} | {len(by_plat_devs[plat])} |")
+    print()
+
+    # Generated marker — useful for parsing in workflows
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    print(f"---\n_Generated: {now}_")
+
+
+def q_triage_lookup(hours: int, version: str, limit: int) -> None:
+    """L2 — Triage helper. Look up the occurrence stats + signature index
+    for the most recent errors. Output is JSON on stdout so the
+    triage-on-issue workflow can parse it.
+
+    --version is reused as ``--match <substring>`` to filter by error
+    message substring (lets the workflow surface only the bug it just
+    detected, rather than every error).
+    """
+    qs = {
+        "select": "created_at,platform,app_version,device_id,event_data",
+        "event_type": "in.(client_error,server_error)",
+        "created_at": f"gte.{_since(hours)}",
+        "order": "created_at.desc",
+        "limit": str(limit),
+    }
+    rows = _get(f"/rest/v1/analytics_events?{urllib.parse.urlencode(qs)}")
+
+    match = (version or "").lower()
+    if match:
+        filtered = []
+        for r in rows:
+            d = r.get("event_data") or {}
+            blob = " ".join(filter(None, [
+                d.get("error_type"), d.get("error_message"),
+                d.get("stack_top"), d.get("context"),
+            ])).lower()
+            if match in blob:
+                filtered.append(r)
+        rows = filtered
+
+    sigs: dict[str, list[dict]] = collections.defaultdict(list)
+    for r in rows:
+        sigs[_error_signature(r.get("event_data") or {})].append(r)
+
+    out = []
+    for sig, grp in sorted(sigs.items(), key=lambda kv: -len(kv[1])):
+        plats = sorted({(r.get("platform") or "?") for r in grp})
+        vers = sorted({(r.get("app_version") or "?") for r in grp})
+        devs = {r.get("device_id") for r in grp if r.get("device_id")}
+        sample = grp[0].get("event_data") or {}
+        out.append({
+            "signature": sig,
+            "count": len(grp),
+            "unique_devices": len(devs),
+            "platforms": plats,
+            "versions": vers,
+            "first_seen": min(r["created_at"] for r in grp),
+            "last_seen": max(r["created_at"] for r in grp),
+            "sample": {
+                "error_type": sample.get("error_type"),
+                "error_message": sample.get("error_message"),
+                "stack_top": sample.get("stack_top"),
+                "context": sample.get("context"),
+                "severity": sample.get("severity"),
+            },
+        })
+    print(json.dumps({"window_hours": hours, "match": version, "signatures": out}, indent=2))
+
+
 QUERIES = {
     "health": lambda a: q_health(),
     "events": lambda a: q_events(a.hours),
@@ -322,6 +514,8 @@ QUERIES = {
     "v_recent": lambda a: q_v_recent(a.hours, a.version, a.limit),
     "app_launches": lambda a: q_app_launches(a.hours),
     "channel_plays": lambda a: q_channel_plays(a.hours),
+    "weekly_pulse": lambda a: q_weekly_pulse(a.hours),
+    "triage_lookup": lambda a: q_triage_lookup(a.hours, a.version, a.limit),
 }
 
 

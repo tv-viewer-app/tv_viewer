@@ -30,6 +30,7 @@ CANONICAL_CATEGORIES = sorted([
     "Religious",
     "Shopping",
     "Sports",
+    "Weather",
 ])
 
 
@@ -145,15 +146,19 @@ _CATEGORY_MAP: dict[str, str] = {
     "health": "Lifestyle",
     "relax": "Lifestyle",
     "outdoor": "Lifestyle",
-    # ── Merged: Business/Technology/Science/Weather → Education ──
+    # ── Merged: Business/Technology/Science → Education ──
     "business": "Education",
     "bus./financial": "Education",
     "technology": "Education",
     "computers": "Education",
     "tech": "Education",
     "science": "Education",
-    "weather": "Education",
     "gaming": "Education",
+    # ── Weather (its own category) ──
+    "weather": "Weather",
+    "weather & traffic": "Weather",
+    "meteo": "Weather",
+    "forecast": "Weather",
     # ── Movies ──
     "movies": "Movies",
     "cinema": "Movies",
@@ -261,6 +266,10 @@ _NAME_PATTERNS: list[tuple[str, re.Pattern]] = [
     )),
     ("Shopping", re.compile(
         r'\b(?:qvc|hsn|teleshopping|shop\s*tv|my\s*shop)\b',
+        re.IGNORECASE
+    )),
+    ("Weather", re.compile(
+        r'\b(?:weather|meteo|forecast|weatherscan|wetter|metar)\b',
         re.IGNORECASE
     )),
 ]

@@ -5,6 +5,40 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.5] - 2026-05-24
+
+### Fixed — EPG completely broken in Docker (gzip-of-gzip)
+Every EPG source (Pluto, Samsung, Plex, EPGShare UK, EPGShare IL) was failing
+with `Compressed file ended before end-of-stream marker`. Root cause: some CDNs
+serve `.gz` files with `Content-Encoding: gzip` on top, and aiohttp auto-
+decompresses the transport layer — leaving plain XML where we then tried a
+second gzip-decompress and got truncation errors.
+
+- `utils/epg.py`: disabled aiohttp `auto_decompress`, set `Accept-Encoding: identity`,
+  and detect gzip by **magic bytes** (`\x1f\x8b`) rather than trusting URL or
+  `Content-Encoding` headers. If a `.gz` URL serves plain XML, we now accept it
+  instead of bailing.
+
+### Fixed — EPG fetch storm on every `/api/epg/*` request
+When the initial EPG fetch failed, `_initialized` stayed `False`, so every
+subsequent endpoint hit re-triggered a full 5-source fetch — flooding upstream
+EPG providers and producing log spam at ~1/sec per channel view.
+
+- Added a 5-minute failure cooldown (`_last_failed_fetch`) so we don't hammer
+  upstream after a fully-failed fetch. Cleared on successful fetch.
+
+### Added — Weather as its own category
+Previously `weather` was merged into Education (which was confusing — a 24h
+forecast channel is not Education). Now Weather is its own canonical category
+across all three clients with `🌦️` icon in the web sidebar.
+
+- `utils/normalize.py`: added `Weather` to `CANONICAL_CATEGORIES`, mapped
+  `weather`/`weather & traffic`/`meteo`/`forecast` → `Weather`, added name-
+  pattern regex for weather/meteo/forecast/weatherscan/wetter/metar.
+- `flutter_app/lib/models/channel.dart`: mirrored in Dart.
+- `web/static/index.html`: added Weather/Nature/Shopping/Radio emoji icons
+  (the latter three were already canonical but rendering the default 📺 fallback).
+
 ## [2.16.4] - 2026-05-24
 
 ### Fixed — Proxy 403 storm (was the *real* "everything is slow" cause)

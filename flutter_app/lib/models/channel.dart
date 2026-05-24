@@ -49,7 +49,7 @@ class Channel {
   static const canonicalCategories = [
     'Documentary', 'Education', 'Entertainment', 'General', 'Kids',
     'Lifestyle', 'Movies', 'Music', 'Nature', 'News', 'Radio',
-    'Religious', 'Shopping', 'Sports',
+    'Religious', 'Shopping', 'Sports', 'Weather',
   ];
 
   /// Full category normalization map — ported from utils/normalize.py
@@ -134,7 +134,10 @@ class Channel {
     // Education merges
     'business': 'Education', 'bus./financial': 'Education',
     'technology': 'Education', 'computers': 'Education', 'tech': 'Education',
-    'science': 'Education', 'weather': 'Education', 'gaming': 'Education',
+    'science': 'Education', 'gaming': 'Education',
+    // Weather (its own category)
+    'weather': 'Weather', 'weather & traffic': 'Weather',
+    'meteo': 'Weather', 'forecast': 'Weather',
     // Direct mappings
     'movies': 'Movies', 'cinema': 'Movies', 'film': 'Movies',
     'kids': 'Kids', 'family': 'Kids', 'children': 'Kids',
@@ -168,6 +171,7 @@ class Channel {
     'Religious': RegExp(r'\b(?:church|gospel|prayer|faith|islam|quran|torah|kabbalah|breslov|christian|bible|kol chai)\b', caseSensitive: false),
     'Kids': RegExp(r'\b(?:kids|cartoon|nick|disney|toon|boomerang|pbs kids|sesame)\b', caseSensitive: false),
     'Shopping': RegExp(r'\b(?:qvc|hsn|teleshopping|shop\s*tv|my\s*shop)\b', caseSensitive: false),
+    'Weather': RegExp(r'\b(?:weather|meteo|forecast|weatherscan|wetter|metar)\b', caseSensitive: false),
   };
 
   static String? normalizeCategory(String? rawCategory, {String? channelName}) {

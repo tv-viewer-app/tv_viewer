@@ -345,6 +345,10 @@ class EPGService:
         self._initialized = False
         self._initializing = False
         self._last_fetch: float = 0
+        # When a full-fetch failure happens (all sources returned 0 channels)
+        # we set this so subsequent endpoint hits don't re-trigger a fetch
+        # storm. Reset on success or when sources change.
+        self._last_failed_fetch: float = 0
         self._epg_sources: List[str] = list(DEFAULT_EPG_SOURCES)
 
         # Load cached data if available
@@ -384,6 +388,15 @@ class EPGService:
             logger.info("EPG cache still fresh (%.1fh old), skipping fetch", cache_age_hours)
             return
 
+        # Cooldown after a recent total failure — don't hammer upstream
+        # sources every time an /api/epg/<channel> request lands.
+        EPG_FAILURE_COOLDOWN_SEC = 300  # 5 minutes
+        if (self._last_failed_fetch
+                and (time.time() - self._last_failed_fetch) < EPG_FAILURE_COOLDOWN_SEC):
+            since = int(time.time() - self._last_failed_fetch)
+            logger.debug("EPG fetch in cooldown (%ds since last failure), skipping", since)
+            return
+
         if aiohttp is None:
             logger.warning("aiohttp not available — EPG disabled")
             return
@@ -401,11 +414,21 @@ class EPGService:
             ssl_ctx = ssl.create_default_context()
 
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-        headers = {"User-Agent": "TVViewer/2.15 EPG-Fetcher"}
+        headers = {
+            "User-Agent": "TVViewer/2.16 EPG-Fetcher",
+            # Tell upstream not to wrap the .gz payload in another gzip layer.
+            # Some CDNs send Content-Encoding: gzip *on* application/gzip files,
+            # which causes aiohttp to auto-decompress before our code can see
+            # the raw .gz bytes, producing "compressed file ended before
+            # end-of-stream" failures across every source. auto_decompress=False
+            # below is the defensive belt; this header is the suspenders.
+            "Accept-Encoding": "identity",
+        }
         async with aiohttp.ClientSession(
             connector=connector,
             timeout=aiohttp.ClientTimeout(total=EPG_FETCH_TIMEOUT),
             headers=headers,
+            auto_decompress=False,
         ) as session:
             tasks = [self._fetch_source(session, url) for url in self._epg_sources]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -447,14 +470,19 @@ class EPGService:
                     "EPG fetch returned 0 channels — keeping existing %d-channel cache",
                     len(self._channel_map),
                 )
-                # Reset fetch timestamp so we retry on next call.
-                self._last_fetch = 0
+                # Mark failure so we apply cooldown to subsequent retries.
+                self._last_failed_fetch = time.time()
                 return
             self._channel_map = all_channels
             self._schedules = all_schedules
             self._build_name_index()
             self._initialized = bool(all_channels)
-            self._last_fetch = time.time() if all_channels else 0
+            if all_channels:
+                self._last_fetch = time.time()
+                self._last_failed_fetch = 0  # clear cooldown on success
+            else:
+                self._last_fetch = 0
+                self._last_failed_fetch = time.time()
 
         logger.info("EPG loaded: %d channels, %d programs",
                      len(all_channels),
@@ -674,8 +702,12 @@ class EPGService:
                                    MAX_EPG_DOWNLOAD // (1024 * 1024), url)
                     return {}, {}
 
-                # Decompress if gzipped
-                if url.endswith('.gz') or response.headers.get('Content-Encoding') == 'gzip':
+                # Detect gzip by magic bytes rather than trusting the URL or
+                # Content-Encoding header — some sources serve raw XML at .gz
+                # URLs after a CDN strips the gzip layer, and some servers
+                # return gzipped data without setting Content-Encoding.
+                is_gzipped = data[:2] == b"\x1f\x8b"
+                if is_gzipped:
                     try:
                         data = gzip.decompress(data)
                         if len(data) > MAX_EPG_DECOMPRESSED:
@@ -683,9 +715,13 @@ class EPGService:
                                            MAX_EPG_DECOMPRESSED // (1024 * 1024), url)
                             return {}, {}
                     except Exception as exc:
-                        if url.endswith('.gz'):
-                            logger.warning("EPG gzip decompression failed for %s: %s", url, exc)
-                            return {}, {}
+                        logger.warning("EPG gzip decompression failed for %s: %s", url, exc)
+                        return {}, {}
+                elif url.endswith(".gz"):
+                    # URL claims gzip but bytes aren't gzipped — likely the CDN
+                    # already decompressed for us. Treat as plain XML and let
+                    # the parser decide if it's valid.
+                    logger.debug("EPG source %s served decompressed content despite .gz URL", url)
 
                 xml_content = data.decode('utf-8', errors='replace')
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
