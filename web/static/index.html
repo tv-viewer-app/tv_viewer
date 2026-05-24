@@ -696,6 +696,11 @@ let audioCtx = null, analyser = null, animFrameId = null, statsInterval = null;
 
 let currentSources = []; // All available sources for current channel
 let currentSourceIdx = 0; // Current source index
+// Sources that already failed during the *current* play attempt. Reset to
+// empty whenever the user picks a different channel. Without this, the old
+// `(idx + 1) % length` rotation would cycle dead sources forever — a single
+// 403 from each source produced thousands of /api/proxy requests per second.
+let _triedSources = new Set();
 
 function playChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
@@ -728,6 +733,7 @@ function playChannel(idx) {
     // Reset sources — use all known URLs for auto-retry
     currentSources = (ch.urls && ch.urls.length > 0) ? [...ch.urls] : [ch.url];
     currentSourceIdx = 0;
+    _triedSources = new Set();
 
     // Check for a remembered working source — start from it
     let startUrl = ch.url;
@@ -760,8 +766,27 @@ function playChannel(idx) {
 }
 
 function tryNextSource() {
-    if (currentSources.length <= 1) return false;
-    currentSourceIdx = (currentSourceIdx + 1) % currentSources.length;
+    if (currentSources.length === 0) return false;
+
+    // Mark the current source as tried before advancing. If every source
+    // has now been tried, give up — don't cycle dead URLs forever.
+    if (currentSources[currentSourceIdx]) {
+        _triedSources.add(currentSources[currentSourceIdx]);
+    }
+    if (_triedSources.size >= currentSources.length) {
+        if (hls) { hls.destroy(); hls = null; }
+        document.getElementById('player').pause();
+        toast('Stream unavailable — all sources failed');
+        return false;
+    }
+
+    // Find the next source we have NOT tried yet (skip dead ones).
+    let nextIdx = currentSourceIdx;
+    for (let i = 0; i < currentSources.length; i++) {
+        nextIdx = (nextIdx + 1) % currentSources.length;
+        if (!_triedSources.has(currentSources[nextIdx])) break;
+    }
+    currentSourceIdx = nextIdx;
     const url = currentSources[currentSourceIdx];
     const video = document.getElementById('player');
     stopStats();
@@ -803,6 +828,18 @@ function startStream(url, video, isRadio) {
                 lowLatencyMode: false,
                 maxBufferLength: 30,
                 maxMaxBufferLength: 60,
+                // Cap retries hard. Defaults are 4 manifest retries +
+                // 6 fragment retries with exponential backoff, which
+                // produced the /api/proxy 403 storm we saw in docker
+                // logs. One retry is plenty — if the first attempt
+                // returned 403, the URL is dead, move on.
+                manifestLoadingMaxRetry: 1,
+                manifestLoadingRetryDelay: 500,
+                manifestLoadingMaxRetryTimeout: 4000,
+                levelLoadingMaxRetry: 1,
+                levelLoadingRetryDelay: 500,
+                fragLoadingMaxRetry: 2,
+                fragLoadingRetryDelay: 1000,
                 xhrSetup: (xhr) => { xhr.withCredentials = false; }
             });
             hls.loadSource(streamUrl);

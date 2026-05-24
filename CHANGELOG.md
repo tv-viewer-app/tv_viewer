@@ -5,6 +5,34 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.4] - 2026-05-24
+
+### Fixed — Proxy 403 storm (was the *real* "everything is slow" cause)
+Production docker logs showed two dead Kan11 URLs hammering `/api/proxy`
+hundreds of times per second, all returning 403. With FastAPI's single
+event loop, that saturated the proxy and pushed every other request
+(`/api/channels`, `/api/epg/*`, even static assets) into the back of the
+queue. Three coordinated fixes:
+
+- **Client `tryNextSource()` no longer cycles dead URLs forever.** The
+  old `(idx + 1) % length` rotation, combined with HLS.js calling
+  `tryNextSource()` on every fatal error, made the loop unbounded. Now
+  tracks a per-attempt `_triedSources` Set and bails with
+  *"Stream unavailable — all sources failed"* once every source has
+  been tried once.
+- **Client HLS.js retry budget capped.** Defaults are 4 manifest +
+  6 fragment retries per source with exponential backoff; on a 403
+  that compounds badly across multiple sources. Lowered to
+  `manifestLoadingMaxRetry: 1`, `fragLoadingMaxRetry: 2`, with short
+  delays. If the first attempt is 403 the URL is dead, don't retry.
+- **Server-side `/api/proxy` circuit breaker.** After 5 consecutive
+  4xx responses for the same URL within 30 s, subsequent requests
+  for that URL are short-circuited with the cached status for 60 s —
+  no upstream call, no log spam, no event-loop time. Protects against
+  misbehaving clients we can no longer fix (stale tabs on old app
+  versions). Successful manifest/segment responses clear the breaker
+  immediately.
+
 ## [2.16.3] - 2026-05-24
 
 ### Fixed — EPG never loaded in Docker / large-feed deployments

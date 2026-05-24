@@ -459,6 +459,77 @@ def _proxy_ssl_param():
     return False if _PROXY_TLS_INSECURE else _get_strict_ssl_context()
 
 
+# ─── /api/proxy circuit breaker ─────────────────────────────────────────────
+#
+# A dead upstream URL combined with an aggressive HLS.js retry loop produced
+# a 403 storm in production docker logs — the same two URLs hammered the
+# proxy hundreds of times per second, saturating the event loop and
+# starving /api/channels. The client-side fix bounds tryNextSource(); this
+# server-side fix bounds *any* misbehaving client (including stale tabs
+# from older app versions that we can no longer fix). After N consecutive
+# 4xx responses for a URL within a short window, subsequent requests for
+# that URL are short-circuited with the cached status until the cooldown
+# elapses — no upstream call, no log spam, no event-loop time.
+_PROXY_BREAKER_THRESHOLD = 5      # consecutive 4xx before tripping
+_PROXY_BREAKER_WINDOW = 30.0      # seconds: 4xx within this window count
+_PROXY_BREAKER_COOLDOWN = 60.0    # seconds: short-circuit window after trip
+_PROXY_BREAKER_MAX_ENTRIES = 1024  # cap on tracked URLs (LRU-ish prune)
+_proxy_breaker_state: dict = {}   # url -> {fails, first_ts, tripped_until, status}
+
+
+def _breaker_should_short_circuit(url: str) -> Optional[int]:
+    """Return the cached 4xx status to serve, or None if the call should proceed."""
+    entry = _proxy_breaker_state.get(url)
+    if not entry:
+        return None
+    tripped_until = entry.get("tripped_until", 0.0)
+    if tripped_until and time.time() < tripped_until:
+        return entry.get("status", 403)
+    if tripped_until and time.time() >= tripped_until:
+        # Cooldown elapsed — clear the trip but keep counting on next failure.
+        entry["tripped_until"] = 0.0
+        entry["fails"] = 0
+    return None
+
+
+def _breaker_record_failure(url: str, status: int) -> None:
+    """Track a 4xx upstream response; trip the breaker if threshold reached."""
+    now = time.time()
+    entry = _proxy_breaker_state.get(url)
+    if entry is None:
+        # Soft prune to keep memory bounded.
+        if len(_proxy_breaker_state) >= _PROXY_BREAKER_MAX_ENTRIES:
+            try:
+                oldest = min(
+                    _proxy_breaker_state.items(),
+                    key=lambda kv: kv[1].get("first_ts", 0.0),
+                )[0]
+                _proxy_breaker_state.pop(oldest, None)
+            except ValueError:
+                pass
+        entry = {"fails": 0, "first_ts": now, "tripped_until": 0.0, "status": status}
+        _proxy_breaker_state[url] = entry
+
+    # Reset the window if the last failure was too long ago.
+    if now - entry.get("first_ts", now) > _PROXY_BREAKER_WINDOW:
+        entry["fails"] = 0
+        entry["first_ts"] = now
+
+    entry["fails"] += 1
+    entry["status"] = status
+    if entry["fails"] >= _PROXY_BREAKER_THRESHOLD:
+        entry["tripped_until"] = now + _PROXY_BREAKER_COOLDOWN
+        logger.warning(
+            "Proxy circuit breaker tripped for %s (status=%d, cooldown=%.0fs)",
+            url, status, _PROXY_BREAKER_COOLDOWN,
+        )
+
+
+def _breaker_record_success(url: str) -> None:
+    """Successful upstream call clears any pending failure tally."""
+    _proxy_breaker_state.pop(url, None)
+
+
 import socket as _socket
 
 
@@ -742,6 +813,18 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     # SSRF protection
     _validate_proxy_url(url)
 
+    # Circuit breaker: if this URL has been failing repeatedly, return the
+    # cached 4xx without touching upstream. Stops 403 storms from
+    # misbehaving clients (e.g. HLS.js retry loops in old tabs) from
+    # saturating the event loop and starving /api/channels.
+    short_circuit_status = _breaker_should_short_circuit(url)
+    if short_circuit_status is not None:
+        return JSONResponse(
+            status_code=short_circuit_status,
+            content={"detail": f"Upstream {short_circuit_status} (breaker)"},
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
+
     # Extract origin from URL for CDN compatibility
     from urllib.parse import urlparse as _parse_url
     _parsed = _parse_url(url)
@@ -766,6 +849,11 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             status = resp.status
             await resp.release()
             await session.close()
+            # Track 4xx for the circuit breaker. 5xx alone shouldn't trip it
+            # — those may be transient — but 4xx (esp 403/404) means the
+            # URL itself is wrong/dead, so retries will only make it worse.
+            if 400 <= status < 500:
+                _breaker_record_failure(url, status)
             return JSONResponse(
                 status_code=status,
                 content={"detail": f"Upstream returned {status}"},
@@ -777,6 +865,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             body = await resp.text()
             await resp.release()
             await session.close()
+            _breaker_record_success(url)
             rewritten = _rewrite_manifest(body, url, str(request.base_url))
             return StreamingResponse(
                 iter([rewritten.encode()]),
@@ -786,6 +875,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
 
         # For segments (.ts, .mp4, etc.) — stream through
         media_type = resp.headers.get("content-type", "video/mp2t")
+        _breaker_record_success(url)
 
         async def stream_generator():
             try:
