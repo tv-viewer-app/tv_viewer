@@ -5,6 +5,48 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.3] - 2026-05-24
+
+### Fixed — EPG never loaded in Docker / large-feed deployments
+- `_fetch_source` raised its compressed-download cap from **10 MB → 64 MB**
+  and the decompressed cap from **50 MB → 300 MB**. Three of the six default
+  community XMLTV mirrors (Pluto US, Samsung TV+ US, Plex Live TV, dp247
+  Freeview) had grown past the 10 MB compressed limit since the original
+  cap was set, so each silently returned empty data. The result was that
+  fresh Docker containers initialized with `⚠️ EPG: no program data
+  available (1.5s)` and `/api/epg/*` responses always had empty
+  `now`/`next`/`schedule` — EPG never appeared in the web UI on any card.
+- All silent EPG failure paths (non-200 status, gzip-decompression error,
+  ClientError, TimeoutError, parse error, oversized payload) are now logged
+  at **WARNING** with the source URL, so docker logs make it obvious which
+  feed is misbehaving. `asyncio.gather` aggregation zips results back to
+  their source URL before logging.
+
+### Fixed — Web UI: EPG fetcher no longer blocks channel-list filtering
+- `renderChannels()` previously fired **30 parallel `/api/epg/*` requests**
+  on every sidebar click. With the browser's per-origin connection cap, the
+  next `/api/channels` request was queued behind the EPG wall, producing
+  the "many seconds" delay users reported when switching categories or
+  countries. Logs from a real session showed the same EPG URLs being
+  refetched repeatedly across clicks.
+- Added a 200 ms settle delay, a per-render `AbortController`, an in-memory
+  EPG cache keyed by channel name, an in-flight dedup map, and a concurrency
+  cap of 4 simultaneous EPG fetches. Rapid sidebar clicks now cancel
+  superseded batches before any EPG request hits the network.
+
+### Fixed — Web UI: filter race condition
+- `loadChannels()` had no request token, so the *last-completed* response
+  won the render, not the *last-clicked* selection. After a fast
+  category→country→category click sequence, the dropdown and channel grid
+  could end up out of sync. Added a monotonic `_loadSeq` token, an
+  `AbortController`, dual seq guards, and optimistic loading UI on click.
+
+### Fixed — Web server: O(1) filter dispatch
+- `_ChannelCache` now builds `by_category`, `by_country`, `by_cat_country`,
+  and `local_channels` indexes once per refresh. `get_channels()` dispatches
+  to the right index instead of scanning all channels per request — 16-50×
+  faster at 50,000 channels (synthetic benchmark).
+
 ## [2.16.2] - 2026-05-24
 
 ### Fixed — Supabase analytics views

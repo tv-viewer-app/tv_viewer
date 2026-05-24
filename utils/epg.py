@@ -410,11 +410,15 @@ class EPGService:
             tasks = [self._fetch_source(session, url) for url in self._epg_sources]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for result in results:
+        for url, result in zip(self._epg_sources, results):
             if isinstance(result, Exception):
-                logger.warning("EPG source failed: %s", result)
+                logger.warning("EPG source %s raised %s: %s",
+                               url, type(result).__name__, result)
                 continue
             channels, schedules = result
+            if not channels:
+                # _fetch_source already logged the reason at WARNING
+                continue
             all_channels.update(channels)
             for ch_id, programs in schedules.items():
                 if ch_id in all_schedules:
@@ -650,36 +654,52 @@ class EPGService:
     async def _fetch_source(self, session: aiohttp.ClientSession,
                              url: str) -> Tuple[Dict[str, str], Dict[str, List[EPGProgram]]]:
         """Fetch and parse a single EPG source."""
-        MAX_EPG_DOWNLOAD = 10 * 1024 * 1024    # 10 MB compressed
-        MAX_EPG_DECOMPRESSED = 50 * 1024 * 1024  # 50 MB decompressed
+        # Limits raised May 2026: modern community EPG feeds (Pluto/Samsung/Plex)
+        # routinely ship 15-30 MB compressed and 80-200 MB decompressed. The old
+        # 10/50 MB caps silently dropped every large source, leaving Docker
+        # users with no program data at all.
+        MAX_EPG_DOWNLOAD = 64 * 1024 * 1024     # 64 MB compressed
+        MAX_EPG_DECOMPRESSED = 300 * 1024 * 1024  # 300 MB decompressed
 
-        logger.debug("Fetching EPG: %s", url)
-        async with session.get(url) as response:
-            if response.status != 200:
-                logger.debug("EPG fetch failed (%d): %s", response.status, url)
-                return {}, {}
+        logger.info("Fetching EPG: %s", url)
+        try:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    logger.warning("EPG fetch failed (HTTP %d): %s", response.status, url)
+                    return {}, {}
 
-            data = await response.content.read(MAX_EPG_DOWNLOAD + 1)
-            if len(data) > MAX_EPG_DOWNLOAD:
-                logger.warning("EPG source too large (>10MB): %s", url)
-                return {}, {}
+                data = await response.content.read(MAX_EPG_DOWNLOAD + 1)
+                if len(data) > MAX_EPG_DOWNLOAD:
+                    logger.warning("EPG source too large (>%d MB): %s",
+                                   MAX_EPG_DOWNLOAD // (1024 * 1024), url)
+                    return {}, {}
 
-            # Decompress if gzipped
-            if url.endswith('.gz') or response.headers.get('Content-Encoding') == 'gzip':
-                try:
-                    data = gzip.decompress(data)
-                    if len(data) > MAX_EPG_DECOMPRESSED:
-                        logger.warning("EPG decompressed content too large (>50MB): %s", url)
-                        return {}, {}
-                except Exception:
-                    # If URL ends with .gz but decompression fails, content is not valid
-                    if url.endswith('.gz'):
-                        logger.debug("EPG gzip decompression failed (likely error page): %s", url)
-                        return {}, {}
+                # Decompress if gzipped
+                if url.endswith('.gz') or response.headers.get('Content-Encoding') == 'gzip':
+                    try:
+                        data = gzip.decompress(data)
+                        if len(data) > MAX_EPG_DECOMPRESSED:
+                            logger.warning("EPG decompressed content too large (>%d MB): %s",
+                                           MAX_EPG_DECOMPRESSED // (1024 * 1024), url)
+                            return {}, {}
+                    except Exception as exc:
+                        if url.endswith('.gz'):
+                            logger.warning("EPG gzip decompression failed for %s: %s", url, exc)
+                            return {}, {}
 
-            xml_content = data.decode('utf-8', errors='replace')
+                xml_content = data.decode('utf-8', errors='replace')
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
+            logger.warning("EPG fetch error for %s: %s", url, exc)
+            return {}, {}
 
-        return parse_xmltv(xml_content)
+        try:
+            channels, schedules = parse_xmltv(xml_content)
+        except Exception as exc:
+            logger.warning("EPG parse failed for %s: %s", url, exc)
+            return {}, {}
+        logger.info("EPG fetched %d channels / %d schedules from %s",
+                    len(channels), len(schedules), url)
+        return channels, schedules
 
     # ------------------------------------------------------------------
     # Cache
