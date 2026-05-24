@@ -234,6 +234,50 @@ def main():
         print("Crash reporter installed")
     except Exception as e:
         print(f"Warning: Could not install crash reporter: {e}")
+
+    # Catch crashes that happen in background daemon threads (e.g. the
+    # StreamChecker asyncio thread). Without this hook those exceptions
+    # are silently lost; with it they are silently telemetered to Supabase
+    # so we can improve the client. No user-facing dialog — bg threads
+    # often crash in startup/idle and a dialog would be jarring.
+    try:
+        import threading
+        def _bg_thread_excepthook(args):
+            exc_type, exc_value, exc_tb, thread = (
+                args.exc_type, args.exc_value, args.exc_traceback, args.thread,
+            )
+            if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+                return
+            try:
+                logging.getLogger("crash").error(
+                    "Unhandled exception in thread %r",
+                    getattr(thread, "name", "?"),
+                    exc_info=(exc_type, exc_value, exc_tb),
+                )
+            except Exception:
+                pass
+            try:
+                from utils.analytics import analytics
+                import asyncio as _a
+                loop = _a.new_event_loop()
+                try:
+                    loop.run_until_complete(
+                        analytics.track_error(
+                            exc_value,
+                            context=f"thread:{getattr(thread, 'name', '?')[:32]}",
+                            severity="error",
+                            is_handled=False,
+                            tb=exc_tb,
+                        )
+                    )
+                finally:
+                    loop.close()
+            except Exception:
+                pass
+        if hasattr(threading, "excepthook"):
+            threading.excepthook = _bg_thread_excepthook
+    except Exception as e:
+        print(f"Warning: Could not install thread crash hook: {e}")
     
     # Initialize anonymous analytics in a background daemon thread so the
     # UI can render without waiting on network/disk I/O (Issue #163).

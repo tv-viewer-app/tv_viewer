@@ -10,6 +10,7 @@ Usage:
 import os
 import sys
 import json
+import uuid
 import asyncio
 import hashlib
 import ipaddress
@@ -1202,6 +1203,95 @@ async def track_analytics(request: Request):
         return {"status": "ok"}
     except Exception:
         return {"status": "error"}
+
+
+# ─── Server-side error reporter (forwards 500s to Supabase) ─────────────────
+
+async def _report_server_error(
+    error: BaseException,
+    *,
+    context: str,
+    severity: str = "error",
+) -> None:
+    """Best-effort: post a `server_error` event to Supabase analytics_events.
+
+    Uses the anon key already plumbed for /api/analytics. Never raises.
+    Server has no device_id, so we use a stable per-instance UUID derived
+    from the host so all errors from the same Docker container group
+    together.
+    """
+    if not (_ANALYTICS_URL and _ANALYTICS_HEADERS):
+        return
+    try:
+        import traceback as _tb
+        frames = _tb.extract_tb(error.__traceback__) if error.__traceback__ else []
+        stack_top = ""
+        stack_summary = []
+        if frames:
+            last = frames[-1]
+            fname = last.filename.replace("\\", "/").rsplit("/", 1)[-1]
+            stack_top = f"{fname}:{last.lineno} in {last.name}"
+            for fr in frames[-3:]:
+                fn = fr.filename.replace("\\", "/").rsplit("/", 1)[-1]
+                stack_summary.append(f"{fn}:{fr.lineno}:{fr.name}")
+        msg = str(error)
+        if len(msg) > 200:
+            msg = msg[:200]
+        payload = {
+            "event_type": "server_error",
+            "device_id": _SERVER_INSTANCE_ID,
+            "platform": "web-server",
+            "app_version": config.APP_VERSION,
+            "event_data": {
+                "error_type": type(error).__name__,
+                "error_message": msg,
+                "stack_top": stack_top,
+                "stack_summary": stack_summary,
+                "severity": severity if severity in ("warning", "error", "fatal") else "error",
+                "is_handled": False,
+                "context": context[:64],
+            },
+        }
+        connector = aiohttp.TCPConnector(limit=2, ttl_dns_cache=300)
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.post(_ANALYTICS_URL, json=payload, headers=_ANALYTICS_HEADERS, ssl=_get_strict_ssl_context()) as resp:
+                if resp.status not in (200, 201):
+                    logger.debug(f"server_error report HTTP {resp.status}")
+    except Exception as e:
+        logger.debug(f"server_error report failed: {e}")
+
+
+# Stable per-process instance ID so all errors from one container/process
+# share a device_id (useful for dedup / scoping in the analytics dashboard).
+_SERVER_INSTANCE_ID = str(uuid.uuid4())
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all that turns server crashes into 500s AND telemeters them.
+
+    HTTPExceptions raised by handlers are NOT routed here — FastAPI handles
+    them via its built-in HTTPException handler. This only fires for truly
+    unexpected failures.
+    """
+    try:
+        path = request.url.path if request and request.url else "?"
+    except Exception:
+        path = "?"
+    try:
+        logger.error("Unhandled exception in %s: %s", path, exc, exc_info=True)
+    except Exception:
+        pass
+    # Fire-and-forget telemetry; never let the reporter mask the original 500.
+    try:
+        asyncio.create_task(_report_server_error(exc, context=f"http:{path[:48]}"))
+    except Exception:
+        pass
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 # ─── Refresh / pull channels ────────────────────────────────────────────────

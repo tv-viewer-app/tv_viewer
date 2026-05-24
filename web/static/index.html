@@ -406,7 +406,62 @@ const analytics = (() => {
         report(ch) { reportCount++; send('channel_report', { name: ch.name }); },
         search(q) { send('search', { query_length: q.length }); },
         feature(name) { send('feature_use', { feature: name }); },
+        error(err, opts) {
+            // Best-effort cross-browser error capture. Never throws.
+            try {
+                const o = opts || {};
+                const e = err || {};
+                const msg = (e.message || String(e) || '').slice(0, 200);
+                const stack = (e.stack || '').toString();
+                const stackLines = stack.split('\n').map(s => s.trim()).filter(Boolean);
+                const stackTop = stackLines[0] ? stackLines[0].slice(0, 200) : '';
+                const stackSummary = stackLines.slice(0, 3).map(l => l.slice(0, 120));
+                const severity = ['warning','error','fatal'].includes(o.severity) ? o.severity : 'error';
+                send('client_error', {
+                    error_type: (e.name || 'Error').slice(0, 64),
+                    error_message: msg,
+                    stack_top: stackTop,
+                    stack_summary: stackSummary,
+                    severity: severity,
+                    is_handled: o.isHandled !== undefined ? !!o.isHandled : true,
+                    context: (o.context || '').slice(0, 64),
+                    url: (location && location.pathname) || '',
+                });
+            } catch (_) { /* analytics never breaks the app */ }
+        },
     };
+})();
+
+// ─── Global error hooks (window.onerror + unhandledrejection) ───────────────
+(function installErrorHooks() {
+    // Avoid double-install if HMR re-runs this script
+    if (window.__tv_error_hooks_installed) return;
+    window.__tv_error_hooks_installed = true;
+
+    window.addEventListener('error', (ev) => {
+        try {
+            const err = ev.error || { name: 'WindowError', message: ev.message, stack: '' };
+            analytics.error(err, {
+                context: `window.onerror@${(ev.filename || '').split('/').pop()}:${ev.lineno || 0}`,
+                severity: 'error',
+                isHandled: false,
+            });
+        } catch (_) {}
+    });
+
+    window.addEventListener('unhandledrejection', (ev) => {
+        try {
+            const reason = ev.reason;
+            const err = (reason instanceof Error)
+                ? reason
+                : { name: 'UnhandledRejection', message: String(reason), stack: '' };
+            analytics.error(err, {
+                context: 'unhandled_promise',
+                severity: 'error',
+                isHandled: false,
+            });
+        } catch (_) {}
+    });
 })();
 
 // ─── Render ─────────────────────────────────────────────────────────────────

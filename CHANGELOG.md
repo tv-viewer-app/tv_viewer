@@ -5,6 +5,45 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Cross-client error telemetry
+
+Clients now report **caught and uncaught errors** to Supabase
+`analytics_events` as `event_type='client_error'` (server crashes use
+`server_error`), so we can see which errors actually hit users and prioritize
+fixes data-driven instead of guessing from GitHub issues. Respects the
+existing opt-in (`TELEMETRY_ENABLED`) — silent for users who never consented.
+
+No schema change — `analytics_events.event_data` is JSONB. Event payload:
+
+```json
+{ "error_type", "error_message", "stack_top", "stack_summary",
+  "severity": "warning|error|fatal", "is_handled": bool, "context": "..." }
+```
+
+- **Desktop (Python)** — new `analytics.track_error(error, context=, severity=,
+  is_handled=)`. The existing `crash_reporter` global handler now fires
+  `analytics.track_crash` silently *before* the user dialog so telemetry is
+  captured even if the user dismisses. New `threading.excepthook` catches
+  background-daemon-thread crashes (notably StreamChecker's asyncio thread)
+  that previously vanished.
+- **Mobile (Flutter)** — new `AnalyticsService.trackError(error, stack,
+  context:, severity:, isHandled:)`. `CrashlyticsService` now forwards both
+  `FlutterError.onError` and `PlatformDispatcher.instance.onError` to
+  Supabase analytics in addition to the existing Crashlytics path, so we
+  get coverage on installs without Firebase configured.
+- **Web (FastAPI)** — new global `@app.exception_handler(Exception)` that
+  posts `server_error` events tagged with a stable per-instance UUID
+  (groups errors per Docker container). Browser-side `window.onerror` +
+  `unhandledrejection` POST to the existing `/api/analytics` endpoint as
+  `client_error`.
+
+Tests: 6 new unit tests in `tests/test_analytics.py` covering shape,
+severity normalization, message/context truncation, and the handled flag.
+339/339 tests pass.
+
+
 ## [2.16.1] - 2026-05-24
 
 ### Security

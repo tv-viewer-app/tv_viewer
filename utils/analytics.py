@@ -363,6 +363,70 @@ class AnalyticsService:
             "duration_ms": int(duration_seconds * 1000),
         })
 
+    async def track_error(
+        self,
+        error: BaseException,
+        *,
+        context: str = "",
+        severity: str = "error",
+        is_handled: bool = True,
+        tb: Optional[Any] = None,
+    ) -> None:
+        """Record a handled error (caught exception) worth telemetering.
+
+        Use for non-fatal errors the app recovered from (e.g. a stream check
+        failure, M3U parse error, EPG fetch timeout). Fatal/uncaught errors
+        should use :meth:`track_crash` instead, which auto-flushes.
+
+        Args:
+            error: The exception instance.
+            context: Short free-form tag (e.g. ``"stream_checker"``,
+                ``"epg_fetch"``). Truncated to 64 chars.
+            severity: ``"warning"`` | ``"error"`` | ``"fatal"``. Defaults to
+                ``"error"``.
+            is_handled: ``True`` for caught exceptions (default), ``False``
+                for uncaught.
+            tb: Optional traceback object. Falls back to
+                ``error.__traceback__``.
+        """
+        try:
+            if severity not in ("warning", "error", "fatal"):
+                severity = "error"
+
+            stack_top = ""
+            stack_summary: List[str] = []
+            try:
+                _tb = tb if tb is not None else error.__traceback__
+                if _tb is not None:
+                    frames = traceback.extract_tb(_tb)
+                    if frames:
+                        last = frames[-1]
+                        # sanitize path: keep only basename + line + func
+                        fname = last.filename.replace("\\", "/").rsplit("/", 1)[-1]
+                        stack_top = f"{fname}:{last.lineno} in {last.name}"
+                    # Compact summary: top-3 most relevant frames (the last 3).
+                    for fr in frames[-3:]:
+                        fn = fr.filename.replace("\\", "/").rsplit("/", 1)[-1]
+                        stack_summary.append(f"{fn}:{fr.lineno}:{fr.name}")
+            except Exception:
+                pass
+
+            error_msg = str(error)
+            if len(error_msg) > 200:
+                error_msg = error_msg[:200]
+
+            await self.track_event("client_error", {
+                "error_type": type(error).__name__,
+                "error_message": error_msg,
+                "stack_top": stack_top,
+                "stack_summary": stack_summary,
+                "severity": severity,
+                "is_handled": is_handled,
+                "context": (context or "")[:64],
+            })
+        except Exception as exc:
+            logger.debug("Failed to track error: %s", exc)
+
     async def track_crash(
         self,
         error: BaseException,

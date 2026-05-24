@@ -374,6 +374,76 @@ class TestAnalyticsConvenienceMethods(unittest.TestCase):
     @patch("utils.analytics.aiohttp", MagicMock())
     @patch("utils.analytics.SUPABASE_URL", "https://test.supabase.co")
     @patch("utils.analytics.SUPABASE_ANON_KEY", "test-key")
+    def test_track_error_basic_shape(self):
+        svc = self._make_svc()
+        try:
+            raise ValueError("network timeout while fetching M3U")
+        except ValueError as e:
+            asyncio.get_event_loop().run_until_complete(
+                svc.track_error(e, context="stream_checker")
+            )
+        ev = svc._queue[0]
+        self.assertEqual(ev["event_type"], "client_error")
+        d = ev["event_data"]
+        self.assertEqual(d["error_type"], "ValueError")
+        self.assertEqual(d["error_message"], "network timeout while fetching M3U")
+        self.assertEqual(d["severity"], "error")
+        self.assertTrue(d["is_handled"])
+        self.assertEqual(d["context"], "stream_checker")
+        # stack metadata should include this test file
+        self.assertIn("test_analytics.py", d["stack_top"])
+        self.assertGreaterEqual(len(d["stack_summary"]), 1)
+
+    @patch("utils.analytics.ENABLED", True)
+    @patch("utils.analytics.aiohttp", MagicMock())
+    @patch("utils.analytics.SUPABASE_URL", "https://test.supabase.co")
+    @patch("utils.analytics.SUPABASE_ANON_KEY", "test-key")
+    def test_track_error_truncates_long_message(self):
+        svc = self._make_svc()
+        asyncio.get_event_loop().run_until_complete(
+            svc.track_error(RuntimeError("x" * 500), context="c")
+        )
+        self.assertLessEqual(len(svc._queue[0]["event_data"]["error_message"]), 200)
+
+    @patch("utils.analytics.ENABLED", True)
+    @patch("utils.analytics.aiohttp", MagicMock())
+    @patch("utils.analytics.SUPABASE_URL", "https://test.supabase.co")
+    @patch("utils.analytics.SUPABASE_ANON_KEY", "test-key")
+    def test_track_error_normalizes_invalid_severity(self):
+        svc = self._make_svc()
+        asyncio.get_event_loop().run_until_complete(
+            svc.track_error(Exception("x"), severity="bogus")
+        )
+        self.assertEqual(svc._queue[0]["event_data"]["severity"], "error")
+
+    @patch("utils.analytics.ENABLED", True)
+    @patch("utils.analytics.aiohttp", MagicMock())
+    @patch("utils.analytics.SUPABASE_URL", "https://test.supabase.co")
+    @patch("utils.analytics.SUPABASE_ANON_KEY", "test-key")
+    def test_track_error_truncates_long_context(self):
+        svc = self._make_svc()
+        asyncio.get_event_loop().run_until_complete(
+            svc.track_error(Exception("x"), context="z" * 200)
+        )
+        self.assertLessEqual(len(svc._queue[0]["event_data"]["context"]), 64)
+
+    @patch("utils.analytics.ENABLED", True)
+    @patch("utils.analytics.aiohttp", MagicMock())
+    @patch("utils.analytics.SUPABASE_URL", "https://test.supabase.co")
+    @patch("utils.analytics.SUPABASE_ANON_KEY", "test-key")
+    def test_track_error_unhandled_flag_propagates(self):
+        svc = self._make_svc()
+        asyncio.get_event_loop().run_until_complete(
+            svc.track_error(Exception("x"), is_handled=False, severity="fatal")
+        )
+        d = svc._queue[0]["event_data"]
+        self.assertFalse(d["is_handled"])
+        self.assertEqual(d["severity"], "fatal")
+
+    @patch("utils.analytics.ENABLED", True)
+    @patch("utils.analytics.aiohttp", MagicMock())
+    @patch("utils.analytics.SUPABASE_URL", "https://test.supabase.co")
+    @patch("utils.analytics.SUPABASE_ANON_KEY", "test-key")
     def test_track_session_end_flushes(self):
         svc = self._make_svc()
         svc.flush = AsyncMock()

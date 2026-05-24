@@ -257,6 +257,53 @@ class AnalyticsService {
     await flush();
   }
 
+  /// Track a handled (non-fatal) error worth telemetering.
+  ///
+  /// Use for caught exceptions the app recovered from (e.g. an EPG fetch
+  /// failure, a parsing error). Fatal/uncaught errors should keep using
+  /// [trackCrash], which auto-flushes.
+  ///
+  /// [severity] is one of `'warning'`, `'error'`, `'fatal'` (default
+  /// `'error'`). [context] is a short tag (≤64 chars) like `'home_screen'`
+  /// or `'epg_fetch'`. Both fields are sanitized.
+  Future<void> trackError(
+    dynamic error,
+    StackTrace? stack, {
+    String context = '',
+    String severity = 'error',
+    bool isHandled = true,
+  }) async {
+    const allowedSeverity = {'warning', 'error', 'fatal'};
+    final sev = allowedSeverity.contains(severity) ? severity : 'error';
+
+    var stackTop = '';
+    final stackSummary = <String>[];
+    if (stack != null) {
+      final lines = stack.toString().split('\n')
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty)
+          .toList();
+      if (lines.isNotEmpty) {
+        stackTop = lines.first.length > 200
+            ? lines.first.substring(0, 200)
+            : lines.first;
+      }
+      for (final l in lines.take(3)) {
+        stackSummary.add(l.length > 120 ? l.substring(0, 120) : l);
+      }
+    }
+
+    await trackEvent('client_error', {
+      'error_type': error.runtimeType.toString(),
+      'error_message': _sanitizeErrorMessage(error.toString()),
+      'stack_top': stackTop,
+      'stack_summary': stackSummary,
+      'severity': sev,
+      'is_handled': isHandled,
+      'context': context.length > 64 ? context.substring(0, 64) : context,
+    });
+  }
+
   /// Track when a user applies a filter (type only, not the value).
   Future<void> trackFilterUsed(String filterType) async {
     await trackEvent('filter_used', {

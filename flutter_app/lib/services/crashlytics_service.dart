@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../utils/logger_service.dart';
+import 'analytics_service.dart';
 
 /// Crashlytics service that works with or without Firebase
 /// 
@@ -82,22 +83,38 @@ class CrashlyticsService {
     FlutterError.onError = (FlutterErrorDetails details) {
       // Log to Firebase Crashlytics
       recordFlutterError(details);
-      
+
       // Also log to logger for local debugging
       _logger.error(
         '[Flutter Error] ${details.exception}',
         details.exception,
         details.stack,
       );
+
+      // Always forward to Supabase analytics so we have cross-install
+      // visibility even when Firebase isn't configured.
+      _reportToAnalytics(
+        details.exception,
+        details.stack,
+        context: 'flutter_framework',
+        isHandled: false,
+      );
     };
-    
+
     // Catch errors outside of Flutter framework
     PlatformDispatcher.instance.onError = (error, stack) {
       recordError(error, stack, fatal: true);
+      _reportToAnalytics(
+        error,
+        stack,
+        context: 'platform_dispatcher',
+        severity: 'fatal',
+        isHandled: false,
+      );
       return true;
     };
   }
-  
+
   /// Set up fallback error handler using logger
   void _setupFallbackErrorHandler() {
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -106,8 +123,14 @@ class CrashlyticsService {
         details.exception,
         details.stack,
       );
+      _reportToAnalytics(
+        details.exception,
+        details.stack,
+        context: 'flutter_framework',
+        isHandled: false,
+      );
     };
-    
+
     // Catch errors outside of Flutter framework
     PlatformDispatcher.instance.onError = (error, stack) {
       _logger.error(
@@ -115,9 +138,43 @@ class CrashlyticsService {
         error,
         stack,
       );
+      _reportToAnalytics(
+        error,
+        stack,
+        context: 'platform_dispatcher',
+        severity: 'fatal',
+        isHandled: false,
+      );
       return true;
     };
   }
+
+  /// Fire-and-forget forwarder to Supabase analytics. Never throws.
+  void _reportToAnalytics(
+    dynamic error,
+    StackTrace? stack, {
+    String context = '',
+    String severity = 'error',
+    bool isHandled = true,
+  }) {
+    // Lazy import via dynamic call so this file stays decoupled from
+    // analytics_service.dart at compile time if someone deletes that file.
+    () async {
+      try {
+        // ignore: avoid_dynamic_calls
+        await AnalyticsService.instance.trackError(
+          error,
+          stack,
+          context: context,
+          severity: severity,
+          isHandled: isHandled,
+        );
+      } catch (_) {
+        // Telemetry must never throw.
+      }
+    }();
+  }
+
   
   /// Record a non-fatal error
   /// 

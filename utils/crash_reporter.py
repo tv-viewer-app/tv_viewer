@@ -221,6 +221,22 @@ def install_global_handler():
             "Unhandled exception",
             exc_info=(exc_type, exc_value, exc_tb)
         )
+
+        # Silently report to Supabase analytics (best-effort, never raises).
+        # Runs BEFORE the user dialog so telemetry is captured even if the
+        # user dismisses the dialog or closes the app.
+        try:
+            from utils.analytics import analytics
+            import asyncio
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(
+                    analytics.track_crash(exc_value, tb=exc_tb)
+                )
+            finally:
+                loop.close()
+        except Exception as telemetry_err:
+            logger.debug(f"Crash telemetry failed: {telemetry_err}")
         
         # Try to show a dialog and report
         try:
