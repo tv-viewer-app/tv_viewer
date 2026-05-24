@@ -696,11 +696,31 @@ class EPGService:
                     logger.warning("EPG fetch failed (HTTP %d): %s", response.status, url)
                     return {}, {}
 
-                data = await response.content.read(MAX_EPG_DOWNLOAD + 1)
-                if len(data) > MAX_EPG_DOWNLOAD:
-                    logger.warning("EPG source too large (>%d MB): %s",
-                                   MAX_EPG_DOWNLOAD // (1024 * 1024), url)
-                    return {}, {}
+                # IMPORTANT: stream-read in chunks until EOF rather than
+                # ``response.content.read(N)``. The single-arg read can return
+                # *fewer* than N bytes on chunked-transfer responses (it
+                # returns whatever's in the buffer when the syscall returns),
+                # leaving us with a truncated payload that gzip.decompress
+                # then rejects with "Compressed file ended before end-of-
+                # stream". Looping until EOF gives us the complete body.
+                buf = bytearray()
+                async for chunk in response.content.iter_chunked(256 * 1024):
+                    buf.extend(chunk)
+                    if len(buf) > MAX_EPG_DOWNLOAD:
+                        logger.warning("EPG source too large (>%d MB): %s",
+                                       MAX_EPG_DOWNLOAD // (1024 * 1024), url)
+                        return {}, {}
+                data = bytes(buf)
+                content_length = response.headers.get("Content-Length")
+                if content_length and content_length.isdigit():
+                    expected = int(content_length)
+                    if len(data) < expected:
+                        logger.warning(
+                            "EPG download truncated for %s: got %d / %d bytes",
+                            url, len(data), expected,
+                        )
+                        return {}, {}
+                logger.debug("EPG downloaded %d bytes from %s", len(data), url)
 
                 # Detect gzip by magic bytes rather than trusting the URL or
                 # Content-Encoding header — some sources serve raw XML at .gz
@@ -715,7 +735,10 @@ class EPGService:
                                            MAX_EPG_DECOMPRESSED // (1024 * 1024), url)
                             return {}, {}
                     except Exception as exc:
-                        logger.warning("EPG gzip decompression failed for %s: %s", url, exc)
+                        logger.warning(
+                            "EPG gzip decompression failed for %s (%d bytes): %s",
+                            url, len(data), exc,
+                        )
                         return {}, {}
                 elif url.endswith(".gz"):
                     # URL claims gzip but bytes aren't gzipped — likely the CDN

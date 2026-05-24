@@ -234,42 +234,110 @@ _CATEGORY_MAP: dict[str, str] = {
 
 # ─── Name-based classification patterns ──────────────────────────────────────
 # Used when category is "General"/"Other" to infer category from channel name.
+# Order matters — first match wins. Put specific/unambiguous patterns first.
+#
+# Word-boundary notes:
+#   - \b only fires between word/non-word chars. It does NOT trigger between
+#     lowercase and uppercase in CamelCase (e.g. "AccuWeather"), so for
+#     compound brand names we use (?<![A-Za-z]) lookbehinds or omit the left \b.
 _NAME_PATTERNS: list[tuple[str, re.Pattern]] = [
-    ("Radio", re.compile(
-        r'(?:\b\d{2,3}\.\d\s)|(?:\b(?:fm|radio)\b)',
+    # Weather first — distinctive keywords, low false-positive risk
+    ("Weather", re.compile(
+        # Catches: Weather Channel, AccuWeather, WeatherNation, WeatherScan,
+        # WeatherStar, Local Now Weather, BBC Weather, Météo, El Tiempo TV,
+        # Wetter, Previsioni, Forecast
+        r'(?:accuweather|weathernation|weatherscan|weatherstar|'
+        r'\bweather\b|weather(?=[A-Z])|(?<=[a-z])weather|'
+        r'\bm[eé]t[eé]o\b|\bmeteo(?:rolog|sat)|\bforecast\b|\bwetter\b|'
+        r'\bprevisioni\b|\bel\s+tiempo\b)',
         re.IGNORECASE
     )),
-    ("Music", re.compile(
-        r'\b(?:hits|jazz|rock|oldies|hitz|reggae|hip.?hop|r&b|soul|blues|'
-        r'techno|edm|salsa|symphony|orchestra|mizrahi|mizrahit|playlist|'
-        r'classic rock|smooth jazz|country music|pop music)\b',
+    # Shopping — specific brands & generic terms
+    ("Shopping", re.compile(
+        r'\b(?:qvc|hsn\d?|teleshopping|telemarket|shop(?:ping)?\s*tv|'
+        r'my\s*shop|gem\s+shopping|jewelry\s+(?:tv|television)|'
+        r'shinsegae\s+shopping|gongyoung\s+shopping|kshopping|'
+        r'home\s+shopping|donna\s+shopping)\b',
         re.IGNORECASE
     )),
-    ("News", re.compile(
-        r'\b(?:news|noticias|cnn|bbc news|fox news|msnbc|cnbc|al.?jazeera|'
-        r'headline|infowars)\b',
-        re.IGNORECASE
-    )),
-    ("Sports", re.compile(
-        r'\b(?:sport|soccer|football|basketball|tennis|cricket|golf|racing|'
-        r'boxing|ufc|mma|nba|nfl|mlb|nhl|espn|bein|dazn)\b',
-        re.IGNORECASE
-    )),
+    # Religious
     ("Religious", re.compile(
         r'(?:\b(?:church|gospel|prayer|faith|islam|quran|torah|kabbalah|'
-        r'breslov|christian|bible|kol chai)\b|ברסלב|הלכ|דף יומי|שיעור|הרב)',
+        r'breslov|christian|bible|kol chai|tbn|godtv|hillsong|daystar|'
+        r'3abn|ewtn|catholic)\b|ברסלב|הלכ|דף יומי|שיעור|הרב)',
         re.IGNORECASE
     )),
+    # Kids
     ("Kids", re.compile(
-        r'\b(?:kids|cartoon|nick|disney|toon|boomerang|pbs kids|sesame)\b',
+        r'\b(?:kids|cartoon|cartoonito|nick(?:toons|jr)?|disney|toon|'
+        r'boomerang|pbs\s*kids|sesame|babytv|baby\s*tv|pokemon|peppa|'
+        r'paw\s*patrol|cocomelon|barbie|teletoon|dreamworks|moonbug)\b',
         re.IGNORECASE
     )),
-    ("Shopping", re.compile(
-        r'\b(?:qvc|hsn|teleshopping|shop\s*tv|my\s*shop)\b',
+    # Sports — brand + generic
+    ("Sports", re.compile(
+        r'\b(?:sport|soccer|football|basketball|tennis|cricket|golf|racing|'
+        r'boxing|ufc|mma|nba|nfl|mlb|nhl|espn|bein\s*sports?|dazn|sportsnet|'
+        r'wwe|fightbox|premier\s*league|champions\s*league|formula\s*1)\b',
         re.IGNORECASE
     )),
-    ("Weather", re.compile(
-        r'\b(?:weather|meteo|forecast|weatherscan|wetter|metar)\b',
+    # News — brand + generic + local US affiliates
+    ("News", re.compile(
+        r'(?:\b(?:news|noticias|noticieros|cnn|bbc\s*news|fox\s*news|msnbc|'
+        r'cnbc|al.?jazeera|headline|infowars|newsmax|newsy|newsnation|'
+        r'cheddar|bloomberg|reuters|sky\s*news|euronews|france\s*24|'
+        r'dw\s*english|i24|democracy\s*now|oann)\b|'
+        # US local-affiliate prefixes like "ABC 10", "FOX 5", "NBC Bay Area"
+        r'\b(?:abc|cbs|nbc|fox|pbs)\s*(?:\d{1,3}|news|bay\s*area|denver|'
+        r'chicago|boston|miami|atlanta|seattle|dallas|houston|phoenix|'
+        r'philadelphia|orlando|tampa|portland|sacramento|cleveland|'
+        r'wkbw|wcpo|wsbtv|kgo|wabc|kcal|wbtv|wfaa|wxyz|whas|kfor|wgme|'
+        r'wbbm|wfor|wnbc|wcbs|kabc|knbc|kcbs|kxan|wbal)\b)',
+        re.IGNORECASE
+    )),
+    # Documentary — true crime, history, science, biography
+    ("Documentary", re.compile(
+        r'(?:\b(?:nat\s*geo|national\s*geographic|smithsonian|history\s*channel|'
+        r'discovery|animal\s*planet|investigation\s*discovery|biography|'
+        r'forensic\s*files|true\s*crime|crime\s*\+?\s*investigation|'
+        r'a&e|cold\s*case|crime\s*360|60\s*days\s*in|'
+        r'chaos\s*on\s*cam|documentary|docu\s*box)\b|'
+        r'\bcrime(?:\s+&\s+(?:evidence|justice))\b|'
+        r'\b(?:american|world)\s+crimes?\b)',
+        re.IGNORECASE
+    )),
+    # Movies — cinema brands and dedicated movie networks
+    ("Movies", re.compile(
+        r'\b(?:cinema|movies?\s*(?:channel|network|tv|box|max)?|'
+        r'mgm\s*(?:presents|gold|movies?)|filmrise|cineplex|'
+        r'action\s*hollywood|cinemax|hbo\s*(?:movie|max)|stirr\s*movies|'
+        r'pluto\s*movies|tubi\s*movies|popcornflix|crackle\s*movies|'
+        r'grit\s*xtra|hallmark\s*movies|lifetime\s*movies)\b',
+        re.IGNORECASE
+    )),
+    # Lifestyle — cooking, travel, home, fashion
+    ("Lifestyle", re.compile(
+        r'\b(?:food\s*(?:network|tv|channel)?|cooking\s*(?:channel)?|'
+        r'cuisine|chef\s*tv|tasty|kitchen(?:\s+nightmares)?|hells?\s*kitchen|'
+        r'bake\s*off|baking|recipe|americas?\s*test\s*kitchen|'
+        r'travel\s*(?:channel|tv|network)?|wanderlust|destination\s*tv|'
+        r'fashion\s*(?:tv|one|channel)?|fashionbox|hgtv|magnolia|'
+        r'home\s*(?:&|and)\s*garden|gardening|diy\s*network|design\s*network|'
+        r'love\s*nature\s*lifestyle|lifestyle)\b',
+        re.IGNORECASE
+    )),
+    # Music — brand + genre keywords (use \b to avoid MMTV-like false positives)
+    ("Music", re.compile(
+        r'\b(?:mtv(?:\s+\w+)?|vh1|vevo|music\s*box|stingray|trace\s*urban|'
+        r'deluxe\s*music|kiss\s*tv|qmusic|nrj|hits|jazz|rock|oldies|hitz|'
+        r'reggae|hip.?hop|r&b|soul|blues|techno|edm|salsa|symphony|orchestra|'
+        r'mizrahi|mizrahit|playlist|classic\s*rock|smooth\s*jazz|'
+        r'country\s*music|pop\s*music)\b',
+        re.IGNORECASE
+    )),
+    # Radio — last, very broad pattern
+    ("Radio", re.compile(
+        r'(?:\b\d{2,3}\.\d\s)|(?:\b(?:fm|radio)\b)',
         re.IGNORECASE
     )),
 ]

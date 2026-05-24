@@ -5,6 +5,48 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.6] - 2026-05-24
+
+### Fixed — EPG truncation (third time the charm)
+v2.16.5 fixed gzip-of-gzip but EPG was *still* truncating in production. Root
+cause: `response.content.read(N)` on aiohttp returns whatever the read syscall
+produced — it does **not** drain a chunked-transfer body. With CDN responses
+using `Transfer-Encoding: chunked` we were getting partial `.gz` bytes that
+failed decompression.
+
+- `utils/epg.py`: rewrote `_fetch_source` to use `async for chunk in
+  response.content.iter_chunked(256*1024)`. This drains the stream fully and
+  applies the size cap inside the loop. Added a post-read `Content-Length`
+  sanity check that rejects partial bodies.
+
+### Improved — Channel auto-categorization (107 channels rescued from General)
+- `utils/normalize.py`: rewrote `_NAME_PATTERNS` to catch CamelCase compound
+  brand names. Previously `\bweather\b` did not match `AccuWeather` because
+  `u→W` is word-char-to-word-char (no `\b` boundary). Now we use compound
+  alternatives plus lookbehind/lookahead to catch:
+  - **Weather**: AccuWeather, WeatherNation, WeatherScan, WeatherStar
+  - **News**: 55 US local affiliate stations (ABC 10, FOX 5, NBC Bay Area,
+    WKBW, WCPO, KGO, WABC, etc.) + Newsmax, OANN, Cheddar, Bloomberg, Reuters,
+    Sky News, France 24, DW, i24
+  - **Documentary**: A&E, Biography, Crime 360, 60 Days In, Forensic Files,
+    Nat Geo, Smithsonian, History Channel, Discovery
+  - **Shopping**: Gem Shopping, Jewelry TV, Shinsegae, Gongyoung, KShopping
+  - **Lifestyle**: Food Network, Cooking Channel, Hell's Kitchen, Tasty,
+    HGTV, Magnolia, Travel Channel, Fashion TV
+  - **Movies**: MGM Presents, FilmRise, Action Hollywood, Hallmark Movies
+  - **Kids**: BabyTV, Pokemon, Peppa, Paw Patrol, CoComelon, Teletoon
+- Audit on 14,037-channel cache: **107 reclassified out of General, 0 regressions**
+  (existing categories untouched — name patterns only fire when source category
+  resolves to "General").
+
+### Added — Closed-loop automation (L2 triage)
+- `scripts/triage_issue.py`: deterministic issue-triage helper. Given an
+  issue number, extracts error signature from fenced log blocks, queries
+  Supabase for occurrence count over the last 24h, assigns severity (P1-P4
+  based on 24h-rate threshold), maps platform labels, and posts an enriched
+  triage comment. Dedups via `<!-- sig:X -->` HTML markers — if the same
+  signature already has an open issue, the new one is closed with a link.
+
 ## [2.16.5] - 2026-05-24
 
 ### Fixed — EPG completely broken in Docker (gzip-of-gzip)
