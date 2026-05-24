@@ -71,7 +71,10 @@ def _request(method: str, path: str, body: dict | None = None) -> Tuple[int, str
 
 
 def check_table_channel_votes() -> bool:
-    status, body = _request('GET', '/rest/v1/channel_votes?select=id&limit=1')
+    # Query only columns explicitly granted to anon (url_hash, vote, created_at).
+    # `id` and `device_id` are intentionally NOT granted — querying them
+    # would return 401 by design, which is correct security behavior.
+    status, body = _request('GET', '/rest/v1/channel_votes?select=url_hash&limit=1')
     if status == 200:
         _ok('Table channel_votes exists and is readable')
         return True
