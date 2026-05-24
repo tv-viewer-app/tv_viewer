@@ -520,5 +520,100 @@ class TestSupabaseContracts:
         assert ed['session_duration_s'] == 120
 
 
+class TestSupabaseRPCs:
+    """v2.16.0: verify report_channel / report_channel_working call the
+    new SECURITY DEFINER RPCs instead of read-modify-write REST calls."""
+
+    def _patched_call(self, target: str, payload_capture: dict):
+        """Build a patched _call_rpc that records its arguments."""
+        from unittest.mock import patch, AsyncMock
+
+        async def fake_call(name, payload, timeout=15):
+            payload_capture['name'] = name
+            payload_capture['payload'] = payload
+            return {'ok': True, 'broken_count': 1, 'working_count': 1}
+
+        return patch(target, new=AsyncMock(side_effect=fake_call))
+
+    def test_report_channel_calls_broken_rpc(self):
+        from utils import supabase_channels
+        from unittest.mock import patch
+
+        captured: dict = {}
+        with patch('utils.supabase_channels.is_configured', return_value=True), \
+             patch('utils.supabase_channels._device_id', return_value='dev-abcdef-123456'), \
+             self._patched_call('utils.supabase_channels._call_rpc', captured):
+            ok = asyncio.run(supabase_channels.report_channel('a' * 64))
+
+        assert ok is True
+        assert captured['name'] == 'report_channel_broken'
+        assert captured['payload']['p_url_hash'] == 'a' * 64
+        assert captured['payload']['p_device_id'] == 'dev-abcdef-123456'
+
+    def test_report_channel_working_calls_rpc_with_response_time(self):
+        from utils import supabase_channels
+        from unittest.mock import patch
+
+        captured: dict = {}
+        with patch('utils.supabase_channels.is_configured', return_value=True), \
+             patch('utils.supabase_channels._device_id', return_value='dev-abcdef-123456'), \
+             self._patched_call('utils.supabase_channels._call_rpc', captured):
+            ok = asyncio.run(supabase_channels.report_channel_working(
+                'b' * 64, response_time_ms=237))
+
+        assert ok is True
+        assert captured['name'] == 'report_channel_working'
+        assert captured['payload']['p_response_time_ms'] == 237
+
+    def test_report_channel_aborts_without_device_id(self):
+        from utils import supabase_channels
+        from unittest.mock import patch
+
+        with patch('utils.supabase_channels.is_configured', return_value=True), \
+             patch('utils.supabase_channels._device_id', return_value=''):
+            ok = asyncio.run(supabase_channels.report_channel('c' * 64))
+        assert ok is False
+
+    def test_promote_source_calls_rpc(self):
+        """web/server.py::_promote_source_supabase should POST to the RPC."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        import config
+
+        config.SUPABASE_URL = 'https://example.supabase.co'
+        config.SUPABASE_ANON_KEY = 'anon-test-key'
+
+        from web import server
+
+        captured: dict = {}
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.text = AsyncMock(return_value='{"ok":true}')
+
+        async def _run():
+            cm = AsyncMock()
+            cm.__aenter__ = AsyncMock(return_value=mock_resp)
+            cm.__aexit__ = AsyncMock(return_value=False)
+
+            def fake_post(url, json=None, headers=None, timeout=None):
+                captured['url'] = url
+                captured['payload'] = json
+                return cm
+
+            mock_session = AsyncMock()
+            mock_session.post = fake_post
+            mock_session_cls = MagicMock()
+            mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with patch('aiohttp.ClientSession', mock_session_cls):
+                await server._promote_source_supabase('CNN', 'http://stream.example/cnn.m3u8')
+
+        asyncio.run(_run())
+        assert captured.get('url', '').endswith('/rest/v1/rpc/promote_channel_source')
+        assert captured['payload']['p_channel_name'] == 'CNN'
+        assert captured['payload']['p_working_url'] == 'http://stream.example/cnn.m3u8'
+        assert len(captured['payload']['p_working_hash']) == 64
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

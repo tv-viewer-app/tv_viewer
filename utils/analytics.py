@@ -145,6 +145,15 @@ def _hash_url(url: str) -> str:
     return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
 
+def get_device_id() -> str:
+    """Public accessor returning a stable anonymous device UUID.
+
+    Loaded from ``~/.tv_viewer_device_id`` (created on first call with
+    owner-only permissions).  Safe to call from any thread.
+    """
+    return _load_or_create_device_id()
+
+
 def _load_or_create_device_id() -> str:
     """Load the anonymous device UUID from disk, or create one on first run."""
     try:

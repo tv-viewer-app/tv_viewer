@@ -5,6 +5,53 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0] - 2026-05-23
+
+### Added
+- **Atomic Supabase RPCs** (`scripts/supabase_migration_v2.16.0.sql`):
+  - `report_channel_broken(p_url_hash, p_device_id)` — replaces the fragile
+    GET-then-PATCH dance on `channels.report_count`. Per-device 10-minute
+    throttle and 100-vote/hour abuse cap.
+  - `report_channel_working(p_url_hash, p_device_id, p_response_time_ms)` —
+    finally makes the documented `report_count >= 3` consensus rule fire:
+    `channel_status.report_count` is now refreshed from the audit trail on
+    every working vote (was stuck at 1).
+  - `promote_channel_source(name, url, hash)` — atomic, race-free URL
+    promotion by exact name match server-side. No more PostgREST filter
+    escaping, no more lost-update races on `urls[]`.
+- **`channel_votes` audit trail** — per-`(device_id, url_hash, vote)`
+  records with 30-day decay window. Enables future abuse-detection and
+  vote-decay policies.
+- **`scripts/supabase_doctor.py`** — one-command health check that
+  verifies the migration is applied (table, RPCs, schema version) and
+  prints clear remediation steps on failure.
+- **`utils.analytics.get_device_id()`** — public accessor for the stable
+  anonymous device UUID (previously only available via the analytics
+  service instance).
+
+### Changed
+- **`utils/supabase_channels.py`** `report_channel` and
+  `report_channel_working` now call the new SECURITY DEFINER RPCs instead
+  of read-modify-write REST calls. Eliminates lost-update races under
+  concurrent reports.
+- **`web/server.py::_promote_source_supabase`** rewritten to call the
+  `promote_channel_source` RPC. Removed the ad-hoc `ilike` escaping —
+  the RPC handles name matching server-side.
+
+### Security
+- **RLS lockdown**: `anon` role's direct `UPDATE` / `DELETE` on
+  `channels` is revoked. Since the anon key ships inside every APK and
+  Docker image, any caller could previously mass-rewrite the catalog.
+  All writes now flow through the rate-limited RPCs above.
+- `channel_votes` is `SELECT`-only for anon (writes via RPC only).
+
+### Migration notes
+1. Run `scripts/supabase_migration_v2.16.0.sql` in the Supabase SQL
+   editor (idempotent, safe to re-run).
+2. Verify with `python scripts/supabase_doctor.py`.
+3. Older clients (≤2.15.x) keep working — they hit the legacy REST
+   endpoints which still respond, but they bypass the new throttles.
+
 ## [2.15.4] - 2026-05-23
 
 ### Fixed

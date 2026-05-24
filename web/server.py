@@ -927,11 +927,11 @@ def _promote_source(name: str, working_url: str):
 
 
 async def _promote_source_supabase(name: str, working_url: str):
-    """Update Supabase to set working_url as primary for this channel.
+    """Promote *working_url* to the primary slot for *name* via atomic RPC.
 
-    Uses PostgREST `name=ilike.{name}` (case-insensitive) with aiohttp's params
-    encoding to prevent filter-syntax injection. The caller must have already
-    validated `name` via `_is_safe_channel_name`.
+    Delegates to the ``promote_channel_source`` SECURITY DEFINER function.
+    No race conditions, no PostgREST filter-escaping, no name-injection
+    surface — the lookup happens server-side with ``lower(name)`` equality.
     """
     if not _is_safe_channel_name(name):
         return
@@ -941,7 +941,6 @@ async def _promote_source_supabase(name: str, working_url: str):
             "apikey": config.SUPABASE_ANON_KEY,
             "Authorization": f"Bearer {config.SUPABASE_ANON_KEY}",
             "Content-Type": "application/json",
-            "Prefer": "return=minimal",
         }
         import aiohttp
         import ssl
@@ -951,34 +950,23 @@ async def _promote_source_supabase(name: str, working_url: str):
         except ImportError:
             ssl_ctx = ssl.create_default_context()
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-        base = f'{config.SUPABASE_URL}/rest/v1/channels'
-        # ilike pattern needs filter-syntax wildcards escaped to literals.
-        # PostgREST treats % and _ as wildcards; convert to literal match.
-        ilike_value = name.replace("%", r"\%").replace("_", r"\_")
-        name_filter = {"name": f"ilike.{ilike_value}"}
+        rpc_url = f'{config.SUPABASE_URL}/rest/v1/rpc/promote_channel_source'
+        payload = {
+            "p_channel_name": name,
+            "p_working_url": working_url,
+            "p_working_hash": url_hash,
+        }
         async with aiohttp.ClientSession(connector=connector) as session:
-            # Get current channel data — params dict ensures URL-encoding
-            get_headers = {k: v for k, v in headers.items() if k != "Content-Type"}
-            get_params = {**name_filter, "select": "urls,url_hash"}
-            async with session.get(base, headers=get_headers, params=get_params,
-                                   timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status != 200:
-                    return
-                rows = await resp.json()
-                if not rows:
-                    return
-                row = rows[0]
-                urls = row.get("urls") or []
-                if working_url in urls and urls[0] != working_url:
-                    urls.remove(working_url)
-                    urls.insert(0, working_url)
-                    payload = {"urls": urls, "url_hash": url_hash}
-                    async with session.patch(
-                        base, json=payload, headers=headers, params=name_filter,
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    ) as patch_resp:
-                        if patch_resp.status in (200, 204):
-                            logger.debug(f"Promoted source for {name} in Supabase")
+            async with session.post(
+                rpc_url, json=payload, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status in (200, 204):
+                    logger.debug("Promoted source for %s in Supabase", name)
+                else:
+                    body = await resp.text()
+                    logger.debug("promote_channel_source RPC %s: %s",
+                                 resp.status, body[:200])
     except Exception as e:
         logger.debug(f"promote_source_supabase error: {e}")
 

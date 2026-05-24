@@ -342,129 +342,120 @@ async def contribute_channels(
         return contributed
 
 
-async def report_channel(url_hash: str) -> bool:
-    """Report a channel as broken. Increments report_count via Supabase REST.
+async def _call_rpc(name: str, payload: Dict[str, Any], timeout: int = 15) -> Optional[Any]:
+    """Invoke a Supabase SECURITY DEFINER RPC. Returns parsed JSON or None on failure."""
+    if not is_configured():
+        return None
+    try:
+        ssl_ctx = _get_ssl_context()
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            url = f'{_SUPABASE_URL}/rest/v1/rpc/{name}'
+            async with session.post(
+                url, json=payload, headers=_headers(),
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                if resp.status in (200, 204):
+                    if resp.status == 204:
+                        return {}
+                    try:
+                        return await resp.json()
+                    except Exception:
+                        return {}
+                body = await resp.text()
+                logger.warning('RPC %s failed: %s - %s', name, resp.status, body[:200])
+                return None
+    except Exception as exc:
+        logger.warning('RPC %s error: %s', name, exc)
+        return None
 
-    Since Supabase REST doesn't support atomic increments natively, we fetch
-    the current report_count and PATCH with count + 1.
+
+def _device_id() -> str:
+    """Lazy import to avoid circular dependency at module load."""
+    try:
+        from utils.analytics import get_device_id
+        return get_device_id()
+    except Exception:
+        return ''
+
+
+async def report_channel(url_hash: str) -> bool:
+    """Report a channel as broken via the atomic ``report_channel_broken`` RPC.
+
+    The server-side function deduplicates per-device votes, enforces a
+    10-minute per-channel throttle plus a 100-vote/hour abuse cap, and
+    refreshes ``channels.report_count`` from the audit trail.
 
     Args:
         url_hash: SHA-256 hash of the channel's primary URL.
 
     Returns:
-        True if the report was recorded, False on any failure.
+        True if the RPC returned ``ok=true`` (including throttled replies);
+        False on transport failure, validation error or rate-limit.
     """
     if not is_configured():
         logger.warning('report_channel: Supabase not configured')
         return False
-
     if not url_hash:
         return False
 
-    try:
-        ssl_ctx = _get_ssl_context()
-        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            # Step 1: GET current report_count
-            get_url = (
-                f'{_SUPABASE_URL}/rest/v1/{_TABLE}'
-                f'?url_hash=eq.{url_hash}&select=report_count'
-            )
-            get_headers = _headers()
-            get_headers.pop('Content-Type', None)
-
-            async with session.get(
-                get_url, headers=get_headers,
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    logger.warning(
-                        f'report_channel: GET failed {resp.status} - {body[:200]}'
-                    )
-                    return False
-
-                rows = await resp.json()
-                if not rows:
-                    logger.warning(f'report_channel: no channel found for hash {url_hash[:16]}…')
-                    return False
-
-                current_count = rows[0].get('report_count', 0) or 0
-
-            # Step 2: PATCH with incremented count
-            patch_url = f'{_SUPABASE_URL}/rest/v1/{_TABLE}?url_hash=eq.{url_hash}'
-            patch_headers = _headers()
-            patch_headers['Prefer'] = 'return=minimal'
-
-            async with session.patch(
-                patch_url,
-                json={'report_count': current_count + 1},
-                headers=patch_headers,
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as resp:
-                if resp.status in (200, 204):
-                    logger.info(
-                        f'Reported channel {url_hash[:16]}… '
-                        f'(count {current_count} → {current_count + 1})'
-                    )
-                    return True
-                else:
-                    body = await resp.text()
-                    logger.warning(
-                        f'report_channel: PATCH failed {resp.status} - {body[:200]}'
-                    )
-                    return False
-
-    except Exception as e:
-        logger.warning(f'report_channel error: {e}')
+    dev = _device_id()
+    if not dev:
+        logger.warning('report_channel: missing device id')
         return False
 
+    result = await _call_rpc(
+        'report_channel_broken',
+        {'p_url_hash': url_hash, 'p_device_id': dev},
+    )
+    if result is None:
+        return False
+    # Result may be a dict (newer PostgREST) or wrapped in a list.
+    if isinstance(result, list) and result:
+        result = result[0]
+    ok = bool(result.get('ok')) if isinstance(result, dict) else False
+    if ok:
+        logger.info('Reported channel %s… broken_count=%s',
+                    url_hash[:16], result.get('broken_count'))
+    else:
+        logger.warning('report_channel: %s', result)
+    return ok
 
-async def report_channel_working(url_hash: str) -> bool:
-    """Report a channel as working. Upserts into channel_status table.
+
+async def report_channel_working(url_hash: str, response_time_ms: Optional[int] = None) -> bool:
+    """Report a channel as working via the atomic ``report_channel_working`` RPC.
+
+    The RPC inserts a per-device 'working' vote (5-minute throttle,
+    200-vote/hour cap) and refreshes ``channel_status.report_count`` so the
+    documented ``report_count >= 3`` consensus rule can finally fire.
 
     Args:
         url_hash: SHA-256 hash of the channel's primary URL.
+        response_time_ms: Optional probe latency to persist.
 
     Returns:
-        True if the status was recorded, False on any failure.
+        True if the RPC accepted the vote, False otherwise.
     """
     if not is_configured() or not url_hash:
         return False
-
-    try:
-        ssl_ctx = _get_ssl_context()
-        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            url = f'{_SUPABASE_URL}/rest/v1/channel_status'
-            hdrs = _headers()
-            hdrs['Prefer'] = 'resolution=merge-duplicates,return=minimal'
-
-            payload = {
-                'url_hash': url_hash,
-                'status': 'working',
-                'last_checked': __import__('datetime').datetime.now(
-                    __import__('datetime').timezone.utc
-                ).isoformat(),
-            }
-
-            async with session.post(
-                url, json=payload, headers=hdrs,
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status in (200, 201, 204):
-                    logger.debug(f'Marked channel {url_hash[:16]}… as working')
-                    return True
-                else:
-                    body = await resp.text()
-                    logger.debug(
-                        f'report_channel_working: {resp.status} - {body[:200]}'
-                    )
-                    return False
-
-    except Exception as e:
-        logger.debug(f'report_channel_working error: {e}')
+    dev = _device_id()
+    if not dev:
         return False
+
+    payload: Dict[str, Any] = {'p_url_hash': url_hash, 'p_device_id': dev}
+    if response_time_ms is not None:
+        payload['p_response_time_ms'] = int(response_time_ms)
+
+    result = await _call_rpc('report_channel_working', payload, timeout=10)
+    if result is None:
+        return False
+    if isinstance(result, list) and result:
+        result = result[0]
+    ok = bool(result.get('ok')) if isinstance(result, dict) else False
+    if ok:
+        logger.debug('Marked channel %s… as working (count=%s)',
+                     url_hash[:16], result.get('working_count'))
+    return ok
 
 
 def diff_channels(
