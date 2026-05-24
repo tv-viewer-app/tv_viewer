@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-05-23T08:07:43.706476+00:00",
-  "total_channels": 20887,
+  "updated_at": "2026-05-24T08:19:23.567121+00:00",
+  "total_channels": 20908,
   "countries": 31,
-  "categories": 53,
+  "categories": 21,
   "top_countries": [
     {
       "name": "France",
-      "count": 290
+      "count": 345
     },
     {
       "name": "China",
@@ -18,133 +18,133 @@
     },
     {
       "name": "Canada",
-      "count": 61
+      "count": 58
     },
     {
       "name": "AE",
-      "count": 35
+      "count": 32
     },
     {
       "name": "Chile",
       "count": 29
     },
     {
-      "name": "CZ",
-      "count": 29
+      "name": "Australia",
+      "count": 25
     },
     {
-      "name": "FI",
-      "count": 29
+      "name": "CZ",
+      "count": 25
     },
     {
       "name": "AR",
-      "count": 26
-    },
-    {
-      "name": "Australia",
       "count": 24
     },
     {
-      "name": "AZ",
-      "count": 21
-    },
-    {
-      "name": "CL",
-      "count": 21
+      "name": "FI",
+      "count": 24
     },
     {
       "name": "Argentina",
+      "count": 21
+    },
+    {
+      "name": "AZ",
       "count": 20
     },
     {
-      "name": "AL",
-      "count": 17
-    },
-    {
-      "name": "BY",
-      "count": 17
-    },
-    {
-      "name": "BA",
-      "count": 16
-    },
-    {
       "name": "Czech Republic",
+      "count": 18
+    },
+    {
+      "name": "AL",
       "count": 13
     },
     {
-      "name": "DK",
+      "name": "CL",
       "count": 13
-    },
-    {
-      "name": "AT",
-      "count": 12
     },
     {
       "name": "BE",
       "count": 12
+    },
+    {
+      "name": "DK",
+      "count": 11
+    },
+    {
+      "name": "BY",
+      "count": 10
+    },
+    {
+      "name": "AT",
+      "count": 9
+    },
+    {
+      "name": "BA",
+      "count": 9
     }
   ],
   "top_categories": [
     {
+      "name": "Education",
+      "count": 382
+    },
+    {
+      "name": "Entertainment",
+      "count": 272
+    },
+    {
+      "name": "Documentary",
+      "count": 194
+    },
+    {
       "name": "Culture",
-      "count": 188
-    },
-    {
-      "name": "Comedy",
-      "count": 100
-    },
-    {
-      "name": "Animation",
-      "count": 94
-    },
-    {
-      "name": "Business",
-      "count": 89
-    },
-    {
-      "name": "Classic",
-      "count": 50
-    },
-    {
-      "name": "Cooking",
       "count": 44
     },
     {
-      "name": "Crime",
-      "count": 42
-    },
-    {
-      "name": "Auto",
-      "count": 31
-    },
-    {
-      "name": "Canada",
-      "count": 31
-    },
-    {
-      "name": "Czech republic",
-      "count": 29
-    },
-    {
-      "name": "Action",
+      "name": "Business",
       "count": 27
     },
     {
-      "name": "Argentina",
-      "count": 26
+      "name": "Animation",
+      "count": 25
+    },
+    {
+      "name": "Comedy",
+      "count": 16
+    },
+    {
+      "name": "Classic",
+      "count": 9
+    },
+    {
+      "name": "Auto",
+      "count": 8
+    },
+    {
+      "name": "Cooking",
+      "count": 6
+    },
+    {
+      "name": "En espa\u00e3\u0091ol",
+      "count": 4
+    },
+    {
+      "name": "Australia",
+      "count": 2
     },
     {
       "name": "Azerbaijan",
-      "count": 21
+      "count": 2
     },
     {
-      "name": "Chile",
-      "count": 21
+      "name": "Culture;Entertainment",
+      "count": 2
     },
     {
-      "name": "Albania",
-      "count": 17
+      "name": "Andorra",
+      "count": 1
     }
   ]
 }
