@@ -583,15 +583,92 @@ function renderChannels(chs) {
             if (replacement && img.parentNode) img.parentNode.replaceChild(replacement, img);
         }, { once: true });
     });
-    // Load EPG for visible channels (first 30)
-    displayChs.slice(0, 30).forEach((ch, i) => loadEpgCard(ch.name, i));
+    // Load EPG for visible channels — heavily throttled to avoid blocking
+    // the next /api/channels request behind a wall of EPG fetches. Each
+    // renderChannels() call gets its own seq; older runs are cancelled
+    // so rapid sidebar clicks don't keep blasting EPG for the channels
+    // they just navigated away from.
+    scheduleEpgLoad(displayChs);
 }
 
-async function loadEpgCard(name, idx) {
+// ─── EPG loading: cached, deduped, abortable, concurrency-limited ────────────
+const _epgCache = new Map();          // name -> resolved EPG data
+const _epgInFlight = new Map();       // name -> Promise (dedup)
+let _epgRunSeq = 0;                   // each render cycle bumps this
+let _epgRunAbort = null;              // AbortController for the active batch
+
+function scheduleEpgLoad(displayChs) {
+    // Cancel previous batch immediately. Late callbacks check the seq and bail.
+    if (_epgRunAbort) {
+        try { _epgRunAbort.abort(); } catch(_) {}
+    }
+    const mySeq = ++_epgRunSeq;
+    const abortCtl = new AbortController();
+    _epgRunAbort = abortCtl;
+
+    // Render-only mapping so loadEpgCard can find the element by index.
+    const targets = [];
+    displayChs.slice(0, 30).forEach((ch, i) => {
+        targets.push({ name: ch.name, idx: i });
+    });
+
+    // Settle delay: if the user clicks again within 200ms, this batch is
+    // cancelled before it ever hits the network. Keeps the /api/channels
+    // path clear for the most-recent click.
+    setTimeout(() => {
+        if (mySeq !== _epgRunSeq) return;
+
+        // Concurrency-limited worker pool — at most 4 EPG fetches in flight
+        // at any time. With renderChannels() firing 30 fetches in parallel
+        // before this change, we'd see hundreds queued in the browser TCP
+        // pool, blocking /api/channels behind them.
+        const CONCURRENCY = 4;
+        let cursor = 0;
+        async function worker() {
+            while (cursor < targets.length) {
+                if (mySeq !== _epgRunSeq) return;  // superseded
+                const { name, idx } = targets[cursor++];
+                await loadEpgCard(name, idx, mySeq, abortCtl.signal);
+            }
+        }
+        for (let i = 0; i < CONCURRENCY; i++) worker();
+    }, 200);
+}
+
+async function loadEpgCard(name, idx, seq, signal) {
     const el = document.getElementById(`epg-${idx}`);
     if (!el) return;
-    const data = await api.epg(name);
-    if (data.now) el.textContent = `▶ ${data.now.title}`;
+
+    // 1) Cache hit — paint immediately and skip the network entirely.
+    if (_epgCache.has(name)) {
+        if (seq === _epgRunSeq) _paintEpg(el, _epgCache.get(name));
+        return;
+    }
+
+    // 2) Same request already in flight (e.g. dup channel name)? Reuse it.
+    let p = _epgInFlight.get(name);
+    if (!p) {
+        p = (async () => {
+            try {
+                const r = await fetch(`/api/epg/${encodeURIComponent(name)}`, { signal });
+                return await r.json();
+            } catch (err) {
+                if (err && err.name === 'AbortError') return null;  // superseded
+                return { now: null, next: null, schedule: [] };
+            }
+        })();
+        _epgInFlight.set(name, p);
+    }
+    const data = await p;
+    _epgInFlight.delete(name);
+    if (!data) return;
+    _epgCache.set(name, data);
+    if (seq !== _epgRunSeq) return;          // user already navigated away
+    _paintEpg(el, data);
+}
+
+function _paintEpg(el, data) {
+    if (data && data.now) el.textContent = `▶ ${data.now.title}`;
     else el.textContent = '';
 }
 
