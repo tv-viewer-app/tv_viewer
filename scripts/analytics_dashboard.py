@@ -149,6 +149,33 @@ def dashboard_summary():
     recent_count = _query_count(f"select=id&created_at=gte.{since}")
     print(f"\n  Events (last 24h): {recent_count:,}")
 
+    # Country breakdown (from event_data and top-level country field)
+    print_section("Countries (by unique device)")
+    country_events = _query("select=device_id,country,event_data", limit=50000)
+    device_country = {}
+    for e in country_events:
+        did = e.get('device_id', '')
+        # Top-level country field (desktop client)
+        c = e.get('country', '')
+        # Web/mobile might store in event_data
+        if not c:
+            data = e.get('event_data', {})
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except (json.JSONDecodeError, TypeError):
+                    data = {}
+            c = data.get('country', '') or data.get('lang', '')[:2] if data.get('lang') else ''
+        if c and did:
+            device_country[did] = c
+    country_counts = {}
+    for c in device_country.values():
+        country_counts[c] = country_counts.get(c, 0) + 1
+    for c, count in sorted(country_counts.items(), key=lambda x: -x[1])[:15]:
+        print(f"  {c:<20} {count:>4} devices")
+    if not country_counts:
+        print("  No country data available")
+
     # App version distribution
     print_section("App Version Distribution")
     versions = _query("select=app_version", limit=50000)
@@ -234,21 +261,26 @@ def show_top_channels():
         print("  No play events recorded.")
         return
 
-    url_counts = {}
+    name_counts = {}
     for p in plays:
         data = p.get('event_data', {})
         if isinstance(data, str):
-            data = json.loads(data)
-        url_hash = data.get('url_hash', 'unknown')
-        url_counts[url_hash] = url_counts.get(url_hash, 0) + 1
+            try:
+                data = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                data = {}
+        # Web client sends 'name', desktop sends 'url_hash'
+        ch_name = data.get('name', '') or data.get('url_hash', 'unknown')
+        name_counts[ch_name] = name_counts.get(ch_name, 0) + 1
 
     print(f"  Total plays: {len(plays):,}")
-    print(f"  Unique channels: {len(url_counts):,}")
+    print(f"  Unique channels: {len(name_counts):,}")
     print()
-    print(f"  {'Rank':<6} {'URL Hash (SHA256)':<20} {'Plays':>8}")
-    print(f"  {'─'*6} {'─'*20} {'─'*8}")
-    for i, (h, c) in enumerate(sorted(url_counts.items(), key=lambda x: -x[1])[:20], 1):
-        print(f"  {i:<6} {h[:18]+'..':.<20} {c:>8,}")
+    print(f"  {'Rank':<6} {'Channel':<35} {'Plays':>8}")
+    print(f"  {'─'*6} {'─'*35} {'─'*8}")
+    for i, (name, c) in enumerate(sorted(name_counts.items(), key=lambda x: -x[1])[:25], 1):
+        display = name[:33] + '..' if len(name) > 35 else name
+        print(f"  {i:<6} {display:<35} {c:>8,}")
 
 
 def show_scan_stats():
