@@ -5,6 +5,65 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.7] - 2026-05-24
+
+### Fixed — EPG errors logged with empty message
+v2.16.6 reported `EPG fetch error for ...: ` (no detail) when sources failed,
+making diagnosis impossible. Some aiohttp exception subclasses have an empty
+`str(exc)` — only `type(exc).__name__` carries the signal. Now logs
+`type: detail` and also catches non-aiohttp exceptions (gzip / IncompleteRead /
+asyncio errors) that previously fell through to the generic handler.
+
+### Fixed — Middleware "No response returned" on HLS playback
+Streaming `/api/proxy` responses regularly raised
+`RuntimeError: No response returned` from `BaseHTTPMiddleware` (a known
+Starlette streaming bug — client disconnects mid-stream confuse the
+middleware). Now both `SecurityHeadersMiddleware` and `CSRFOriginMiddleware`
+catch the exception on proxy paths and return HTTP 499 (the bytes were
+already delivered before the disconnect).
+
+### Improved — Channel auto-categorization (6837 channels rescued from General)
+v2.16.6 still had 6923 channels stuck in "General". This release pushes that
+down to **186** (well under the 500 target) by adding aggressive but
+defensible heuristics:
+
+- **Documentary**: now catches crime/killer/murder/mystery/forensic/evil/
+  unsolved/paranormal/prison/investigation/WWII keywords
+- **Music**: classical, ambient, instrumental, lo-fi, chill, funk, disco,
+  k-pop, j-pop, mariachi, salsa, reggaeton, plus more artist names
+- **Radio**: now catches `107FM` / `91FM` (no word boundary needed), US
+  station codes `93X` / `97X`, plus AM/XM and `\d+\s*FM` patterns
+- **News**: parliament, council, civic, public-access, c-span
+- **Education**: TED, university TV, community media education
+- **Entertainment** (catch-all): expanded with `tele\w*` / `canal\w*` /
+  `kanal\w*` prefix-tolerant compound matches; broadcaster acronyms (BBC,
+  RAI, RTL, MBC, CBC, ITV, RTP, NHK, KBS, SBS, RTI, Reelz, Nove, Awe,
+  Atlantis, Popcorn, La1-9, M3-7); non-Latin script detection (Cyrillic,
+  CJK, Hebrew, Arabic, Hangul, Devanagari)
+- **Final fallback**: any channel with 3+ Latin-alphabetic chars and no
+  other signal → Entertainment (only pure-symbol/numeric names stay General)
+
+Final distribution on 14,037-channel cache:
+| Category | Count | % |
+|---|---|---|
+| Entertainment | 7173 | 51.1% |
+| Radio | 1600 | 11.4% |
+| News | 1345 | 9.6% |
+| Music | 826 | 5.9% |
+| Religious | 752 | 5.4% |
+| Movies | 508 | 3.6% |
+| Sports | 486 | 3.5% |
+| Documentary | 424 | 3.0% |
+| Kids | 273 | 1.9% |
+| Lifestyle | 251 | 1.8% |
+| **General** | **186** | **1.3%** |
+| Education | 179 | 1.3% |
+| Shopping | 30 | 0.2% |
+| Weather | 4 | 0.0% |
+
+Zero regressions — name patterns only fire when the source category
+resolves to "General".
+
 ## [2.16.6] - 2026-05-24
 
 ### Fixed — EPG truncation (third time the charm)

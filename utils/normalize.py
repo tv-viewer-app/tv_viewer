@@ -299,10 +299,13 @@ _NAME_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("Documentary", re.compile(
         r'(?:\b(?:nat\s*geo|national\s*geographic|smithsonian|history\s*channel|'
         r'discovery|animal\s*planet|investigation\s*discovery|biography|'
-        r'forensic\s*files|true\s*crime|crime\s*\+?\s*investigation|'
+        r'forensic(?:\s*files)?|true\s*crime|crime\s*\+?\s*investigation|'
         r'a&e|cold\s*case|crime\s*360|60\s*days\s*in|'
-        r'chaos\s*on\s*cam|documentary|docu\s*box)\b|'
-        r'\bcrime(?:\s+&\s+(?:evidence|justice))\b|'
+        r'chaos\s*on\s*cam|documentary|docu\s*box|'
+        r'killer|killers|murder|murders|evil|infamous|'
+        r'mystery|mysteries|unsolved|paranormal|prison|jail|'
+        r'detective|investigation|world\s*war|wwii|wwi)\b|'
+        r'\bcrime\b(?!\s*news)|'  # "Crime" alone but not "Crime News"
         r'\b(?:american|world)\s+crimes?\b)',
         re.IGNORECASE
     )),
@@ -335,11 +338,99 @@ _NAME_PATTERNS: list[tuple[str, re.Pattern]] = [
         r'country\s*music|pop\s*music)\b',
         re.IGNORECASE
     )),
-    # Radio — last, very broad pattern
+    # Radio — last, very broad pattern (genre keywords + US/CA call signs)
     ("Radio", re.compile(
-        r'(?:\b\d{2,3}\.\d\s)|(?:\b(?:fm|radio)\b)',
+        # Frequencies (e.g. "101.5 FM", "88.0", "107FM", "91 FM"),
+        # FM/AM/radio keywords (with or without word boundary — catches
+        # "107FM" where \bfm fails because 7→F has no \b),
+        # US/CA call signs at start of name, station codes like "93X" "97X".
+        r'(?:\b\d{2,3}\.\d\b)|'                # 101.5
+        r'(?:\b\d{2,4}\s*(?:fm|am|xm)\b)|'    # "98 FM"
+        r'(?:\d{2,4}fm\b)|'                    # 107FM
+        r'(?:\b(?:fm|am|radio)\b)|'            # standalone keywords
+        r'(?:^[WK][A-Z]{2,4}(?:[\s\-]|$))|'   # WBLS / KABC at start
+        r'(?:\b\d{2,3}[XZJxzj]\b)',           # 93X, 97X, 90Z
         re.IGNORECASE
     )),
+    # Education — TED talks, universities, learning channels
+    ("Education", re.compile(
+        r'\b(?:ted\s*talks?|ted\s*conferences?|\w*\s*university\s*tv|'
+        r'college\s*tv|community\s*media\s*education|education\s*tv|'
+        r'rta\s*education|learning\s*channel|science\s*channel|'
+        r'documentary\s*education|how\s*to|crash\s*course|edutainment)\b',
+        re.IGNORECASE
+    )),
+    # Public affairs / government — parliament, council, civic access
+    ("News", re.compile(
+        r'\b(?:parliament|council\s*channel|government\s*channel|'
+        r'community\s*tv|civic\s*channel|municipal\s*tv|'
+        r'public\s*access|legislature|senate|congress|cspan|c-span)\b',
+        re.IGNORECASE
+    )),
+    # Entertainment — anime, drama, novela, sitcom, reality, comedy
+    ("Entertainment", re.compile(
+        r'\b(?:anime|telenovela|novela|k.?drama|sitcom|reality\s*tv|'
+        r'comedy\s*central|stand.?up|game\s*show|talk\s*show|'
+        r'soap\s*opera|drama\s*series|series\s*channel|xena|'
+        r'mr\s*bean|tom\s*&?\s*jerry|looney\s*tunes)\b',
+        re.IGNORECASE
+    )),
+    # Music — extended with artists, eras, dance styles, ambient
+    ("Music", re.compile(
+        r'\b(?:mtv(?:\s+\w+)?|vh1|vevo|music\s*box|stingray|trace\s*urban|'
+        r'deluxe\s*music|kiss\s*tv|qmusic|nrj|hits|jazz|rock|oldies|hitz|'
+        r'reggae|reggaeton|hip.?hop|r&b|soul|blues|techno|edm|salsa|mariachi|'
+        r'symphony|orchestra|mizrahi|mizrahit|playlist|classic\s*rock|'
+        r'classical|smooth\s*jazz|country\s*music|pop\s*music|songs?|melody|'
+        r'k.?pop|j.?pop|disco|funk|funky|ambient|instrumental|lo.?fi|chill|'
+        r'dance\s*classics?|exclusively\s*\w+|tilemousiki|'
+        r'clapton|beatles|elvis|presley|sinatra|dylan|madonna|metallica|'
+        r'dire\s*straits|bob\s*marley|pink\s*floyd|\d0s\s+(?:hits?|music|'
+        r'songs?|funk|soul|disco))\b',
+        re.IGNORECASE
+    )),
+    # === Last-resort catch-all ===
+    # If a channel made it this far with NO category and a generic TV-broadcast
+    # token in the name, classify it as Entertainment (catch-all for regional
+    # general-interest TV networks).  Foreign-language tokens included.
+    ("Entertainment", re.compile(
+        r'(?:'
+        # English/Latin generic broadcasting words (with prefix-tolerance for
+        # compound CamelCase like "TeleMistretta", "Telever", "Canale5")
+        r'\btele\w*\b|\bcanal\w*\b|\bkanal\w*\b|\bkanaal\w*\b|'
+        r'\b(?:tv|television|televisi[oóón]|televisione|televizyon|televizia|'
+        r'channel|chaine|cha[iî]ne|fernsehen|sender|emittente|emisora|'
+        r'stazione|rete|chain|network|broadcasting|freetv|free\s*tv)\b|'
+        # Substring-tv: matches MTV, CTV, ATV, TVR, TVP, HDTV, FreeTV, etc.
+        r'\b\w*tv\w*\b|'
+        # Common broadcaster acronyms (3-letter networks)
+        r'\b(?:bbc|itv|rai|rtl|rti|mbc|cbc|pbs|rtv|rtp|rte|nhk|kbs|sbs|bfbs|'
+        r'tbs|mnc|cnn|zdf|ard|ntv|jtv|otv|btv|stv|htv|dtv|ptv|ktv|etv|gtv|ftv|'
+        r'omroep|antenne|antena|сts|стс|нтв|тнт|ren|tnt|pop|now|alt|heart|'
+        r'vibes|deal|red\s*button|tweede\s*kamer|reelz|awe|nove|la\d|m\d|'
+        r'action|atlantis|action!|popcorn|trve|trce|trv|trvl)\b|'
+        # Geo-blocked regional channels — explicit "(US) Geo", "(IL) Geo"
+        r'\(\s*[A-Z]{2}\s*\)\s*geo|'
+        r'\bil:\s|\bkamer:|'
+        # Italian/Spanish/Portuguese regional indicators
+        r'\b(?:rete|provincia|regione|estado|paraguay|argentina|colombia|'
+        r'brasil|brazil|portugal|italia|espa[nñ]ol|deutschland)\b|'
+        # Non-Latin scripts (almost always a regional TV network)
+        r'[\u0400-\u04ff]{2,}|'              # Cyrillic
+        r'[\u4e00-\u9fff]|'                  # CJK Han
+        r'[\u3040-\u309f\u30a0-\u30ff]|'     # Hiragana/Katakana
+        r'[\u0590-\u05ff]{2,}|'              # Hebrew
+        r'[\u0600-\u06ff]{2,}|'              # Arabic
+        r'[\u0900-\u097f]{2,}|'              # Devanagari (Hindi)
+        r'[\uac00-\ud7af]'                   # Korean Hangul
+        r')',
+        re.IGNORECASE
+    )),
+    # === True final fallback ===
+    # Anything with a real (3+ alphanumeric) name and no other category signal:
+    # classify as Entertainment.  Channels with only punctuation/symbols/very
+    # short names stay in General as a "truly unknown" bucket.
+    ("Entertainment", re.compile(r'[A-Za-z\u00c0-\u024f]{3,}', re.UNICODE)),
 ]
 
 

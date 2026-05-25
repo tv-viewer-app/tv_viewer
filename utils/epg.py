@@ -748,7 +748,16 @@ class EPGService:
 
                 xml_content = data.decode('utf-8', errors='replace')
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
-            logger.warning("EPG fetch error for %s: %s", url, exc)
+            # Some aiohttp exception subclasses have empty str(exc).
+            # Always include the type name so logs are diagnosable.
+            detail = str(exc) or repr(exc) or "<no detail>"
+            logger.warning("EPG fetch error for %s: %s: %s",
+                           url, type(exc).__name__, detail)
+            return {}, {}
+        except Exception as exc:
+            # Catch-all: gzip/IncompleteReadError/etc. can sneak through.
+            logger.warning("EPG unexpected error for %s: %s: %s",
+                           url, type(exc).__name__, exc or repr(exc))
             return {}, {}
 
         try:

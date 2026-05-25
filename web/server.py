@@ -351,7 +351,18 @@ app.add_middleware(
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except RuntimeError as exc:
+            # Starlette BaseHTTPMiddleware raises "No response returned"
+            # when a StreamingResponse generator is interrupted by a client
+            # disconnect.  The bytes were already delivered to the (now-gone)
+            # client; the error is just noise.  Suppress it for proxy
+            # streams which see this constantly during HLS playback.
+            if (request.url.path.startswith("/api/proxy")
+                    and "No response returned" in str(exc)):
+                return Response(status_code=499)  # nginx "client closed request"
+            raise
         # Skip security headers for proxied streams (breaks video playback)
         if not request.url.path.startswith("/api/proxy"):
             response.headers["X-Content-Type-Options"] = "nosniff"
@@ -391,7 +402,14 @@ class CSRFOriginMiddleware(BaseHTTPMiddleware):
                     status_code=exc.status_code,
                     content={"detail": exc.detail},
                 )
-        return await call_next(request)
+        try:
+            return await call_next(request)
+        except RuntimeError as exc:
+            # Same Starlette streaming-disconnect bug as SecurityHeaders.
+            if (request.url.path.startswith("/api/proxy")
+                    and "No response returned" in str(exc)):
+                return Response(status_code=499)
+            raise
 
 
 app.add_middleware(CSRFOriginMiddleware)
