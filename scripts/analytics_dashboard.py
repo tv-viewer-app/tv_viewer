@@ -73,9 +73,12 @@ def _headers():
     }
 
 
+_TIME_FILTER = ""  # Set by --days flag
+
+
 def _query(params: str, limit: int = 1000) -> list:
     """Query Supabase REST API."""
-    url = f"{SUPABASE_URL}/rest/v1/{TABLE}?{params}&limit={limit}"
+    url = f"{SUPABASE_URL}/rest/v1/{TABLE}?{params}{_TIME_FILTER}&limit={limit}"
     resp = requests.get(url, headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
@@ -83,7 +86,7 @@ def _query(params: str, limit: int = 1000) -> list:
 
 def _query_count(params: str) -> int:
     """Get count of matching rows."""
-    url = f"{SUPABASE_URL}/rest/v1/{TABLE}?{params}&limit=1"
+    url = f"{SUPABASE_URL}/rest/v1/{TABLE}?{params}{_TIME_FILTER}&limit=1"
     headers = _headers()
     headers['Prefer'] = 'count=exact'
     headers['Range-Unit'] = 'items'
@@ -354,7 +357,17 @@ def main():
     parser.add_argument('--top', action='store_true', help='Show top channels')
     parser.add_argument('--scans', action='store_true', help='Show scan statistics')
     parser.add_argument('--raw', action='store_true', help='Show raw recent events')
+    parser.add_argument('--days', type=int, default=0, help='Limit to last N days (0=all time)')
     args = parser.parse_args()
+
+    # Apply global time filter if --days specified
+    global _TIME_FILTER
+    if args.days > 0:
+        since = (datetime.utcnow() - timedelta(days=args.days)).strftime('%Y-%m-%dT%H:%M:%S')
+        _TIME_FILTER = f"&created_at=gte.{since}"
+        print(f"  ⏱️  Filtering: last {args.days} days (since {since[:10]})")
+    else:
+        _TIME_FILTER = ""
 
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("ERROR: Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.")

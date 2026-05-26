@@ -20,4 +20,4 @@ jobs:
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      run: python scripts/analytics_dashboard.py
+      run: python scripts/analytics_dashboard.py --days 30
