@@ -95,16 +95,17 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
         if (!_backgroundPlayback) {
           _controller?.pause();
         } else {
-          // Ensure foreground service is active for background audio
-          BackgroundAudioHandler.instance?.attachController(
-            _controller!,
-            channelName: _currentStation?.name ?? 'Radio',
-            category: _currentStation?.category ?? 'Radio',
-          );
+          // Switch to just_audio for reliable background playback
+          final url = _currentStation?.url;
+          if (url != null && url.isNotEmpty) {
+            BackgroundAudioHandler.instance?.activateBackgroundAudio(url);
+          }
         }
         break;
       case AppLifecycleState.resumed:
-        if (!_backgroundPlayback) {
+        if (BackgroundAudioHandler.instance?.isBackgroundActive == true) {
+          BackgroundAudioHandler.instance?.deactivateBackgroundAudio();
+        } else if (!_backgroundPlayback) {
           _controller?.play();
         }
         break;
@@ -188,6 +189,7 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
           _controller!,
           channelName: station.name,
           category: station.category ?? 'Radio',
+          streamUrl: url,
         );
       }
 

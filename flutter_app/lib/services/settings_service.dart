@@ -25,7 +25,7 @@ class SettingsService {
   static const String defaultThemeMode = 'system'; // 'dark', 'light', 'system'
   static const String defaultGroupBy = 'category'; // 'category', 'country'
   static const bool defaultAnalyticsEnabled = true;
-  static const bool defaultBackgroundPlayback = false;
+  static const bool defaultBackgroundPlayback = true;
 
   SharedPreferences? _prefs;
 

@@ -36,6 +36,16 @@
         android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config">
         
+        <!-- Background audio foreground service (required for Android 14+ / SDK 34+) -->
+        <service
+            android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService"/>
+            </intent-filter>
+        </service>
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"

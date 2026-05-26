@@ -5,6 +5,25 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.8] - 2026-05-27
+
+### Fixed — Background playback not working on Android 14+ (API 34/35)
+Background audio completely broken on Android 14+ due to three issues:
+1. **Missing foreground service type declaration** — Android 14+ requires
+   `android:foregroundServiceType="mediaPlayback"` on the service element.
+   Without it, `startForeground()` throws `MissingForegroundServiceTypeException`.
+2. **`video_player` cannot play in background** — ExoPlayer's video surface is
+   destroyed when the app goes to background. Now uses `just_audio` (already a
+   dependency) to play audio-only in background, seamlessly switching back to
+   video when foregrounded.
+3. **Race condition in setting load** — `_loadBackgroundPlaybackSetting()` was
+   async but not gated, so quick background transitions could see the default
+   (`false`) value.
+
+### Changed — Background playback enabled by default
+For a media/IPTV app, audio should continue when backgrounded. Previously
+defaulted to `false`, now defaults to `true`. Users can still disable in Settings.
+
 ## [2.16.7] - 2026-05-24
 
 ### Fixed — EPG errors logged with empty message

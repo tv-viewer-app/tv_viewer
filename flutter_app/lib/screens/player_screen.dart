@@ -104,7 +104,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _initializePlayer();
     _initializeWakeLock();
     _initializePip();
-    _loadBackgroundPlaybackSetting();
+    _loadBackgroundPlaybackSetting(); // async — loads before user can background
+    
+    // Always attach to audio service for notification (even if background disabled)
+    // This ensures the foreground service is ready before going to background
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureAudioServiceReady();
+    });
     
     // Allow auto-rotation (portrait + landscape) for video playback
     SystemChrome.setPreferredOrientations([
@@ -136,6 +142,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   /// Load background playback preference
   Future<void> _loadBackgroundPlaybackSetting() async {
     _backgroundPlayback = await SettingsService.instance.getBackgroundPlayback();
+  }
+
+  /// Pre-attach audio service so foreground service is ready for background transition
+  void _ensureAudioServiceReady() {
+    if (_videoController != null && _activeStreamUrl != null) {
+      BackgroundAudioHandler.instance?.attachController(
+        _videoController!,
+        channelName: widget.channel.name,
+        category: widget.channel.category,
+        streamUrl: _activeStreamUrl,
+      );
+    }
   }
   
   /// Initialize PiP service
@@ -171,21 +189,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     switch (state) {
       case AppLifecycleState.paused:
         // App is in background (possibly in PiP)
-        // If background playback is enabled, keep playing audio via foreground service
         if (!_isPipMode && !_backgroundPlayback) {
           _videoController?.pause();
-        } else if (_backgroundPlayback && _videoController != null) {
-          // Ensure audio service is attached for background playback
-          BackgroundAudioHandler.instance?.attachController(
-            _videoController!,
-            channelName: widget.channel.name,
-            category: widget.channel.category,
-          );
+        } else if (_backgroundPlayback && _activeStreamUrl != null) {
+          // Switch to just_audio for reliable background playback
+          BackgroundAudioHandler.instance?.activateBackgroundAudio(_activeStreamUrl!);
         }
         break;
       case AppLifecycleState.resumed:
         // App is back in foreground
-        if (!_isPipMode && !_backgroundPlayback) {
+        if (BackgroundAudioHandler.instance?.isBackgroundActive == true) {
+          // Deactivate background audio, resume video player
+          BackgroundAudioHandler.instance?.deactivateBackgroundAudio();
+        } else if (!_isPipMode && !_backgroundPlayback) {
           _videoController?.play();
         }
         // Re-assert wake lock — Android may drop it on background/resume (#190)
@@ -197,6 +213,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
 
   int _currentUrlIndex = 0;
+  String? _activeStreamUrl; // Currently playing stream URL for background audio
   final Set<int> _failedIndices = {}; // Track indices that failed this session
   bool _isFallingBack = false; // Prevent re-entrant fallback from listener
   
@@ -257,6 +274,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         }
 
         _currentUrlIndex = idx;
+        _activeStreamUrl = streamUrl;
         
         _safeSetState(() {
           _isLoading = false;
@@ -294,6 +312,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
             _videoController!,
             channelName: widget.channel.name,
             category: widget.channel.category,
+            streamUrl: streamUrl,
           );
         }
         
@@ -582,6 +601,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       }
       
       _videoController = controller;
+      _activeStreamUrl = streamUrl;
       _playerListener = () {
         if (mounted) {
           _safeSetState(() {

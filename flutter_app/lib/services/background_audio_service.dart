@@ -1,15 +1,21 @@
 import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:video_player/video_player.dart';
 import '../utils/logger_service.dart';
 
 /// Background audio handler that creates a foreground service notification
 /// for media playback (like Chrome/Spotify). This keeps audio alive when
 /// the app is in the background and shows media controls in the notification.
+///
+/// Uses just_audio for actual background playback because video_player's
+/// ExoPlayer surface is destroyed when the app goes to background on Android 14+.
 class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
   VideoPlayerController? _videoController;
+  final AudioPlayer _audioPlayer = AudioPlayer();
   String _channelName = '';
   String _channelCategory = '';
-  bool _isPlaying = false;
+  String? _currentUrl;
+  bool _isBackgroundActive = false;
 
   static BackgroundAudioHandler? _instance;
 
@@ -28,10 +34,11 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// Attach a VideoPlayerController to this handler for background control.
   void attachController(VideoPlayerController controller,
-      {required String channelName, String? category}) {
+      {required String channelName, String? category, String? streamUrl}) {
     _videoController = controller;
     _channelName = channelName;
     _channelCategory = category ?? 'Live TV';
+    _currentUrl = streamUrl;
 
     // Update media item metadata (shown in notification)
     mediaItem.add(MediaItem(
@@ -46,12 +53,58 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
 
     // Mark as playing
     _updatePlaybackState(playing: true);
-    logger.info('Background audio attached: $channelName');
+    logger.info('Background audio attached: $channelName (url: ${streamUrl != null ? "provided" : "none"})');
   }
+
+  /// Activate background-only audio playback via just_audio.
+  /// Call when app goes to background with background playback enabled.
+  Future<void> activateBackgroundAudio(String url) async {
+    if (_isBackgroundActive) return;
+    _isBackgroundActive = true;
+    _currentUrl = url;
+    
+    try {
+      // Pause video player (surface will be destroyed anyway)
+      _videoController?.pause();
+      
+      // Start audio-only playback via just_audio
+      await _audioPlayer.setUrl(url);
+      await _audioPlayer.play();
+      _updatePlaybackState(playing: true);
+      logger.info('Background audio activated for: $_channelName');
+    } catch (e) {
+      logger.error('Failed to activate background audio: $e');
+      _isBackgroundActive = false;
+    }
+  }
+
+  /// Deactivate background audio and resume video player.
+  /// Call when app returns to foreground.
+  Future<void> deactivateBackgroundAudio() async {
+    if (!_isBackgroundActive) return;
+    _isBackgroundActive = false;
+    
+    try {
+      await _audioPlayer.stop();
+      // Resume video player now that surface is available again
+      _videoController?.play();
+      logger.info('Background audio deactivated, video resumed');
+    } catch (e) {
+      logger.error('Failed to deactivate background audio: $e');
+    }
+  }
+
+  /// Whether background audio-only mode is currently active
+  bool get isBackgroundActive => _isBackgroundActive;
 
   /// Detach the controller (when player screen is disposed).
   void detachController() {
     _videoController = null;
+    _currentUrl = null;
+    if (_isBackgroundActive) {
+      _audioPlayer.stop();
+      _isBackgroundActive = false;
+    }
     _updatePlaybackState(playing: false, state: AudioProcessingState.idle);
     mediaItem.add(const MediaItem(id: '', title: ''));
     logger.info('Background audio detached');
@@ -74,22 +127,31 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> play() async {
-    _videoController?.play();
-    _isPlaying = true;
+    if (_isBackgroundActive) {
+      _audioPlayer.play();
+    } else {
+      _videoController?.play();
+    }
     _updatePlaybackState(playing: true);
   }
 
   @override
   Future<void> pause() async {
-    _videoController?.pause();
-    _isPlaying = false;
+    if (_isBackgroundActive) {
+      _audioPlayer.pause();
+    } else {
+      _videoController?.pause();
+    }
     _updatePlaybackState(playing: false);
   }
 
   @override
   Future<void> stop() async {
+    if (_isBackgroundActive) {
+      await _audioPlayer.stop();
+      _isBackgroundActive = false;
+    }
     _videoController?.pause();
-    _isPlaying = false;
     _updatePlaybackState(playing: false, state: AudioProcessingState.idle);
     await super.stop();
   }
@@ -111,6 +173,11 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
       processingState: state,
       playing: playing,
     ));
+  }
+
+  /// Dispose the just_audio player (call on app termination)
+  Future<void> disposeAudioPlayer() async {
+    await _audioPlayer.dispose();
   }
 }
 
