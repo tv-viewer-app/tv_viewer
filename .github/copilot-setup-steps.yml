@@ -1,0 +1,32 @@
+# =============================================================================
+# Copilot Coding Agent — Environment Setup
+# =============================================================================
+# Configures the environment for GitHub Copilot coding agent to work on issues
+# and PRs autonomously. Runs before the agent starts working.
+# =============================================================================
+
+steps:
+  - name: Install Python dependencies
+    run: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      pip install pytest bandit
+
+  - name: Install Flutter
+    run: |
+      git clone https://github.com/flutter/flutter.git --depth 1 -b stable /opt/flutter
+      echo "/opt/flutter/bin" >> $GITHUB_PATH
+      /opt/flutter/bin/flutter precache --android
+      /opt/flutter/bin/flutter pub get --directory=flutter_app
+
+  - name: Install VLC (for desktop tests)
+    run: |
+      sudo apt-get update -qq
+      sudo apt-get install -y -qq vlc libvlc-dev
+
+  - name: Verify environment
+    run: |
+      python --version
+      python -c "import aiohttp, certifi; print('Core deps OK')"
+      /opt/flutter/bin/flutter --version
+      echo "✅ Environment ready for Copilot agent"

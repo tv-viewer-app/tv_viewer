@@ -1,0 +1,109 @@
+# =============================================================================
+# Issue Auto-Triage — Labels and categorizes new issues automatically
+# =============================================================================
+# Scans issue title and body for keywords, applies appropriate labels,
+# and assigns priority. Reduces manual triage burden.
+# =============================================================================
+
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Auto-label issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = (issue.title || '').toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const text = title + ' ' + body;
+            
+            const labels = [];
+            
+            // Platform detection
+            if (text.includes('android') || text.includes('apk') || text.includes('flutter')) {
+              labels.push('platform:android');
+            }
+            if (text.includes('docker') || text.includes('web') || text.includes('browser')) {
+              labels.push('platform:web');
+            }
+            if (text.includes('windows') || text.includes('desktop') || text.includes('exe')) {
+              labels.push('platform:desktop');
+            }
+            
+            // Type detection
+            if (text.includes('crash') || text.includes('error') || text.includes('bug') || 
+                text.includes('broken') || text.includes('not working') || text.includes('fail')) {
+              labels.push('bug');
+            }
+            if (text.includes('feature') || text.includes('request') || text.includes('add') ||
+                text.includes('would be nice') || text.includes('suggestion')) {
+              labels.push('enhancement');
+            }
+            if (text.includes('channel') && (text.includes('add') || text.includes('request') || text.includes('missing'))) {
+              labels.push('channel-request');
+            }
+            
+            // Component detection
+            if (text.includes('epg') || text.includes('program guide') || text.includes('schedule')) {
+              labels.push('component:epg');
+            }
+            if (text.includes('background') || text.includes('notification') || text.includes('foreground service')) {
+              labels.push('component:background-playback');
+            }
+            if (text.includes('playback') || text.includes('stream') || text.includes('buffering') || text.includes('vlc')) {
+              labels.push('component:player');
+            }
+            if (text.includes('radio') || text.includes('audio')) {
+              labels.push('component:radio');
+            }
+            
+            // Priority (based on severity keywords)
+            if (text.includes('crash') || text.includes('data loss') || text.includes('security')) {
+              labels.push('P1-High');
+            }
+            
+            if (labels.length > 0) {
+              // Ensure labels exist first
+              for (const label of labels) {
+                try {
+                  await github.rest.issues.getLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label,
+                  });
+                } catch (e) {
+                  if (e.status === 404) {
+                    await github.rest.issues.createLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label,
+                      color: label.startsWith('P1') ? 'B60205' : 
+                             label.startsWith('platform') ? '0075ca' :
+                             label.startsWith('component') ? 'c5def5' :
+                             label === 'bug' ? 'd73a4a' : '0e8a16',
+                    });
+                  }
+                }
+              }
+              
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labels,
+              });
+              
+              console.log(`Applied labels: ${labels.join(', ')}`);
+            }

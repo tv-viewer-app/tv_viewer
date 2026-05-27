@@ -1,11 +1,14 @@
 name: Analytics Report
 
 on:
+  schedule:
+    - cron: '0 7 * * 1'  # Weekly on Monday at 7 AM UTC (10 AM Israel)
   workflow_dispatch:
 
 jobs:
   report:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
     - uses: actions/checkout@v4
     
@@ -16,8 +19,24 @@ jobs:
     - name: Install dependencies
       run: pip install requests
 
-    - name: Run analytics dashboard
+    - name: Run analytics dashboard (7-day)
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      run: python scripts/analytics_dashboard.py --days 30
+      run: |
+        echo "## 📊 Weekly Analytics Report (last 7 days)" >> $GITHUB_STEP_SUMMARY
+        python scripts/analytics_dashboard.py --days 7 2>&1 | tee /tmp/report-7d.txt
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/report-7d.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Run analytics dashboard (30-day)
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      run: |
+        echo "## 📊 Monthly Trend (last 30 days)" >> $GITHUB_STEP_SUMMARY
+        python scripts/analytics_dashboard.py --days 30 2>&1 | tee /tmp/report-30d.txt
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/report-30d.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
