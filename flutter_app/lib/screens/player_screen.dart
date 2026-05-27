@@ -220,6 +220,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   Future<void> _initializePlayer({int? startIndex}) async {
     // Dispose existing controller before creating new one (fixes memory leak on retry)
     _disposeController();
+    final playStartTime = DateTime.now(); // Performance: measure time-to-first-frame
     
     final urls = widget.channel.urls;
     if (urls.isEmpty) {
@@ -318,6 +319,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         
         // Report success
         _reportHealth(streamUrl, true);
+        
+        // Performance: track time-to-first-frame
+        final latencyMs = DateTime.now().difference(playStartTime).inMilliseconds;
+        AnalyticsService.instance?.trackStreamLatency(
+          latencyMs,
+          category: widget.channel.category ?? '',
+          fromCache: (startIndex == null && _currentUrlIndex == idx),
+        );
+        
         return; // Success — stop trying URLs
         
       } catch (e, stackTrace) {

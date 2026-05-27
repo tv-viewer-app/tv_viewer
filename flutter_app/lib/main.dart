@@ -13,6 +13,7 @@ import 'services/parental_controls_service.dart';
 import 'services/play_integrity_service.dart';
 
 void main() async {
+  final appStartTime = DateTime.now(); // Perf: measure app startup time
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize logger service first (before DI container)
@@ -47,6 +48,9 @@ void main() async {
   try {
     await analytics.initialize();
     await analytics.trackAppLaunch();
+    // Perf: report startup time
+    final startupMs = DateTime.now().difference(appStartTime).inMilliseconds;
+    analytics.trackPerformance('app_startup', startupMs);
   } catch (e) {
     logger.warning('Analytics init failed (non-fatal)', e);
   }

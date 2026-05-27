@@ -351,6 +351,62 @@ def show_raw_events():
         print(f"  {ts}  {etype:<16} [{platform} v{version}] dev:{device}  {data_str}")
 
 
+def show_performance():
+    """Show performance metrics (stream-to-first-frame latency)."""
+    print()
+    print("Performance Metrics (stream_to_first_frame)")
+    print("=" * 60)
+
+    events = _query('analytics_events',
+                    select='event_data',
+                    extra=f'&event_type=eq.perf_metric{_TIME_FILTER}',
+                    limit=500)
+
+    if not events:
+        print("  No performance data yet (perf_metric events will appear after v2.16.8+)")
+        return
+
+    latencies = []
+    for ev in events:
+        data = ev.get('event_data', {})
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        if data.get('metric') == 'stream_to_first_frame':
+            ms = data.get('duration_ms', 0)
+            if 0 < ms < 60000:  # Sanity: 0-60s
+                latencies.append(ms)
+
+    if not latencies:
+        print("  No stream latency data yet")
+        return
+
+    latencies.sort()
+    n = len(latencies)
+    p50 = latencies[n // 2]
+    p90 = latencies[int(n * 0.9)]
+    p99 = latencies[int(n * 0.99)] if n >= 100 else latencies[-1]
+    avg = sum(latencies) // n
+
+    print(f"  Samples: {n}")
+    print(f"  Average: {avg}ms")
+    print(f"  P50:     {p50}ms")
+    print(f"  P90:     {p90}ms")
+    print(f"  P99:     {p99}ms")
+    print(f"  Min:     {latencies[0]}ms")
+    print(f"  Max:     {latencies[-1]}ms")
+
+    # Alert on regression (P90 > 8 seconds is bad)
+    if p90 > 8000:
+        print(f"  ⚠️  REGRESSION: P90 latency ({p90}ms) exceeds 8s threshold!")
+    elif p90 > 5000:
+        print(f"  ⚡ WARNING: P90 latency ({p90}ms) approaching 8s threshold")
+    else:
+        print(f"  ✅ P90 latency within acceptable range")
+
+
 def main():
     parser = argparse.ArgumentParser(description='TV Viewer Analytics Dashboard')
     parser.add_argument('--crashes', action='store_true', help='Show crash details')
@@ -398,6 +454,7 @@ def main():
             show_top_channels()
             show_scan_stats()
             show_crashes()
+            show_performance()
     except requests.exceptions.ConnectionError:
         print("ERROR: Cannot connect to Supabase. Check SUPABASE_URL.")
         sys.exit(1)

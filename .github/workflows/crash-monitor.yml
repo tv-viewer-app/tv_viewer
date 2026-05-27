@@ -1,0 +1,39 @@
+# =============================================================================
+# Crash Monitor — Auto-creates issues from crash analytics events
+# =============================================================================
+# Runs daily, queries Supabase analytics_events for app_crash type,
+# deduplicates by crash signature, and creates GitHub issues for new crashes.
+# =============================================================================
+
+name: Crash Monitor
+
+on:
+  schedule:
+    - cron: '30 7 * * *'  # Daily at 7:30 AM UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-crashes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Query crash events and create issues
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/crash_monitor.py

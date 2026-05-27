@@ -1,0 +1,28 @@
+TV Viewer is a free, open-source IPTV streaming application that aggregates publicly available streams from community-maintained M3U playlists.
+
+Features:
+• 16,000+ live TV and radio channels from around the world
+• Background audio playback — keep listening when screen is off
+• Multi-source failover — if one stream fails, automatically tries alternatives
+• EPG (Electronic Program Guide) with current/next program info
+• Channel categories: News, Sports, Entertainment, Music, Kids, and more
+• Radio mode with dedicated audio-focused interface
+• Picture-in-Picture (PiP) support
+• Search, favorites, and watch history
+• No account required, no ads, no tracking by default
+• Optional anonymous usage analytics (opt-in only)
+• Self-hosted web/Docker version available
+• Regular updates with new channels from community sources
+
+Privacy:
+• No personal data collected
+• No account or login required
+• Analytics are opt-in and fully anonymous (device ID only, no IP logging)
+• All source code is open and auditable
+
+This app does not host or provide any streams. It aggregates publicly available M3U playlists maintained by the open-source community (iptv-org and others). Channel availability depends on the source providers.
+
+Permissions:
+• Internet: Required to stream content
+• Wake Lock: Keeps screen on during video playback
+• Foreground Service: Background audio playback notification

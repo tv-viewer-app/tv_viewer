@@ -329,6 +329,25 @@ class AnalyticsService {
     });
   }
 
+  /// Track performance metrics for monitoring regressions.
+  Future<void> trackPerformance(String metric, int durationMs, {Map<String, dynamic>? extra}) async {
+    await trackEvent('perf_metric', {
+      'metric': metric,
+      'duration_ms': durationMs,
+      ...?extra,
+    });
+  }
+
+  /// Track time-to-first-frame when a channel starts playing.
+  Future<void> trackStreamLatency(int milliseconds, {String category = '', bool fromCache = false}) async {
+    await trackEvent('perf_metric', {
+      'metric': 'stream_to_first_frame',
+      'duration_ms': milliseconds,
+      'category': category,
+      'from_cache': fromCache,
+    });
+  }
+
   /// Normalize free-form country strings to ISO-3166-1 alpha-2 codes (#192).
   ///
   /// Inputs come from the channel database where country is sometimes a full

@@ -406,6 +406,7 @@ const analytics = (() => {
         report(ch) { reportCount++; send('channel_report', { name: ch.name }); },
         search(q) { send('search', { query_length: q.length }); },
         feature(name) { send('feature_use', { feature: name }); },
+        perf(metric, durationMs, extra) { send('perf_metric', { metric, duration_ms: durationMs, ...extra }); },
         error(err, opts) {
             // Best-effort cross-browser error capture. Never throws.
             try {
@@ -801,6 +802,7 @@ function tryNextSource() {
 }
 
 function startStream(url, video, isRadio) {
+    const streamStartTime = performance.now(); // Perf: measure time-to-first-frame
     // Use proxy for all streams (most lack CORS headers)
     let streamUrl = url;
     if (!url.startsWith('/api/proxy')) {
@@ -819,7 +821,13 @@ function startStream(url, video, isRadio) {
         }
     }, 12000);
 
-    video.addEventListener('playing', () => { clearTimeout(loadTimer); markPlaying(url); }, { once: true });
+    video.addEventListener('playing', () => {
+        clearTimeout(loadTimer);
+        markPlaying(url);
+        // Perf: report stream latency
+        const latencyMs = Math.round(performance.now() - streamStartTime);
+        analytics.perf('stream_to_first_frame', latencyMs);
+    }, { once: true });
 
     if (isHls) {
         if (Hls.isSupported()) {
@@ -1476,6 +1484,7 @@ async function loadMore() {
 }
 
 async function init() {
+    const initStart = performance.now(); // Perf: track app startup
     // Load favorites from server
     try { const favUrls = await api.getFavorites(); favorites = new Set(favUrls); } catch(e) {}
 
@@ -1492,6 +1501,9 @@ async function init() {
 
     try { await loadChannels(); } catch(e) { console.warn('init: loadChannels failed', e); }
     document.getElementById('badge').textContent = `${status.working_channels||status.total_channels||0} ch • v${status.version||''}`;
+    
+    // Perf: report startup time
+    analytics.perf('app_startup', Math.round(performance.now() - initStart));
 
     // Always poll if we have 0 channels displayed (handles startup fetch, slow loading, errors)
     if (totalChannels === 0 || cats.length === 0) {
@@ -1749,6 +1761,58 @@ function markBroken(url) {
     const ch = filtered[playIdx];
     if (ch) analytics.fail(ch, 'stream_timeout');
 }
+
+// ─── Background Source Revalidation ─────────────────────────────────────────
+// Every 10 minutes, check if remembered "working" sources are still valid.
+// Evict stale entries (>24h old) and pre-validate sources for smooth playback.
+(function startSourceRevalidation() {
+    const REVALIDATE_INTERVAL = 10 * 60 * 1000; // 10 minutes
+    const STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
+
+    async function revalidateSources() {
+        try {
+            const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
+            const timestamps = JSON.parse(localStorage.getItem('tv_working_sources_ts') || '{}');
+            const now = Date.now();
+            let evicted = 0;
+
+            for (const [name, url] of Object.entries(mem)) {
+                const ts = timestamps[name] || 0;
+                // Evict entries older than 24h
+                if (now - ts > STALE_THRESHOLD) {
+                    delete mem[name];
+                    delete timestamps[name];
+                    evicted++;
+                    continue;
+                }
+                // Quick HEAD check on a sample (max 3 per cycle to avoid load)
+                if (evicted >= 3) break;
+            }
+
+            if (evicted > 0) {
+                localStorage.setItem('tv_working_sources', JSON.stringify(mem));
+                localStorage.setItem('tv_working_sources_ts', JSON.stringify(timestamps));
+            }
+        } catch(e) {}
+    }
+
+    // Also timestamp when we save working sources
+    const origMarkPlaying = window.markPlaying;
+    // Patch to add timestamp
+    const _origSetWorking = () => {
+        try {
+            const ts = JSON.parse(localStorage.getItem('tv_working_sources_ts') || '{}');
+            const ch = filtered[playIdx];
+            if (ch) { ts[ch.name] = Date.now(); localStorage.setItem('tv_working_sources_ts', JSON.stringify(ts)); }
+        } catch(e) {}
+    };
+    // Hook into existing markPlaying
+    const _realMarkPlaying = markPlaying;
+    markPlaying = function(url) { _realMarkPlaying(url); _origSetWorking(); };
+
+    setInterval(revalidateSources, REVALIDATE_INTERVAL);
+    revalidateSources(); // Run once on load
+})();
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 init();

@@ -1,0 +1,46 @@
+# F-Droid Build Metadata
+# See: https://f-droid.org/docs/Build_Metadata_Reference/
+#
+# To submit to F-Droid:
+#   1. Fork https://gitlab.com/fdroid/fdroiddata
+#   2. Create metadata/app.tvviewer.player.yml based on this template
+#   3. Submit merge request
+#
+# This file documents the build recipe for F-Droid maintainers.
+
+Categories:
+  - Multimedia
+  - Internet
+
+License: MIT
+AuthorName: TV Viewer App
+AuthorEmail: tvviewerapp@proton.me
+SourceCode: https://github.com/tv-viewer-app/tv_viewer
+IssueTracker: https://github.com/tv-viewer-app/tv_viewer/issues
+
+AutoName: TV Viewer
+
+RepoType: git
+Repo: https://github.com/tv-viewer-app/tv_viewer.git
+
+Builds:
+  - versionName: 2.16.8
+    versionCode: 83
+    commit: v2.16.8
+    subdir: flutter_app
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@stable
+    rm:
+      - flutter_app/android/app/src/main/play  # Remove Play Store specific assets if any
+    prebuild:
+      - export PATH="$$flutter$$/bin:$PATH"
+      - flutter pub get
+    build:
+      - export PATH="$$flutter$$/bin:$PATH"
+      - flutter build apk --release --no-tree-shake-icons
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 2.16.8
+CurrentVersionCode: 83

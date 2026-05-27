@@ -1,0 +1,80 @@
+# =============================================================================
+# F-Droid Build — Builds unsigned APK suitable for F-Droid
+# =============================================================================
+# F-Droid requires reproducible, unsigned builds. This workflow produces an
+# APK without Google Play signing, proprietary SDKs, or non-free dependencies.
+#
+# The APK is also published as a GitHub Release asset for sideloading.
+# =============================================================================
+
+name: F-Droid Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v2.16.8)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-fdroid:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Build unsigned APK (F-Droid compatible)
+        working-directory: flutter_app
+        run: |
+          # Build release APK without signing (debug signing = unsigned for F-Droid)
+          flutter build apk --release \
+            --no-tree-shake-icons \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Rename APK
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
+             "TV_Viewer_v${VERSION}_fdroid.apk"
+          echo "APK_PATH=TV_Viewer_v${VERSION}_fdroid.apk" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fdroid-apk
+          path: ${{ env.APK_PATH }}
+          retention-days: 90
+
+      - name: Attach to release (if tag-triggered)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          gh release upload "${{ github.ref_name }}" "${{ env.APK_PATH }}" \
+            --clobber || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
