@@ -18,7 +18,7 @@ dependencies:
   http: ^1.2.0
   
   # Video Player - use basic video_player, skip chewie
-  video_player: ^2.8.2
+  video_player: ^2.11.1
   
   # Audio Player - background-capable audio for radio streams
   just_audio: ^0.9.39
