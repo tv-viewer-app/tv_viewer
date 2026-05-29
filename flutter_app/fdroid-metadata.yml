@@ -26,7 +26,7 @@ Repo: https://github.com/tv-viewer-app/tv_viewer.git
 Builds:
   - versionName: 2.16.8
     versionCode: 83
-    commit: v2.16.8
+    commit: bdefc0cd3d673cae628420d955d4cebd7627ad25
     subdir: flutter_app
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
