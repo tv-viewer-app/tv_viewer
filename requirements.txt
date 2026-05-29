@@ -1,6 +1,6 @@
 # TV Viewer Project Dependencies
 python-vlc>=3.0.18122
-requests>=2.32.0
+requests>=2.34.2
 aiohttp>=3.9.2
 certifi>=2026.4.22   # CA certificate bundle for SSL pinning (Issue #97)
 # pychromecast — OPTIONAL. Removed from default install because zeroconf (its
