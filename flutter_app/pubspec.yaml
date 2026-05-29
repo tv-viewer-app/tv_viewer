@@ -52,7 +52,7 @@ dependencies:
   
   # Device & Connectivity Info (BL-024, BL-032)
   device_info_plus: ^10.1.0
-  connectivity_plus: ^6.0.3
+  connectivity_plus: ^7.1.1
   package_info_plus: ^8.0.0
   
   # Share functionality (BL-024)
