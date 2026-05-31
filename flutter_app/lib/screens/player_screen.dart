@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -64,6 +65,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   String? _bitrate;
   double _volume = 1.0; // BL-018: Volume control
   bool _backgroundPlayback = false; // Continue playback when screen off
+  Timer? _wakeLockTimer; // Periodic re-assertion of wake lock
   
   // Named listener for proper cleanup
   VoidCallback? _playerListener;
@@ -133,10 +135,26 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   Future<void> _initializeWakeLock() async {
     try {
       await WakelockPlus.enable();
+      // Also set native FLAG_KEEP_SCREEN_ON (more reliable on Android 14+)
+      if (Platform.isAndroid) {
+        const channel = MethodChannel('tv_viewer/wakelock');
+        await channel.invokeMethod('enable');
+      }
       logger.info('Wake lock enabled for ${widget.channel.name}');
     } catch (e) {
       logger.warning('Failed to enable wake lock', e);
     }
+    // Re-assert every 5 min in case Android silently drops it
+    _wakeLockTimer?.cancel();
+    _wakeLockTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (mounted && _isPlaying) {
+        WakelockPlus.enable();
+        if (Platform.isAndroid) {
+          const channel = MethodChannel('tv_viewer/wakelock');
+          channel.invokeMethod('enable');
+        }
+      }
+    });
   }
 
   /// Load background playback preference
@@ -922,7 +940,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     
     // Disable wake lock
+    _wakeLockTimer?.cancel();
     WakelockPlus.disable();
+    if (Platform.isAndroid) {
+      const channel = MethodChannel('tv_viewer/wakelock');
+      channel.invokeMethod('disable');
+    }
     
     // Restore orientation
     SystemChrome.setPreferredOrientations([
