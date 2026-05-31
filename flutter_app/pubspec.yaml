@@ -1,7 +1,7 @@
 name: tv_viewer
 description: TV Viewer - IPTV Streaming App for Android
 publish_to: 'none'
-version: 2.16.15+90
+version: 2.16.16+91
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -52,7 +52,7 @@ dependencies:
   
   # Device & Connectivity Info (BL-024, BL-032)
   device_info_plus: ^10.1.0
-  connectivity_plus: ^7.1.1
+  connectivity_plus: ^6.0.3
   package_info_plus: ^8.0.0
   
   # Share functionality (BL-024)
