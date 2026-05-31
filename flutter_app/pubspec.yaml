@@ -1,7 +1,7 @@
 name: tv_viewer
 description: TV Viewer - IPTV Streaming App for Android
 publish_to: 'none'
-version: 2.17.2+94
+version: 2.17.3+95
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -45,7 +45,7 @@ dependencies:
   
   # Android-specific features
   wakelock_plus: ^1.2.0
-  floating: ^2.0.0
+  floating: ^6.0.0
   
   # Cached images for channel logos (#147)
   cached_network_image: ^3.3.1
