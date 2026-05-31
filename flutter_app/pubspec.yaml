@@ -1,7 +1,7 @@
 name: tv_viewer
 description: TV Viewer - IPTV Streaming App for Android
 publish_to: 'none'
-version: 2.17.4+96
+version: 2.17.5+97
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -12,7 +12,7 @@ dependencies:
   
   # UI
   cupertino_icons: ^1.0.8
-  google_fonts: ^6.1.0
+  google_fonts: ^6.2.1
   
   # HTTP & Networking
   http: ^1.2.0
