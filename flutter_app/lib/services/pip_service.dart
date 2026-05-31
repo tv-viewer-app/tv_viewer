@@ -66,8 +66,8 @@ class PipService {
     }
 
     try {
-      // Enable PiP mode
-      final result = await _floating!.enable();
+      // Enable PiP mode with aspect ratio
+      final result = await _floating!.enable(aspectRatio);
       
       if (result == PiPStatus.enabled) {
         _isPipActive = true;
@@ -88,7 +88,6 @@ class PipService {
     if (_floating == null) return;
 
     try {
-      _floating!.dispose();
       _isPipActive = false;
       debugPrint('PiP: Disabled');
     } catch (e) {
@@ -143,7 +142,7 @@ class PipService {
 
     try {
       // Re-enable with new parameters
-      await _floating!.enable();
+      await _floating!.enable(aspectRatio);
       debugPrint('PiP: Updated aspect ratio to $aspectRatio');
     } catch (e) {
       debugPrint('PiP: Error updating params: $e');
@@ -152,7 +151,6 @@ class PipService {
 
   /// Dispose resources
   void dispose() {
-    _floating?.dispose();
     _floating = null;
     _isPipActive = false;
   }
