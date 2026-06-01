@@ -1,5 +1,5 @@
 # TV Viewer Project Dependencies
-python-vlc>=3.0.18122
+python-vlc>=3.0.21203
 requests>=2.34.2
 aiohttp>=3.9.2
 certifi>=2026.4.22   # CA certificate bundle for SSL pinning (Issue #97)
