@@ -5,6 +5,18 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.0] - 2026-06-03
+
+### Fixed — Play Store compliance
+- Target SDK 35 (Play Store requirement)
+- Removed unused photo/video/storage permissions (from dependencies)
+- Removed REQUEST_INSTALL_PACKAGES (not needed for Play Store users)
+- Added obfuscation + debug symbols to Play Store deploy
+
+### Changed
+- Upgraded to Flutter 3.32 + Gradle 8.9 + AGP 8.7
+- PiP temporarily disabled (floating package incompatible with Flutter 3.32)
+
 ## [2.17.6] - 2026-05-31
 
 ### Fixed — Screen turns off during video playback (Android 14+)

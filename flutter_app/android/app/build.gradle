@@ -31,7 +31,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "app.tvviewer.player"
-    compileSdk 34
+    compileSdk 35
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -46,7 +46,7 @@ android {
         applicationId "app.tvviewer.player"
         // PiP requires API 26+ (Android 8.0)
         minSdk 26
-        targetSdk 34
+        targetSdk 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
