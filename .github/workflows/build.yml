@@ -344,11 +344,12 @@ jobs:
             --obfuscate \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          # AAB build is best-effort (strip debug symbols may fail without NDK)
           flutter build appbundle --release \
             --split-debug-info=build/debug-info \
             --obfuscate \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" || echo "⚠️ AAB build failed (non-fatal, APK available)"
 
       - name: Package native debug symbols
         run: |
