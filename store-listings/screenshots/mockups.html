@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TV Viewer Store Screenshots</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; font-family: 'Inter', 'Segoe UI', sans-serif; display: flex; flex-wrap: wrap; gap: 40px; padding: 40px; justify-content: center; }
+
+.phone-frame {
+  width: 390px;
+  height: 844px;
+  background: #1c1b1f;
+  border-radius: 40px;
+  border: 3px solid #333;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.status-bar {
+  height: 44px;
+  background: #1c1b1f;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app-bar {
+  height: 56px;
+  background: #1c1b1f;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  border-bottom: 1px solid #2d2c31;
+}
+.app-bar .title { color: #fff; font-size: 20px; font-weight: 600; flex: 1; }
+.app-bar .icon { width: 24px; height: 24px; color: #b3b3b3; }
+
+.search-bar {
+  margin: 12px 16px;
+  background: #2d2c31;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8a8a8a;
+  font-size: 15px;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 12px;
+  overflow-x: hidden;
+}
+.chip {
+  background: #2d2c31;
+  color: #e0e0e0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chip.active { background: #1565C0; color: #fff; }
+
+.channel-list { padding: 0 0 80px; overflow: hidden; }
+.channel-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  border-bottom: 1px solid #2d2c31;
+}
+.channel-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.channel-info { flex: 1; min-width: 0; }
+.channel-name { color: #fff; font-size: 15px; font-weight: 500; margin-bottom: 2px; }
+.channel-meta { color: #8a8a8a; font-size: 13px; }
+.channel-epg { color: #64b5f6; font-size: 12px; margin-top: 2px; }
+.channel-status { width: 10px; height: 10px; border-radius: 50%; }
+.status-green { background: #4caf50; }
+.status-red { background: #f44336; }
+
+.bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: #1c1b1f;
+  border-top: 1px solid #2d2c31;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding-bottom: 16px;
+}
+.nav-item { text-align: center; color: #8a8a8a; font-size: 11px; }
+.nav-item.active { color: #64b5f6; }
+.nav-icon { font-size: 22px; margin-bottom: 2px; }
+
+/* Player screen */
+.player-bg { background: #000; position: relative; }
+.video-area { height: 220px; background: linear-gradient(135deg, #0d47a1, #1565c0); display: flex; align-items: center; justify-content: center; }
+.play-btn { width: 64px; height: 64px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff; }
+.player-controls { padding: 16px; display: flex; align-items: center; gap: 16px; }
+.player-info { padding: 16px; }
+.player-title { color: #fff; font-size: 20px; font-weight: 600; }
+.player-subtitle { color: #8a8a8a; font-size: 14px; margin-top: 4px; }
+.live-badge { background: #f44336; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: inline-block; margin-left: 8px; }
+.epg-card { background: #2d2c31; margin: 16px; border-radius: 12px; padding: 16px; }
+.epg-title { color: #64b5f6; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.epg-item { display: flex; gap: 8px; margin-bottom: 6px; }
+.epg-time { color: #8a8a8a; font-size: 13px; min-width: 50px; }
+.epg-prog { color: #e0e0e0; font-size: 13px; }
+
+/* Radio */
+.radio-art { height: 200px; background: linear-gradient(135deg, #4a148c, #7c43bd); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+.radio-wave { font-size: 64px; }
+.radio-title { color: #fff; font-size: 24px; font-weight: 700; }
+.radio-station { color: rgba(255,255,255,0.7); font-size: 14px; }
+
+/* Category filter */
+.category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+.cat-card { background: #2d2c31; border-radius: 12px; padding: 16px; text-align: center; }
+.cat-icon { font-size: 28px; margin-bottom: 6px; }
+.cat-name { color: #e0e0e0; font-size: 13px; }
+.cat-count { color: #8a8a8a; font-size: 11px; }
+
+.screenshot-label {
+  position: absolute;
+  bottom: -30px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #8a8a8a;
+  font-size: 13px;
+}
+</style>
+</head>
+<body>
+
+<!-- Screenshot 1: Home / Channel List -->
+<div style="position:relative">
+<div class="phone-frame">
+  <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+  <div class="app-bar">
+    <span class="title">📺 TV Viewer</span>
+    <span style="color:#64b5f6;font-size:13px">16,247 channels</span>
+  </div>
+  <div class="search-bar">🔍 Search channels...</div>
+  <div class="filter-chips">
+    <span class="chip active">All</span>
+    <span class="chip">🇮🇱 Israel</span>
+    <span class="chip">News</span>
+    <span class="chip">Sports</span>
+    <span class="chip">Music</span>
+    <span class="chip">Kids</span>
+  </div>
+  <div class="channel-list">
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#1565c0">13</div>
+      <div class="channel-info">
+        <div class="channel-name">Reshet 13</div>
+        <div class="channel-meta">News • Israel • 1080p</div>
+        <div class="channel-epg">▶ Evening News with Yonit Levi</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#2e7d32">11</div>
+      <div class="channel-info">
+        <div class="channel-name">Kan 11 News</div>
+        <div class="channel-meta">News • Israel • 720p</div>
+        <div class="channel-epg">▶ HaMabat with Geula Even-Saar</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#e65100">14</div>
+      <div class="channel-info">
+        <div class="channel-name">Channel 14</div>
+        <div class="channel-meta">News • Israel • 1080p</div>
+        <div class="channel-epg">▶ Hamerkaz with Erel Segal</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#6a1b9a">📻</div>
+      <div class="channel-info">
+        <div class="channel-name">100FM 80s</div>
+        <div class="channel-meta">Music • Israel • Radio</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#c62828">🏀</div>
+      <div class="channel-info">
+        <div class="channel-name">Sport 5</div>
+        <div class="channel-meta">Sports • Israel • 1080p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#00695c">BBC</div>
+      <div class="channel-info">
+        <div class="channel-name">BBC World News</div>
+        <div class="channel-meta">News • United Kingdom • 720p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#f57f17">🎬</div>
+      <div class="channel-info">
+        <div class="channel-name">Action 24</div>
+        <div class="channel-meta">Movies • Greece • 1080p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item active"><div class="nav-icon">📺</div>TV</div>
+    <div class="nav-item"><div class="nav-icon">📻</div>Radio</div>
+    <div class="nav-item"><div class="nav-icon">🗺️</div>Map</div>
+    <div class="nav-item"><div class="nav-icon">⚙️</div>Settings</div>
+  </div>
+</div>
+<div class="screenshot-label">1. Channel List</div>
+</div>
+
+<!-- Screenshot 2: Video Player -->
+<div style="position:relative">
+<div class="phone-frame player-bg">
+  <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+  <div class="video-area">
+    <div class="play-btn">▶</div>
+  </div>
+  <div class="player-info">
+    <div class="player-title">Reshet 13 <span class="live-badge">LIVE</span></div>
+    <div class="player-subtitle">News • Israel • 1080p HD</div>
+  </div>
+  <div class="epg-card">
+    <div class="epg-title">📖 Program Guide</div>
+    <div class="epg-item"><span class="epg-time">20:00</span><span class="epg-prog" style="color:#64b5f6">▶ Evening News with Yonit Levi</span></div>
+    <div class="epg-item"><span class="epg-time">21:00</span><span class="epg-prog">Survivor VIP</span></div>
+    <div class="epg-item"><span class="epg-time">22:30</span><span class="epg-prog">Late Night News</span></div>
+    <div class="epg-item"><span class="epg-time">23:00</span><span class="epg-prog">Documentary Hour</span></div>
+  </div>
+  <div style="padding: 16px; display: flex; gap: 12px;">
+    <span class="chip">⭐ Favorite</span>
+    <span class="chip">📤 Share</span>
+    <span class="chip">🔗 Open External</span>
+  </div>
+</div>
+<div class="screenshot-label">2. Video Player + EPG</div>
+</div>
+
+<!-- Screenshot 3: Categories -->
+<div style="position:relative">
+<div class="phone-frame">
+  <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+  <div class="app-bar">
+    <span class="title">Browse Categories</span>
+  </div>
+  <div class="category-grid">
+    <div class="cat-card"><div class="cat-icon">📰</div><div class="cat-name">News</div><div class="cat-count">2,341 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">⚽</div><div class="cat-name">Sports</div><div class="cat-count">1,847 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">🎬</div><div class="cat-name">Movies</div><div class="cat-count">1,523 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">🎵</div><div class="cat-name">Music</div><div class="cat-count">1,892 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">👶</div><div class="cat-name">Kids</div><div class="cat-count">876 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">🎭</div><div class="cat-name">Entertainment</div><div class="cat-count">2,104 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">📚</div><div class="cat-name">Education</div><div class="cat-count">534 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">🌿</div><div class="cat-name">Nature</div><div class="cat-count">421 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">🛍️</div><div class="cat-name">Shopping</div><div class="cat-count">312 channels</div></div>
+    <div class="cat-card"><div class="cat-icon">☁️</div><div class="cat-name">Weather</div><div class="cat-count">198 channels</div></div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item active"><div class="nav-icon">📺</div>TV</div>
+    <div class="nav-item"><div class="nav-icon">📻</div>Radio</div>
+    <div class="nav-item"><div class="nav-icon">🗺️</div>Map</div>
+    <div class="nav-item"><div class="nav-icon">⚙️</div>Settings</div>
+  </div>
+</div>
+<div class="screenshot-label">3. Categories</div>
+</div>
+
+<!-- Screenshot 4: Radio Mode -->
+<div style="position:relative">
+<div class="phone-frame" style="background:#1c1b1f">
+  <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+  <div class="radio-art">
+    <div class="radio-wave">📻</div>
+    <div class="radio-title">100FM 80s</div>
+    <div class="radio-station">Israel • Music Radio</div>
+  </div>
+  <div style="padding: 24px; text-align: center;">
+    <div style="display:flex; align-items:center; justify-content:center; gap:32px; margin: 24px 0;">
+      <span style="color:#8a8a8a;font-size:32px">⏮</span>
+      <div style="width:64px;height:64px;background:#1565c0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff">⏸</div>
+      <span style="color:#8a8a8a;font-size:32px">⏭</span>
+    </div>
+    <div style="background:#2d2c31;border-radius:8px;height:4px;margin:16px 0;position:relative">
+      <div style="background:#1565c0;border-radius:8px;height:4px;width:60%"></div>
+    </div>
+    <div style="color:#8a8a8a;font-size:13px">🔊 Background playback active</div>
+  </div>
+  <div style="padding:0 16px">
+    <div style="color:#fff;font-size:16px;font-weight:600;margin-bottom:12px">More Radio Stations</div>
+    <div class="channel-item" style="border-bottom:1px solid #2d2c31">
+      <div class="channel-logo" style="background:#4a148c;font-size:14px">90s</div>
+      <div class="channel-info">
+        <div class="channel-name">100FM 90s</div>
+        <div class="channel-meta">Music • Israel</div>
+      </div>
+    </div>
+    <div class="channel-item" style="border-bottom:1px solid #2d2c31">
+      <div class="channel-logo" style="background:#1b5e20;font-size:14px">88</div>
+      <div class="channel-info">
+        <div class="channel-name">Kan 88</div>
+        <div class="channel-meta">Music • Israel</div>
+      </div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#bf360c;font-size:12px">Bet</div>
+      <div class="channel-info">
+        <div class="channel-name">Kan Reshet Bet</div>
+        <div class="channel-meta">News • Israel</div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item"><div class="nav-icon">📺</div>TV</div>
+    <div class="nav-item active"><div class="nav-icon">📻</div>Radio</div>
+    <div class="nav-item"><div class="nav-icon">🗺️</div>Map</div>
+    <div class="nav-item"><div class="nav-icon">⚙️</div>Settings</div>
+  </div>
+</div>
+<div class="screenshot-label">4. Radio Mode</div>
+</div>
+
+<!-- Screenshot 5: Search Results -->
+<div style="position:relative">
+<div class="phone-frame">
+  <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+  <div class="app-bar">
+    <span class="title">📺 TV Viewer</span>
+  </div>
+  <div class="search-bar" style="border:1px solid #1565c0">🔍 <span style="color:#fff">BBC</span></div>
+  <div style="padding:8px 16px;color:#8a8a8a;font-size:13px">12 results for "BBC"</div>
+  <div class="channel-list">
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#b71c1c;font-size:12px">BBC</div>
+      <div class="channel-info">
+        <div class="channel-name">BBC World News</div>
+        <div class="channel-meta">News • United Kingdom • 720p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#1a237e;font-size:12px">BBC</div>
+      <div class="channel-info">
+        <div class="channel-name">BBC One</div>
+        <div class="channel-meta">Entertainment • United Kingdom • 1080p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#004d40;font-size:12px">BBC</div>
+      <div class="channel-info">
+        <div class="channel-name">BBC Two</div>
+        <div class="channel-meta">Entertainment • United Kingdom • 720p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#311b92;font-size:12px">BBC</div>
+      <div class="channel-info">
+        <div class="channel-name">BBC Arabic</div>
+        <div class="channel-meta">News • United Kingdom • 720p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#e65100;font-size:12px">BBC</div>
+      <div class="channel-info">
+        <div class="channel-name">BBC Persian</div>
+        <div class="channel-meta">News • United Kingdom • 720p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+    <div class="channel-item">
+      <div class="channel-logo" style="background:#880e4f;font-size:10px">CBeeb</div>
+      <div class="channel-info">
+        <div class="channel-name">CBeebies (BBC Kids)</div>
+        <div class="channel-meta">Kids • United Kingdom • 720p</div>
+      </div>
+      <div class="channel-status status-green"></div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item active"><div class="nav-icon">📺</div>TV</div>
+    <div class="nav-item"><div class="nav-icon">📻</div>Radio</div>
+    <div class="nav-item"><div class="nav-icon">🗺️</div>Map</div>
+    <div class="nav-item"><div class="nav-icon">⚙️</div>Settings</div>
+  </div>
+</div>
+<div class="screenshot-label">5. Search</div>
+</div>
+
+</body>
+</html>
