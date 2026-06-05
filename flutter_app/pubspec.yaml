@@ -12,7 +12,7 @@ dependencies:
   
   # UI
   cupertino_icons: ^1.0.8
-  google_fonts: ">=6.2.1 <6.3.0"
+  google_fonts: ^8.1.0
   
   # HTTP & Networking
   http: ^1.2.0
