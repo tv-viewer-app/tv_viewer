@@ -134,6 +134,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   Future<void> _initializeWakeLock() async {
     try {
       await WakelockPlus.enable();
+      if (!mounted) return;
       // Also set native FLAG_KEEP_SCREEN_ON (more reliable on Android 14+)
       if (Platform.isAndroid) {
         const channel = MethodChannel('tv_viewer/wakelock');
@@ -143,6 +144,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     } catch (e) {
       logger.warning('Failed to enable wake lock', e);
     }
+    if (!mounted) return;
     // Re-assert every 5 min in case Android silently drops it
     _wakeLockTimer?.cancel();
     _wakeLockTimer = Timer.periodic(const Duration(minutes: 5), (_) {

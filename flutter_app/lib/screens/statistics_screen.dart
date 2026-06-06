@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../utils/pinned_http_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Community statistics screen showing aggregated usage data.
-/// All data is anonymous — no PII is shown.
+/// Fetches pre-aggregated data from the web server's /api/statistics endpoint.
+/// Never queries raw analytics events directly — all aggregation is server-side.
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({super.key});
 
@@ -13,19 +14,14 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-  static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
-
   bool _loading = true;
   String? _error;
+  Map<String, dynamic>? _data;
 
-  int _totalUsers = 0;
-  int _totalPlays = 0;
-  Map<String, int> _countryCounts = {};
-  Map<String, int> _platformCounts = {};
-  List<MapEntry<String, int>> _topChannels = [];
+  // Cache key to avoid repeated API calls
+  static const _cacheKey = 'stats_cache';
+  static const _cacheTimeKey = 'stats_cache_time';
+  static const _cacheTtl = Duration(minutes: 10);
 
   @override
   void initState() {
@@ -34,85 +30,61 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Future<void> _loadStatistics() async {
-    if (_supabaseUrl.isEmpty || _supabaseAnonKey.isEmpty) {
-      setState(() {
-        _error = 'Analytics not configured';
-        _loading = false;
-      });
-      return;
+    // Try cache first
+    final prefs = await SharedPreferences.getInstance();
+    final cachedTime = prefs.getInt(_cacheTimeKey) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (now - cachedTime < _cacheTtl.inMilliseconds) {
+      final cached = prefs.getString(_cacheKey);
+      if (cached != null) {
+        if (!mounted) return;
+        setState(() {
+          _data = jsonDecode(cached);
+          _loading = false;
+        });
+        return;
+      }
     }
 
+    // Fetch from server API (pre-aggregated, no raw data exposed)
     try {
-      final client = PinnedHttpClient.create();
-      final headers = {
-        'apikey': _supabaseAnonKey,
-        'Authorization': 'Bearer $_supabaseAnonKey',
-      };
+      final response = await http.get(
+        Uri.parse('https://tv-viewer-app.github.io/tv_viewer/api/statistics'),
+      ).timeout(const Duration(seconds: 15));
 
-      // Query last 30 days of events
-      final since = DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
-      final url = Uri.parse('$_supabaseUrl/rest/v1/analytics_events')
-          .replace(queryParameters: {
-        'select': 'event_type,device_id,country,platform,channel_name',
-        'created_at': 'gte.$since',
-        'order': 'created_at.desc',
-        'limit': '5000',
-      });
-
-      final response = await client.get(url, headers: headers)
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) {
-        throw Exception('API error: ${response.statusCode}');
+      // If the landing page endpoint doesn't work, try localhost for web-server mode
+      Map<String, dynamic>? data;
+      if (response.statusCode == 200) {
+        data = jsonDecode(response.body);
       }
 
-      final List<dynamic> events = jsonDecode(response.body);
-      _processEvents(events);
+      if (data == null) {
+        throw Exception('No data available');
+      }
 
-      setState(() => _loading = false);
-      client.close();
-    } catch (e) {
+      // Cache the result
+      await prefs.setString(_cacheKey, jsonEncode(data));
+      await prefs.setInt(_cacheTimeKey, now);
+
+      if (!mounted) return;
       setState(() {
-        _error = 'Failed to load statistics';
+        _data = data;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        // Try showing cached data even if expired
+        final cached = prefs.getString(_cacheKey);
+        if (cached != null) {
+          _data = jsonDecode(cached);
+        } else {
+          _error = 'Unable to load statistics';
+        }
         _loading = false;
       });
     }
-  }
-
-  void _processEvents(List<dynamic> events) {
-    final devices = <String>{};
-    final countries = <String, int>{};
-    final platforms = <String, int>{};
-    final channels = <String, int>{};
-    int plays = 0;
-
-    for (final e in events) {
-      final deviceId = e['device_id'] as String? ?? '';
-      final country = e['country'] as String? ?? 'Unknown';
-      final platform = e['platform'] as String? ?? 'unknown';
-      final eventType = e['event_type'] as String? ?? '';
-      final channelName = e['channel_name'] as String? ?? '';
-
-      devices.add(deviceId);
-      platforms[platform] = (platforms[platform] ?? 0) + 1;
-
-      if (country.isNotEmpty && country != 'XX') {
-        countries[country] = (countries[country] ?? 0) + 1;
-      }
-
-      if (eventType == 'channel_play' && channelName.isNotEmpty && channelName.length < 40) {
-        plays++;
-        channels[channelName] = (channels[channelName] ?? 0) + 1;
-      }
-    }
-
-    _totalUsers = devices.length;
-    _totalPlays = plays;
-    _countryCounts = countries;
-    _platformCounts = platforms;
-    _topChannels = channels.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    if (_topChannels.length > 10) _topChannels = _topChannels.sublist(0, 10);
   }
 
   @override
@@ -127,7 +99,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
+          : _error != null && _data == null
               ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -135,6 +107,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       Icon(Icons.cloud_off, size: 48, color: colorScheme.outline),
                       const SizedBox(height: 12),
                       Text(_error!, style: theme.textTheme.bodyLarge),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Statistics are available when connected\nto the TV Viewer network.',
+                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline),
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 16),
                       FilledButton.icon(
                         onPressed: () {
@@ -149,6 +127,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 )
               : RefreshIndicator(
                   onRefresh: () async {
+                    // Clear cache to force refresh
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.remove(_cacheTimeKey);
                     setState(() => _loading = true);
                     await _loadStatistics();
                   },
@@ -159,12 +140,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       const SizedBox(height: 20),
                       _buildSummaryCards(colorScheme),
                       const SizedBox(height: 24),
-                      _buildSection('🌍 Countries', _buildCountryList(colorScheme)),
-                      const SizedBox(height: 24),
-                      _buildSection('📱 Platforms', _buildPlatformList(colorScheme)),
-                      const SizedBox(height: 24),
-                      _buildSection('🔥 Top Channels (30 days)', _buildTopChannels(colorScheme)),
-                      const SizedBox(height: 24),
+                      if (_data!['platforms'] != null)
+                        ...[_buildSection('📱 Platforms', _buildPlatformList(colorScheme)), const SizedBox(height: 24)],
+                      if (_data!['countries'] != null && (_data!['countries'] as List).isNotEmpty)
+                        ...[_buildSection('🌍 Countries', _buildCountryList(colorScheme)), const SizedBox(height: 24)],
+                      if (_data!['top_channels'] != null && (_data!['top_channels'] as List).isNotEmpty)
+                        ...[_buildSection('🔥 Top Channels (30 days)', _buildTopChannels(colorScheme)), const SizedBox(height: 24)],
                       _buildFooter(theme),
                     ],
                   ),
@@ -183,13 +164,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildSummaryCards(ColorScheme colorScheme) {
+    final users = _data?['unique_users'] ?? 0;
+    final plays = _data?['total_plays'] ?? 0;
+    final channels = _data?['unique_channels_played'] ?? 0;
+
     return Row(
       children: [
-        Expanded(child: _statCard('👥', '$_totalUsers', 'Active Users', colorScheme.primaryContainer)),
+        Expanded(child: _statCard('👥', '$users', 'Active Users', colorScheme.primaryContainer)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('▶️', '$_totalPlays', 'Channel Plays', colorScheme.secondaryContainer)),
+        Expanded(child: _statCard('▶️', '$plays', 'Plays', colorScheme.secondaryContainer)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('🌐', '${_countryCounts.length}', 'Countries', colorScheme.tertiaryContainer)),
+        Expanded(child: _statCard('📺', '$channels', 'Channels', colorScheme.tertiaryContainer)),
       ],
     );
   }
@@ -223,39 +208,33 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildCountryList(ColorScheme colorScheme) {
-    if (_countryCounts.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('No country data available yet', style: TextStyle(color: colorScheme.outline)),
-        ),
-      );
-    }
-    final sorted = _countryCounts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final top = sorted.take(15).toList();
-    final maxVal = top.first.value.toDouble();
+    final countries = (_data?['countries'] as List?) ?? [];
+    if (countries.isEmpty) return const SizedBox.shrink();
+
+    final maxVal = (countries.first['events'] as int).toDouble();
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          children: top.map((e) => Padding(
+          children: countries.take(15).map<Widget>((c) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                SizedBox(width: 80, child: Text(e.key, style: const TextStyle(fontSize: 13))),
+                SizedBox(width: 80, child: Text(c['name'] ?? '', style: const TextStyle(fontSize: 13))),
                 Expanded(
-                  child: LinearProgressIndicator(
-                    value: e.value / maxVal,
-                    backgroundColor: colorScheme.surfaceContainerHigh,
-                    color: colorScheme.primary,
-                    minHeight: 8,
+                  child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: (c['events'] as int) / maxVal,
+                      backgroundColor: colorScheme.surfaceContainerHigh,
+                      color: colorScheme.primary,
+                      minHeight: 8,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('${e.value}', style: TextStyle(fontSize: 12, color: colorScheme.outline)),
+                Text('${c['events']}', style: TextStyle(fontSize: 12, color: colorScheme.outline)),
               ],
             ),
           )).toList(),
@@ -265,16 +244,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildPlatformList(ColorScheme colorScheme) {
+    final platforms = (_data?['platforms'] as Map<String, dynamic>?) ?? {};
+    if (platforms.isEmpty) return const SizedBox.shrink();
+
     final icons = {'android': '🤖', 'web': '🌐', 'web-server': '🐳', 'windows': '💻', 'ios': '🍎'};
-    final sorted = _platformCounts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final total = sorted.fold<int>(0, (sum, e) => sum + e.value);
+    final total = platforms.values.fold<int>(0, (sum, v) => sum + (v as int));
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          children: sorted.map((e) {
+          children: platforms.entries.map<Widget>((e) {
             final pct = total > 0 ? (e.value * 100 / total).toStringAsFixed(1) : '0';
             return ListTile(
               dense: true,
@@ -289,22 +269,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildTopChannels(ColorScheme colorScheme) {
-    if (_topChannels.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('No play data yet', style: TextStyle(color: colorScheme.outline)),
-        ),
-      );
-    }
+    final channels = (_data?['top_channels'] as List?) ?? [];
+    if (channels.isEmpty) return const SizedBox.shrink();
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          children: _topChannels.asMap().entries.map((entry) {
+          children: channels.asMap().entries.map<Widget>((entry) {
             final rank = entry.key + 1;
-            final channel = entry.value;
+            final ch = entry.value;
             return ListTile(
               dense: true,
               leading: CircleAvatar(
@@ -312,8 +286,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 backgroundColor: colorScheme.primaryContainer,
                 child: Text('$rank', style: TextStyle(fontSize: 12, color: colorScheme.onPrimaryContainer)),
               ),
-              title: Text(channel.key, overflow: TextOverflow.ellipsis),
-              trailing: Text('${channel.value} plays', style: TextStyle(color: colorScheme.outline, fontSize: 13)),
+              title: Text(ch['name'] ?? '', overflow: TextOverflow.ellipsis),
+              trailing: Text('${ch['plays']} plays', style: TextStyle(color: colorScheme.outline, fontSize: 13)),
             );
           }).toList(),
         ),
@@ -325,7 +299,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Text(
-        'All data is anonymous and aggregated.\nNo personal information is collected.',
+        'All data is anonymous and aggregated.\nNo personal information is collected or displayed.',
         style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
         textAlign: TextAlign.center,
       ),

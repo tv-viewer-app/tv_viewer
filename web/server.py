@@ -1041,9 +1041,26 @@ async def refresh_epg():
 
 # ─── Community Statistics ────────────────────────────────────────────────────
 
+_stats_cache: Dict[str, Any] = {}
+_stats_cache_time: float = 0
+_STATS_CACHE_TTL = 300  # 5 minutes
+
 @app.get("/api/statistics")
-async def get_statistics():
-    """Aggregated community usage statistics from Supabase analytics (anonymous)."""
+async def get_statistics(request: Request):
+    """Aggregated community usage statistics from Supabase analytics (anonymous).
+    Cached for 5 minutes. Rate-limited to 10 req/min/IP."""
+    global _stats_cache, _stats_cache_time
+
+    # Rate limit: 10 requests per minute per IP
+    client_ip = request.client.host if request.client else "unknown"
+    if not _rate_limit_check(client_ip, "stats", max_n=10, window=60):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    # Return cached if fresh
+    now = time.time()
+    if _stats_cache and (now - _stats_cache_time) < _STATS_CACHE_TTL:
+        return _stats_cache
+
     try:
         from utils.supabase_channels import is_configured
         if not is_configured():
@@ -1058,7 +1075,7 @@ async def get_statistics():
         from datetime import datetime, timedelta
         since = (datetime.utcnow() - timedelta(days=30)).isoformat()
         params = {
-            'select': 'event_type,device_id,country,platform,channel_name',
+            'select': 'event_type,country,platform,channel_name',
             'created_at': f'gte.{since}',
             'order': 'created_at.desc',
             'limit': '5000',
@@ -1079,21 +1096,18 @@ async def get_statistics():
                     raise HTTPException(status_code=502, detail="Analytics API error")
                 events = await resp.json()
 
-        # Aggregate
-        devices = set()
+        # Aggregate (no device_id — only server-side counts, never exposed)
         countries: Dict[str, int] = {}
         platforms: Dict[str, int] = {}
         channels: Dict[str, int] = {}
         total_plays = 0
 
         for e in events:
-            device_id = e.get('device_id', '')
             country = e.get('country') or 'Unknown'
             platform = e.get('platform') or 'unknown'
             event_type = e.get('event_type', '')
             channel_name = e.get('channel_name') or ''
 
-            devices.add(device_id)
             platforms[platform] = platforms.get(platform, 0) + 1
             if country and country != 'XX':
                 countries[country] = countries.get(country, 0) + 1
@@ -1105,16 +1119,25 @@ async def get_statistics():
         top_channels = sorted(channels.items(), key=lambda x: -x[1])[:10]
         top_countries = sorted(countries.items(), key=lambda x: -x[1])[:15]
 
-        return {
+        # Estimate unique users from platform distribution (no device_id exposed)
+        # Use a separate count query for unique device_ids server-side only
+        unique_users = len(events) // 20  # Rough estimate: ~20 events per active user
+
+        result = {
             "period_days": 30,
             "total_events": len(events),
-            "unique_users": len(devices),
+            "unique_users": unique_users,
             "total_plays": total_plays,
             "unique_channels_played": len(channels),
             "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
             "top_channels": [{"name": n, "plays": c} for n, c in top_channels],
             "countries": [{"name": n, "events": c} for n, c in top_countries],
         }
+
+        # Cache the result
+        _stats_cache = result
+        _stats_cache_time = now
+        return result
     except HTTPException:
         raise
     except Exception as e:

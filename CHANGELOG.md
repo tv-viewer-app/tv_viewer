@@ -5,6 +5,20 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.1] - 2026-06-06
+
+### Security Hardening
+- Statistics screen no longer queries Supabase directly (info disclosure fix)
+- Removed device_id from analytics API responses (privacy improvement)
+- Added rate limiting (10 req/min) + 5-min cache to /api/statistics endpoint
+- Flutter client uses server-side pre-aggregated data only
+
+### Fixed
+- Memory leak: HTTP client not closed on error path in statistics screen
+- Wake lock timer race: added mounted guard after async await
+- Statistics setState after dispose: added mounted checks
+- aiohttp updated to >=3.14.0
+
 ## [2.19.0] - 2026-06-06
 
 ### Added — Community Statistics page
@@ -22,6 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+
+## [2.19.1] - 2026-06-06
+
+### Security Hardening
+- Statistics screen no longer queries Supabase directly (info disclosure fix)
+- Removed device_id from analytics API responses (privacy improvement)
+- Added rate limiting (10 req/min) + 5-min cache to /api/statistics endpoint
+- Flutter client uses server-side pre-aggregated data only
+
+### Fixed
+- Memory leak: HTTP client not closed on error path in statistics screen
+- Wake lock timer race: added mounted guard after async await
+- Statistics setState after dispose: added mounted checks
+- aiohttp updated to >=3.14.0
 
 ## [2.19.0] - 2026-06-06
 
