@@ -5,6 +5,15 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.2] - 2026-06-06
+
+### Fixed
+- Statistics page shows comprehensive data (channels, categories, countries, recently added)
+- Web renderStats handles new API format
+
+### Added
+- Supabase analytics RLS script for event collection
+
 ## [2.20.0] - 2026-06-06
 
 ### Fixed — Analytics connectivity
