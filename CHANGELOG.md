@@ -5,6 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.3] - 2026-06-06
+
+### Fixed
+- Statistics screen: was pointing to non-existent GitHub Pages URL
+- Country detection: timezone-based inference for both Flutter and Web clients
+- Docker image updated to latest version
+- Web analytics now sends detected country code
+
 ## [2.19.1] - 2026-06-06
 
 ### Security Hardening
@@ -36,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+
+## [2.19.3] - 2026-06-06
+
+### Fixed
+- Statistics screen: was pointing to non-existent GitHub Pages URL
+- Country detection: timezone-based inference for both Flutter and Web clients
+- Docker image updated to latest version
+- Web analytics now sends detected country code
 
 ## [2.19.1] - 2026-06-06
 
