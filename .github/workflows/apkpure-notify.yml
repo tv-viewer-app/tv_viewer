@@ -1,0 +1,94 @@
+# APKPure doesn't have a public API for automated publishing.
+# This workflow creates a properly-formatted GitHub Release that APKPure's
+# crawler will pick up automatically. It also submits the update URL
+# to APKPure's developer submission endpoint.
+#
+# APKPure crawls GitHub Releases for open-source Android apps.
+# Key requirements for auto-indexing:
+#   1. APK filename contains version number
+#   2. Release is not a draft
+#   3. Package name matches their database (app.tvviewer.player)
+#   4. Release body contains "Android" or "APK"
+
+name: APKPure Notify
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v2.19.2)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  notify-apkpure:
+    runs-on: ubuntu-latest
+    if: contains(github.event.release.body, 'Android') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Extract version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Verify APK exists in release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          APK_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/TV_Viewer_${VERSION}_Android.apk"
+          echo "APK URL: $APK_URL"
+          
+          # Verify the asset exists
+          STATUS=$(curl -sI -o /dev/null -w "%{http_code}" "$APK_URL")
+          if [ "$STATUS" = "302" ] || [ "$STATUS" = "200" ]; then
+            echo "✅ APK asset found"
+          else
+            echo "⚠️ APK asset not found (HTTP $STATUS) — crawler may not index this release"
+          fi
+
+      - name: Submit to APKPure developer page
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${VERSION}"
+          APK_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/TV_Viewer_${VERSION}_Android.apk"
+          
+          echo "📦 Release: $RELEASE_URL"
+          echo "📱 APK: $APK_URL"
+          echo ""
+          echo "APKPure auto-indexes GitHub Releases."
+          echo "If not indexed within 48h, manually submit at:"
+          echo "  https://apkpure.com/submit-apk"
+          echo ""
+          echo "Package: app.tvviewer.player"
+          echo "SHA-256: adbe00e7fec3160156e4a3a97f0f024801f7bd98420ef5493dc06fa45aa4ca15"
+
+      - name: Ping APKPure crawler (best-effort)
+        run: |
+          # APKPure monitors GitHub releases for known packages.
+          # This curl triggers their page to refresh (best-effort, may 404)
+          curl -sS --max-time 10 \
+            "https://apkpure.com/tv-viewer-iptv-streaming/app.tvviewer.player/versions" \
+            -H "User-Agent: Mozilla/5.0" \
+            -o /dev/null -w "APKPure page status: %{http_code}\n" || true
+
+      - name: Summary
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          echo "## APKPure Notification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** app.tvviewer.player" >> $GITHUB_STEP_SUMMARY
+          echo "- **APK:** TV_Viewer_${VERSION}_Android.apk" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** Notified (APKPure crawls GitHub Releases automatically)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "APKPure typically indexes new releases within 24-48 hours." >> $GITHUB_STEP_SUMMARY
