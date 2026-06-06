@@ -394,10 +394,30 @@ const analytics = (() => {
                     event_type: eventType,
                     device_id: deviceId,
                     platform: 'web',
+                    country: detectCountry(),
                     event_data: { session_id: sessionId, ...data }
                 })
             }).catch(() => {});
         } catch(e) {}
+    }
+
+    function detectCountry() {
+        try {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            const tzMap = {
+                'Asia/Jerusalem': 'IL', 'Asia/Tel_Aviv': 'IL',
+                'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US', 'America/Los_Angeles': 'US',
+                'Europe/London': 'GB', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Europe/Madrid': 'ES',
+                'Europe/Rome': 'IT', 'Europe/Amsterdam': 'NL', 'Europe/Moscow': 'RU',
+                'Asia/Tokyo': 'JP', 'Asia/Seoul': 'KR', 'Asia/Shanghai': 'CN', 'Asia/Kolkata': 'IN',
+                'Australia/Sydney': 'AU', 'America/Sao_Paulo': 'BR', 'America/Toronto': 'CA',
+            };
+            if (tzMap[tz]) return tzMap[tz];
+            if (tz.startsWith('America/')) return 'US';
+            if (tz.startsWith('Europe/')) return tz.split('/')[1] === 'Istanbul' ? 'TR' : 'DE';
+            if (tz.startsWith('Asia/')) return 'XX';
+            return 'XX';
+        } catch(e) { return 'XX'; }
     }
 
     // Session start (once per page load)

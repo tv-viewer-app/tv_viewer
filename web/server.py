@@ -1457,6 +1457,7 @@ async def track_analytics(request: Request):
             "event_data": body.get("event_data", {}) if isinstance(body.get("event_data"), dict) else {},
             "app_version": str(body.get("app_version", config.APP_VERSION))[:20],
             "platform": str(body.get("platform", "web"))[:30],
+            "country": str(body.get("country", "XX"))[:5],
         }
         # Cap event_data size
         import json as _json
