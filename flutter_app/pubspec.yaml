@@ -1,7 +1,7 @@
 name: tv_viewer
 description: TV Viewer - IPTV Streaming App for Android
 publish_to: 'none'
-version: 2.18.2+101
+version: 2.19.0+102
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

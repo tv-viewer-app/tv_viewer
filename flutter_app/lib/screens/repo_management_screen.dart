@@ -188,7 +188,7 @@ class _RepoManagementScreenState extends State<RepoManagementScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: _isCustom
                       ? colorScheme.tertiaryContainer
-                      : colorScheme.surfaceContainerHighest,
+                      : colorScheme.surfaceContainerHigh,
                   child: Row(
                     children: [
                       Icon(

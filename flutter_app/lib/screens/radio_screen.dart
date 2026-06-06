@@ -492,7 +492,7 @@ class _RadioScreenState extends State<RadioScreen> with WidgetsBindingObserver {
       leading: CircleAvatar(
         backgroundColor: isActive
             ? theme.colorScheme.primary.withOpacity(0.3)
-            : theme.colorScheme.surfaceContainerHighest,
+            : theme.colorScheme.surfaceContainerHigh,
         child: ClipOval(
           child: SafeChannelLogo(
             url: station.logo,

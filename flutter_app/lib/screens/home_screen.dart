@@ -21,6 +21,7 @@ import 'map_screen.dart';
 import 'player_screen.dart';
 import 'radio_screen.dart';
 import 'settings_screen.dart';
+import 'statistics_screen.dart';
 import '../services/update_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -300,6 +301,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (context) => const DiagnosticsScreen(),
                   ),
                 );
+              } else if (value == 'statistics') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const StatisticsScreen(),
+                  ),
+                );
               } else if (value == 'feedback') {
                 FeedbackService.showFeedbackDialog(context);
               } else if (value == 'rate') {
@@ -392,6 +400,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icon(Icons.bug_report),
                     SizedBox(width: 8),
                     Text('Diagnostics'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'statistics',
+                child: Row(
+                  children: [
+                    Icon(Icons.bar_chart),
+                    SizedBox(width: 8),
+                    Text('Community Stats'),
                   ],
                 ),
               ),

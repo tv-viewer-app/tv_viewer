@@ -207,6 +207,7 @@
         <span id="search-clear" style="cursor:pointer;color:var(--text-dim);font-size:14px;display:none;padding:0 2px;" title="Clear search">✕</span>
     </div>
     <div class="header-actions">
+        <button class="icon-btn" id="btn-stats" title="Community Stats">📊</button>
         <button class="icon-btn" id="btn-map" title="World Map">🗺</button>
         <button class="icon-btn" id="btn-refresh" title="Refresh Channels">🔄</button>
         <button class="icon-btn" id="btn-settings" title="Settings">⚙️</button>
@@ -316,6 +317,18 @@
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
             <button class="p-btn" onclick="closeSettings()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Modal -->
+<div class="modal" id="stats-modal" style="display:none">
+    <div class="modal-content" style="max-width:600px">
+        <h2>📊 Community Statistics</h2>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">Last 30 days • Anonymous aggregated data</p>
+        <div id="stats-content"><div class="spinner" style="margin:32px auto"></div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+            <button class="p-btn" onclick="closeStats()">Close</button>
         </div>
     </div>
 </div>
@@ -1376,6 +1389,93 @@ function closeSettings() {
     toast('Settings saved');
 }
 
+// ─── Community Statistics ────────────────────────────────────────────────────
+async function openStats() {
+    document.getElementById('stats-modal').style.display = 'flex';
+    const container = document.getElementById('stats-content');
+    container.innerHTML = '<div class="spinner" style="margin:32px auto"></div>';
+    try {
+        const resp = await fetch('/api/statistics');
+        if (!resp.ok) throw new Error('API error');
+        const data = await resp.json();
+        container.innerHTML = renderStats(data);
+    } catch(e) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim)">Unable to load statistics. Analytics may not be configured.</p>';
+    }
+}
+
+function closeStats() {
+    document.getElementById('stats-modal').style.display = 'none';
+}
+
+function renderStats(data) {
+    const platformIcons = {android:'🤖',web:'🌐','web-server':'🐳',windows:'💻',ios:'🍎'};
+    let html = `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+            <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
+                <div style="font-size:24px">👥</div>
+                <div style="font-size:24px;font-weight:700;color:var(--text)">${data.unique_users}</div>
+                <div style="font-size:12px;color:var(--text-dim)">Active Users</div>
+            </div>
+            <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
+                <div style="font-size:24px">▶️</div>
+                <div style="font-size:24px;font-weight:700;color:var(--text)">${data.total_plays}</div>
+                <div style="font-size:12px;color:var(--text-dim)">Channel Plays</div>
+            </div>
+            <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
+                <div style="font-size:24px">📺</div>
+                <div style="font-size:24px;font-weight:700;color:var(--text)">${data.unique_channels_played}</div>
+                <div style="font-size:12px;color:var(--text-dim)">Channels Played</div>
+            </div>
+        </div>
+    `;
+
+    // Platforms
+    const totalEvents = data.total_events || 1;
+    html += '<h3 style="margin:16px 0 8px;font-size:15px">📱 Platforms</h3>';
+    html += '<div style="background:var(--card-bg);border-radius:8px;padding:12px;border:1px solid var(--border)">';
+    for (const [platform, count] of Object.entries(data.platforms || {})) {
+        const pct = ((count / totalEvents) * 100).toFixed(1);
+        const icon = platformIcons[platform] || '📱';
+        html += `<div style="display:flex;align-items:center;gap:8px;margin:6px 0">
+            <span>${icon}</span>
+            <span style="width:80px;font-size:13px">${platform}</span>
+            <div style="flex:1;background:var(--border);border-radius:4px;height:8px;overflow:hidden">
+                <div style="background:var(--accent);height:100%;width:${pct}%;border-radius:4px"></div>
+            </div>
+            <span style="font-size:12px;color:var(--text-dim);min-width:50px;text-align:right">${pct}%</span>
+        </div>`;
+    }
+    html += '</div>';
+
+    // Countries
+    if (data.countries && data.countries.length > 0) {
+        html += '<h3 style="margin:16px 0 8px;font-size:15px">🌍 Countries</h3>';
+        html += '<div style="background:var(--card-bg);border-radius:8px;padding:12px;border:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px">';
+        for (const c of data.countries) {
+            html += `<span style="background:var(--border);padding:4px 10px;border-radius:12px;font-size:12px">${c.name} <b>${c.events}</b></span>`;
+        }
+        html += '</div>';
+    }
+
+    // Top Channels
+    if (data.top_channels && data.top_channels.length > 0) {
+        html += '<h3 style="margin:16px 0 8px;font-size:15px">🔥 Top Channels</h3>';
+        html += '<div style="background:var(--card-bg);border-radius:8px;padding:8px;border:1px solid var(--border)">';
+        data.top_channels.forEach((ch, i) => {
+            html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;${i < data.top_channels.length-1 ? 'border-bottom:1px solid var(--border)':''}">
+                <span style="background:var(--accent);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">${i+1}</span>
+                <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.name}</span>
+                <span style="font-size:12px;color:var(--text-dim)">${ch.plays} plays</span>
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    html += '<p style="text-align:center;margin-top:16px;font-size:11px;color:var(--text-dim)">All data is anonymous and aggregated. No personal information is collected.</p>';
+    return html;
+}
+
 // ─── Data Loading ───────────────────────────────────────────────────────────
 let currentOffset = 0, hasMore = false, totalChannels = 0;
 let allLoaded = [];  // Full channel list from server (unfiltered)
@@ -1583,6 +1683,7 @@ document.getElementById('p-playpause').onclick = () => {
 document.getElementById('btn-map').onclick = toggleMap;
 document.getElementById('btn-refresh').onclick = refreshChannels;
 document.getElementById('btn-settings').onclick = openSettings;
+document.getElementById('btn-stats').onclick = openStats;
 document.getElementById('map-close').onclick = toggleMap;
 document.getElementById('set-parental').onchange = () => {
     document.getElementById('pin-section').style.display = document.getElementById('set-parental').checked ? 'block' : 'none';

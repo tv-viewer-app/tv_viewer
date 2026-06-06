@@ -5,10 +5,36 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-06-06
+
+### Added — Community Statistics page
+- New statistics screen showing anonymous aggregated usage data
+- Available in Android app (menu → Community Stats) and web client (📊 button)
+- Shows: active users, channel plays, top 10 channels, platform breakdown, countries
+- All data is anonymous — no personal information collected or displayed
+- Backend API endpoint: GET /api/statistics
+
+### Fixed
+- Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+- Fix surfaceContainerHighest → surfaceContainerHigh for broader compat
+
 ## [2.18.2] - 2026-06-05
 
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+
+## [2.19.0] - 2026-06-06
+
+### Added — Community Statistics page
+- New statistics screen showing anonymous aggregated usage data
+- Available in Android app (menu → Community Stats) and web client (📊 button)
+- Shows: active users, channel plays, top 10 channels, platform breakdown, countries
+- All data is anonymous — no personal information collected or displayed
+- Backend API endpoint: GET /api/statistics
+
+### Fixed
+- Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+- Fix surfaceContainerHighest → surfaceContainerHigh for broader compat
 
 ## [2.18.0] - 2026-06-03
 

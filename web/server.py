@@ -1039,6 +1039,89 @@ async def refresh_epg():
         raise HTTPException(status_code=500, detail=f"EPG refresh failed: {e}")
 
 
+# ─── Community Statistics ────────────────────────────────────────────────────
+
+@app.get("/api/statistics")
+async def get_statistics():
+    """Aggregated community usage statistics from Supabase analytics (anonymous)."""
+    try:
+        from utils.supabase_channels import is_configured
+        if not is_configured():
+            raise HTTPException(status_code=503, detail="Analytics not configured")
+
+        supabase_url = os.environ.get('SUPABASE_URL', '')
+        supabase_key = os.environ.get('SUPABASE_ANON_KEY', '')
+        if not supabase_url or not supabase_key:
+            raise HTTPException(status_code=503, detail="Analytics not configured")
+
+        import aiohttp
+        from datetime import datetime, timedelta
+        since = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        params = {
+            'select': 'event_type,device_id,country,platform,channel_name',
+            'created_at': f'gte.{since}',
+            'order': 'created_at.desc',
+            'limit': '5000',
+        }
+        headers_req = {
+            'apikey': supabase_key,
+            'Authorization': f'Bearer {supabase_key}',
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f'{supabase_url}/rest/v1/analytics_events',
+                params=params,
+                headers=headers_req,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=502, detail="Analytics API error")
+                events = await resp.json()
+
+        # Aggregate
+        devices = set()
+        countries: Dict[str, int] = {}
+        platforms: Dict[str, int] = {}
+        channels: Dict[str, int] = {}
+        total_plays = 0
+
+        for e in events:
+            device_id = e.get('device_id', '')
+            country = e.get('country') or 'Unknown'
+            platform = e.get('platform') or 'unknown'
+            event_type = e.get('event_type', '')
+            channel_name = e.get('channel_name') or ''
+
+            devices.add(device_id)
+            platforms[platform] = platforms.get(platform, 0) + 1
+            if country and country != 'XX':
+                countries[country] = countries.get(country, 0) + 1
+
+            if event_type == 'channel_play' and channel_name and len(channel_name) < 50:
+                total_plays += 1
+                channels[channel_name] = channels.get(channel_name, 0) + 1
+
+        top_channels = sorted(channels.items(), key=lambda x: -x[1])[:10]
+        top_countries = sorted(countries.items(), key=lambda x: -x[1])[:15]
+
+        return {
+            "period_days": 30,
+            "total_events": len(events),
+            "unique_users": len(devices),
+            "total_plays": total_plays,
+            "unique_channels_played": len(channels),
+            "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
+            "top_channels": [{"name": n, "plays": c} for n, c in top_channels],
+            "countries": [{"name": n, "events": c} for n, c in top_countries],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Statistics API error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load statistics")
+
+
 # ─── Report broken channel ──────────────────────────────────────────────────
 
 class ReportRequest(BaseModel):
