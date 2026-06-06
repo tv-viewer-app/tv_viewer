@@ -3,9 +3,15 @@
 -- Addresses linter warnings about SECURITY DEFINER functions
 
 -- ============================================================================
--- 1. promote_channel_source: Switch to SECURITY INVOKER
+-- 1. Drop and recreate functions with SECURITY INVOKER
 -- ============================================================================
-CREATE OR REPLACE FUNCTION public.promote_channel_source(
+
+DROP FUNCTION IF EXISTS public.promote_channel_source(text, text, text);
+DROP FUNCTION IF EXISTS public.report_channel_broken(text, text);
+DROP FUNCTION IF EXISTS public.report_channel_working(text, text, integer);
+
+-- promote_channel_source
+CREATE FUNCTION public.promote_channel_source(
     p_channel_name text,
     p_working_url text,
     p_working_hash text
@@ -24,10 +30,8 @@ BEGIN
 END;
 $$;
 
--- ============================================================================
--- 2. report_channel_broken: Switch to SECURITY INVOKER
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.report_channel_broken(
+-- report_channel_broken
+CREATE FUNCTION public.report_channel_broken(
     p_url_hash text,
     p_device_id text
 )
@@ -47,10 +51,8 @@ BEGIN
 END;
 $$;
 
--- ============================================================================
--- 3. report_channel_working: Switch to SECURITY INVOKER
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.report_channel_working(
+-- report_channel_working
+CREATE FUNCTION public.report_channel_working(
     p_url_hash text,
     p_device_id text,
     p_response_time_ms integer DEFAULT 0
@@ -70,8 +72,13 @@ BEGIN
 END;
 $$;
 
+-- Grant execute to anon (needed for client calls)
+GRANT EXECUTE ON FUNCTION public.promote_channel_source(text, text, text) TO anon;
+GRANT EXECUTE ON FUNCTION public.report_channel_broken(text, text) TO anon;
+GRANT EXECUTE ON FUNCTION public.report_channel_working(text, text, integer) TO anon;
+
 -- ============================================================================
--- 4. Materialized view: Revoke direct anon access, use safe view wrapper
+-- 2. Materialized view: Revoke direct anon access, use safe view wrapper
 -- ============================================================================
 REVOKE SELECT ON public.mv_top_channels FROM anon;
 REVOKE SELECT ON public.mv_top_channels FROM authenticated;
