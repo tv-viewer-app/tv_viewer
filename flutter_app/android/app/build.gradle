@@ -88,5 +88,5 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
-    implementation "com.google.android.play:integrity:1.4.0"
+    implementation "com.google.android.play:integrity:1.6.0"
 }
