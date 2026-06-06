@@ -442,37 +442,34 @@ class AnalyticsService {
       final tz = DateTime.now().timeZoneName;
       final offsetHours = DateTime.now().timeZoneOffset.inMinutes / 60.0;
 
-      // Common timezone names → country
+      // Common timezone names → country (no duplicates — ambiguous ones handled below)
       const tzNameMap = <String, String>{
-        'IST': 'IL', 'IDT': 'IL',  // Israel Standard/Daylight
-        'EST': 'US', 'EDT': 'US', 'CST': 'US', 'CDT': 'US',
+        'IDT': 'IL',               // Israel Daylight (unambiguous)
+        'EST': 'US', 'EDT': 'US', 'CDT': 'US',
         'MST': 'US', 'MDT': 'US', 'PST': 'US', 'PDT': 'US',
         'GMT': 'GB', 'BST': 'GB',  // British Summer Time
         'CET': 'DE', 'CEST': 'DE', // Central European
         'EET': 'GR', 'EEST': 'GR', // Eastern European
         'JST': 'JP',               // Japan
         'KST': 'KR',               // Korea
-        'CST': 'CN',               // China (also US, disambiguate by offset)
         'AEST': 'AU', 'AEDT': 'AU', 'ACST': 'AU',
-        'IST': 'IN',               // India (offset +5:30 disambiguates from Israel +2/+3)
         'BRT': 'BR', 'BRST': 'BR', // Brazil
         'MSK': 'RU',               // Moscow
       };
 
       // First try timezone name
       if (tzNameMap.containsKey(tz)) {
-        final candidate = tzNameMap[tz]!;
-        // Disambiguate IST: Israel +2/+3 vs India +5.5
-        if (tz == 'IST' || tz == 'IDT') {
-          if (offsetHours >= 4.5 && offsetHours <= 6.0) return 'IN';
-          return 'IL';
-        }
-        // Disambiguate CST: US -6/-5 vs China +8
-        if (tz == 'CST') {
-          if (offsetHours > 0) return 'CN';
-          return 'US';
-        }
-        return candidate;
+        return tzNameMap[tz]!;
+      }
+
+      // Handle ambiguous timezone abbreviations by offset
+      if (tz == 'IST' || tz == 'IDT') {
+        if (offsetHours >= 4.5 && offsetHours <= 6.0) return 'IN';
+        return 'IL';
+      }
+      if (tz == 'CST') {
+        if (offsetHours > 0) return 'CN';
+        return 'US';
       }
 
       // Fallback: offset-based rough detection

@@ -322,8 +322,8 @@
 </div>
 
 <!-- Statistics Modal -->
-<div class="modal" id="stats-modal" style="display:none">
-    <div class="modal-content" style="max-width:600px">
+<div class="modal-overlay" id="stats-modal">
+    <div class="modal" style="max-width:600px">
         <h2>📊 Community Statistics</h2>
         <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">Last 30 days • Anonymous aggregated data</p>
         <div id="stats-content"><div class="spinner" style="margin:32px auto"></div></div>
@@ -1411,7 +1411,7 @@ function closeSettings() {
 
 // ─── Community Statistics ────────────────────────────────────────────────────
 async function openStats() {
-    document.getElementById('stats-modal').style.display = 'flex';
+    document.getElementById('stats-modal').classList.add('active');
     const container = document.getElementById('stats-content');
     container.innerHTML = '<div class="spinner" style="margin:32px auto"></div>';
     try {
@@ -1425,7 +1425,7 @@ async function openStats() {
 }
 
 function closeStats() {
-    document.getElementById('stats-modal').style.display = 'none';
+    document.getElementById('stats-modal').classList.remove('active');
 }
 
 function renderStats(data) {
