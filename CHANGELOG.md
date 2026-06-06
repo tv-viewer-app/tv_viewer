@@ -5,6 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.0] - 2026-06-06
+
+### Fixed — Analytics connectivity
+- Supabase project migrated to new instance (cdtxpefohpwtusmqengu)
+- Default Supabase URL/key embedded in config (Docker works out of box)
+- Statistics page now works on both Docker and Android
+- Fixed search_path security warnings on Supabase functions
+
 ## [2.19.5] - 2026-06-06
 
 ### Fixed
@@ -44,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+
+## [2.20.0] - 2026-06-06
+
+### Fixed — Analytics connectivity
+- Supabase project migrated to new instance (cdtxpefohpwtusmqengu)
+- Default Supabase URL/key embedded in config (Docker works out of box)
+- Statistics page now works on both Docker and Android
+- Fixed search_path security warnings on Supabase functions
 
 ## [2.19.5] - 2026-06-06
 

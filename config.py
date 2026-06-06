@@ -21,7 +21,7 @@ import json
 # Application Metadata
 # =============================================================================
 APP_NAME = "TV Viewer"
-APP_VERSION = "2.19.5"
+APP_VERSION = "2.20.0"
 
 # =============================================================================
 # File Paths
@@ -123,8 +123,8 @@ GEO_IP_ENABLED = os.environ.get('GEO_IP_ENABLED', '').lower() in ('true', '1', '
 # channel_health). It cannot read, update, or delete protected data.
 # This is the standard Supabase architecture for public-facing apps.
 # See: https://supabase.com/docs/guides/api/api-keys
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
-SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://cdtxpefohpwtusmqengu.supabase.co')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo')
 
 
 def load_external_config():
