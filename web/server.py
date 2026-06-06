@@ -1062,142 +1062,120 @@ async def get_statistics(request: Request):
         return _stats_cache
 
     try:
-        from utils.supabase_channels import is_configured
-        if not is_configured():
-            # Fallback: return local channel statistics when Supabase not configured
-            channels = _load_channels()
-            countries: Dict[str, int] = {}
-            categories: Dict[str, int] = {}
-            for ch in channels:
-                c = ch.get('country', 'Unknown')
-                if c and c != 'Unknown':
-                    countries[c] = countries.get(c, 0) + 1
-                cat = ch.get('category', 'General')
-                categories[cat] = categories.get(cat, 0) + 1
-            top_countries = sorted(countries.items(), key=lambda x: -x[1])[:15]
-            top_categories = sorted(categories.items(), key=lambda x: -x[1])[:10]
-            result = {
-                "period_days": 0,
-                "total_events": len(channels),
-                "unique_users": 0,
-                "total_plays": 0,
-                "unique_channels_played": len(channels),
-                "total_channels": len(channels),
-                "platforms": {},
-                "top_channels": [{"name": c[0], "plays": c[1]} for c in top_categories],
-                "countries": [{"name": c[0], "events": c[1]} for c in top_countries],
-                "source": "channel_database",
-                "note": "Showing channel database distribution. Live usage analytics will appear after users start streaming.",
-            }
-            _stats_cache = result
-            _stats_cache_time = now
-            return result
+        # Always build channel database stats (available regardless of Supabase)
+        channels = _load_channels()
+        ch_countries: Dict[str, int] = {}
+        ch_categories: Dict[str, int] = {}
+        recently_added: List[Dict] = []
+        working_count = 0
+        
+        for ch in channels:
+            c = ch.get('country', 'Unknown')
+            if c and c != 'Unknown':
+                ch_countries[c] = ch_countries.get(c, 0) + 1
+            cat = ch.get('category', 'General')
+            ch_categories[cat] = ch_categories.get(cat, 0) + 1
+            if ch.get('status') == 'working':
+                working_count += 1
 
-        supabase_url = os.environ.get('SUPABASE_URL', '') or getattr(_cfg, 'SUPABASE_URL', '') if '_cfg' in dir() else ''
-        supabase_key = os.environ.get('SUPABASE_ANON_KEY', '') or getattr(_cfg, 'SUPABASE_ANON_KEY', '') if '_cfg' in dir() else ''
-        if not supabase_url or not supabase_key:
-            raise ValueError("No Supabase credentials")
+        # Get recently added channels (last 10 sorted by name for stability)
+        recently_added = sorted(
+            [{"name": ch.get("name", ""), "country": ch.get("country", ""), "category": ch.get("category", "")}
+             for ch in channels if ch.get("name")],
+            key=lambda x: x["name"]
+        )[-10:]
 
-        import aiohttp
-        from datetime import datetime, timedelta, timezone
-        since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-        params = {
-            'select': 'event_type,country,platform,channel_name',
-            'created_at': f'gte.{since}',
-            'order': 'created_at.desc',
-            'limit': '5000',
-        }
-        headers_req = {
-            'apikey': supabase_key,
-            'Authorization': f'Bearer {supabase_key}',
-        }
+        top_ch_countries = sorted(ch_countries.items(), key=lambda x: -x[1])[:15]
+        top_categories = sorted(ch_categories.items(), key=lambda x: -x[1])[:10]
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f'{supabase_url}/rest/v1/analytics_events',
-                params=params,
-                headers=headers_req,
-                timeout=aiohttp.ClientTimeout(total=10),
-                ssl=_get_strict_ssl_context(),
-            ) as resp:
-                if resp.status != 200:
-                    raise ValueError(f"Supabase returned {resp.status}")
-                events = await resp.json()
+        # Try to get live analytics from Supabase
+        analytics_data = {}
+        try:
+            from utils.supabase_channels import is_configured
+            if is_configured():
+                import aiohttp
+                from datetime import datetime, timedelta, timezone
+                supabase_url = os.environ.get('SUPABASE_URL', '') or config.SUPABASE_URL
+                supabase_key = os.environ.get('SUPABASE_ANON_KEY', '') or config.SUPABASE_ANON_KEY
 
-        # Aggregate (no device_id — only server-side counts, never exposed)
-        countries: Dict[str, int] = {}
-        platforms: Dict[str, int] = {}
-        channels: Dict[str, int] = {}
-        total_plays = 0
+                since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+                params = {
+                    'select': 'event_type,country,platform,event_data,device_id',
+                    'created_at': f'gte.{since}',
+                    'order': 'created_at.desc',
+                    'limit': '5000',
+                }
+                headers_req = {
+                    'apikey': supabase_key,
+                    'Authorization': f'Bearer {supabase_key}',
+                }
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f'{supabase_url}/rest/v1/analytics_events',
+                        params=params,
+                        headers=headers_req,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=_get_strict_ssl_context(),
+                    ) as resp:
+                        if resp.status == 200:
+                            events = await resp.json()
+                            if events:
+                                devices = set()
+                                user_countries: Dict[str, int] = {}
+                                platforms: Dict[str, int] = {}
+                                played_channels: Dict[str, int] = {}
 
-        for e in events:
-            country = e.get('country') or 'Unknown'
-            platform = e.get('platform') or 'unknown'
-            event_type = e.get('event_type', '')
-            channel_name = e.get('channel_name') or ''
+                                for ev in events:
+                                    devices.add(ev.get('device_id', ''))
+                                    p = ev.get('platform', 'unknown')
+                                    platforms[p] = platforms.get(p, 0) + 1
+                                    uc = ev.get('country', 'XX')
+                                    if uc and uc != 'XX':
+                                        user_countries[uc] = user_countries.get(uc, 0) + 1
+                                    # Channel name from event_data
+                                    ed = ev.get('event_data') or {}
+                                    if isinstance(ed, dict):
+                                        cn = ed.get('name', '') or ed.get('channel_name', '')
+                                        if cn and ev.get('event_type') == 'channel_play':
+                                            played_channels[cn] = played_channels.get(cn, 0) + 1
 
-            platforms[platform] = platforms.get(platform, 0) + 1
-            if country and country != 'XX':
-                countries[country] = countries.get(country, 0) + 1
+                                analytics_data = {
+                                    "unique_users": len(devices),
+                                    "total_events": len(events),
+                                    "user_countries": sorted(user_countries.items(), key=lambda x: -x[1])[:15],
+                                    "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
+                                    "top_played": sorted(played_channels.items(), key=lambda x: -x[1])[:10],
+                                    "total_plays": sum(1 for e in events if e.get('event_type') == 'channel_play'),
+                                }
+        except Exception as analytics_err:
+            logger.debug(f"Statistics: analytics query skipped ({analytics_err})")
 
-            if event_type == 'channel_play' and channel_name and len(channel_name) < 50:
-                total_plays += 1
-                channels[channel_name] = channels.get(channel_name, 0) + 1
-
-        top_channels = sorted(channels.items(), key=lambda x: -x[1])[:10]
-        top_countries = sorted(countries.items(), key=lambda x: -x[1])[:15]
-
-        # Estimate unique users from platform distribution (no device_id exposed)
-        # Use a separate count query for unique device_ids server-side only
-        unique_users = len(events) // 20  # Rough estimate: ~20 events per active user
-
+        # Build comprehensive result
+        has_analytics = bool(analytics_data.get("total_events"))
         result = {
-            "period_days": 30,
-            "total_events": len(events),
-            "unique_users": unique_users,
-            "total_plays": total_plays,
-            "unique_channels_played": len(channels),
-            "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
-            "top_channels": [{"name": n, "plays": c} for n, c in top_channels],
-            "countries": [{"name": n, "events": c} for n, c in top_countries],
+            "total_channels": len(channels),
+            "working_channels": working_count,
+            "channel_countries": [{"name": c[0], "channels": c[1]} for c in top_ch_countries],
+            "categories": [{"name": c[0], "channels": c[1]} for c in top_categories],
+            "recently_added": recently_added,
+            # Analytics (live user data)
+            "has_analytics": has_analytics,
+            "unique_users": analytics_data.get("unique_users", 0),
+            "total_plays": analytics_data.get("total_plays", 0),
+            "total_events": analytics_data.get("total_events", 0),
+            "platforms": analytics_data.get("platforms", {}),
+            "user_countries": [{"name": c[0], "events": c[1]} for c in analytics_data.get("user_countries", [])],
+            "top_channels": [{"name": c[0], "plays": c[1]} for c in analytics_data.get("top_played", [])],
         }
 
-        # Cache the result
         _stats_cache = result
         _stats_cache_time = now
         return result
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"Statistics: Supabase query failed ({e}), falling back to local data")
-        # Fallback to local channel statistics
-        channels = _load_channels()
-        countries_local: Dict[str, int] = {}
-        categories_local: Dict[str, int] = {}
-        for ch in channels:
-            c = ch.get('country', 'Unknown')
-            if c and c != 'Unknown':
-                countries_local[c] = countries_local.get(c, 0) + 1
-            cat = ch.get('category', 'General')
-            categories_local[cat] = categories_local.get(cat, 0) + 1
-        top_countries_local = sorted(countries_local.items(), key=lambda x: -x[1])[:15]
-        top_categories_local = sorted(categories_local.items(), key=lambda x: -x[1])[:10]
-        result = {
-            "period_days": 0,
-            "total_events": len(channels),
-            "unique_users": 0,
-            "total_plays": 0,
-            "unique_channels_played": len(channels),
-            "total_channels": len(channels),
-            "platforms": {},
-            "top_channels": [{"name": c[0], "plays": c[1]} for c in top_categories_local],
-            "countries": [{"name": c[0], "events": c[1]} for c in top_countries_local],
-            "source": "channel_database",
-            "note": "Showing channel database distribution. Live usage analytics will appear after users start streaming.",
-        }
-        _stats_cache = result
-        _stats_cache_time = now
-        return result
+        logger.warning(f"Statistics error: {e}")
+        return {"error": "temporary_failure", "total_channels": 0, "has_analytics": False}
 
 
 # ─── Report broken channel ──────────────────────────────────────────────────
