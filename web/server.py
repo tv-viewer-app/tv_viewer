@@ -1064,7 +1064,32 @@ async def get_statistics(request: Request):
     try:
         from utils.supabase_channels import is_configured
         if not is_configured():
-            raise HTTPException(status_code=503, detail="Analytics not configured")
+            # Fallback: return local channel statistics when Supabase not configured
+            channels = _load_channels()
+            countries: Dict[str, int] = {}
+            categories: Dict[str, int] = {}
+            for ch in channels:
+                c = ch.get('country', 'Unknown')
+                if c and c != 'Unknown':
+                    countries[c] = countries.get(c, 0) + 1
+                cat = ch.get('category', 'General')
+                categories[cat] = categories.get(cat, 0) + 1
+            top_countries = sorted(countries.items(), key=lambda x: -x[1])[:15]
+            top_categories = sorted(categories.items(), key=lambda x: -x[1])[:10]
+            result = {
+                "period_days": 0,
+                "total_events": len(channels),
+                "total_plays": 0,
+                "unique_channels_played": 0,
+                "total_channels": len(channels),
+                "platforms": {"web": len(channels)},
+                "top_channels": [{"name": c[0], "plays": c[1]} for c in top_categories],
+                "countries": [{"name": c[0], "events": c[1]} for c in top_countries],
+                "source": "local_channels",
+            }
+            _stats_cache = result
+            _stats_cache_time = now
+            return result
 
         supabase_url = os.environ.get('SUPABASE_URL', '')
         supabase_key = os.environ.get('SUPABASE_ANON_KEY', '')
