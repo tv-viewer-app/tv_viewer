@@ -1079,13 +1079,15 @@ async def get_statistics(request: Request):
             result = {
                 "period_days": 0,
                 "total_events": len(channels),
+                "unique_users": 0,
                 "total_plays": 0,
-                "unique_channels_played": 0,
+                "unique_channels_played": len(channels),
                 "total_channels": len(channels),
-                "platforms": {"web": len(channels)},
+                "platforms": {},
                 "top_channels": [{"name": c[0], "plays": c[1]} for c in top_categories],
                 "countries": [{"name": c[0], "events": c[1]} for c in top_countries],
-                "source": "local_channels",
+                "source": "channel_database",
+                "note": "Showing channel database distribution. Live usage analytics will appear after users start streaming.",
             }
             _stats_cache = result
             _stats_cache_time = now
@@ -1183,13 +1185,15 @@ async def get_statistics(request: Request):
         result = {
             "period_days": 0,
             "total_events": len(channels),
+            "unique_users": 0,
             "total_plays": 0,
-            "unique_channels_played": len(categories_local),
+            "unique_channels_played": len(channels),
             "total_channels": len(channels),
-            "platforms": {"web": 1},
+            "platforms": {},
             "top_channels": [{"name": c[0], "plays": c[1]} for c in top_categories_local],
             "countries": [{"name": c[0], "events": c[1]} for c in top_countries_local],
-            "source": "local_channels",
+            "source": "channel_database",
+            "note": "Showing channel database distribution. Live usage analytics will appear after users start streaming.",
         }
         _stats_cache = result
         _stats_cache_time = now
