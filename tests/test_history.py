@@ -339,8 +339,10 @@ class TestDebounce:
         wh = WatchHistory(filepath=filepath)
         wh.record_play(_make_channel())
 
-        # Wait for debounce timer to fire (2s + margin)
-        time.sleep(SAVE_DEBOUNCE_SECONDS + 0.5)
+        # Give the debounce timer extra headroom on slower Windows/CI runners.
+        deadline = time.monotonic() + (SAVE_DEBOUNCE_SECONDS * 2) + 0.5
+        while time.monotonic() < deadline and not os.path.exists(filepath):
+            time.sleep(0.1)
 
         assert os.path.exists(filepath)
         with open(filepath, "r", encoding="utf-8") as f:

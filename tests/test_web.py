@@ -226,32 +226,34 @@ class TestHealthReportSecurity:
         assert r.status_code == 200
         assert r.json() == {"status": "ignored"}
 
-    def test_health_report_rate_limit_global(self, client):
-        """Global bucket: large burst beyond the cap is throttled (HTTP 200,
-        status='throttled') rather than rejected with 429 — frontend uses a
-        fire-and-forget POST, and 429s would just create console noise without
-        any benefit."""
-        from web.server import _health_buckets, _health_buckets_lock, _HEALTH_RATE_GLOBAL
+    def test_health_report_rate_limit_global(self, client, monkeypatch):
+        """Global bucket: the (cap + 1)th request is deterministically throttled.
+
+        Keep the window long inside the test so slow CI runners cannot age out the
+        earliest requests before the final assertion.
+        """
+        import web.server as server
+
+        cap = 5
+        monkeypatch.setattr(server, "_HEALTH_RATE_GLOBAL", (cap, 120.0))
+
         # Reset buckets to isolate from other tests
-        with _health_buckets_lock:
-            _health_buckets.clear()
+        with server._health_buckets_lock:
+            server._health_buckets.clear()
+
         payload = {
             "url": "https://example.com/rl.m3u8",
             "status": "working",
         }
-        cap, _window = _HEALTH_RATE_GLOBAL
-        # Send enough requests to overflow the global bucket comfortably.
-        total = cap + 20
-        statuses = {"recorded": 0, "ignored": 0, "throttled": 0, "other": 0}
-        for _ in range(total):
+
+        for _ in range(cap):
             r = client.post("/api/health/report", json=payload)
             assert r.status_code == 200, f"Unexpected status {r.status_code}"
-            body_status = r.json().get("status")
-            statuses[body_status if body_status in statuses else "other"] += 1
-        # At least some requests should be throttled (downgraded, not 429)
-        assert statuses["throttled"] >= 5, statuses
-        # And we should have at most `cap` non-throttled responses
-        assert statuses["recorded"] + statuses["ignored"] <= cap, statuses
+            assert r.json().get("status") in ("recorded", "ignored")
+
+        r = client.post("/api/health/report", json=payload)
+        assert r.status_code == 200, f"Unexpected status {r.status_code}"
+        assert r.json() == {"status": "throttled"}
 
 
 # ─── Report ─────────────────────────────────────────────────────────────────
