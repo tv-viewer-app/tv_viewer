@@ -1,17 +1,17 @@
 # 📺 TV Viewer
 
-**Community-powered IPTV player with 16,000+ crowdsourced channels. Free forever.**
+**Community-powered IPTV player with 16,000+ crowdsourced channels, privacy-first analytics, and community statistics.**
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub Issues](https://img.shields.io/github/issues/tv-viewer-app/tv_viewer)](https://github.com/tv-viewer-app/tv_viewer/issues)
 [![Latest Release](https://img.shields.io/github/v/release/tv-viewer-app/tv_viewer)](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
 ![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B.svg)
+![Flutter](https://img.shields.io/badge/Flutter-3.32.0-02569B.svg)
+[![Docker](https://img.shields.io/badge/Docker-latest-2496ED.svg)](https://hub.docker.com/r/asummoner/tvviewerapp)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20Web%20%7C%20Docker-green.svg)
 
 > **🌐 [Visit the TV Viewer Landing Page →](https://tv-viewer-app.github.io/tv_viewer/)**
 
-**TV Viewer** is a free, open-source IPTV player where the community maintains the channel list. Users report broken streams, submit new channels, and rate quality — making the experience better for everyone. No account needed. No ads. No tracking.
+TV Viewer is a free, open-source IPTV player where the community maintains the channel list. Users report broken streams, submit new channels, and anonymously share aggregate usage signals that improve stream health and discovery for everyone. No account needed. No ads. No tracking by default.
 
 ## Support the Project 🍺
 
@@ -19,75 +19,60 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.14.2
+## ✨ What's New in v2.20.2
 
-- **CI: web tests no longer require Supabase** — Tests validate API structure/format
+- **Community Statistics page** now shows richer totals for channels, categories, countries, and recent additions
+- **Timezone-based country detection** improves local recommendations and privacy-preserving analytics on Android and Web
+- **Supabase backend migrated** to project `cdtxpefohpwtusmqengu`
+- **APKPure notify workflow** added to the release pipeline
+- **Docker Hub stays current** with `asummoner/tvviewerapp:latest`
 
-_See the [CHANGELOG](CHANGELOG.md) for the full release history._
+_See the [CHANGELOG](CHANGELOG.md) for full release history._
 
 ## Features
 
-- 🌍 **16,000+ Channels Worldwide** — Aggregated from 80+ configurable sources, growing daily
-- 👥 **Crowdsourced Quality** — Users report broken streams and submit new channels via app or GitHub
-- 🇮🇱 **Israeli channels included** — KAN 11, Reshet 13, Channel 14, i24NEWS, Makan 33, Kan Kids, and 50+ more
-- ✅ **Background channel validation** — Concurrent stream checking with smart priority queue
-- 📂 **Categorized channel list** — Filter by category, country, language, or media type (TV/Radio)
-- 📻 **Dedicated radio player** — Genre browsing, now-playing bar, and audio controls (Android)
-- 🎬 **Embedded video player** — VLC-powered (Windows) / native player (Android)
-- 🔀 **Source selector** — Switch between alternative stream sources without leaving the player
-- 💾 **Offline mode** — Persistent local cache works without internet
-- 🧹 **Channel consolidation** — Multi-pass name normalization eliminates duplicates across sources
-- 🎨 **Windows 11 Fluent Design** — Modern dark theme with ttkbootstrap
-- 📱 **Android app** — Flutter-based with Material Design and gesture controls
-- 🌐 **Shared health database** — Supabase-backed health sharing surfaces working streams community-wide
-- 📊 **Privacy-first telemetry** — Opt-in anonymous usage analytics with no PII collection
-- 🔒 **No login required** — Just start and watch
-- 📺 **EPG Program Guide** — XMLTV-based Now/Next display with live progress bar
-- ⏱ **Watch history** — Recently played channels with play counts
-- 🔐 **Parental controls** — PIN-locked category blocking and over-18 age gate
-- 🔍 **Advanced search** — Prefix filters (`country:US`, `category:news`, `language:english`, `type:radio`) with fuzzy matching
-- 🛡️ **SSRF protection** — Server-side request forgery guards on all outbound URL fetches
-- ⚙️ **Settings screen** — Stream timeouts, theme, repository management (Android)
-- 📋 **Diagnostics** — Network tests, stream URL tester, system info export (Windows)
-- 🔄 **Auto-update checker** — GitHub release notifications on startup (both platforms)
-- 📡 **Chromecast support** — Cast to TV via VLC, external player, or URL copy (Android)
-- 🖼️ **Channel thumbnails** — Cached network images with fallback icons (Android)
-- 🔒 **Play Integrity API** — Google Play attestation for app security (Android)
+- 🌍 **16,000+ channels worldwide** — Aggregated from community-maintained playlists and configurable sources
+- 👥 **Crowdsourced quality** — Users report broken streams and submit fixes from the app or GitHub
+- 📊 **Community Statistics** — Anonymous aggregated usage data for active users, plays, countries, and platform trends
+- 🌐 **Timezone-based country detection** — Privacy-friendly local country inference without GPS or IP lookup
+- 📂 **Rich browsing** — Filter by category, country, language, and media type (TV/Radio)
+- 📻 **Dedicated radio experience** — Background audio playback, genre browsing, and now-playing controls on Android
+- 🔀 **Multi-source failover** — Switch between alternative stream sources without leaving playback
+- 💾 **Offline-friendly caching** — Local cache and favorites still work when Supabase is unavailable
+- 📺 **EPG support** — XMLTV-based now/next program data with live progress bars
+- 🔒 **Privacy-first telemetry** — Opt-in analytics only, with no login and no PII collection
+- 🛡️ **Hardened web backend** — SSRF protections, safe Supabase writes, and server-side statistics aggregation
+- 🐳 **Self-hosted web/Docker edition** — FastAPI + HLS.js UI for NAS and browser deployments
 
-## Contributing Channels
+## Availability
 
-The heart of TV Viewer is its crowdsourced channel database. Help make it better:
-
-### Via the App (Easiest)
-- **Report broken channels** — Swipe left on any channel (Android) or right-click (Windows) → "Report Broken"
-- **Report wrong info** — Long-press (Android) or right-click (Windows) → "Wrong Info" to fix misclassified channels
-- **Submit new channels** — Settings → "Add Channel" with a stream URL you've discovered
-- **Rate quality** — Health data syncs anonymously to the shared database
-
-### Via GitHub
-1. Open a [Channel Request](https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_request.yml) — our bot will auto-search IPTV databases and create a PR
-2. Open a [Channel Report](https://github.com/tv-viewer-app/tv_viewer/issues/new?template=channel_report.yml) — report broken or misclassified channels
-3. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide
+| Channel | Status | Notes |
+|---------|--------|-------|
+| GitHub Releases | ✅ Live | Windows zip, Linux source, Android APK + AAB assets |
+| Google Play | ✅ Live | Primary Android store distribution |
+| F-Droid | 🟡 MR open | `fdroid-build.yml` produces unsigned APK artifacts |
+| APKPure | 🟡 Pending | `apkpure-notify.yml` helps release discovery |
+| Samsung Galaxy Store | 🟡 Pending | Planned additional Android storefront |
+| Docker Hub | ✅ Live | `asummoner/tvviewerapp:latest` |
 
 ## Downloads
 
 | Platform | Download | Notes |
 |----------|----------|-------|
-| Android | [Latest APK](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 8.0+ (API 26) |
-| Windows | [Latest EXE](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Self-contained — VLC is bundled |
-| Web/Docker | `docker run -p 8765:8765 tv-viewer-web` | Any browser, any OS |
+| Android | [Google Play](https://play.google.com/store/apps/details?id=app.tvviewer.player) / [Latest Release](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 8.0+ (API 26) |
+| Windows | [Latest Release](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Self-contained, VLC bundled |
+| Web / Docker | `docker run -p 8765:8765 asummoner/tvviewerapp:latest` | Browser-based, NAS-friendly |
 | Linux | [From source](#from-source-windowslinux) | Python 3.12+ + VLC |
 
 ## Quick Start
 
 ### Windows
-1. Download `TV_Viewer-windows.zip` from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
-2. Extract anywhere and run `TVViewer.exe` — VLC is bundled, no separate install needed
+1. Download the latest Windows asset from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
+2. Extract anywhere and run `TVViewer.exe`
 
 ### Android
-1. Download the `.apk` from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
-2. Enable "Install from unknown sources" in Settings
-3. Install and open
+1. Install from **Google Play** or download the latest APK from [Releases](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
+2. Open TV Viewer and start browsing channels immediately
 
 ### From Source (Windows/Linux)
 ```bash
@@ -99,131 +84,80 @@ python main.py
 
 ### Web Interface (Docker)
 ```bash
-# Quick start
-docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped tv-viewer-web
-
-# Build from source
-docker build -t tv-viewer-web .
-docker compose up -d
-
+docker run -d --name tv-viewer -p 8765:8765 --restart unless-stopped asummoner/tvviewerapp:latest
 # Open http://localhost:8765
 ```
-**NAS deployment:** 25 MB image, 48 MB RAM, single ARM/x86 core. Works on Synology, QNAP, Unraid, TrueNAS, Raspberry Pi 4+.
 
-### Web Interface (CLI)
+### Web Interface (Dev)
 ```bash
-pip install fastapi uvicorn aiohttp
+pip install -r web/requirements.txt
 python -m web.server
 # Open http://localhost:8765
 ```
 
 ## Tech Stack
 
-| Component | Windows (Python / tkinter) | Android (Flutter / Dart) |
-|-----------|---------------------------|--------------------------|
-| UI Framework | ttkbootstrap / tkinter (Fluent Design) | Flutter / Material Design |
-| Video Player | VLC (python-vlc) | video_player |
-| HTTP Client | aiohttp + requests | http package |
-| Concurrency | asyncio + threading | Dart async/await |
-| Data Storage | JSON files | SharedPreferences |
-| Cloud Backend | Supabase (crowd-sourced health) | Supabase (crowd-sourced health) |
-| Build | PyInstaller | Flutter build / GitHub Actions |
+| Layer | Stack | Notes |
+|------|-------|-------|
+| Desktop | Python 3.12 + CustomTkinter + VLC | Native Windows/Linux client |
+| Mobile | Flutter 3.32.0 + Material 3 | Gradle 8.9, AGP 8.7.0, Kotlin 1.9.22 |
+| Web | FastAPI + vanilla JS + HLS.js | Browser UI + self-hosted Docker image |
+| Shared backend | Supabase (`cdtxpefohpwtusmqengu`) | Channels, status, analytics, aggregated stats |
+| Android audio | `just_audio` + `audio_service` | Background playback for radio streams |
+| CI/CD | 28 GitHub Actions workflows | Release, store, Docker, analytics, backend ops |
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [🌐 Landing Page](https://tv-viewer-app.github.io/tv_viewer/) | Project homepage with screenshots and downloads |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute channels, bugs, and code |
-| [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and design |
-| [SUPPORT_GUIDE.md](docs/SUPPORT_GUIDE.md) | Troubleshooting guide |
-| [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance optimization guide |
-| [API.md](docs/API.md) | API reference for developers |
-| [TEST_PLAN.md](docs/TEST_PLAN.md) | Test plan and coverage |
-| [RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) | Release checklist |
+| [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and current platform stack |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute channels, code, and docs |
+| [docs/SUPPORT_GUIDE.md](docs/SUPPORT_GUIDE.md) | Troubleshooting guide |
+| [docs/API.md](docs/API.md) | API notes for the web backend |
+| [docs/TEST_PLAN.md](docs/TEST_PLAN.md) | Test plan and coverage |
+| [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) | Release checklist |
 | [PRIVACY_POLICY.md](PRIVACY_POLICY.md) | Privacy policy |
-
-## Keyboard Shortcuts (Windows)
-
-| Key | Action |
-|-----|--------|
-| `Ctrl+F` | Focus search box |
-| `Ctrl+,` | Open settings |
-| `F5` | Refresh channels |
-| `Escape` | Clear search / exit fullscreen |
-| `Space` | Play/Pause (in player) |
-| `F` | Toggle fullscreen (in player) |
-| `M` | Toggle mute (in player) |
-| `←` / `→` | Previous / Next channel (in player) |
-| `↑` / `↓` | Volume up / down (in player) |
 
 ## Project Structure
 
 ```
 tv_viewer_project/
-├── main.py                 # Windows app entry point
-├── config.py               # Configuration (version, tuning params)
-├── channels_config.json    # Repository list + custom channels
-├── requirements.txt        # Python dependencies
-├── build.py                # Windows EXE build script
-├── dist/
-│   ├── TV_Viewer.exe       # Windows executable
-│   └── android/            # Android APK
-├── flutter_app/            # Flutter Android app source
-├── core/                   # Channel manager, repo handler, stream checker
-├── ui/                     # Windows UI (main window, player, toast, tooltips)
-├── utils/                  # Helpers, EPG, history, parental, logger, thumbnails
-├── tests/                  # Automated tests (258+ tests)
-├── docs/                   # Documentation + landing page
-│   └── index.html          # GitHub Pages landing page
-└── .github/workflows/      # CI/CD (6 workflows)
-```
-
-## Building
-
-### Windows EXE
-```bash
-python build.py          # Build single-file EXE
-python build.py --clean  # Clean build artifacts first
-```
-
-### Android APK
-APK is built automatically by GitHub Actions on push to `flutter_app/**`.
-Manual trigger: `gh workflow run build-apk.yml`
-
-### Validation
-```bash
-python -m pytest tests/ -v           # Unit tests
-python tests/validate_build.py       # Pre-release validation
+├── main.py                 # Desktop entry point
+├── config.py               # Configuration and current version (2.20.2)
+├── Dockerfile              # Docker image definition
+├── core/                   # Channel manager, repository, stream checker
+├── ui/                     # Desktop UI
+├── utils/                  # Shared utilities, analytics, normalization, Supabase client
+├── web/                    # FastAPI backend + static web client
+├── flutter_app/            # Flutter Android app source + fastlane metadata
+├── tests/                  # Python tests (299+)
+├── docs/                   # Project documentation
+└── .github/workflows/      # CI/CD automation (28 workflows)
 ```
 
 ## CI/CD
 
-6 GitHub Actions workflows automate testing, security scanning, and builds:
-- **build-apk.yml** — Flutter APK build on push
-- **build.yml** — Windows EXE build
-- **ci.yml** — Multi-platform CI (lint, test, build)
-- **cve-scanner.yml** — Daily CVE scanning
-- **release.yml** — Automated GitHub Release creation
-- **supabase-keepalive.yml** — Supabase backend keep-alive pings
+TV Viewer uses **28 GitHub Actions workflows** across validation, release orchestration, store publishing, Docker publishing, analytics, and Supabase maintenance. Key workflows include:
+
+- `ci.yml` — core CI for Python/Web changes
+- `build.yml` / `release.yml` / `release-gate.yml` — release pipeline and gating
+- `build-apk.yml` / `play-store-deploy.yml` — Android APK/AAB build and Google Play deployment
+- `fdroid-build.yml` / `apkpure-notify.yml` — alternate Android distribution channels
+- `docker-publish.yml` — multi-arch Docker Hub publish (`latest` + version tags)
+- `supabase-*.yml` and analytics workflows — backend health, keepalive, monitoring, reporting
 
 ## Troubleshooting
 
-See [SUPPORT_GUIDE.md](docs/SUPPORT_GUIDE.md) for detailed troubleshooting.
+See [docs/SUPPORT_GUIDE.md](docs/SUPPORT_GUIDE.md) for detailed troubleshooting.
 
 | Problem | Solution |
 |---------|----------|
-| VLC not found | Windows EXE bundles VLC. From source, install VLC from [videolan.org](https://www.videolan.org/vlc/) |
-| No channels | Check internet connection, click "Refresh" |
-| Duplicate channels | Clear cache — channels consolidate automatically on next load |
-| Stream not playing | Use the source selector in the player to try an alternative stream |
-| Supabase unavailable | App works fully offline; health sharing resumes when connectivity returns |
-| Hebrew/RTL text garbled | Update to v2.6.3+ which includes proper font fallback |
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+| VLC not found | The Windows release bundles VLC. From source, install VLC locally |
+| No channels | Check connectivity and refresh sources |
+| Stream not playing | Try another source from the source selector |
+| Statistics unavailable | Verify the web server can reach Supabase and `/api/statistics` is enabled |
+| Supabase unavailable | The app continues to work from cache; analytics and shared health resume later |
 
 ## Contributing
 
@@ -233,9 +167,13 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to:
 - 💻 Contribute code
 - 📖 Improve documentation
 
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
 ## Credits
 
-- [IPTV-org](https://github.com/iptv-org/iptv) community playlists
-- [python-vlc](https://pypi.org/project/python-vlc/) for video playback
-- [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap) for modern UI
-- [Flutter](https://flutter.dev/) for Android app
+- [IPTV-org](https://github.com/iptv-org/iptv) and other community playlist maintainers
+- [python-vlc](https://pypi.org/project/python-vlc/) for desktop playback
+- [Flutter](https://flutter.dev/) for the Android client
+- [Supabase](https://supabase.com/) for the shared backend and aggregated analytics

@@ -1,0 +1,3 @@
+• Community Statistics page with richer aggregated totals
+• Better country detection using device timezone only
+• Supabase migration + Android/Web statistics fixes

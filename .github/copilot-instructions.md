@@ -5,15 +5,15 @@ Community-powered IPTV streaming application with **three clients** sharing a
 common Supabase backend for channel data and analytics:
 
 - **Desktop** (Python + CustomTkinter): Windows / Linux native app, VLC playback
-- **Mobile** (Flutter 3): Android (Play Store), iOS scaffolding
+- **Mobile** (Flutter 3.32): Android (Google Play), iOS scaffolding
 - **Web / Docker** (FastAPI + vanilla JS): self-hosted server, browser UI
 
-**Version:** 2.15+ (semver, current latest tag tracked in `config.py` /
-`flutter_app/pubspec.yaml` / `Dockerfile`)
+**Version:** 2.20.2 (semver, kept in sync via `config.py`, `flutter_app/pubspec.yaml`, and release workflows)
 **License:** MIT
 **Repo:** tv-viewer-app/tv_viewer (default branch: `master`)
-**Distribution:** GitHub Releases (Windows zip, Linux x86_64, Android APK + AAB),
-Docker Hub, Google Play Store
+**Distribution:** GitHub Releases (Windows zip, Linux x86_64, Android APK + AAB), Docker Hub (`asummoner/tvviewerapp:latest`), Google Play, F-Droid (MR open), APKPure (pending), Samsung (pending)
+**Current release highlights:** Community Statistics page, timezone-based country detection, APKPure notify workflow
+**Supabase project:** `cdtxpefohpwtusmqengu`
 
 ## Build, Test, and Lint Commands
 
@@ -49,15 +49,15 @@ flutter analyze                         # Lint (release-blocking in CI)
 |-------|------------|-------|
 | Desktop UI | CustomTkinter + ttkbootstrap | Fluent 2 dark theme |
 | Desktop player | VLC via python-vlc | No hardware-accel flags (instability) |
-| Mobile | Flutter 3 + Material 3 | media_kit player, audio_service for background |
+| Mobile | Flutter 3.32 + Material 3 | `video_player` for video, `just_audio` + `audio_service` for radio/background playback |
 | Web backend | FastAPI + uvicorn | Single-file `web/server.py` |
 | Web UI | Vanilla JS + HLS.js | `web/static/index.html` (~1500 LoC) |
 | Shared DB | Supabase (Postgres + PostgREST) | Anon key client-side, RLS-protected |
 | Analytics | Supabase `analytics_events` table | Opt-in only |
 | HTTP client | aiohttp (async) + requests | certifi CA bundle in Docker |
 | EPG | XMLTV (gzipped) from public sources | `utils/epg.py` |
-| Build | PyInstaller (desktop) / Flutter / Docker buildx | |
-| CI/CD | 20 GitHub Actions workflows | Release Gate is the merge bar |
+| Build | PyInstaller (desktop) / Flutter 3.32.0 / Docker buildx | Android uses Gradle 8.9, AGP 8.7.0, Kotlin 1.9.22 |
+| CI/CD | 28 GitHub Actions workflows | Release gate, store distribution, Docker publish, analytics and Supabase ops |
 
 ## Architecture
 
@@ -74,30 +74,32 @@ flutter analyze                         # Lint (release-blocking in CI)
 - `flutter_app/lib/services/` — `analytics_service.dart`, `shared_db_service.dart`,
   `audio_handler.dart` (background playback), `epg_service.dart`
 - `flutter_app/lib/screens/` — `home_screen.dart`, `player_screen.dart`,
-  `radio_screen.dart`, `help_support_screen.dart`
+  `radio_screen.dart`, `statistics_screen.dart`, `help_support_screen.dart`
 - Supabase credentials injected via `--dart-define=SUPABASE_URL=…` at build time
 - Pinned HTTPS via `lib/utils/pinned_http_client.dart` for *.supabase.co
 
 ### Web / Docker
 - `web/server.py` — FastAPI app. Endpoints: `/api/channels`, `/api/refresh`,
-  `/api/health/report`, `/api/sources/{name}`, `/api/epg/{channel}`, `/proxy`
+  `/api/health/report`, `/api/sources/{name}`, `/api/epg/{channel}`, `/api/statistics`, `/proxy`
   (SSRF-protected — blocks private IP ranges)
 - `web/static/index.html` — SPA, localStorage state, HLS.js, EPG overlay
 - Persistent state in `DATA_DIR` (`/data` volume in Docker): channels.json,
   favorites.json, epg_cache.json
 - `utils/supabase_channels.py` — shared DB client: fetch, report broken,
-  report working (v2.15.1+)
+  report working, and serve community statistics
 - `utils/normalize.py` — **single source of truth** for category/country
   normalization (14 canonical categories). Ported by hand to Dart; risks drift.
 
 ### Shared Backend (Supabase)
+- **Project ref:** `cdtxpefohpwtusmqengu`
 - `channels` — `url_hash`, `name`, `urls[]`, `category`, `country`, `logo`,
   `media_type`, `source`, etc.
 - `channel_status` — `url_hash`, `status` (working/broken), `last_checked`,
   `report_count`
 - `analytics_events` — opt-in usage telemetry (sessions, plays, failures)
 - `v_channels_with_sources` — view with `security_invoker=true` (RLS honors caller)
-- `mv_daily_active_users` — materialized view, refreshed by GH Action
+- `mv_daily_active_users` — materialized view for aggregated usage data
+- `/api/statistics` reads pre-aggregated anonymous data only; clients never query analytics tables directly
 
 ## Critical Conventions
 
@@ -148,7 +150,7 @@ crashes. See git history for context.
 ```python
 {
     'name': str,           # Display name
-    'url': str,            # Primary stream URL (== urls[0] in v2.15+)
+    'url': str,            # Primary stream URL (== urls[0])
     'urls': list[str],     # All known sources for this channel
     'url_hash': str,       # SHA-256 of primary url (Supabase key)
     'category': str,       # One of CANONICAL_CATEGORIES
@@ -185,7 +187,7 @@ tv_viewer_project/
 ├── scripts/               # One-off ops scripts (Supabase setup, dashboards)
 ├── docs/                  # ARCHITECTURE, SUPPORT_GUIDE, PRIVACY (canonical)
 ├── .github/
-│   ├── workflows/         # 20 CI workflows
+│   ├── workflows/         # 28 CI workflows
 │   └── copilot-instructions.md  # This file
 └── .squad/                # Internal planning artifacts (not shipped)
 ```
@@ -276,11 +278,11 @@ See session artifacts for detailed collaboration protocols and quality checklist
 
 ### Existing Workflows
 
-**android-build.yml** - Automated Flutter Android APK builds
-- **Triggers:** Push to `master` (only `flutter_app/**` changes), manual dispatch
-- **Actions:** Builds APK, extracts version from pubspec.yaml, uploads artifact, commits to `dist/android/`
-- **Uses:** Flutter 3.19.0, Java 17, actions/checkout@v4, actions/upload-artifact@v4
-- **Key pattern:** `[skip ci]` in commit message prevents recursive builds
+**build-apk.yml** - Automated Flutter Android APK/AAB builds
+- **Triggers:** Manual dispatch (tag releases flow through `build.yml` / `release.yml`)
+- **Actions:** Builds signed APK + AAB, uploads artifacts, and can attach Android assets to GitHub Releases
+- **Uses:** Flutter 3.32.0, Java 17, Gradle 8.9, AGP 8.7.0, Kotlin 1.9.22
+- **Related store workflows:** `play-store-deploy.yml`, `fdroid-build.yml`, `apkpure-notify.yml`
 
 ### Creating New Workflows
 
@@ -326,7 +328,7 @@ jobs:
 gh run list --limit 10
 
 # View specific workflow runs
-gh run list --workflow=android-build.yml
+gh run list --workflow=build-apk.yml
 
 # View details of failed run
 gh run view <run-id>
@@ -384,12 +386,12 @@ task: github-mcp-server-get_job_logs with failed_only=true
 **Creating release with GitHub CLI:**
 ```bash
 # Create tag and release
-VERSION="v1.8.2"
+VERSION="v2.20.2"
 gh release create $VERSION \
   --title "TV Viewer $VERSION" \
   --notes-file <(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | head -n -1) \
   dist/TV_Viewer.exe \
-  dist/android/TV_Viewer_v1.8.2.apk
+  dist/TV_Viewer_v2.20.2_Android.apk
 
 # Create pre-release (for testing)
 gh release create $VERSION \
@@ -427,9 +429,9 @@ gh issue create \
 
 # Link to milestone
 gh issue create \
-  --title "Task for v1.9.0" \
+  --title "Task for v2.20.2" \
   --body "..." \
-  --milestone "v1.9.0"
+  --milestone "v2.20.2"
 ```
 
 **Managing pull requests:**
@@ -462,13 +464,13 @@ gh repo edit --enable-wiki=false --enable-projects=true
 ### Version Sync Strategy
 
 This project has **separate versions per platform**:
-- **Desktop (Python):** Version in `config.py` (currently 1.8.2)
+- **Desktop (Python):** Version in `config.py` (currently 2.20.2)
 - **Android (Flutter):** Version in `flutter_app/pubspec.yaml`
 
 When releasing:
 1. Update relevant platform version(s)
 2. Document in CHANGELOG.md under appropriate version
-3. Create release tag with platform suffix if needed: `v1.8.2` (desktop), `v1.7.0-android`
+3. Create the release tag from the aligned version, e.g. `v2.20.2`
 
 ### Workflow Templates for TV Viewer
 
@@ -533,19 +535,25 @@ See `.github/workflows/WORKFLOWS-README.md` for full documentation.
 
 ## CI/CD Pipeline Summary
 
-| Workflow | Trigger | Blocks? |
+TV Viewer currently uses **28 GitHub Actions workflows** spanning CI, releases, store distribution, Docker publishing, Supabase operations, analytics, and community automation.
+
+| Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `test.yml` | Push, PR | No |
-| `pr-validation.yml` | PR | **Yes** (lint, security, tests) |
-| `security-gate.yml` | Tags, PR | **Yes** (HIGH severity) |
-| `release-gate.yml` | Tags (v*) | **Yes** (5 gates) |
-| `build-release.yml` | After gate | Creates GitHub Release |
-| `cve-scanner.yml` | Daily 6 AM | Creates issue on findings |
+| `ci.yml` | Push, PR | Core Python/Web validation |
+| `build.yml` | Tags, manual | Canonical release build pipeline |
+| `build-apk.yml` | Manual | Ad-hoc signed Android APK/AAB builds |
+| `release-gate.yml` | Tags | Release readiness gates |
+| `release.yml` / `auto-release.yml` | Tags | GitHub Release publication |
+| `docker-publish.yml` | Tags, manual | Push `asummoner/tvviewerapp` with `latest` + version tags |
+| `play-store-deploy.yml` | Release, manual | Google Play deployment |
+| `fdroid-build.yml` | Tags, manual | F-Droid-compatible unsigned APK |
+| `apkpure-notify.yml` | Release/tag | Notify APKPure crawler after release publication |
+| `supabase-*.yml` + analytics workflows | Schedule, manual | Monitor backend health and aggregated community analytics |
 
 ### Release Process
 1. Update `APP_VERSION` in `config.py` + `flutter_app/pubspec.yaml`
 2. Update `CHANGELOG.md`
-3. Tag: `git tag v1.9.0 && git push origin v1.9.0`
+3. Tag: `git tag v2.20.2 && git push origin v2.20.2`
 4. Release Gate validates → Build Release publishes all 3 platforms
 
 ### What Blocks Releases

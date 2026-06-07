@@ -2,534 +2,175 @@
 
 ## Overview
 
-TV Viewer is a cross-platform IPTV streaming application. The Windows desktop
-client is built with Python (CustomTkinter + VLC); the Android client is built
-with Flutter. Both platforms share a common data model and connect to the same
-Supabase backend for crowd-sourced channel health and anonymous telemetry.
+TV Viewer is a community-powered IPTV application with **three clients** sharing a common Supabase backend:
 
-**Version:** 2.13.1
-**Platforms:** Windows (primary), Android (Flutter), Web/Docker (FastAPI)
+- **Desktop:** Python + CustomTkinter + VLC for Windows/Linux
+- **Mobile:** Flutter 3.32.0 for Android
+- **Web/Docker:** FastAPI + vanilla JS + HLS.js for self-hosted browser playback
+
+**Current version:** 2.20.2  
+**Supabase project:** `cdtxpefohpwtusmqengu`  
+**Distribution:** GitHub Releases, Google Play, Docker Hub (`asummoner/tvviewerapp:latest`), with F-Droid / APKPure / Samsung storefront work in progress
 
 ## Technology Stack
 
-### Windows (Python)
+| Layer | Technology | Notes |
+|------|------------|-------|
+| Desktop UI | CustomTkinter + ttkbootstrap | Native dark-themed UI |
+| Desktop playback | VLC via `python-vlc` | No hardware-acceleration flags enabled |
+| Mobile UI | Flutter 3.32.0 + Material 3 | Android app |
+| Android build chain | Gradle 8.9, AGP 8.7.0, Kotlin 1.9.22 | Release-aligned toolchain |
+| Mobile playback | `video_player`, `just_audio`, `audio_service` | Video + background radio playback |
+| Web backend | FastAPI + Uvicorn | Single-file `web/server.py` |
+| Web frontend | Vanilla JS + HLS.js | `web/static/index.html` SPA |
+| Shared backend | Supabase Postgres + PostgREST | Channels, health, analytics, aggregated stats |
+| HTTP | `aiohttp` + `requests` | Async fetch and safe outbound calls |
+| EPG | XMLTV | `utils/epg.py` |
+| CI/CD | GitHub Actions (28 workflows) | Builds, releases, stores, Docker, backend ops |
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| UI Framework | CustomTkinter | Windows 11 Fluent Design UI |
-| Video Player | VLC (python-vlc) | Hardware-accelerated playback |
-| HTTP Client | aiohttp | Async network operations |
-| Concurrency | asyncio + threading | Non-blocking operations |
-| Data Storage | JSON files | Channel cache and config |
-| Backend | Supabase (REST) | Crowd-sourced health & telemetry |
-| Telemetry | utils/telemetry.py | Privacy-first anonymous events |
-| Maps | tkintermapview | Interactive channel map |
-| Logging | Python logging | Rotating file logs |
-| Build | PyInstaller | Windows executable |
-| CI/CD | GitHub Actions | Automated builds |
+## High-Level Architecture
 
-### Android (Flutter)
+```
+Playlist sources ──> Repository fetch / normalization ──> Shared channel model
+                                                     ├─> Desktop client (Tk + VLC)
+                                                     ├─> Android client (Flutter)
+                                                     └─> Web client (FastAPI + HLS.js)
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| Framework | Flutter / Dart | Cross-platform mobile UI |
-| State Mgmt | Provider 6.1.x | Reactive state management |
-| DI | GetIt 7.6.x | Service locator |
-| Video | video_player | Native playback |
-| Storage | SharedPreferences | Local prefs & source selection |
-| Maps | flutter_map 6.1.x | Channel world map |
-| Backend | Supabase (REST) | Shared with Windows client |
-| Telemetry | services/analytics_service.dart | Privacy-first anonymous events |
+All clients ──> Supabase (`channels`, `channel_status`, `analytics_events`)
+            └─> Aggregated statistics via `/api/statistics`
+```
 
-### Web / Docker (Python)
+## Client Architecture
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| Framework | FastAPI + Uvicorn | Async web server |
-| Frontend | Vanilla JS + HLS.js | Single-page app |
-| Proxy | aiohttp | CORS-free stream proxying |
-| Caching | In-memory (_ChannelCache) | Serve channels from RAM |
-| Container | Alpine Linux | 25 MB Docker image |
-| Health | localStorage + Supabase | Per-channel status tracking |
+### Desktop (Python)
+
+Key modules:
+
+- `core/channel_manager.py` — in-memory source of truth for loaded channels
+- `core/repository.py` — async M3U fetching and repository management
+- `core/stream_checker.py` — background validation on a daemon thread
+- `ui/main_window.py` — main Tk UI; all background-thread UI updates must use `root.after()`
+- `ui/player_window.py` — VLC playback window and source selector
+
+Important runtime rule: **Tk widgets must never be updated directly from background threads.**
+
+### Mobile (Flutter / Android)
+
+Key modules:
+
+- `flutter_app/lib/screens/home_screen.dart` — app shell and navigation
+- `flutter_app/lib/screens/player_screen.dart` — video playback UI
+- `flutter_app/lib/screens/radio_screen.dart` — radio-focused playback experience
+- `flutter_app/lib/screens/statistics_screen.dart` — Community Statistics page
+- `flutter_app/lib/services/analytics_service.dart` — opt-in analytics + timezone-based country detection
+- `flutter_app/lib/services/shared_db_service.dart` — Supabase reads/writes for shared health data
+- `flutter_app/lib/services/audio_handler.dart` — background audio playback
+
+Flutter builds inject Supabase credentials with `--dart-define` at build time.
+
+### Web / Docker
+
+Key modules:
+
+- `web/server.py` — FastAPI server, API routes, proxying, statistics, and Supabase integration
+- `web/static/index.html` — single-page client using HLS.js
+- `utils/supabase_channels.py` — shared DB helpers for channel status updates
+- `utils/normalize.py` — canonical category/country normalization shared conceptually across clients
+
+Primary routes:
+
+- `GET /api/channels`
+- `POST /api/refresh`
+- `POST /api/health/report`
+- `GET /api/epg/{channel}`
+- `GET /api/statistics`
+- `GET /proxy`
+
+The Docker image is published as **`asummoner/tvviewerapp`** with both versioned and `latest` tags.
+
+## Shared Backend (Supabase)
+
+Supabase is the system of record for shared channel metadata, crowd-sourced health, and anonymous analytics. The active project is **`cdtxpefohpwtusmqengu`**.
+
+Key data surfaces:
+
+| Object | Purpose |
+|--------|---------|
+| `channels` | Shared channel catalog with URL hashes, metadata, and source info |
+| `channel_status` | Working/broken status and report counts |
+| `analytics_events` | Opt-in anonymous analytics events |
+| `v_channels_with_sources` | RLS-respecting view for client consumption |
+| `mv_daily_active_users` | Aggregated stats for dashboards and community statistics |
+
+Clients never query raw analytics tables for the statistics UI; they consume **server-side aggregated results** from `/api/statistics`.
+
+## Data Flow
+
+1. Repository sources are fetched and parsed from public M3U playlists
+2. Category and country data are normalized
+3. Channels are deduplicated into multi-source entries (`url` + `urls[]`)
+4. Clients cache data locally for offline resilience
+5. Health reports and analytics flow to Supabase
+6. Aggregated anonymous metrics are exposed through the Community Statistics page
+
+## Community Statistics
+
+Version 2.19+ introduced the **Community Statistics** feature.
+
+- **Android:** `statistics_screen.dart` from the home menu
+- **Web:** stats panel opened from the 📊 button
+- **Backend:** `GET /api/statistics` in `web/server.py`
+- **Data shape:** anonymous totals for active users, plays, countries, channels, and platform breakdowns
+
+The implementation is privacy-preserving: no raw personal identifiers are displayed or exposed to clients.
+
+## Country Detection
+
+TV Viewer uses **timezone-based country detection** in Android and Web for localized relevance and analytics without GPS or IP geolocation.
+
+- **Android:** `analytics_service.dart` maps timezone name / offset to country code
+- **Web:** `web/server.py` detects local country and `index.html` reports timezone-derived locale hints
+
+## Security and Privacy
+
+- `/api/health/report` is the only client-to-shared-DB write surface exposed by the web app
+- Values sent to Supabase must be validated and encoded via request params, never interpolated into query URLs
+- `/proxy` blocks private IP ranges to reduce SSRF risk
+- Analytics are opt-in and designed to avoid PII
+- Channel URLs are represented by hashes where appropriate when shared with backend services
 
 ## Project Structure
 
 ```
 tv_viewer_project/
-├── main.py                    # Desktop entry point
-├── config.py                  # Settings, Supabase URL/key
-├── build.py                   # PyInstaller build script
-├── channels.json              # Cached channel data
-├── channels_config.json       # User config (repos, custom channels)
-│
-├── core/                      # Core business logic (Python)
-│   ├── channel_manager.py     # Channel coordinator + consolidation
-│   ├── repository.py          # IPTV repository fetching
-│   └── stream_checker.py      # Smart Scan engine
-│
-├── ui/                        # Desktop UI components
-│   ├── main_window.py         # Main window + nav rail
-│   ├── player_window.py       # Player + source selector
-│   ├── map_window.py          # World map (CartoDB tiles)
-│   ├── channel_card.py        # Channel card widget
-│   ├── channel_grid.py        # Scrollable channel grid
-│   ├── nav_rail.py            # Navigation rail
-│   ├── status_bar.py          # Bottom status bar
-│   └── scan_animation.py      # Pixel art scan animation
-│
-├── utils/                     # Shared utilities (Python)
-│   ├── helpers.py             # M3U parsing, JSON I/O, SSRF guard
-│   ├── shared_db.py           # Supabase client (channel_status)
-│   ├── telemetry.py           # Privacy-first telemetry
-│   ├── channel_lookup.py      # Channel metadata lookup
-│   ├── thumbnail.py           # Thumbnail capture/cache
-│   ├── favorites.py           # Favorite channels
-│   ├── cache.py               # Generic cache utilities
-│   ├── analytics.py           # Analytics helpers
-│   └── logger.py              # Logging configuration
-│
-├── flutter_app/               # Android client
-│   └── lib/
-│       ├── models/            # Channel, Category, etc.
-│       ├── repositories/
-│       │   └── impl/
-│       │       ├── channel_repository_impl.dart
-│       │       └── playlist_repository_impl.dart
-│       ├── services/
-│       │   ├── shared_db_service.dart
-│       │   └── analytics_service.dart
-│       ├── providers/         # Provider state classes
-│       ├── screens/           # UI screens
-│       ├── widgets/           # Reusable widgets
-│       ├── di/                # GetIt registration
-│       └── data/              # Constants, API config
-│
-├── tests/                     # Test suite
-├── web/                       # Web/Docker interface
-│   ├── server.py              # FastAPI backend + CORS proxy + cache
-│   └── static/
-│       └── index.html         # Single-page web app (HLS.js)
-├── docs/                      # Documentation
-├── scripts/                   # Build & utility scripts
-├── thumbnails/                # Cached thumbnails
-└── logs/                      # Rotating log files
+├── config.py                     # Global config + app version
+├── core/                         # Channel management and validation
+├── ui/                           # Desktop UI
+├── utils/                        # Shared helpers, normalization, analytics, Supabase
+├── web/server.py                 # FastAPI backend
+├── web/static/index.html         # Web SPA
+├── flutter_app/lib/              # Android app source
+├── flutter_app/fastlane/metadata # Play Store metadata
+├── docs/                         # Project docs
+└── .github/workflows/            # 28 automation workflows
 ```
 
-## Component Architecture
+## Release and Distribution Architecture
 
-### Data Flow
+The release system spans GitHub Releases plus store-specific workflows:
 
-```
-┌──────────────┐    ┌───────────────┐    ┌──────────────┐
-│  Repository  │───>│  Channel      │───>│  Stream      │
-│  Handler     │    │  Manager      │    │  Checker     │
-│  (fetch M3U) │    │  (organise +  │    │  (Smart Scan │
-│              │    │   consolidate)│    │   + priority) │
-└──────────────┘    └──────┬────────┘    └──────┬───────┘
-                           │                     │
-                    ┌──────▼────────┐     ┌──────▼───────┐
-                    │  Main Window  │     │  Supabase    │
-                    │  (display)    │     │  shared_db   │
-                    └──────┬────────┘     │  (health +   │
-                           │              │   telemetry) │
-                    ┌──────▼────────┐     └──────────────┘
-                    │  Player       │
-                    │  (playback +  │
-                    │   source sel) │
-                    └───────────────┘
-```
+- `build.yml`, `release-gate.yml`, `release.yml` — canonical release path
+- `build-apk.yml` — ad-hoc Android APK/AAB builds
+- `play-store-deploy.yml` — Google Play publishing
+- `fdroid-build.yml` — F-Droid-compatible unsigned APK generation
+- `apkpure-notify.yml` — APKPure release discovery automation
+- `docker-publish.yml` — multi-arch Docker Hub publishing
 
-### Threading Model
+## Verification Commands
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Main Thread (UI)                                            │
-│  - CustomTkinter event loop                                  │
-│  - User interaction handling                                 │
-│  - UI updates via root.after()                               │
-└──────────────────────────────────────────────────────────────┘
-          │ Callbacks (thread-safe)
-          v
-┌──────────────────────────────────────────────────────────────┐
-│  Background Thread — StreamChecker (Smart Scan)              │
-│  - asyncio event loop with priority queue                    │
-│  - 30 concurrent HTTP checks (semaphore)                     │
-│  - Pause/resume via threading.Event                          │
-│  - Low thread priority (below normal)                        │
-└──────────────────────────────────────────────────────────────┘
-          │
-          v
-┌──────────────────────────────────────────────────────────────┐
-│  Supabase Upload Thread (daemon)                             │
-│  - Per-batch streaming of scan results                       │
-│  - Telemetry event queue (fire-and-forget)                   │
-└──────────────────────────────────────────────────────────────┘
-          │
-          v
-┌──────────────────────────────────────────────────────────────┐
-│  VLC Threads (managed by libvlc)                             │
-│  - Video decoding (hardware accelerated)                     │
-│  - Audio processing · Network streaming                      │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## Key Subsystems
-
-### 1. Channel Consolidation
-
-Multi-pass name normalisation merges duplicate channels that differ only in
-quality tags, codec labels, or regional suffixes into single multi-URL entries.
-Both platforms implement the same algorithm; the result is an **~18 % reduction**
-in visible channel count.
-
-#### Normalisation Patterns Stripped
-
-| Category | Examples |
-|----------|----------|
-| Quality / resolution | `(720p)`, `(1080i)`, `HD`, `FHD`, `4K`, `SD` |
-| Regional suffixes | `(רשת 13)`, `(Geo-blocked)`, `[Not 24/7]` |
-| Audio codecs | `MP3`, `AAC`, `AAC+`, `FLAC` |
-| Video codecs | `h.264`, `h.265`, `HEVC` |
-| Variant markers | `alt`, `backup`, `mirror`, `dubbed`, `subtitled`, `multi-audio` |
-| Version / stream IDs | `v1`, `v2`, `option1`, `stream1`, `128k`, `320k` |
-
-#### Merge Logic
-
-1. Channels are grouped by **normalised name + country** (case-insensitive).
-2. All unique URLs are collected into a `urls[]` array on the merged entry.
-3. **Python second pass** sorts URLs by health: working (fastest first) →
-   unchecked → failed. A `working_url_index` tracks the preferred source.
-4. **Flutter** ORs the `isWorking` flag (if any variant works, the merged
-   entry is marked working) and preserves the first occurrence's metadata.
-
-#### Entry Points
-
-| Platform | Location | Function |
-|----------|----------|----------|
-| Windows | `core/channel_manager.py` | `consolidate_channels()` |
-| Android | `playlist_repository_impl.dart` | `consolidateByName()` |
-| Android | `channel_repository_impl.dart` | `fetchChannels()` → calls `deduplicateChannels()` before returning (Issue #58 fix) |
-
----
-
-### 2. Smart Scan
-
-`StreamChecker` (`core/stream_checker.py`) replaces the old linear scan with a
-**dynamic priority queue** and primary-URL-only main pass.
-
-#### Priority Order
-
-| Priority | Bucket | Rationale |
-|----------|--------|-----------|
-| 1 (highest) | Recently played channels | Immediate user interest |
-| 2 | User's country (via `boost_country()`) | Regional relevance |
-| 3 | Never-scanned channels | New additions |
-| 4 | Working channels needing revalidation | Staleness check |
-| 5 (lowest) | Known-failed channels | Unlikely to recover |
-
-#### Scan Strategy
-
-- **Main pass:** Only the primary URL of each channel is checked.
-  Alternative URLs are queued for background verification.
-- **Pause / resume:** `threading.Event` flag; triggered when the map window
-  opens (frees bandwidth for tile downloads) and resumed on close.
-- **Streaming upload:** Scan results are pushed to Supabase per-batch as they
-  complete, not at the end.
-
----
-
-### 3. Supabase Integration
-
-Supabase is the **always-on** shared backend (replaces the earlier PrivateBin
-experiment). Both platforms use REST with an anonymous key protected by Row
-Level Security.
-
-#### Tables
-
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `channel_status` | Crowd-sourced channel health | `url_hash` (SHA-256), `status`, `last_checked`, `response_time_ms` |
-| `app_telemetry` | Anonymous usage telemetry | `device_id` (random UUID), `event_type`, `payload`, `created_at` |
-
-#### Client Code
-
-| Platform | File | Notes |
-|----------|------|-------|
-| Windows | `utils/shared_db.py` | Imports `SUPABASE_URL` / `SUPABASE_KEY` from `config.py` |
-| Android | `services/shared_db_service.dart` | Same Supabase instance |
-
-**Privacy:** Channel URLs are SHA-256 hashed before transmission. A 24-hour
-cache prevents redundant re-scanning.
-
----
-
-### 4. Privacy-First Telemetry
-
-Anonymous, opt-out telemetry with no PII. Implemented independently on each
-platform but sharing the same Supabase table and event schema.
-
-#### Tracked Events
-
-| Event | Payload (examples) | Notes |
-|-------|--------------------|-------|
-| `app_start` | platform, OS version, Python/Flutter version | — |
-| `channel_play` | country (locale), category, hashed URL | No channel name |
-| `channel_fail` | country, category, error type, hashed URL | No channel name |
-| `feature_use` | feature name (map, search, scan, fullscreen) | — |
-| `scan_complete` | total channels, working count, duration | — |
-
-#### Privacy Guarantees
-
-- **No PII**: No usernames, IPs, emails, or device fingerprints.
-- **No channel names or URLs**: Only SHA-256 hashes are transmitted.
-- **Random device ID**: Persistent UUID per install; not tied to hardware.
-- **Opt-out**: Flutter: `setEnabled(false)`; Python: config flag.
-- **Rate-limited**: Max 500 events per type per session.
-- **Fire-and-forget**: Never blocks UI; silently drops on failure.
-
-#### Implementation
-
-| Platform | File | Mechanism |
-|----------|------|-----------|
-| Windows | `utils/telemetry.py` | Daemon threads, immediate upload |
-| Android | `services/analytics_service.dart` | Batched queue (20 events or 30 s) |
-
----
-
-### 5. Source Selector
-
-For channels with multiple stream URLs (created by consolidation), the player
-exposes a **source selector** control.
-
-- **UI**: Dropdown (`#1`, `#2`, …) in `ui/player_window.py`; only shown when
-  `len(urls) > 1`.
-- **Default selection**: Pre-selects `working_url_index` (last known-working
-  source).
-- **Persistence**: Flutter stores the preferred source per channel in
-  `SharedPreferences`. Python persists `working_url_index` in the channel
-  cache.
-- **Background verification**: Alternative URLs are verified in the background
-  so the selector reflects up-to-date health.
-
----
-
-## Key Classes
-
-### Category & Country Normalization (`utils/normalize.py`)
-
-Single source of truth for all category and country string normalization.
-All clients (Web/Docker, Desktop Python, Flutter/Android) produce identical results.
-
-**14 Canonical Categories:**
-Documentary, Education, Entertainment, General, Kids, Lifestyle, Movies,
-Music, Nature, News, Radio, Religious, Shopping, Sports.
-
-**Normalization Pipeline:**
-1. Direct map lookup (160+ raw → canonical mappings including all Xumous variants)
-2. Vendor prefix stripping (e.g., "Xumous: Comedy" → lookup "comedy")
-3. Semicolon/compound splitting (e.g., "animation;entertainment" → Kids)
-4. Name-based inference when category is General (FM frequency → Radio, etc.)
-
-**Client Integration:**
-- Desktop: `categorize_channel()` in `utils/helpers.py` delegates to `normalize_category()`
-- Web/Docker: `server.py` imports and calls `normalize_category()` during channel load
-- Flutter: `Channel.normalizeCategory()` in `channel.dart` is a Dart port of the same map
-
-### ChannelManager (`core/channel_manager.py`)
-
-Central coordinator for channel data. Thread-safe with `RLock`.
-
-**Responsibilities:**
-- Load / save channel cache
-- Fetch from IPTV repositories
-- Organise by category / country
-- **Consolidate duplicate channels** (`consolidate_channels()`)
-- Coordinate validation
-- Filter by media type
-
-**Memory Optimisation:**
-- Uses `__slots__` (~40 % memory savings)
-- Shared references between categories / countries
-- In-place channel updates
-
-### StreamChecker (`core/stream_checker.py`)
-
-Background stream validator — **Smart Scan** engine.
-
-**Responsibilities:**
-- Dynamic priority-queue scheduling
-- Async HTTP HEAD/GET requests (30 concurrent via semaphore)
-- Primary-URL-only main pass; alternatives queued in background
-- Pause / resume (map viewing, user request)
-- Per-batch streaming of results to Supabase
-- Graceful cancellation
-
-**Performance Features:**
-- Low thread priority
-- DNS caching
-- TCP connection reuse (`force_close=False`, `keepalive_timeout=30`)
-- Batch processing with GC
-
-### MainWindow (`ui/main_window.py`)
-
-Main desktop UI with navigation rail.
-
-**Features:**
-- Category / country grouping
-- Media type filtering
-- Real-time scan progress
-- Debounced UI updates
-- Channel card grid
-
-### PlayerWindow (`ui/player_window.py`)
-
-Embedded video player with hardware acceleration.
-
-**Features:**
-- Platform-specific HW acceleration
-- Volume / mute controls
-- Fullscreen toggle
-- **Source selector** for multi-URL channels
-- Google Cast support (optional)
-
-### MapWindow (`ui/map_window.py`)
-
-Interactive world map showing channel locations.
-
-**Features:**
-- CartoDB Dark Matter basemap tiles
-- SQLite tile cache (`tv_viewer_tiles.db` in temp directory)
-- Pauses Smart Scan while open (frees bandwidth)
-
-## Performance Optimisations
-
-### Scanning (6× faster than v1.x)
-
-| Lever | Old | New | Impact |
-|-------|-----|-----|--------|
-| Concurrent checks | 10 | **30** | 3× throughput |
-| Inter-request delay | 100 ms | **5 ms** | Eliminated 30+ min of sleep for 18 K channels |
-| URL strategy | All URLs | **Primary only** (alternatives in background) | 2–5× fewer checks |
-| Connection reuse | Off | **`force_close=False`, `keepalive_timeout=30`** | 2–3× speedup for CDN hosts |
-| Channel count | — | **−18 %** via consolidation | Fewer total checks |
-
-### CPU Optimisation
-
-1. **Thread Priority**: Background checker runs at below-normal priority
-2. **Adaptive Delays**: `SCAN_REQUEST_DELAY` (5 ms) between HTTP requests
-3. **Batch Processing**: `SCAN_BATCH_SIZE=100`, with `SCAN_BATCH_DELAY=0.5 s`
-4. **Debounced Updates**: UI refreshes are rate-limited
-5. **Skip recent**: `SCAN_SKIP_MINUTES=30` avoids re-checking recent results
-
-### Memory Optimisation
-
-1. **`__slots__`**: Reduces per-channel object overhead
-2. **Shared References**: Categories / countries point to same channel objects
-3. **In-Place Updates**: Channels modified without copying
-4. **Generational GC**: Triggered between batches
-
-### Network Optimisation
-
-1. **TCP Connection Pooling**: `force_close=False`, `keepalive_timeout=30`
-2. **DNS Caching**: 5-minute TTL for lookups
-3. **Per-Host Limits**: Prevents overwhelming individual servers
-4. **Timeout Tuning**: `STREAM_CHECK_TIMEOUT=5 s`
-
-### Map & Tile Performance
-
-- **CartoDB Dark Matter** basemap — lightweight, dark-theme-matched
-- **SQLite tile cache** in system temp directory — eliminates repeat downloads
-
-### Video Optimisation
-
-1. **Hardware Acceleration**:
-   - Windows: D3D11VA
-   - macOS: VideoToolbox
-   - Linux: VAAPI / VDPAU
-2. **Network Buffering**: 1-second cache for smooth playback
-
-## Configuration
-
-### `config.py` Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `MAX_CONCURRENT_CHECKS` | 30 | Parallel stream validations |
-| `SCAN_REQUEST_DELAY` | 0.005 s | Delay between requests |
-| `SCAN_BATCH_SIZE` | 100 | Channels per batch |
-| `SCAN_BATCH_DELAY` | 0.5 s | Pause between batches |
-| `SCAN_SKIP_MINUTES` | 30 | Skip recently-checked channels |
-| `STREAM_CHECK_TIMEOUT` | 5 s | Per-stream timeout |
-| `REQUEST_TIMEOUT` | 20 s | Repository fetch timeout |
-| `SUPABASE_URL` | *(see config)* | Supabase project URL |
-| `SUPABASE_KEY` | *(see config)* | Supabase anonymous key |
-
-### `channels_config.json` (User Config)
-
-```json
-{
-  "repositories": [
-    "https://iptv-org.github.io/iptv/index.m3u"
-  ],
-  "custom_channels": [
-    {
-      "name": "My Channel",
-      "url": "http://example.com/stream.m3u8",
-      "category": "Custom"
-    }
-  ]
-}
-```
-
-## Security
-
-### URL & Network Safety
-
-1. **Scheme allowlist**: Only `http` / `https` / `rtmp` / `rtsp` accepted
-2. **SSRF protection** (`utils/helpers.py`): Resolves hostnames and blocks
-   private / loopback / link-local / reserved IP ranges via
-   `ipaddress.ip_address()` checks (`is_private`, `is_loopback`,
-   `is_link_local`, `is_reserved`). Also blocks `javascript:`, `data:`,
-   `file:`, `vbscript:`, `about:` schemes.
-3. **FMStream HTTPS**: All FMStream URLs upgraded to HTTPS
-4. **Content Limits**: Max file sizes on M3U downloads prevent DoS
-
-### Analytics & Privacy
-
-5. **No channel names in analytics**: Only SHA-256 hashed URLs
-6. **No PII collected**: Random device UUID, no IP logging
-7. **Rate-limited telemetry**: 500 events / type / session cap
-
-### Player
-
-8. **No Lua**: VLC Lua scripting disabled
-9. **Input Sanitisation**: M3U content sanitised before parsing
-
-## Error Handling
-
-- **Network errors**: Logged, channel marked as failed, result uploaded to
-  Supabase `channel_status`
-- **Parse errors**: Skipped with warning; consolidation tolerates partial data
-- **VLC errors**: Fallback to software decoding; source selector lets user try
-  alternative URLs
-- **UI errors**: Wrapped in try/catch to prevent crashes
-- **Telemetry errors**: Silently dropped (fire-and-forget)
-- **Supabase errors**: Logged but never block the UI or scan
-
-## Testing
-
-Run the desktop application:
 ```bash
-python main.py
-```
-
-Build Windows executable:
-```bash
-python build.py
-```
-
-Run Flutter app (Android):
-```bash
-cd flutter_app
-flutter run
+python tests/validate_build.py --quick
+python -m pytest tests/ -q
+cd flutter_app && flutter test
+cd flutter_app && flutter analyze
 ```

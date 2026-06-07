@@ -1,28 +1,29 @@
-TV Viewer is a free, open-source IPTV streaming application that aggregates publicly available streams from community-maintained M3U playlists.
+TV Viewer is a free, open-source IPTV streaming app built around community-maintained playlists and privacy-first design.
 
 Features:
 • 16,000+ live TV and radio channels from around the world
-• Background audio playback — keep listening when screen is off
-• Multi-source failover — if one stream fails, automatically tries alternatives
+• Community Statistics page with anonymous aggregated usage insights
+• Timezone-based country detection (no GPS or IP lookup needed)
+• Background audio playback for radio streams
+• Multi-source failover when one stream stops working
 • EPG (Electronic Program Guide) with current/next program info
-• Channel categories: News, Sports, Entertainment, Music, Kids, and more
-• Radio mode with dedicated audio-focused interface
-• Picture-in-Picture (PiP) support
-• Search, favorites, and watch history
+• Search, favorites, source selector, and watch history
+• Picture-in-Picture (PiP) support where available
 • No account required, no ads, no tracking by default
 • Optional anonymous usage analytics (opt-in only)
-• Self-hosted web/Docker version available
-• Regular updates with new channels from community sources
+• Self-hosted web/Docker edition also available
+• Regular updates with new channels and fixes from the community
 
 Privacy:
 • No personal data collected
 • No account or login required
-• Analytics are opt-in and fully anonymous (device ID only, no IP logging)
+• Analytics are opt-in and anonymous
+• Country detection uses device timezone only
 • All source code is open and auditable
 
 This app does not host or provide any streams. It aggregates publicly available M3U playlists maintained by the open-source community (iptv-org and others). Channel availability depends on the source providers.
 
 Permissions:
 • Internet: Required to stream content
-• Wake Lock: Keeps screen on during video playback
+• Wake Lock: Keeps playback active when needed
 • Foreground Service: Background audio playback notification
