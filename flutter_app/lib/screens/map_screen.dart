@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../providers/channel_provider.dart';
 import '../services/analytics_service.dart';
+import '../utils/logger_service.dart';
 import 'player_screen.dart';
 
 /// Country center coordinates for map markers.
@@ -158,13 +160,89 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen>
-    with TickerProviderStateMixin {
-  final MapController _mapController = MapController();
+class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
+  static final Uint8List _transparentTileBytes = Uint8List.fromList(<int>[
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x08,
+    0x06,
+    0x00,
+    0x00,
+    0x00,
+    0x1F,
+    0x15,
+    0xC4,
+    0x89,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x49,
+    0x44,
+    0x41,
+    0x54,
+    0x78,
+    0x9C,
+    0x63,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x05,
+    0x00,
+    0x01,
+    0x0D,
+    0x0A,
+    0x2D,
+    0xB4,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4E,
+    0x44,
+    0xAE,
+    0x42,
+    0x60,
+    0x82,
+  ]);
+  static const int _tileErrorThreshold = 4;
+
+  late final MapController _mapController;
+  late final MemoryImage _errorTileImage;
   bool _favoritesOnly = false;
   bool _hideOffline = false;
   double _currentZoom = 3.0;
   bool _isClusterView = true; // true when zoom < 6
+  bool _mapInitFailed = false;
+  bool _showMapFallback = false;
+  bool _tileRecoveryScheduled = false;
+  int _tileErrorCount = 0;
+  String _mapFallbackMessage = 'Map unavailable - check network connection';
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
@@ -172,7 +250,14 @@ class _MapScreenState extends State<MapScreen>
   @override
   void initState() {
     super.initState();
-    AnalyticsService.instance.trackFeature('map_open');
+    try {
+      _mapController = MapController();
+      _errorTileImage = MemoryImage(_transparentTileBytes);
+      AnalyticsService.instance.trackFeature('map_open');
+    } catch (e, stackTrace) {
+      _mapInitFailed = true;
+      logger.error('Map initialization failed', e, stackTrace);
+    }
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -189,37 +274,198 @@ class _MapScreenState extends State<MapScreen>
   }
 
   void _animateToCountry(LatLng target, {double zoom = 6.0}) {
-    final latTween = Tween(
-      begin: _mapController.camera.center.latitude,
-      end: target.latitude,
-    );
-    final lngTween = Tween(
-      begin: _mapController.camera.center.longitude,
-      end: target.longitude,
-    );
-    final zoomTween = Tween(
-      begin: _mapController.camera.zoom,
-      end: zoom,
-    );
-    final ctrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 600),
-    );
-    final curve = CurvedAnimation(parent: ctrl, curve: Curves.easeOutCubic);
-    ctrl.addListener(() {
-      _mapController.move(
-        LatLng(latTween.evaluate(curve), lngTween.evaluate(curve)),
-        zoomTween.evaluate(curve),
+    if (_mapInitFailed) return;
+
+    try {
+      final latTween = Tween(
+        begin: _mapController.camera.center.latitude,
+        end: target.latitude,
       );
+      final lngTween = Tween(
+        begin: _mapController.camera.center.longitude,
+        end: target.longitude,
+      );
+      final zoomTween = Tween(
+        begin: _mapController.camera.zoom,
+        end: zoom,
+      );
+      final ctrl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 600),
+      );
+      final curve = CurvedAnimation(parent: ctrl, curve: Curves.easeOutCubic);
+      ctrl.addListener(() {
+        _mapController.move(
+          LatLng(latTween.evaluate(curve), lngTween.evaluate(curve)),
+          zoomTween.evaluate(curve),
+        );
+      });
+      ctrl.addStatusListener((s) {
+        if (s == AnimationStatus.completed) ctrl.dispose();
+      });
+      ctrl.forward();
+    } catch (e, stackTrace) {
+      logger.error('Map camera animation failed', e, stackTrace);
+    }
+  }
+
+  void _handleTileError(Object error, StackTrace? stackTrace) {
+    _tileErrorCount++;
+
+    if (_tileErrorCount <= 3 || _tileErrorCount == _tileErrorThreshold) {
+      logger.error('Map tile fetch failed', error, stackTrace);
+    }
+
+    if (!mounted || _showMapFallback || _tileErrorCount < _tileErrorThreshold) {
+      return;
+    }
+
+    setState(() {
+      _showMapFallback = true;
+      _mapFallbackMessage = 'Map unavailable - check network connection';
     });
-    ctrl.addStatusListener((s) {
-      if (s == AnimationStatus.completed) ctrl.dispose();
+  }
+
+  void _handleTileRecovered() {
+    if (!mounted || !_showMapFallback || _tileRecoveryScheduled) {
+      return;
+    }
+
+    _tileRecoveryScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tileRecoveryScheduled = false;
+      if (!mounted || !_showMapFallback) return;
+
+      setState(() {
+        _showMapFallback = false;
+        _tileErrorCount = 0;
+      });
     });
-    ctrl.forward();
+  }
+
+  Widget _buildMapFallback({bool fillAvailableSpace = true}) {
+    final content = Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.public_off_rounded,
+              size: 44,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _mapFallbackMessage,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You can keep browsing channels without the map.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (fillAvailableSpace) {
+      return content;
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.94),
+      ),
+      child: content,
+    );
+  }
+
+  Widget _buildMapView(
+    Map<String, List<Channel>> grouped,
+    ChannelProvider provider,
+    bool isLandscape,
+    int channelCount,
+    int totalWorking,
+  ) {
+    if (_mapInitFailed) {
+      return _buildMapFallback();
+    }
+
+    try {
+      return Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: const LatLng(30.0, 20.0),
+              initialZoom: _currentZoom,
+              minZoom: 2,
+              maxZoom: 18,
+              onPositionChanged: (pos, _) {
+                if (pos.zoom == null) return;
+                _currentZoom = pos.zoom!;
+                final nowCluster = _currentZoom < 6;
+                if (nowCluster != _isClusterView) {
+                  setState(() => _isClusterView = nowCluster);
+                }
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.tvviewer.app',
+                tileProvider: NetworkTileProvider(),
+                keepBuffer: 8,
+                errorImage: _errorTileImage,
+                evictErrorTileStrategy:
+                    EvictErrorTileStrategy.notVisibleRespectMargin,
+                errorTileCallback: (tile, error, stackTrace) {
+                  _handleTileError(error, stackTrace);
+                },
+                tileBuilder: (context, tileWidget, tile) {
+                  if (tile.readyToDisplay && !tile.loadError) {
+                    _handleTileRecovered();
+                  }
+                  return tileWidget;
+                },
+              ),
+              MarkerLayer(
+                markers: _buildMarkers(grouped, provider, isLandscape),
+              ),
+            ],
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            child: _StatsBar(
+              countries: grouped.length,
+              channels: channelCount,
+              working: totalWorking,
+            ),
+          ),
+          if (_showMapFallback)
+            Positioned.fill(
+              child: _buildMapFallback(fillAvailableSpace: false),
+            ),
+        ],
+      );
+    } catch (e, stackTrace) {
+      logger.error('Map widget build failed', e, stackTrace);
+      return _buildMapFallback();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     return Scaffold(
       appBar: AppBar(
         title: const Text('🗺️ World Map'),
@@ -255,48 +501,12 @@ class _MapScreenState extends State<MapScreen>
           final grouped = _groupByCountry(channels);
           final totalWorking = channels.where((c) => c.isWorking).length;
 
-          return Stack(
-            children: [
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: const LatLng(30.0, 20.0),
-                  initialZoom: _currentZoom,
-                  minZoom: 2,
-                  maxZoom: 18,
-                  onPositionChanged: (pos, _) {
-                    if (pos.zoom == null) return;
-                    _currentZoom = pos.zoom!;
-                    // Only rebuild when crossing cluster/pin threshold
-                    final nowCluster = _currentZoom < 6;
-                    if (nowCluster != _isClusterView) {
-                      setState(() => _isClusterView = nowCluster);
-                    }
-                  },
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.tvviewer.app',
-                    tileProvider: NetworkTileProvider(),
-                    keepBuffer: 8,
-                  ),
-                  MarkerLayer(
-                    markers: _buildMarkers(grouped, provider, isLandscape),
-                  ),
-                ],
-              ),
-              // Stats overlay at bottom (extra padding for Android nav bar)
-              Positioned(
-                left: 12, right: 12,
-                bottom: MediaQuery.of(context).padding.bottom + 16,
-                child: _StatsBar(
-                  countries: grouped.length,
-                  channels: channels.length,
-                  working: totalWorking,
-                ),
-              ),
-            ],
+          return _buildMapView(
+            grouped,
+            provider,
+            isLandscape,
+            channels.length,
+            totalWorking,
           );
         },
       ),
@@ -391,7 +601,8 @@ class _MapScreenState extends State<MapScreen>
   ) {
     final working = channels.where((c) => c.isWorking).length;
     final ratio = channels.isNotEmpty ? working / channels.length : 0.0;
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     showModalBottomSheet(
       context: context,
@@ -412,7 +623,8 @@ class _MapScreenState extends State<MapScreen>
               // Drag handle
               Container(
                 margin: const EdgeInsets.symmetric(vertical: 10),
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: Colors.grey[500],
                   borderRadius: BorderRadius.circular(2),
@@ -420,7 +632,8 @@ class _MapScreenState extends State<MapScreen>
               ),
               // Header with animated health bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -432,14 +645,14 @@ class _MapScreenState extends State<MapScreen>
                           child: Text(
                             country,
                             style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
                         ),
                         _CountBadge(count: channels.length, label: 'total'),
                         const SizedBox(width: 8),
-                        _CountBadge(count: working, label: 'live',
-                            color: Colors.green),
+                        _CountBadge(
+                            count: working, label: 'live', color: Colors.green),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -472,7 +685,8 @@ class _MapScreenState extends State<MapScreen>
                 child: ListView.builder(
                   controller: scrollController,
                   itemCount: channels.length,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   itemBuilder: (ctx, i) {
                     final ch = channels[i];
                     final isFav = provider.isFavorite(ch);
@@ -511,7 +725,8 @@ class _MapScreenState extends State<MapScreen>
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(ch.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+              child:
+                  Text(ch.name, maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -519,15 +734,11 @@ class _MapScreenState extends State<MapScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ch.country != null)
-              _infoRow('Country', ch.country!),
-            if (ch.category != null)
-              _infoRow('Category', ch.category!),
-            if (ch.language != null)
-              _infoRow('Language', ch.language!),
+            if (ch.country != null) _infoRow('Country', ch.country!),
+            if (ch.category != null) _infoRow('Category', ch.category!),
+            if (ch.language != null) _infoRow('Language', ch.language!),
             _infoRow('Status', ch.isWorking ? 'Working ✅' : 'Offline ❌'),
-            if (ch.resolution != null)
-              _infoRow('Resolution', ch.resolution!),
+            if (ch.resolution != null) _infoRow('Resolution', ch.resolution!),
           ],
         ),
         actions: [
@@ -642,7 +853,9 @@ class _CountryBubble extends StatelessWidget {
             ),
           ),
           Text(
-            country.length > 3 ? country.substring(0, 3).toUpperCase() : country.toUpperCase(),
+            country.length > 3
+                ? country.substring(0, 3).toUpperCase()
+                : country.toUpperCase(),
             style: TextStyle(
               color: Colors.white.withOpacity(0.85),
               fontSize: 8,
@@ -767,8 +980,8 @@ class _FilterChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16,
-                  color: active ? activeColor : Colors.grey[400]),
+              Icon(icon,
+                  size: 16, color: active ? activeColor : Colors.grey[400]),
               const SizedBox(width: 4),
               Text(
                 label,
@@ -804,7 +1017,8 @@ class _StatsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isLandscape ? 10 : 16,
@@ -824,19 +1038,22 @@ class _StatsBar extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _StatItem(
-                  value: countries, label: 'Countries',
+                  value: countries,
+                  label: 'Countries',
                   color: const Color(0xFF4DA6FF),
                   compact: isLandscape,
                 ),
                 _divider(),
                 _StatItem(
-                  value: channels, label: 'Channels',
+                  value: channels,
+                  label: 'Channels',
                   color: const Color(0xFF4DA6FF),
                   compact: isLandscape,
                 ),
                 _divider(),
                 _StatItem(
-                  value: working, label: 'Working',
+                  value: working,
+                  label: 'Working',
                   color: Colors.green,
                   compact: isLandscape,
                 ),
@@ -849,9 +1066,10 @@ class _StatsBar extends StatelessWidget {
   }
 
   Widget _divider() => Container(
-    width: 1, height: 28,
-    color: Colors.white.withOpacity(0.15),
-  );
+        width: 1,
+        height: 28,
+        color: Colors.white.withOpacity(0.15),
+      );
 }
 
 /// Single stat counter with animated count-up.
@@ -961,15 +1179,18 @@ class _ChannelTile extends StatelessWidget {
             children: [
               // Status dot
               Container(
-                width: 10, height: 10,
+                width: 10,
+                height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: channel.isWorking ? Colors.green : Colors.red[400],
                   boxShadow: channel.isWorking
-                      ? [BoxShadow(
-                          color: Colors.green.withOpacity(0.4),
-                          blurRadius: 6,
-                        )]
+                      ? [
+                          BoxShadow(
+                            color: Colors.green.withOpacity(0.4),
+                            blurRadius: 6,
+                          )
+                        ]
                       : null,
                 ),
               ),
@@ -985,7 +1206,8 @@ class _ChannelTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    if (channel.category != null && channel.category!.isNotEmpty)
+                    if (channel.category != null &&
+                        channel.category!.isNotEmpty)
                       Text(
                         channel.category!,
                         style: TextStyle(fontSize: 11, color: Colors.grey[500]),
@@ -1011,7 +1233,8 @@ class _ChannelTile extends StatelessWidget {
               ),
               // Play button
               Container(
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: const Color(0xFF0078D4),
                   borderRadius: BorderRadius.circular(8),
