@@ -5,6 +5,13 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.5] - 2026-06-09
+
+### Fixed
+- Removed Play Integrity / Firebase dependency (F-Droid APK check now passes)
+- Fixed crash monitor script for new Supabase schema
+- Merged aiohttp and uvicorn patches
+
 ## [2.20.4] - 2026-06-09
 
 ### Fixed
@@ -2304,5 +2311,4 @@ KAN channels on `kancdn.medonecdn.net` use different path names than `*.media.ka
 - Thumbnail previews
 - Search and filter functionality
 - Dark theme UI
-
 
