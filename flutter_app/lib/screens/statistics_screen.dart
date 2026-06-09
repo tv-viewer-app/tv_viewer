@@ -14,10 +14,13 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
+  // Supabase credentials — anon key is safe to embed (public, RLS-protected)
   static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const String.fromEnvironment('SUPABASE_URL',
+          defaultValue: 'https://cdtxpefohpwtusmqengu.supabase.co');
   static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      const String.fromEnvironment('SUPABASE_ANON_KEY',
+          defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo');
 
   bool _loading = true;
   String? _error;
@@ -57,9 +60,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final client = PinnedHttpClient.create();
     try {
       final since = DateTime.now().subtract(const Duration(days: 30)).toUtc().toIso8601String();
-      // Only request aggregatable fields — NO device_id (privacy)
+      // Query fields that exist — channel info is inside event_data JSON
       final url = Uri.parse('$_supabaseUrl/rest/v1/analytics_events'
-          '?select=event_type,country,platform,channel_name'
+          '?select=event_type,country,platform,event_data'
           '&created_at=gte.$since'
           '&order=created_at.desc'
           '&limit=5000');
@@ -108,7 +111,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       final country = (e['country'] as String?) ?? '';
       final platform = (e['platform'] as String?) ?? 'unknown';
       final eventType = (e['event_type'] as String?) ?? '';
-      final channelName = (e['channel_name'] as String?) ?? '';
+
+      // Extract channel name from event_data JSON
+      final eventData = e['event_data'];
+      String channelName = '';
+      if (eventData is Map) {
+        channelName = (eventData['name'] as String?) ?? (eventData['channel_name'] as String?) ?? '';
+      }
 
       platforms[platform] = (platforms[platform] ?? 0) + 1;
       if (country.isNotEmpty && country != 'XX') {

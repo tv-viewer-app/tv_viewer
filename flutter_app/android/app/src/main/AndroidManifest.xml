@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- Self-update from GitHub Releases (sideload/F-Droid users) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     
     <!-- Remove photo/video permissions added by dependencies — we don't use camera/gallery -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
