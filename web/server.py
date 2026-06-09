@@ -899,6 +899,18 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             try:
                 async for chunk in resp.content.iter_chunked(65536):
                     yield chunk
+            except (
+                asyncio.TimeoutError,
+                aiohttp.ClientError,
+                ConnectionResetError,
+                OSError,
+            ) as exc:
+                logger.debug(
+                    "Proxy stream ended quietly for %s: %s",
+                    _parsed.netloc or _parsed.path or "upstream",
+                    type(exc).__name__,
+                )
+                return
             finally:
                 await resp.release()
                 await session.close()

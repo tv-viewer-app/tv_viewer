@@ -7,6 +7,8 @@ Note: Channel data tests use >= 0 assertions since CI may not have
 access to Supabase. Tests validate API structure and response format.
 """
 
+import asyncio
+import logging
 import pytest
 import sys
 from pathlib import Path
@@ -15,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastapi.testclient import TestClient
+from web import server
 from web.server import app
 
 
@@ -139,6 +142,77 @@ class TestFavorites:
 # ─── Proxy ──────────────────────────────────────────────────────────────────
 
 class TestProxy:
+    @pytest.mark.parametrize(
+        ("upstream_error", "error_name"),
+        [
+            (asyncio.TimeoutError("timed out"), "TimeoutError"),
+            (server.aiohttp.ClientError("upstream failed"), "ClientError"),
+            (ConnectionResetError("connection reset"), "ConnectionResetError"),
+            (OSError("socket closed"), "OSError"),
+        ],
+    )
+    def test_proxy_stream_ends_cleanly_on_expected_upstream_errors(
+        self,
+        client,
+        monkeypatch,
+        caplog,
+        upstream_error,
+        error_name,
+    ):
+        class _FakeStream:
+            async def iter_chunked(self, _chunk_size):
+                yield b"first-chunk"
+                raise upstream_error
+
+        class _FakeResponse:
+            def __init__(self):
+                self.status = 200
+                self.headers = {"content-type": "video/mp2t"}
+                self.content = _FakeStream()
+                self.released = False
+
+            async def release(self):
+                self.released = True
+
+        class _FakeSession:
+            def __init__(self, response):
+                self._response = response
+                self.closed = False
+
+            async def get(self, *_args, **_kwargs):
+                return self._response
+
+            async def close(self):
+                self.closed = True
+
+        fake_response = _FakeResponse()
+        fake_session = _FakeSession(fake_response)
+
+        monkeypatch.setattr(server, "_validate_proxy_url", lambda _url: None)
+        monkeypatch.setattr(server.aiohttp, "ClientSession", lambda **_kwargs: fake_session)
+
+        with caplog.at_level(logging.DEBUG, logger=server.logger.name):
+            with client.stream(
+                "GET",
+                "/api/proxy",
+                params={"url": "https://example.com/live.ts"},
+            ) as response:
+                body = b"".join(response.iter_bytes())
+
+        assert response.status_code == 200
+        assert body == b"first-chunk"
+        assert fake_response.released is True
+        assert fake_session.closed is True
+        debug_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno == logging.DEBUG
+        ]
+        assert any(
+            "Proxy stream ended quietly" in message and error_name in message
+            for message in debug_messages
+        )
+
     def test_proxy_rejects_invalid_url(self, client):
         r = client.get("/api/proxy?url=not-a-url")
         assert r.status_code == 400
