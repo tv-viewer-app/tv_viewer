@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'screens/home_screen.dart';
 import 'providers/channel_provider.dart';
 import 'utils/logger_service.dart';
@@ -100,7 +99,7 @@ class TVViewerApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      textTheme: GoogleFonts.interTextTheme().apply(
+      textTheme: ThemeData.light().textTheme.apply(
         fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
       ),
       appBarTheme: AppBarTheme(
@@ -156,7 +155,7 @@ class TVViewerApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
+      textTheme: ThemeData.dark().textTheme.apply(
         fontFamilyFallback: ['Roboto', 'Noto Sans', 'Noto Sans Hebrew', 'sans-serif'],
       ),
       appBarTheme: AppBarTheme(
