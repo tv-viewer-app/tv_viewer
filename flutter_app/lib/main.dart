@@ -9,7 +9,6 @@ import 'services/analytics_service.dart';
 import 'services/background_audio_service.dart';
 import 'services/crashlytics_service.dart';
 import 'services/parental_controls_service.dart';
-import 'services/play_integrity_service.dart';
 
 void main() async {
   final appStartTime = DateTime.now(); // Perf: measure app startup time
@@ -61,9 +60,6 @@ void main() async {
   } catch (e) {
     logger.warning('Crashlytics init failed (non-fatal)', e);
   }
-  
-  // Verify Play Integrity (fire-and-forget, never blocks startup)
-  PlayIntegrityService.instance.verifyOnStartup();
   
   // Wrap app in error zone to catch all errors
   runZonedGuarded(() {

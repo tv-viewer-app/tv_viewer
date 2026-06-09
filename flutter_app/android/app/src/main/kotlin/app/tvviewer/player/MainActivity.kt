@@ -6,12 +6,9 @@ import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import com.google.android.play.core.integrity.IntegrityManagerFactory
-import com.google.android.play.core.integrity.IntegrityTokenRequest
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "tv_viewer/intent"
-    private val INTEGRITY_CHANNEL = "tv_viewer/integrity"
     private val WAKELOCK_CHANNEL = "tv_viewer/wakelock"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -73,35 +70,6 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        // Play Integrity API channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INTEGRITY_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "requestIntegrityToken" -> {
-                    val nonce = call.argument<String>("nonce")
-                    if (nonce == null) {
-                        result.error("INVALID_NONCE", "Nonce is required", null)
-                        return@setMethodCallHandler
-                    }
-                    try {
-                        val integrityManager = IntegrityManagerFactory.create(applicationContext)
-                        val request = IntegrityTokenRequest.builder()
-                            .setNonce(nonce)
-                            .build()
-                        integrityManager.requestIntegrityToken(request)
-                            .addOnSuccessListener { response ->
-                                result.success(response.token())
-                            }
-                            .addOnFailureListener { e ->
-                                result.error("INTEGRITY_ERROR", e.message, e.toString())
-                            }
-                    } catch (e: Exception) {
-                        result.error("INTEGRITY_INIT_ERROR", e.message, e.toString())
-                    }
-                }
-                else -> result.notImplemented()
-            }
-        }
     }
 }
-
 
