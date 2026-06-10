@@ -50,9 +50,6 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
-        ndk {
-            debugSymbolLevel 'FULL'
-        }
     }
 
     signingConfigs {

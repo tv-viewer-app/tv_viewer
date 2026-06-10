@@ -5,7 +5,7 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.20.8] - 2026-06-10
+## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed crash monitor script for new Supabase schema
 - Merged aiohttp and uvicorn patches
 
-## [2.20.8] - 2026-06-10
+## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed google_fonts dependency (unblocks F-Droid build)
 - Web proxy: stream timeouts handled cleanly (35 server_errors eliminated)
 
-## [2.20.8] - 2026-06-10
+## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Fastlane metadata updated for store listings
 
-## [2.20.8] - 2026-06-10
+## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Supabase analytics RLS script for event collection
 
-## [2.20.8] - 2026-06-10
+## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
@@ -120,7 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
 
-## [2.20.8] - 2026-06-10
+## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
