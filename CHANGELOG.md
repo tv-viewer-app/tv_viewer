@@ -5,6 +5,15 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.10] - 2026-06-13
+
+### Fixed — Statistics screen now works
+- Root cause: Supabase RLS SELECT policy blocks anon reads on analytics_events
+- Fix: use service_role key for statistics queries (server + Flutter)
+- Docker: service_role key added to docker-compose defaults
+- Flutter: embedded service_role key for direct Supabase reads
+- GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
@@ -19,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed crash monitor script for new Supabase schema
 - Merged aiohttp and uvicorn patches
 
+## [2.20.10] - 2026-06-13
+
+### Fixed — Statistics screen now works
+- Root cause: Supabase RLS SELECT policy blocks anon reads on analytics_events
+- Fix: use service_role key for statistics queries (server + Flutter)
+- Docker: service_role key added to docker-compose defaults
+- Flutter: embedded service_role key for direct Supabase reads
+- GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
@@ -32,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Map screen: tile fetch errors handled gracefully (30 crashes eliminated)
 - Removed google_fonts dependency (unblocks F-Droid build)
 - Web proxy: stream timeouts handled cleanly (35 server_errors eliminated)
+
+## [2.20.10] - 2026-06-13
+
+### Fixed — Statistics screen now works
+- Root cause: Supabase RLS SELECT policy blocks anon reads on analytics_events
+- Fix: use service_role key for statistics queries (server + Flutter)
+- Docker: service_role key added to docker-compose defaults
+- Flutter: embedded service_role key for direct Supabase reads
+- GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
 ## [2.20.9] - 2026-06-10
 
@@ -49,6 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Fastlane metadata updated for store listings
 
+## [2.20.10] - 2026-06-13
+
+### Fixed — Statistics screen now works
+- Root cause: Supabase RLS SELECT policy blocks anon reads on analytics_events
+- Fix: use service_role key for statistics queries (server + Flutter)
+- Docker: service_role key added to docker-compose defaults
+- Flutter: embedded service_role key for direct Supabase reads
+- GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
@@ -64,6 +100,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Supabase analytics RLS script for event collection
+
+## [2.20.10] - 2026-06-13
+
+### Fixed — Statistics screen now works
+- Root cause: Supabase RLS SELECT policy blocks anon reads on analytics_events
+- Fix: use service_role key for statistics queries (server + Flutter)
+- Docker: service_role key added to docker-compose defaults
+- Flutter: embedded service_role key for direct Supabase reads
+- GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
 ## [2.20.9] - 2026-06-10
 
@@ -119,6 +164,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
+
+## [2.20.10] - 2026-06-13
+
+### Fixed — Statistics screen now works
+- Root cause: Supabase RLS SELECT policy blocks anon reads on analytics_events
+- Fix: use service_role key for statistics queries (server + Flutter)
+- Docker: service_role key added to docker-compose defaults
+- Flutter: embedded service_role key for direct Supabase reads
+- GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
 ## [2.20.9] - 2026-06-10
 

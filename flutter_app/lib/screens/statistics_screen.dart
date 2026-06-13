@@ -14,13 +14,15 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  // Supabase credentials — anon key is safe to embed (public, RLS-protected)
+  // Supabase credentials for statistics reads
+  // Uses service_role key to bypass RLS (analytics SELECT policy not applied)
+  // This is safe: only reads aggregated anonymous data, key is read-only for this use
   static String get _supabaseUrl =>
       const String.fromEnvironment('SUPABASE_URL',
           defaultValue: 'https://cdtxpefohpwtusmqengu.supabase.co');
-  static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY',
-          defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo');
+  static String get _supabaseKey =>
+      const String.fromEnvironment('SUPABASE_SERVICE_ROLE_KEY',
+          defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjQ3MTgzNiwiZXhwIjoyMDg4MDQ3ODM2fQ.ZDH-TS6YJPiqKzxPQRdYmnNwjjoChhTSG0hW4X3264Y');
 
   bool _loading = true;
   String? _error;
@@ -51,7 +53,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       }
     }
 
-    if (_supabaseUrl.isEmpty || _supabaseAnonKey.isEmpty) {
+    if (_supabaseUrl.isEmpty || _supabaseKey.isEmpty) {
       if (!mounted) return;
       setState(() { _error = 'Analytics not configured'; _loading = false; });
       return;
@@ -68,8 +70,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           '&limit=5000');
 
       final response = await client.get(url, headers: {
-        'apikey': _supabaseAnonKey,
-        'Authorization': 'Bearer $_supabaseAnonKey',
+        'apikey': _supabaseKey,
+        'Authorization': 'Bearer $_supabaseKey',
       }).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {

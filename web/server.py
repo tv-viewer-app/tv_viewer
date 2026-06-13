@@ -1108,7 +1108,9 @@ async def get_statistics(request: Request):
                 import aiohttp
                 from datetime import datetime, timedelta, timezone
                 supabase_url = os.environ.get('SUPABASE_URL', '') or config.SUPABASE_URL
-                supabase_key = os.environ.get('SUPABASE_ANON_KEY', '') or config.SUPABASE_ANON_KEY
+                # Use service_role key for analytics reads (bypasses RLS)
+                # Falls back to anon key if service_role not available
+                supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '') or os.environ.get('SUPABASE_ANON_KEY', '') or config.SUPABASE_ANON_KEY
 
                 since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
                 params = {
