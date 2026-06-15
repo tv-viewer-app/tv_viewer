@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 import '../utils/pinned_http_client.dart';
 
 /// Anonymous, privacy-first analytics service backed by Supabase REST API.
@@ -125,7 +126,10 @@ class AnalyticsService {
       _deviceId = prefs.getString(_deviceIdKey) ?? '';
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuidV4();
-        await prefs.setString(_deviceIdKey, _deviceId);
+        await PrefsLock.instance.synchronized(() async {
+          final lockedPrefs = await SharedPreferences.getInstance();
+          await lockedPrefs.setString(_deviceIdKey, _deviceId);
+        });
       }
 
       // Start periodic flush
@@ -160,8 +164,10 @@ class AnalyticsService {
   /// Allow user to opt in/out of anonymous analytics collection.
   Future<void> setEnabled(bool enabled) async {
     _userOptedIn = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_analyticsEnabledKey, enabled);
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_analyticsEnabledKey, enabled);
+    });
     _logger.info('[Analytics] User opted ${enabled ? "in" : "out"}');
   }
 

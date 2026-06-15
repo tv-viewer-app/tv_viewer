@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// Centralized settings service for TV Viewer app.
 ///
@@ -50,8 +51,10 @@ class SettingsService {
   }
 
   Future<void> setStreamTimeout(int seconds) async {
-    final prefs = await _getPrefs();
-    await prefs.setInt(_keyStreamTimeout, seconds.clamp(3, 30));
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setInt(_keyStreamTimeout, seconds.clamp(3, 30));
+    });
   }
 
   /// HTTP request timeout in seconds (3–30).
@@ -61,8 +64,10 @@ class SettingsService {
   }
 
   Future<void> setRequestTimeout(int seconds) async {
-    final prefs = await _getPrefs();
-    await prefs.setInt(_keyRequestTimeout, seconds.clamp(3, 30));
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setInt(_keyRequestTimeout, seconds.clamp(3, 30));
+    });
   }
 
   // ── Display Settings ─────────────────────────────────────────────
@@ -74,8 +79,10 @@ class SettingsService {
   }
 
   Future<void> setThemeMode(String mode) async {
-    final prefs = await _getPrefs();
-    await prefs.setString(_keyThemeMode, mode);
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setString(_keyThemeMode, mode);
+    });
   }
 
   /// Default group-by: 'category' or 'country'.
@@ -85,8 +92,10 @@ class SettingsService {
   }
 
   Future<void> setDefaultGroupBy(String groupBy) async {
-    final prefs = await _getPrefs();
-    await prefs.setString(_keyDefaultGroupBy, groupBy);
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setString(_keyDefaultGroupBy, groupBy);
+    });
   }
 
   // ── Repository Management ────────────────────────────────────────
@@ -107,14 +116,18 @@ class SettingsService {
 
   /// Save custom repo URLs.
   Future<void> setCustomRepos(List<String> repos) async {
-    final prefs = await _getPrefs();
-    await prefs.setString(_keyCustomRepos, jsonEncode(repos));
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setString(_keyCustomRepos, jsonEncode(repos));
+    });
   }
 
   /// Remove custom repos (revert to defaults).
   Future<void> clearCustomRepos() async {
-    final prefs = await _getPrefs();
-    await prefs.remove(_keyCustomRepos);
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.remove(_keyCustomRepos);
+    });
   }
 
   // ── Privacy Settings ─────────────────────────────────────────────
@@ -126,8 +139,10 @@ class SettingsService {
   }
 
   Future<void> setAnalyticsEnabled(bool enabled) async {
-    final prefs = await _getPrefs();
-    await prefs.setBool(_keyAnalyticsEnabled, enabled);
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setBool(_keyAnalyticsEnabled, enabled);
+    });
   }
 
   // ── Playback Settings ───────────────────────────────────────────
@@ -139,7 +154,9 @@ class SettingsService {
   }
 
   Future<void> setBackgroundPlayback(bool enabled) async {
-    final prefs = await _getPrefs();
-    await prefs.setBool(_keyBackgroundPlayback, enabled);
+    await PrefsLock.instance.synchronized(() async {
+      final prefs = await _getPrefs();
+      await prefs.setBool(_keyBackgroundPlayback, enabled);
+    });
   }
 }

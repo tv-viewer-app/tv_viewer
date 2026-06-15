@@ -13,6 +13,7 @@ import '../services/shared_db_service.dart';
 import '../services/epg_service.dart';
 import '../models/epg_info.dart';
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// #145: Sort field options for channel list.
 enum SortField { none, name, status, category, country }
@@ -1281,11 +1282,13 @@ class ChannelProvider extends ChangeNotifier {
       return;
     }
     try {
-      final prefs = await SharedPreferences.getInstance();
       // Encode JSON in a background isolate to avoid blocking UI
       final channelMaps = _channels.map((c) => c.toJson()).toList();
       final json = await compute(_encodeJsonInBackground, channelMaps);
-      await prefs.setString('channels_cache', json);
+      await PrefsLock.instance.synchronized(() async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('channels_cache', json);
+      });
       logger.debug('Saved ${_channels.length} channels to cache');
     } catch (e, stackTrace) {
       logger.error('Error saving cache', e, stackTrace);
@@ -1303,7 +1306,6 @@ class ChannelProvider extends ChangeNotifier {
   /// This acts as a fallback when Supabase is unavailable
   Future<void> _saveLocalHealthCache() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final healthMap = <String, Map<String, dynamic>>{};
       
       for (final channel in _channels) {
@@ -1317,7 +1319,10 @@ class ChannelProvider extends ChangeNotifier {
         }
       }
       
-      await prefs.setString('channel_health_cache', jsonEncode(healthMap));
+      await PrefsLock.instance.synchronized(() async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('channel_health_cache', jsonEncode(healthMap));
+      });
       logger.debug('Saved local health cache for ${healthMap.length} channels');
     } catch (e, stackTrace) {
       logger.error('Error saving local health cache', e, stackTrace);
@@ -1357,8 +1362,10 @@ class ChannelProvider extends ChangeNotifier {
       logger.error('Error loading local health cache (clearing corrupt data)', e, stackTrace);
       // Clear corrupt cache to prevent repeated failures on every startup
       try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('channel_health_cache');
+        await PrefsLock.instance.synchronized(() async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('channel_health_cache');
+        });
       } catch (_) {}
       return {};
     }
@@ -1374,25 +1381,24 @@ class ChannelProvider extends ChangeNotifier {
     int? responseTimeMs,
   }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString('channel_health_cache');
-      Map<String, dynamic> healthMap = {};
-      
-      // Load existing cache
-      if (json != null) {
-        healthMap = jsonDecode(json) as Map<String, dynamic>;
-      }
-      
-      // Update this channel's status
-      final urlHash = SharedDbService.hashUrl(url);
-      healthMap[urlHash] = {
-        'status': isWorking ? 'working' : 'failed',
-        'lastChecked': DateTime.now().toUtc().toIso8601String(),
-        'responseTimeMs': responseTimeMs,
-      };
-      
-      // Save back to SharedPreferences
-      await prefs.setString('channel_health_cache', jsonEncode(healthMap));
+      await PrefsLock.instance.synchronized(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final json = prefs.getString('channel_health_cache');
+        Map<String, dynamic> healthMap = {};
+
+        if (json != null) {
+          healthMap = jsonDecode(json) as Map<String, dynamic>;
+        }
+
+        final urlHash = SharedDbService.hashUrl(url);
+        healthMap[urlHash] = {
+          'status': isWorking ? 'working' : 'failed',
+          'lastChecked': DateTime.now().toUtc().toIso8601String(),
+          'responseTimeMs': responseTimeMs,
+        };
+
+        await prefs.setString('channel_health_cache', jsonEncode(healthMap));
+      });
       logger.debug('Updated local health cache for channel: $url (working=$isWorking)');
       
       // Fire-and-forget report to Supabase (SECONDARY, optional)
