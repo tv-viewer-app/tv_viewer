@@ -5,12 +5,26 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.11] - 2026-06-15
 
 ### Fixed
 - SQLite BUSY errors eliminated (SharedPreferences write mutex — 75 errors fixed)
 - F-Droid metadata rewritten from scratch (pipeline should pass now)
 - Merged 4 Dependabot patches (aiohttp, certifi, uvicorn, requests)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.10] - 2026-06-13
 
@@ -21,12 +35,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flutter: embedded service_role key for direct Supabase reads
 - GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
 - In-app update restored (REQUEST_INSTALL_PACKAGES permission)
 - Play Core excluded from APK (F-Droid compliance)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.5] - 2026-06-09
 
@@ -35,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed crash monitor script for new Supabase schema
 - Merged aiohttp and uvicorn patches
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.10] - 2026-06-13
 
 ### Fixed — Statistics screen now works
@@ -44,12 +79,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flutter: embedded service_role key for direct Supabase reads
 - GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
 - In-app update restored (REQUEST_INSTALL_PACKAGES permission)
 - Play Core excluded from APK (F-Droid compliance)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.4] - 2026-06-09
 
@@ -58,6 +107,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed google_fonts dependency (unblocks F-Droid build)
 - Web proxy: stream timeouts handled cleanly (35 server_errors eliminated)
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.10] - 2026-06-13
 
 ### Fixed — Statistics screen now works
@@ -67,12 +123,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flutter: embedded service_role key for direct Supabase reads
 - GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
 - In-app update restored (REQUEST_INSTALL_PACKAGES permission)
 - Play Core excluded from APK (F-Droid compliance)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.3] - 2026-06-07
 
@@ -83,6 +153,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Fastlane metadata updated for store listings
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.10] - 2026-06-13
 
 ### Fixed — Statistics screen now works
@@ -92,12 +169,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flutter: embedded service_role key for direct Supabase reads
 - GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
 - In-app update restored (REQUEST_INSTALL_PACKAGES permission)
 - Play Core excluded from APK (F-Droid compliance)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.2] - 2026-06-06
 
@@ -108,6 +199,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Supabase analytics RLS script for event collection
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.10] - 2026-06-13
 
 ### Fixed — Statistics screen now works
@@ -117,12 +215,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flutter: embedded service_role key for direct Supabase reads
 - GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
 - In-app update restored (REQUEST_INSTALL_PACKAGES permission)
 - Play Core excluded from APK (F-Droid compliance)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.0] - 2026-06-06
 
@@ -172,6 +284,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Pin google_fonts <6.3.0 (const evaluation error on Flutter 3.32+)
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.10] - 2026-06-13
 
 ### Fixed — Statistics screen now works
@@ -181,12 +300,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flutter: embedded service_role key for direct Supabase reads
 - GitHub secret SUPABASE_SERVICE_ROLE_KEY updated to new project
 
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
+
 ## [2.20.9] - 2026-06-10
 
 ### Fixed
 - Statistics screen works on Android (embedded Supabase URL, fixed event_data query)
 - In-app update restored (REQUEST_INSTALL_PACKAGES permission)
 - Play Core excluded from APK (F-Droid compliance)
+
+## [2.20.13] - 2026-06-20
+
+### Fixed
+- Statistics screen on Android: certificate pinning rejected Supabase's rotated TLS cert
+- Removed Supabase from certificate pinning hosts (they rotate certs frequently)
+- Statistics queries use standard HTTP client instead of pinned client
 
 ## [2.20.0] - 2026-06-06
 
