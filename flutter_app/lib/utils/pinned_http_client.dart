@@ -115,8 +115,8 @@ class PinnedHttpClient {
 
   /// Hosts that should have their certificates pinned.
   static bool _isPinnedHost(String host) {
-    return host.endsWith('.supabase.co') ||
-        host.endsWith('.supabase.in') ||
-        host == 'api.github.com';
+    // Only pin GitHub API — Supabase rotates certs frequently
+    // and pinning causes silent failures on mobile
+    return host == 'api.github.com';
   }
 }

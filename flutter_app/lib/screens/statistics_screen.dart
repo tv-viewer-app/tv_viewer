@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/pinned_http_client.dart';
 
 /// Community statistics screen showing aggregated usage data.
 /// Queries only event_type, country, platform, channel_name (no device_id).
@@ -59,7 +58,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       return;
     }
 
-    final client = PinnedHttpClient.create();
+    final client = http.Client(); // Don't use PinnedHttpClient — cert pins may be stale
     try {
       final since = DateTime.now().subtract(const Duration(days: 30)).toUtc().toIso8601String();
       // Query fields that exist — channel info is inside event_data JSON
