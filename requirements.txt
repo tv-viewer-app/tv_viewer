@@ -13,7 +13,7 @@ Pillow>=12.2.0  # Image processing for thumbnails
 defusedxml>=0.7.1  # Safe XML parsing — prevents XXE and billion-laughs attacks
 
 # Web interface (optional — enables browser-based TV viewing)
-fastapi>=0.137.0
+fastapi>=0.138.0
 uvicorn[standard]>=0.49.0
 httpx>=0.28.1  # Required for FastAPI TestClient (starlette dependency)
 
