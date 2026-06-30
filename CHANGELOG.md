@@ -5,6 +5,16 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.14] - 2026-06-30
+
+### Fixed
+- 675 false crash reports: network errors (SocketException) now logged as warnings, not crashes
+- Statistics web UI: fixed "undefined" for channels played
+- Merged 7 Dependabot patches
+
+### Changed
+- Supabase MCP moved to project-level config (no longer global)
+
 ## [2.20.13] - 2026-06-20
 
 ### Fixed
