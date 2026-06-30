@@ -31,7 +31,7 @@ dependencies:
   
   # Storage
   shared_preferences: ^2.5.5
-  path_provider: ^2.1.2
+  path_provider: ^2.1.6
   
   # Utils
   url_launcher: ^6.3.2
