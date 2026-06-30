@@ -2,7 +2,7 @@
 python-vlc>=3.0.21203
 requests>=2.34.2
 aiohttp>=3.14.1
-certifi>=2026.5.20   # CA certificate bundle for SSL pinning (Issue #97)
+certifi>=2026.6.17   # CA certificate bundle for SSL pinning (Issue #97)
 # pychromecast — OPTIONAL. Removed from default install because zeroconf (its
 # transitive dep) is a known Windows Defender false-positive trigger and the
 # Cast feature is opt-in. To enable Cast support: pip install pychromecast
