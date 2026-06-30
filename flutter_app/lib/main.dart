@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show HttpException, SocketException;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
@@ -61,6 +62,35 @@ void main() async {
     logger.warning('Crashlytics init failed (non-fatal)', e);
   }
   
+  void reportUnhandledError(dynamic error, StackTrace? stackTrace) {
+    final errorText = error.toString();
+    final isNetworkError = error is SocketException ||
+        error is HttpException ||
+        errorText.contains('ClientException') ||
+        errorText.contains('SocketException') ||
+        errorText.contains('Connection') ||
+        errorText.contains('Network is unreachable');
+
+    if (isNetworkError) {
+      analytics.trackError(
+        error,
+        stackTrace,
+        severity: 'warning',
+        isHandled: false,
+      );
+      crashlytics.recordError(
+        error,
+        stackTrace,
+        reason: 'Unhandled network error',
+        fatal: false,
+      );
+      return;
+    }
+
+    analytics.trackCrash(error, stackTrace);
+    crashlytics.recordError(error, stackTrace, fatal: true);
+  }
+
   // Wrap app in error zone to catch all errors
   runZonedGuarded(() {
     // Catch Flutter framework errors
@@ -70,16 +100,14 @@ void main() async {
         details.exception,
         details.stack,
       );
-      analytics.trackCrash(details.exception, details.stack);
-      crashlytics.recordFlutterError(details);
+      reportUnhandledError(details.exception, details.stack);
     };
     
     runApp(const TVViewerApp());
   }, (error, stackTrace) {
     // Catch async errors not caught by Flutter
     logger.error('Uncaught async error', error, stackTrace);
-    analytics.trackCrash(error, stackTrace);
-    crashlytics.recordError(error, stackTrace, fatal: true);
+    reportUnhandledError(error, stackTrace);
   });
 }
 
