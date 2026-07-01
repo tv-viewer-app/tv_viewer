@@ -4,10 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TV Viewer</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1565C0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icon-512.png">
     <link rel="stylesheet"
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
@@ -2172,5 +2176,6 @@ function markBroken(url, failureType = 'unknown') {
 // ─── Init ───────────────────────────────────────────────────────────────────
 init();
 </script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');</script>
 </body>
 </html>

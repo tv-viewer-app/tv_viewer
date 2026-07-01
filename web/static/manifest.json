@@ -1,0 +1,27 @@
+{
+  "name": "TV Viewer - IPTV Streaming",
+  "short_name": "TV Viewer",
+  "description": "Free IPTV streaming — 21,000+ live TV and radio channels worldwide",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1c1b1f",
+  "theme_color": "#1565C0",
+  "orientation": "any",
+  "categories": ["entertainment", "music", "news"],
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

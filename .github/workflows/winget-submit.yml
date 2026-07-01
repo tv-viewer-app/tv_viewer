@@ -1,0 +1,50 @@
+name: WinGet Submit
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 2.21.1)'
+        required: true
+
+jobs:
+  submit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Update and submit
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          $url = "https://github.com/tv-viewer-app/tv_viewer/releases/download/v${version}/TV_Viewer-windows.zip"
+
+          if ($env:WINGET_TOKEN) {
+            ./wingetcreate.exe update TVViewerApp.TVViewer `
+              --version $version `
+              --urls $url `
+              --submit `
+              --token $env:WINGET_TOKEN
+          } else {
+            echo "WINGET_GITHUB_TOKEN not set — skipping submission"
+            echo "To enable: create a GitHub PAT and add as repo secret WINGET_GITHUB_TOKEN"
+          }
