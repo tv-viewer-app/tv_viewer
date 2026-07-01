@@ -5,6 +5,18 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.1] - 2026-07-01
+
+### Security
+- Migrated from JWT tokens to new Supabase API keys format
+- Publishable key (sb_publishable_*) replaces old anon JWT
+- Secret key stored only in GitHub Actions secrets (never in code)
+- Added docs/SECURITY.md with key management guidelines
+
+### Fixed
+- All old JWT tokens removed from source code
+- GitHub secrets updated with rotated keys
+
 ## [2.21.0] - 2026-07-01
 
 ### Security
