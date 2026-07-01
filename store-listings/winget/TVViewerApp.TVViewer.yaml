@@ -1,0 +1,32 @@
+# Created using TV Viewer build system
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.singleton.1.6.0.schema.json
+
+PackageIdentifier: TVViewerApp.TVViewer
+PackageVersion: 2.20.13
+PackageName: TV Viewer
+Publisher: TV Viewer App
+PublisherUrl: https://github.com/tv-viewer-app/tv_viewer
+PublisherSupportUrl: https://github.com/tv-viewer-app/tv_viewer/issues
+License: MIT
+LicenseUrl: https://github.com/tv-viewer-app/tv_viewer/blob/master/LICENSE
+ShortDescription: Free IPTV streaming with 21,000+ live TV and radio channels worldwide
+Description: |-
+  TV Viewer is a free, open-source IPTV streaming application.
+  Browse 21,000+ live TV and radio channels from 100+ countries.
+  Features: search, favorites, EPG guide, background playback.
+  No ads, no account required, no tracking.
+Tags:
+  - iptv
+  - tv
+  - streaming
+  - radio
+  - media-player
+  - video
+ReleaseNotesUrl: https://github.com/tv-viewer-app/tv_viewer/releases/tag/v2.20.13
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: https://github.com/tv-viewer-app/tv_viewer/releases/download/v2.20.13/TV_Viewer-windows.zip
+    InstallerSha256: F6396D2E92AFE25B7BDB58E9836244AEB47014967CFA83345097FAEA824440CD
+ManifestType: singleton
+ManifestVersion: 1.6.0

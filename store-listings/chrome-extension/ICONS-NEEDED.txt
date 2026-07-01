@@ -1,0 +1,1 @@
+Copy from web/static/icon-512.png and resize
