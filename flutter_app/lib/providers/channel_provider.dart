@@ -1146,8 +1146,14 @@ class ChannelProvider extends ChangeNotifier {
       return true;
     }).toList();
 
-    // #145: Apply sort after filtering
-    if (_sortField != SortField.none) {
+    // Default to verified-first browsing when no explicit sort is active.
+    if (_sortField == SortField.none) {
+      _filteredChannels.sort((a, b) {
+        final cmp = b.healthScore.compareTo(a.healthScore);
+        if (cmp != 0) return cmp;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+    } else {
       _filteredChannels.sort((a, b) {
         int cmp;
         switch (_sortField) {

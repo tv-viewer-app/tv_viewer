@@ -78,13 +78,18 @@
         .card-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .card-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .card-epg { font-size: 10px; color: var(--accent); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; }
-        .card-dot.working { background: var(--success); animation: pulse 1.5s infinite; }
+        .card-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; }
+        .card-dot.reliable, .card-dot.working { background: var(--success); animation: pulse 1.5s infinite; }
+        .card-dot.unstable, .card-dot.unchecked { background: var(--fav); }
         .card-dot.offline { background: var(--live); }
-        .card-dot.unchecked { background: var(--accent); opacity: .55; }
         /* Back-compat: keep .live/.ok as aliases so any legacy markup still renders */
         .card-dot.live { background: var(--success); animation: pulse 1.5s infinite; }
         .card-dot.ok { background: var(--accent); opacity: .55; }
+        .health-badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 10px; color: var(--text-sec); text-transform: capitalize; }
+        .health-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; }
+        .health-badge.reliable::before { background: var(--success); }
+        .health-badge.unstable::before { background: var(--fav); }
+        .health-badge.offline::before { background: var(--live); }
         .card-actions { display: flex; gap: 4px; margin-top: 8px; }
         .card-actions button { font-size: 10px; padding: 3px 7px; border: 1px solid var(--border); background: transparent; color: var(--text-sec); border-radius: 4px; cursor: pointer; }
         .card-actions button:hover { border-color: var(--accent); color: var(--accent); }
@@ -225,7 +230,7 @@
                 <select id="filter-category"><option value="">All Categories</option></select>
                 <select id="filter-country"><option value="">All Countries</option></select>
                 <select id="filter-type"><option value="">All Types</option><option value="TV">📺 TV</option><option value="Radio">📻 Radio</option></select>
-                <select id="filter-status"><option value="">All Channels</option><option value="hide-broken">Hide Broken</option></select>
+                <select id="filter-status"><option value="">Show: All</option><option value="verified">Show: Verified Only</option></select>
             </div>
             <div class="grid" id="grid"></div>
         </div>
@@ -567,14 +572,18 @@ function renderChannels(chs) {
     if (typeFilter) {
         displayChs = displayChs.filter(ch => (ch.media_type || 'TV') === typeFilter);
     }
-    // Apply status filter
+    // Apply verified/reliability filter
     const statusFilter = document.getElementById('filter-status').value;
-    if (statusFilter === 'hide-broken') {
-        displayChs = displayChs.filter(ch => channelHealth[ch.url] !== 'broken' && ch.status !== 'offline');
+    if (statusFilter === 'verified') {
+        displayChs = displayChs.filter(ch => effectiveHealth(ch) === 'reliable');
     }
 
-    // Sort alphabetically by name
-    displayChs.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, {sensitivity: 'base'}));
+    // Preserve server-side verified-first order, then break ties by name.
+    displayChs.sort((a, b) => {
+        const scoreDiff = (b.health_score || 0) - (a.health_score || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (a.name || '').localeCompare(b.name || '', undefined, {sensitivity: 'base'});
+    });
 
     grid.innerHTML = displayChs.map((ch, i) => {
         // SECURITY (v2.16.1): Do NOT inline `onerror="mono('${esc(ch.name)}')"`.
@@ -586,21 +595,11 @@ function renderChannels(chs) {
         const logo = ch.logo
             ? `<img class="card-logo" src="${esc(ch.logo)}" data-fallback-name="${esc(ch.name||'')}">`
             : mono(ch.name);
-        // Status dot — precedence: (1) local 'broken' wins over any catalog
-        // status (user just reported it doesn't work), (2) local 'working' or
-        // catalog 'working' → green, (3) catalog 'offline' → red, (4) unknown.
-        const localH = channelHealth[ch.url];
-        let eff;
-        if (localH === 'broken')             eff = 'offline';
-        else if (localH === 'working')       eff = 'working';
-        else if (ch.status === 'offline')    eff = 'offline';
-        else if (ch.status === 'working')    eff = 'working';
-        else                                  eff = 'unchecked';
-        const dot = eff;
+        const health = effectiveHealth(ch);
         const isFav = favorites.has(ch.url);
         return `<div class="card" data-idx="${i}" data-url="${esc(ch.url||'')}">
-            <div class="card-dot ${dot}"></div>
-            <div class="card-top">${logo}<div class="card-info"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div></div></div>
+            <div class="card-dot ${health}"></div>
+            <div class="card-top">${logo}<div class="card-info"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div><div class="health-badge ${health}">${esc(health)}</div></div></div>
             <div class="card-epg" id="epg-${i}"></div>
             <div class="card-actions"><button onclick="event.stopPropagation();playChannel(${i})">▶ Play</button><button onclick="event.stopPropagation();toggleFav(${i})" style="${isFav?'color:var(--fav);border-color:var(--fav)':''}">${isFav?'★':'☆'}</button><button onclick="event.stopPropagation();castChannel(${i})">📡</button><button class="report-btn" onclick="event.stopPropagation();reportBroken(${i})">⚠</button></div>
         </div>`;
@@ -730,15 +729,78 @@ let audioCtx = null, analyser = null, animFrameId = null, statsInterval = null;
 
 let currentSources = []; // All available sources for current channel
 let currentSourceIdx = 0; // Current source index
+let currentChannel = null;
+let currentIsRadio = false;
+let currentFailureType = 'unknown';
+let currentStreamAttemptId = 0;
 // Sources that already failed during the *current* play attempt. Reset to
 // empty whenever the user picks a different channel. Without this, the old
 // `(idx + 1) % length` rotation would cycle dead sources forever — a single
 // 403 from each source produced thousands of /api/proxy requests per second.
 let _triedSources = new Set();
 
+const failMessages = {
+    geo_blocked: '🌍 This channel may be geo-restricted in your region',
+    timeout: '⏱️ Stream timed out — the source may be slow or offline',
+    not_found: '❌ Stream not found — this channel may have moved',
+    dns_error: '🔌 Network error — check your internet connection',
+    tls_error: '🔒 Security error — this stream has certificate issues',
+    connection_error: '📡 Connection failed — stream may be offline',
+    unsupported_format: '🎬 Unsupported stream format',
+    server_error: '🛠️ Server error — the source is having trouble',
+    unknown: '⚠️ Stream unavailable — try another source'
+};
+
+function classifyFailure(errorMsg) {
+    const msg = String(errorMsg || '').toLowerCase();
+    if (msg.includes('403') || msg.includes('forbidden')) return 'geo_blocked';
+    if (msg.includes('404') || msg.includes('not found')) return 'not_found';
+    if (msg.includes('timeout') || msg.includes('timed out')) return 'timeout';
+    if (msg.includes('ssl') || msg.includes('tls') || msg.includes('certificate')) return 'tls_error';
+    if (msg.includes('dns') || msg.includes('resolve') || msg.includes('getaddrinfo')) return 'dns_error';
+    if (/\b5\d{2}\b/.test(msg) || msg.includes('server error')) return 'server_error';
+    if (msg.includes('codec') || msg.includes('format') || msg.includes('unsupported') || msg.includes('notsupportederror')) return 'unsupported_format';
+    if (msg.includes('connection') || msg.includes('refused') || msg.includes('reset')) return 'connection_error';
+    return 'unknown';
+}
+
+function failureTypeFromError(error) {
+    if (!error) return 'unknown';
+    if (typeof error === 'string') return classifyFailure(error);
+    if (error.failure_type && failMessages[error.failure_type]) return error.failure_type;
+    const parts = [
+        error.message,
+        error.detail,
+        error.type,
+        error.details,
+        error.code,
+        error.status,
+        error.reason,
+        error.response && error.response.code,
+        error.response && error.response.text,
+    ].filter(Boolean);
+    return classifyFailure(parts.join(' '));
+}
+
+function getFailureMessage(failureType, channelName, allSourcesFailed = false) {
+    const base = failMessages[failureType] || failMessages.unknown;
+    return allSourcesFailed && channelName ? `${base} — all sources failed for ${channelName}` : base;
+}
+
+function getChannelSources(channel) {
+    const urls = (channel && channel.urls && channel.urls.length > 0) ? channel.urls : [channel && channel.url];
+    return [...new Set(urls.filter(Boolean))];
+}
+
+function updateSourceSelector(url) {
+    const sel = document.getElementById('p-sources');
+    if (sel && sel.style.display !== 'none') sel.value = url;
+}
+
 function playChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
     playIdx = idx;
+    currentChannel = ch;
     analytics.play(ch);
     const overlay = document.getElementById('player-overlay');
     const video = document.getElementById('player');
@@ -763,23 +825,24 @@ function playChannel(idx) {
     hideRadioOverlay();
 
     const isRadio = ch.media_type === 'Radio' || (ch.category && ch.category.toLowerCase().includes('radio'));
+    currentIsRadio = isRadio;
+    currentFailureType = 'unknown';
 
     // Reset sources — use all known URLs for auto-retry
-    currentSources = (ch.urls && ch.urls.length > 0) ? [...ch.urls] : [ch.url];
+    currentSources = getChannelSources(ch);
     currentSourceIdx = 0;
     _triedSources = new Set();
 
     // Check for a remembered working source — start from it
-    let startUrl = ch.url;
     try {
         const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
         const remembered = mem[ch.name];
-        if (remembered && currentSources.includes(remembered)) {
-            startUrl = remembered;
-            currentSourceIdx = currentSources.indexOf(remembered);
+        if (remembered && currentSources.includes(remembered) && currentSources[0] !== remembered) {
+            currentSources = [remembered, ...currentSources.filter(url => url !== remembered)];
         }
     } catch(e) {}
 
+    const startUrl = currentSources[0] || ch.url;
     startStream(startUrl, video, isRadio);
 
     // Show radio visualizer if audio-only
@@ -791,7 +854,7 @@ function playChannel(idx) {
     startStats(video);
 
     // Load sources (also enables auto-retry with alternatives)
-    loadSources(ch.name, ch.url);
+    loadSources(ch.name, startUrl);
 
     // Load EPG with schedule
     loadPlayerEpg(ch.name);
@@ -799,43 +862,37 @@ function playChannel(idx) {
     saveRecent(ch);
 }
 
-function tryNextSource() {
-    if (currentSources.length === 0) return false;
+function tryNextSource(channel = currentChannel, urlIndex = currentSourceIdx + 1, failureType = currentFailureType) {
+    if (!channel) return false;
+    if (currentSources.length === 0) currentSources = getChannelSources(channel);
+    if (currentSources[currentSourceIdx]) _triedSources.add(currentSources[currentSourceIdx]);
+    currentFailureType = failureType || 'unknown';
 
-    // Mark the current source as tried before advancing. If every source
-    // has now been tried, give up — don't cycle dead URLs forever.
-    if (currentSources[currentSourceIdx]) {
-        _triedSources.add(currentSources[currentSourceIdx]);
-    }
-    if (_triedSources.size >= currentSources.length) {
+    if (urlIndex >= currentSources.length || _triedSources.size >= currentSources.length) {
         if (hls) { hls.destroy(); hls = null; }
-        document.getElementById('player').pause();
-        toast('Stream unavailable — all sources failed');
+        const video = document.getElementById('player');
+        video.pause();
+        toast(getFailureMessage(currentFailureType, channel.name, true));
+        analytics.fail(channel, `all_urls_failed:${currentFailureType}`);
         return false;
     }
 
-    // Find the next source we have NOT tried yet (skip dead ones).
-    let nextIdx = currentSourceIdx;
-    for (let i = 0; i < currentSources.length; i++) {
-        nextIdx = (nextIdx + 1) % currentSources.length;
-        if (!_triedSources.has(currentSources[nextIdx])) break;
-    }
-    currentSourceIdx = nextIdx;
-    const url = currentSources[currentSourceIdx];
+    currentSourceIdx = urlIndex;
+    const url = currentSources[urlIndex];
     const video = document.getElementById('player');
     stopStats();
     if (hls) { hls.destroy(); hls = null; }
-    toast(`Switching to source ${currentSourceIdx + 1}/${currentSources.length}...`);
-    // Update source selector dropdown
-    const sel = document.getElementById('p-sources');
-    if (sel.style.display !== 'none') sel.value = url;
-    startStream(url, video, false);
+    toast(`Source ${urlIndex}/${currentSources.length} failed, trying ${urlIndex + 1}/${currentSources.length}...`);
+    updateSourceSelector(url);
+    startStream(url, video, currentIsRadio);
     startStats(video);
     return true;
 }
 
 function startStream(url, video, isRadio) {
     const streamStartTime = performance.now(); // Perf: measure time-to-first-frame
+    const attemptId = ++currentStreamAttemptId;
+    currentFailureType = 'unknown';
     // Use proxy for all streams (most lack CORS headers)
     let streamUrl = url;
     if (!url.startsWith('/api/proxy')) {
@@ -843,23 +900,43 @@ function startStream(url, video, isRadio) {
     }
 
     const isHls = url.includes('.m3u8') || url.includes('m3u8');
+    let settled = false;
+
+    const failCurrentSource = (error) => {
+        if (attemptId !== currentStreamAttemptId) return false;
+        if (settled) return false;
+        settled = true;
+        clearTimeout(loadTimer);
+        const failureType = failureTypeFromError(error);
+        currentFailureType = failureType;
+        markBroken(url, failureType);
+        return tryNextSource(currentChannel, currentSourceIdx + 1, failureType);
+    };
 
     // Timeout — try next source if nothing plays in 12s
     const loadTimer = setTimeout(() => {
-        if (video.readyState < 2 && currentSources.length > 1) {
-            markBroken(url);
-            tryNextSource();
-        } else if (video.readyState < 2) {
-            toast('Stream unavailable');
-        }
+        if (attemptId !== currentStreamAttemptId) return;
+        if (video.readyState < 2) failCurrentSource({ message: 'timeout' });
     }, 12000);
 
     video.addEventListener('playing', () => {
+        if (attemptId !== currentStreamAttemptId) return;
+        settled = true;
         clearTimeout(loadTimer);
+        currentFailureType = 'unknown';
+        currentSourceIdx = Math.max(0, currentSources.indexOf(url));
         markPlaying(url);
         // Perf: report stream latency
         const latencyMs = Math.round(performance.now() - streamStartTime);
         analytics.perf('stream_to_first_frame', latencyMs);
+    }, { once: true });
+    video.addEventListener('error', () => {
+        if (attemptId !== currentStreamAttemptId) return;
+        const mediaError = video.error;
+        failCurrentSource({
+            code: mediaError && mediaError.code,
+            message: mediaError && mediaError.message ? mediaError.message : `media error ${mediaError && mediaError.code ? mediaError.code : ''}`
+        });
     }, { once: true });
 
     if (isHls) {
@@ -896,35 +973,34 @@ function startStream(url, video, isRadio) {
             hls.on(Hls.Events.ERROR, (e, data) => {
                 console.warn('HLS error:', data.type, data.details, data.fatal);
                 if (data.fatal) {
-                    clearTimeout(loadTimer);
                     if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.response && data.response.code < 400) {
                         // Transient network error — try recovery once
                         hls.startLoad();
                         setTimeout(() => {
+                            if (attemptId !== currentStreamAttemptId) return;
                             if (video.readyState < 2) {
                                 hls.destroy(); hls = null;
-                                if (!tryNextSource()) toast('Stream unavailable — try another source');
+                                failCurrentSource(data);
                             }
                         }, 4000);
                     } else {
                         // HTTP error (404, 403, etc.) or media error — switch source immediately
                         hls.destroy(); hls = null;
-                        if (!tryNextSource()) {
-                            toast('Stream unavailable — try another source');
-                        }
+                        failCurrentSource(data);
                     }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = streamUrl; video.play().catch(()=>{});
         } else {
-            video.src = streamUrl; video.play().catch(()=> toast('HLS not supported'));
+            video.src = streamUrl; video.play().catch(() => {
+                failCurrentSource({ message: 'HLS not supported' });
+            });
         }
     } else {
         video.src = streamUrl;
-        video.play().catch(() => {
-            clearTimeout(loadTimer);
-            if (!tryNextSource()) toast('Stream unavailable');
+        video.play().catch((e) => {
+            failCurrentSource(e);
         });
     }
 }
@@ -985,18 +1061,20 @@ async function loadSources(name, currentUrl) {
         } catch(e) {}
 
         // Update currentSources with all available URLs, preferred first
-        currentSources = sources.map(s => s.url);
+        currentSources = [...new Set(sources.map(s => s.url).filter(Boolean))];
         if (preferredUrl && currentSources.includes(preferredUrl) && currentSources[0] !== preferredUrl) {
             currentSources = [preferredUrl, ...currentSources.filter(u => u !== preferredUrl)];
         }
         currentSourceIdx = currentSources.indexOf(currentUrl);
         if (currentSourceIdx < 0) currentSourceIdx = 0;
 
+        const sourceMap = new Map(sources.map(s => [s.url, s]));
         sel.style.display = '';
-        sel.innerHTML = sources.map((s, i) => {
-            const selected = s.url === currentUrl ? ' selected' : '';
+        sel.innerHTML = currentSources.map((url, i) => {
+            const s = sourceMap.get(url) || { url, status: '' };
+            const selected = i === currentSourceIdx ? ' selected' : '';
             const label = `Source ${i + 1}${s.status === 'working' ? ' ✓' : ''}`;
-            return `<option value="${esc(s.url)}"${selected}>${label}</option>`;
+            return `<option value="${esc(url)}"${selected}>${label}</option>`;
         }).join('');
     } catch(e) {
         sel.style.display = 'none';
@@ -1618,6 +1696,13 @@ function clientFilter(channels) {
     );
 }
 
+function effectiveHealth(ch) {
+    const localH = channelHealth[ch.url];
+    if (localH === 'broken') return 'offline';
+    if (localH === 'working') return 'reliable';
+    return ch.health || 'offline';
+}
+
 async function loadChannels(append = false) {
     const mySeq = ++_loadSeq;
     // Cancel any earlier in-flight fetch so we don't waste bandwidth on
@@ -1632,6 +1717,7 @@ async function loadChannels(append = false) {
     if (currentCat) p.category = currentCat;
     if (currentCountry) p.country = currentCountry;
     if (currentView === 'favorites') p.favorites_only = true;
+    if (document.getElementById('filter-status')?.value === 'verified') p.verified_only = true;
     const typeFilter = document.getElementById('filter-type')?.value;
     if (typeFilter) p.media_type = typeFilter;
 
@@ -1815,9 +1901,11 @@ document.getElementById('p-sources').onchange = (e) => {
     const url = e.target.value;
     if (!url) return;
     const video = document.getElementById('player');
+    currentSourceIdx = Math.max(0, currentSources.indexOf(url));
+    _triedSources = new Set(currentSources.slice(0, currentSourceIdx));
     stopStats();
     if (hls) { hls.destroy(); hls = null; }
-    startStream(url, video);
+    startStream(url, video, currentIsRadio);
     startStats(video);
     toast('Switched source');
 };
@@ -1911,7 +1999,7 @@ function hash(s) { let h=0; for(let i=0;i<(s||'').length;i++){h=((h<<5)-h)+s.cha
 function mono(name) { const l=(name||'?')[0].toUpperCase(); const c=MONO_COLORS[Math.abs(hash(name))%MONO_COLORS.length]; return `<div class="card-mono" style="background:${c}">${l}</div>`; }
 function debounce(fn,ms) { let t; return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}; }
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
-function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,category:ch.category,country:ch.country,logo:ch.logo,status:ch.status});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,50)));}catch(e){} }
+function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,category:ch.category,country:ch.country,logo:ch.logo,status:ch.status,health:ch.health,health_score:ch.health_score});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,50)));}catch(e){} }
 
 // ─── Channel Health ─────────────────────────────────────────────────────────
 // Per-session dedup: don't re-POST the same (url,status) within the session.
@@ -1925,7 +2013,7 @@ function _shouldReport(url, status, promote) {
     return true;
 }
 
-function reportHealth(url, status) {
+function reportHealth(url, status, reason = '') {
     // Update local state
     channelHealth[url] = status;
     localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth));
@@ -1934,7 +2022,7 @@ function reportHealth(url, status) {
     fetch('/api/health/report', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url, status})
+        body: JSON.stringify({url, status, reason})
     }).catch(() => {});
 }
 
@@ -1978,10 +2066,10 @@ function markPlaying(url) {
     }
 }
 
-function markBroken(url) {
-    reportHealth(url, 'broken');
+function markBroken(url, failureType = 'unknown') {
+    reportHealth(url, 'broken', failureType);
     const ch = filtered[playIdx];
-    if (ch) analytics.fail(ch, 'stream_timeout');
+    if (ch) analytics.fail(ch, failureType);
 }
 
 // ─── Background Source Revalidation ─────────────────────────────────────────

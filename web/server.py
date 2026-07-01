@@ -54,7 +54,8 @@ from utils.normalize import (
     COUNTRY_CODES as _COUNTRY_CODES,
 )
 
-
+
+
 # Detect local country for "LOCAL" category — env var override or system locale
 def _detect_local_country() -> str:
     env = os.environ.get("LOCAL_COUNTRY", "").strip()
@@ -330,6 +331,52 @@ class _ChannelCache:
 
 
 _cache = _ChannelCache()
+
+
+def _channel_has_epg(channel_name: str) -> bool:
+    """Return True when the channel has at least one loaded EPG entry."""
+    if not channel_name:
+        return False
+    try:
+        from utils.epg import epg_service
+        if not epg_service.is_loaded:
+            return False
+        with epg_service._lock:
+            epg_id = epg_service._resolve_channel(channel_name, "")
+            return bool(epg_id and epg_service._schedules.get(epg_id))
+    except Exception:
+        return False
+
+
+def _channel_health_score(channel: Dict[str, Any], has_epg: Optional[bool] = None) -> int:
+    """Compute a simple reliability score for verified-first browsing."""
+    score = 0
+    status = (channel.get("status") or "").lower()
+    if status == "working":
+        score += 50
+    elif status == "unchecked":
+        score += 10
+    elif status in {"broken", "failed", "offline"}:
+        score -= 20
+
+    urls = channel.get("urls") or []
+    if len(urls) > 1:
+        score += 10
+    if channel.get("logo"):
+        score += 5
+    if has_epg is None:
+        has_epg = _channel_has_epg(channel.get("name") or "")
+    if has_epg:
+        score += 5
+    return score
+
+
+def _channel_health_label(score: int) -> str:
+    if score >= 50:
+        return "reliable"
+    if score >= 20:
+        return "unstable"
+    return "offline"
 
 app = FastAPI(
     title="TV Viewer Web",
@@ -701,6 +748,7 @@ async def get_channels(
     media_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     favorites_only: bool = Query(False),
+    verified_only: bool = Query(False),
     show_all: bool = Query(False),
     limit: int = Query(200, ge=1, le=5000),
     offset: int = Query(0, ge=0),
@@ -742,8 +790,24 @@ async def get_channels(
     if not show_all:
         channels = [c for c in channels if c.get("status") != "offline"]
 
-    total = len(channels)
-    channels = channels[offset:offset + limit]
+    enriched = []
+    for ch in channels:
+        has_epg = _channel_has_epg(ch.get("name") or "")
+        health_score = _channel_health_score(ch, has_epg=has_epg)
+        enriched.append({
+            **ch,
+            "health_score": health_score,
+            "health": _channel_health_label(health_score),
+        })
+
+    if verified_only:
+        enriched = [c for c in enriched if c.get("health") == "reliable"]
+
+    # Stable sort: keep existing local/alphabetical order inside equal scores.
+    enriched.sort(key=lambda ch: ch.get("health_score", 0), reverse=True)
+
+    total = len(enriched)
+    channels = enriched[offset:offset + limit]
 
     # Strip heavy fields to reduce payload (logo URLs alone can add 30% to response size)
     slim = []
@@ -757,6 +821,8 @@ async def get_channels(
             "logo": ch.get("logo"),
             "status": ch.get("status"),
             "media_type": ch.get("media_type"),
+            "health_score": ch.get("health_score", 0),
+            "health": ch.get("health", "offline"),
         })
 
     return {
@@ -815,6 +881,28 @@ _proxy_timeout = aiohttp.ClientTimeout(total=60, sock_read=30)
 _proxy_connector: Optional[aiohttp.TCPConnector] = None
 
 
+def classify_failure(error_msg: str) -> str:
+    """Classify stream failure for analytics and user messaging."""
+    msg = str(error_msg or "").lower()
+    if "403" in msg or "forbidden" in msg:
+        return "geo_blocked"
+    if "404" in msg or "not found" in msg:
+        return "not_found"
+    if "timeout" in msg or "timed out" in msg:
+        return "timeout"
+    if "ssl" in msg or "tls" in msg or "certificate" in msg:
+        return "tls_error"
+    if "dns" in msg or "resolve" in msg or "getaddrinfo" in msg:
+        return "dns_error"
+    if re.search(r"\b5\d{2}\b", msg) or "server error" in msg:
+        return "server_error"
+    if "codec" in msg or "format" in msg or "unsupported" in msg:
+        return "unsupported_format"
+    if "connection" in msg or "refused" in msg or "reset" in msg:
+        return "connection_error"
+    return "unknown"
+
+
 def _get_proxy_connector() -> aiohttp.TCPConnector:
     global _proxy_connector
     if _proxy_connector is None or _proxy_connector.closed:
@@ -838,9 +926,13 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     # saturating the event loop and starving /api/channels.
     short_circuit_status = _breaker_should_short_circuit(url)
     if short_circuit_status is not None:
+        detail = f"Upstream {short_circuit_status} (breaker)"
         return JSONResponse(
             status_code=short_circuit_status,
-            content={"detail": f"Upstream {short_circuit_status} (breaker)"},
+            content={
+                "detail": detail,
+                "failure_type": classify_failure(detail),
+            },
             headers={"Access-Control-Allow-Origin": "*"}
         )
 
@@ -868,6 +960,8 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             status = resp.status
             await resp.release()
             await session.close()
+            detail = f"Upstream returned {status}"
+            failure_type = classify_failure(detail)
             # Track 4xx for the circuit breaker. 5xx alone shouldn't trip it
             # — those may be transient — but 4xx (esp 403/404) means the
             # URL itself is wrong/dead, so retries will only make it worse.
@@ -875,7 +969,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
                 _breaker_record_failure(url, status)
             return JSONResponse(
                 status_code=status,
-                content={"detail": f"Upstream returned {status}"},
+                content={"detail": detail, "failure_type": failure_type},
                 headers={"Access-Control-Allow-Origin": "*"}
             )
 
@@ -924,9 +1018,13 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
     except (aiohttp.ClientError, asyncio.TimeoutError, asyncio.CancelledError, OSError) as e:
         if session and not session.closed:
             await session.close()
+        detail = f"Upstream connection failed: {type(e).__name__}"
         return JSONResponse(
             status_code=502,
-            content={"detail": f"Upstream connection failed: {type(e).__name__}"},
+            content={
+                "detail": detail,
+                "failure_type": classify_failure(f"{detail} {e}")
+            },
             headers={"Access-Control-Allow-Origin": "*"}
         )
     except Exception as e:
@@ -935,7 +1033,10 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
         logger.error(f"Proxy unexpected error: {e}")
         return JSONResponse(
             status_code=502,
-            content={"detail": "Proxy error"},
+            content={
+                "detail": "Proxy error",
+                "failure_type": classify_failure(str(e))
+            },
             headers={"Access-Control-Allow-Origin": "*"}
         )
 
@@ -1056,162 +1157,183 @@ async def refresh_epg():
 
 _stats_cache: Dict[str, Any] = {}
 _stats_cache_time: float = 0
-_STATS_CACHE_TTL = 300  # 5 minutes
+_STATS_CACHE_TTL = 1800  # 30 minutes
+
+
+async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
+    """Build and cache aggregated community statistics."""
+    global _stats_cache, _stats_cache_time
+
+    now = time.time()
+    if not force and _stats_cache and (now - _stats_cache_time) < _STATS_CACHE_TTL:
+        return _stats_cache
+
+    # Always build channel database stats (available regardless of Supabase)
+    channels = _load_channels()
+    ch_countries: Dict[str, int] = {}
+    ch_categories: Dict[str, int] = {}
+    recently_added: List[Dict] = []
+    working_count = 0
+
+    for ch in channels:
+        c = ch.get('country', 'Unknown')
+        if c and c != 'Unknown':
+            ch_countries[c] = ch_countries.get(c, 0) + 1
+        cat = ch.get('category', 'General')
+        ch_categories[cat] = ch_categories.get(cat, 0) + 1
+        if ch.get('status') == 'working':
+            working_count += 1
+
+    # Get recently added channels (last 10 sorted by name for stability)
+    recently_added = sorted(
+        [{"name": ch.get("name", ""), "country": ch.get("country", ""), "category": ch.get("category", "")}
+         for ch in channels if ch.get("name")],
+        key=lambda x: x["name"]
+    )[-10:]
+
+    top_ch_countries = sorted(ch_countries.items(), key=lambda x: -x[1])[:15]
+    top_categories = sorted(ch_categories.items(), key=lambda x: -x[1])[:10]
+
+    # Try to get live analytics from Supabase
+    analytics_data = {}
+    try:
+        from utils.supabase_channels import is_configured
+        if is_configured():
+            import aiohttp
+            from datetime import datetime, timedelta, timezone
+            supabase_url = os.environ.get('SUPABASE_URL', '') or config.SUPABASE_URL
+            # Use service_role key for analytics reads (bypasses RLS)
+            # Falls back to anon key if service_role not available
+            supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '') or os.environ.get('SUPABASE_ANON_KEY', '') or config.SUPABASE_ANON_KEY
+
+            since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            params = {
+                'select': 'event_type,country,platform,event_data,device_id,created_at',
+                'created_at': f'gte.{since}',
+                'order': 'created_at.desc',
+                'limit': '5000',
+            }
+            headers_req = {
+                'apikey': supabase_key,
+                'Authorization': f'Bearer {supabase_key}',
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f'{supabase_url}/rest/v1/analytics_events',
+                    params=params,
+                    headers=headers_req,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    ssl=_get_strict_ssl_context(),
+                ) as resp:
+                    if resp.status == 200:
+                        events = await resp.json()
+                        if events:
+                            devices = set()
+                            user_countries: Dict[str, int] = {}
+                            platforms: Dict[str, int] = {}
+                            played_channels: Dict[str, int] = {}
+                            country_last_access: Dict[str, str] = {}
+                            country_channels: Dict[str, Counter] = {}
+
+                            for ev in events:
+                                devices.add(ev.get('device_id', ''))
+                                p = ev.get('platform', 'unknown')
+                                platforms[p] = platforms.get(p, 0) + 1
+                                uc = ev.get('country', 'XX')
+                                if uc and uc != 'XX':
+                                    user_countries[uc] = user_countries.get(uc, 0) + 1
+                                    created_at = ev.get('created_at', '')
+                                    if created_at > country_last_access.get(uc, ''):
+                                        country_last_access[uc] = created_at
+                                # Channel name from event_data
+                                ed = ev.get('event_data') or {}
+                                cn = ''
+                                if isinstance(ed, dict):
+                                    cn = ed.get('name', '') or ed.get('channel_name', '')
+                                if cn and ev.get('event_type') == 'channel_play':
+                                    played_channels[cn] = played_channels.get(cn, 0) + 1
+                                    if uc and uc != 'XX':
+                                        if uc not in country_channels:
+                                            country_channels[uc] = Counter()
+                                        country_channels[uc][cn] += 1
+
+                            analytics_data = {
+                                "unique_users": len(devices),
+                                "total_events": len(events),
+                                "user_countries": sorted(user_countries.items(), key=lambda x: -x[1])[:15],
+                                "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
+                                "top_played": sorted(played_channels.items(), key=lambda x: -x[1])[:15],
+                                "unique_channels_played": len(played_channels),
+                                "country_last_access": [
+                                    {"name": k, "last_seen": v[:10]}
+                                    for k, v in sorted(country_last_access.items(), key=lambda x: x[1], reverse=True)[:15]
+                                ],
+                                "country_top_channels": {
+                                    k: [{"name": n, "plays": c} for n, c in v.most_common(3)]
+                                    for k, v in country_channels.items()
+                                    if user_countries.get(k, 0) > 5 and sum(v.values()) >= 3
+                                },
+                                "total_plays": sum(1 for e in events if e.get('event_type') == 'channel_play'),
+                            }
+    except Exception as analytics_err:
+        logger.debug(f"Statistics: analytics query skipped ({analytics_err})")
+
+    # Build comprehensive result
+    has_analytics = bool(analytics_data.get("total_events"))
+    result = {
+        "total_channels": len(channels),
+        "working_channels": working_count,
+        "channel_countries": [{"name": c[0], "channels": c[1]} for c in top_ch_countries],
+        "categories": [{"name": c[0], "channels": c[1]} for c in top_categories],
+        "recently_added": recently_added,
+        # Analytics (live user data)
+        "has_analytics": has_analytics,
+        "unique_users": analytics_data.get("unique_users", 0),
+        "total_plays": analytics_data.get("total_plays", 0),
+        "total_events": analytics_data.get("total_events", 0),
+        "unique_channels_played": analytics_data.get("unique_channels_played", 0),
+        "platforms": analytics_data.get("platforms", {}),
+        "user_countries": [{"name": c[0], "events": c[1]} for c in analytics_data.get("user_countries", [])],
+        "top_channels": [{"name": c[0], "plays": c[1]} for c in analytics_data.get("top_played", [])],
+        "country_last_access": analytics_data.get("country_last_access", []),
+        "country_top_channels": analytics_data.get("country_top_channels", {}),
+    }
+
+    _stats_cache = result
+    _stats_cache_time = now
+    return result
 
 @app.get("/api/statistics")
 async def get_statistics(request: Request):
     """Aggregated community usage statistics from Supabase analytics (anonymous).
-    Cached for 5 minutes. Rate-limited to 10 req/min/IP."""
-    global _stats_cache, _stats_cache_time
+    Cached for 30 minutes. Rate-limited to 10 req/min/IP."""
 
     # Rate limit: 10 requests per minute per IP
     client_ip = request.client.host if request.client else "unknown"
     if not _rate_limit_check(client_ip, "stats", max_n=10, window=60):
         raise HTTPException(status_code=429, detail="Too many requests")
 
-    # Return cached if fresh
-    now = time.time()
-    if _stats_cache and (now - _stats_cache_time) < _STATS_CACHE_TTL:
-        return _stats_cache
-
     try:
-        # Always build channel database stats (available regardless of Supabase)
-        channels = _load_channels()
-        ch_countries: Dict[str, int] = {}
-        ch_categories: Dict[str, int] = {}
-        recently_added: List[Dict] = []
-        working_count = 0
-        
-        for ch in channels:
-            c = ch.get('country', 'Unknown')
-            if c and c != 'Unknown':
-                ch_countries[c] = ch_countries.get(c, 0) + 1
-            cat = ch.get('category', 'General')
-            ch_categories[cat] = ch_categories.get(cat, 0) + 1
-            if ch.get('status') == 'working':
-                working_count += 1
-
-        # Get recently added channels (last 10 sorted by name for stability)
-        recently_added = sorted(
-            [{"name": ch.get("name", ""), "country": ch.get("country", ""), "category": ch.get("category", "")}
-             for ch in channels if ch.get("name")],
-            key=lambda x: x["name"]
-        )[-10:]
-
-        top_ch_countries = sorted(ch_countries.items(), key=lambda x: -x[1])[:15]
-        top_categories = sorted(ch_categories.items(), key=lambda x: -x[1])[:10]
-
-        # Try to get live analytics from Supabase
-        analytics_data = {}
-        try:
-            from utils.supabase_channels import is_configured
-            if is_configured():
-                import aiohttp
-                from datetime import datetime, timedelta, timezone
-                supabase_url = os.environ.get('SUPABASE_URL', '') or config.SUPABASE_URL
-                # Use service_role key for analytics reads (bypasses RLS)
-                # Falls back to anon key if service_role not available
-                supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '') or os.environ.get('SUPABASE_ANON_KEY', '') or config.SUPABASE_ANON_KEY
-
-                since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-                params = {
-                    'select': 'event_type,country,platform,event_data,device_id,created_at',
-                    'created_at': f'gte.{since}',
-                    'order': 'created_at.desc',
-                    'limit': '5000',
-                }
-                headers_req = {
-                    'apikey': supabase_key,
-                    'Authorization': f'Bearer {supabase_key}',
-                }
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f'{supabase_url}/rest/v1/analytics_events',
-                        params=params,
-                        headers=headers_req,
-                        timeout=aiohttp.ClientTimeout(total=10),
-                        ssl=_get_strict_ssl_context(),
-                    ) as resp:
-                        if resp.status == 200:
-                            events = await resp.json()
-                            if events:
-                                devices = set()
-                                user_countries: Dict[str, int] = {}
-                                platforms: Dict[str, int] = {}
-                                played_channels: Dict[str, int] = {}
-                                country_last_access: Dict[str, str] = {}
-                                country_channels: Dict[str, Counter] = {}
-
-                                for ev in events:
-                                    devices.add(ev.get('device_id', ''))
-                                    p = ev.get('platform', 'unknown')
-                                    platforms[p] = platforms.get(p, 0) + 1
-                                    uc = ev.get('country', 'XX')
-                                    if uc and uc != 'XX':
-                                        user_countries[uc] = user_countries.get(uc, 0) + 1
-                                        created_at = ev.get('created_at', '')
-                                        if created_at > country_last_access.get(uc, ''):
-                                            country_last_access[uc] = created_at
-                                    # Channel name from event_data
-                                    ed = ev.get('event_data') or {}
-                                    cn = ''
-                                    if isinstance(ed, dict):
-                                        cn = ed.get('name', '') or ed.get('channel_name', '')
-                                    if cn and ev.get('event_type') == 'channel_play':
-                                        played_channels[cn] = played_channels.get(cn, 0) + 1
-                                        if uc and uc != 'XX':
-                                            if uc not in country_channels:
-                                                country_channels[uc] = Counter()
-                                            country_channels[uc][cn] += 1
-
-                                analytics_data = {
-                                    "unique_users": len(devices),
-                                    "total_events": len(events),
-                                    "user_countries": sorted(user_countries.items(), key=lambda x: -x[1])[:15],
-                                    "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
-                                    "top_played": sorted(played_channels.items(), key=lambda x: -x[1])[:15],
-                                    "country_last_access": [
-                                        {"name": k, "last_seen": v[:10]}
-                                        for k, v in sorted(country_last_access.items(), key=lambda x: x[1], reverse=True)[:15]
-                                    ],
-                                    "country_top_channels": {
-                                        k: [{"name": n, "plays": c} for n, c in v.most_common(3)]
-                                        for k, v in country_channels.items()
-                                        if user_countries.get(k, 0) > 5 and sum(v.values()) >= 3
-                                    },
-                                    "total_plays": sum(1 for e in events if e.get('event_type') == 'channel_play'),
-                                }
-        except Exception as analytics_err:
-            logger.debug(f"Statistics: analytics query skipped ({analytics_err})")
-
-        # Build comprehensive result
-        has_analytics = bool(analytics_data.get("total_events"))
-        result = {
-            "total_channels": len(channels),
-            "working_channels": working_count,
-            "channel_countries": [{"name": c[0], "channels": c[1]} for c in top_ch_countries],
-            "categories": [{"name": c[0], "channels": c[1]} for c in top_categories],
-            "recently_added": recently_added,
-            # Analytics (live user data)
-            "has_analytics": has_analytics,
-            "unique_users": analytics_data.get("unique_users", 0),
-            "total_plays": analytics_data.get("total_plays", 0),
-            "total_events": analytics_data.get("total_events", 0),
-            "platforms": analytics_data.get("platforms", {}),
-            "user_countries": [{"name": c[0], "events": c[1]} for c in analytics_data.get("user_countries", [])],
-            "top_channels": [{"name": c[0], "plays": c[1]} for c in analytics_data.get("top_played", [])],
-            "country_last_access": analytics_data.get("country_last_access", []),
-            "country_top_channels": analytics_data.get("country_top_channels", {}),
-        }
-
-        _stats_cache = result
-        _stats_cache_time = now
-        return result
+        return await _refresh_statistics_cache()
     except HTTPException:
         raise
     except Exception as e:
         logger.warning(f"Statistics error: {e}")
-        return {"error": "temporary_failure", "total_channels": 0, "has_analytics": False}
+        return {"error": "temporary_failure", "total_channels": 0, "has_analytics": False, "total_events": 0}
+
+
+@app.on_event("startup")
+async def _warm_statistics_cache_on_startup():
+    """Pre-warm statistics cache shortly after startup."""
+
+    async def _warm_cache():
+        await asyncio.sleep(30)
+        try:
+            await _refresh_statistics_cache(force=True)
+        except Exception as exc:
+            logger.debug(f"Statistics pre-warm skipped ({exc})")
+
+    asyncio.create_task(_warm_cache())
 
 
 # ─── Report broken channel ──────────────────────────────────────────────────
@@ -1363,6 +1485,8 @@ async def health_report(request: Request):
         status = body.get("status", "")
         promote = bool(body.get("promote", False))
         ch_name = body.get("name", "") or ""
+        reason = str(body.get("reason", "") or "")[:200]
+        failure_type = classify_failure(reason) if reason else "unknown"
         if not url or status not in ("working", "broken"):
             return {"status": "ignored"}
 
@@ -1391,6 +1515,11 @@ async def health_report(request: Request):
                 _promote_source(ch_name, url)
         else:
             _mark_local_broken(url)
+            logger.debug(
+                "health_report: broken stream classified as %s for %s",
+                failure_type,
+                ch_name[:80] if isinstance(ch_name, str) else "",
+            )
 
         # Best-effort Supabase push
         try:
@@ -1407,7 +1536,11 @@ async def health_report(request: Request):
         except Exception:
             pass
 
-        return {"status": "recorded", "channel_status": status}
+        return {
+            "status": "recorded",
+            "channel_status": status,
+            "failure_type": failure_type,
+        }
     except Exception as e:
         logger.debug(f"Health report error: {e}")
         return {"status": "error"}
@@ -1528,6 +1661,19 @@ async def track_analytics(request: Request):
             "platform": str(body.get("platform", "web"))[:30],
             "country": str(body.get("country", "XX"))[:5],
         }
+        if payload["event_type"] == "channel_fail":
+            event_data = payload["event_data"]
+            raw_reason = (
+                event_data.get("failure_type")
+                or event_data.get("reason")
+                or event_data.get("error_code")
+                or event_data.get("error_message")
+                or ""
+            )
+            failure_type = classify_failure(raw_reason)
+            event_data["failure_type"] = failure_type
+            if not event_data.get("error_code"):
+                event_data["error_code"] = failure_type
         # Cap event_data size
         import json as _json
         if len(_json.dumps(payload["event_data"])) > 5000:

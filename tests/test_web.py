@@ -65,6 +65,104 @@ class TestChannels:
         assert "channels" in data
         assert isinstance(data["channels"], list)
 
+    def test_channels_include_health_and_sort_verified_first(self, client, monkeypatch):
+        class _DummyCache:
+            sorted_channels = [
+                {
+                    "name": "Unchecked One",
+                    "url": "https://example.com/unchecked.m3u8",
+                    "urls": ["https://example.com/unchecked.m3u8"],
+                    "category": "News",
+                    "country": "United States",
+                    "logo": "",
+                    "status": "unchecked",
+                    "media_type": "TV",
+                },
+                {
+                    "name": "Reliable One",
+                    "url": "https://example.com/reliable.m3u8",
+                    "urls": [
+                        "https://example.com/reliable.m3u8",
+                        "https://backup.example.com/reliable.m3u8",
+                    ],
+                    "category": "News",
+                    "country": "Israel",
+                    "logo": "https://example.com/reliable.png",
+                    "status": "working",
+                    "media_type": "TV",
+                },
+                {
+                    "name": "Failed One",
+                    "url": "https://example.com/failed.m3u8",
+                    "urls": ["https://example.com/failed.m3u8"],
+                    "category": "News",
+                    "country": "United States",
+                    "logo": "",
+                    "status": "failed",
+                    "media_type": "TV",
+                },
+            ]
+            by_category = {}
+            by_country = {}
+            by_cat_country = {}
+            local_channels = []
+            favorites = set()
+
+        monkeypatch.setattr(server, "_cache", _DummyCache())
+        monkeypatch.setattr(server, "_channel_has_epg", lambda name: name == "Reliable One")
+
+        r = client.get("/api/channels?show_all=true")
+        assert r.status_code == 200
+        data = r.json()
+        assert [ch["name"] for ch in data["channels"]] == [
+            "Reliable One",
+            "Unchecked One",
+            "Failed One",
+        ]
+        assert data["channels"][0]["health_score"] == 70
+        assert data["channels"][0]["health"] == "reliable"
+        assert data["channels"][1]["health"] == "offline"
+        assert data["channels"][2]["health"] == "offline"
+
+    def test_channels_verified_only_filter(self, client, monkeypatch):
+        class _DummyCache:
+            sorted_channels = [
+                {
+                    "name": "Reliable One",
+                    "url": "https://example.com/reliable.m3u8",
+                    "urls": ["https://example.com/reliable.m3u8"],
+                    "category": "Sports",
+                    "country": "Israel",
+                    "logo": "",
+                    "status": "working",
+                    "media_type": "TV",
+                },
+                {
+                    "name": "Unchecked One",
+                    "url": "https://example.com/unchecked.m3u8",
+                    "urls": ["https://example.com/unchecked.m3u8"],
+                    "category": "Sports",
+                    "country": "Israel",
+                    "logo": "",
+                    "status": "unchecked",
+                    "media_type": "TV",
+                },
+            ]
+            by_category = {}
+            by_country = {}
+            by_cat_country = {}
+            local_channels = []
+            favorites = set()
+
+        monkeypatch.setattr(server, "_cache", _DummyCache())
+        monkeypatch.setattr(server, "_channel_has_epg", lambda _name: False)
+
+        r = client.get("/api/channels?verified_only=true")
+        assert r.status_code == 200
+        data = r.json()
+        assert [ch["name"] for ch in data["channels"]] == ["Reliable One"]
+        assert data["channels"][0]["health"] == "reliable"
+
     def test_channels_with_category(self, client):
         r = client.get("/api/channels?category=News")
         assert r.status_code == 200
@@ -142,6 +240,18 @@ class TestFavorites:
 # ─── Proxy ──────────────────────────────────────────────────────────────────
 
 class TestProxy:
+    @pytest.mark.parametrize(
+        ("message", "expected"),
+        [
+            ("Upstream returned 403", "geo_blocked"),
+            ("timed out while loading stream", "timeout"),
+            ("SSL certificate verify failed", "tls_error"),
+            ("codec unsupported", "unsupported_format"),
+        ],
+    )
+    def test_classify_failure(self, message, expected):
+        assert server.classify_failure(message) == expected
+
     @pytest.mark.parametrize(
         ("upstream_error", "error_name"),
         [
@@ -294,6 +404,18 @@ class TestHealthReportSecurity:
         )
         assert r.status_code == 200
         assert r.json().get("status") in ("recorded", "ignored")
+
+    def test_health_report_classifies_failure_reason(self, client):
+        r = client.post(
+            "/api/health/report",
+            json={
+                "url": "https://example.com/stream.m3u8",
+                "status": "broken",
+                "reason": "Upstream returned 403",
+            },
+        )
+        assert r.status_code == 200
+        assert r.json().get("failure_type") == "geo_blocked"
 
     def test_health_report_ignores_missing_fields(self, client):
         r = client.post("/api/health/report", json={"url": ""})

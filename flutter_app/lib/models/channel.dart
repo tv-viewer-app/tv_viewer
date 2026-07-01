@@ -624,6 +624,21 @@ class Channel {
     }
     return '$bitrate bps';
   }
+
+  int get healthScore {
+    int score = 10;
+    if (isWorking && lastChecked != null) score += 50;
+    if (!isWorking && lastChecked != null) score -= 20;
+    if (urls.length > 1) score += 10;
+    if ((logo ?? '').isNotEmpty) score += 5;
+    return score;
+  }
+
+  String get healthLabel {
+    if (healthScore >= 50) return 'reliable';
+    if (healthScore >= 20) return 'unstable';
+    return 'offline';
+  }
   
   /// BL-031: copyWith method for immutable updates
   /// v2.1.0: Added urls and workingUrlIndex params
