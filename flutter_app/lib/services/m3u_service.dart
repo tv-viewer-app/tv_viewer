@@ -17,6 +17,10 @@ class M3UService {
     'https://iptv-org.github.io/iptv/countries/il.m3u',
     'https://iptv-org.github.io/iptv/countries/us.m3u',
     'https://iptv-org.github.io/iptv/countries/uk.m3u',
+    'https://iptv-org.github.io/iptv/countries/ca.m3u',
+    'https://iptv-org.github.io/iptv/countries/de.m3u',
+    'https://iptv-org.github.io/iptv/countries/ru.m3u',
+    'https://iptv-org.github.io/iptv/countries/in.m3u',
     'https://iptv-org.github.io/iptv/languages/heb.m3u',
     'https://gist.githubusercontent.com/serginholssfilmes/ba590a457da0192f4c14a19f1d3704ec/raw',
     // Free-TV curated playlists (quality-focused, HD where possible)
@@ -32,13 +36,9 @@ class M3UService {
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_movies.m3u8',
     'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_en.m3u8',
     // Community sources
-    'https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/grouped_by_content.m3u',
-    'https://raw.githubusercontent.com/djthawks/IPTV-1/master/all/international.m3u',
     'https://raw.githubusercontent.com/RokuIL/Live-From-Israel/master/NextPVRChannels.m3u8',
     'https://raw.githubusercontent.com/iptv-org/iptv/master/streams/il.m3u',
-    'https://de1.api.radio-browser.info/m3u/stations/bycountry/israel',
-    'https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20states',
-    'https://de1.api.radio-browser.info/m3u/stations/bycountry/united%20kingdom',
+    'https://de1.api.radio-browser.info/m3u/stations/bycountry/germany',
     // Smart TV platform channels
     'https://www.apsattv.com/xumo.m3u',
     'https://www.apsattv.com/lg.m3u',
@@ -49,6 +49,7 @@ class M3UService {
     'https://www.apsattv.com/vizio.m3u',
     'https://www.apsattv.com/firetv.m3u',
     'https://www.apsattv.com/klowd.m3u',
+    'https://raw.githubusercontent.com/ceriaolshop123-cmd/MULTI-IPTV-SERVERS/main/Isthisfs.m3u8',
   ];
 
   /// Adult/NSFW repositories — only fetched when adult content is enabled
