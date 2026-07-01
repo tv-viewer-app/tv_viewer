@@ -1202,8 +1202,14 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
             import aiohttp
             from datetime import datetime, timedelta, timezone
             supabase_url = os.environ.get('SUPABASE_URL', '') or config.SUPABASE_URL
-            # Use the server-only secret key for analytics reads (bypasses RLS).
-            supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
+            # Prefer the publishable key now that anon can read the aggregated
+            # analytics views and the raw table via RLS. Fall back to the
+            # service role only when anon is not configured in the environment.
+            supabase_key = (
+                os.environ.get('SUPABASE_ANON_KEY', '').strip()
+                or config.SUPABASE_ANON_KEY
+                or os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
+            )
 
             since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
             params = {
@@ -1217,6 +1223,62 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                 'Authorization': f'Bearer {supabase_key}',
             }
             async with aiohttp.ClientSession() as session:
+                # Try pre-aggregated materialized views first (works with
+                # publishable key and avoids scanning raw analytics rows).
+                try:
+                    async with session.get(
+                        f'{supabase_url}/rest/v1/mv_top_channels?order=play_count.desc&limit=15',
+                        headers=headers_req,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=_get_strict_ssl_context(),
+                    ) as mv_resp:
+                        if mv_resp.status == 200:
+                            mv_channels = await mv_resp.json()
+                            if mv_channels:
+                                top_played = []
+                                for channel in mv_channels[:15]:
+                                    country = str(channel.get("channel_country", "") or "").strip()
+                                    category = str(channel.get("channel_category", "") or "").strip()
+                                    label = " ".join(part for part in (country, category) if part).strip()
+                                    if not label:
+                                        label = str(channel.get("channel_hash", "Unknown channel") or "Unknown channel")
+                                    top_played.append((label, int(channel.get("play_count", 0) or 0)))
+
+                                analytics_data["top_played"] = top_played
+                                analytics_data["unique_channels_played"] = len(top_played)
+                                analytics_data["total_plays"] = sum(plays for _, plays in top_played)
+
+                    async with session.get(
+                        f'{supabase_url}/rest/v1/mv_daily_active_users?order=day.desc&limit=30',
+                        headers=headers_req,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=_get_strict_ssl_context(),
+                    ) as dau_resp:
+                        if dau_resp.status == 200:
+                            dau_data = await dau_resp.json()
+                            if dau_data:
+                                total_devices = len(
+                                    set(
+                                        f'{d.get("day", "")}{d.get("platform", "")}'
+                                        for d in dau_data
+                                    )
+                                )
+                                analytics_data["unique_users"] = total_devices
+                                analytics_data["total_events"] = sum(
+                                    int(d.get("total_events", 0) or 0) for d in dau_data
+                                )
+                                platforms_mv: Dict[str, int] = {}
+                                for d in dau_data:
+                                    platform = str(d.get("platform", "unknown") or "unknown")
+                                    platforms_mv[platform] = platforms_mv.get(platform, 0) + int(
+                                        d.get("total_events", 0) or 0
+                                    )
+                                analytics_data["platforms"] = dict(
+                                    sorted(platforms_mv.items(), key=lambda x: -x[1])
+                                )
+                except Exception as mv_err:
+                    logger.debug(f"Materialized views not available: {mv_err}")
+
                 async with session.get(
                     f'{supabase_url}/rest/v1/analytics_events',
                     params=params,
@@ -1256,7 +1318,7 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                                             country_channels[uc] = Counter()
                                         country_channels[uc][cn] += 1
 
-                            analytics_data = {
+                            analytics_data.update({
                                 "unique_users": len(devices),
                                 "total_events": len(events),
                                 "user_countries": sorted(user_countries.items(), key=lambda x: -x[1])[:15],
@@ -1273,12 +1335,12 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                                     if user_countries.get(k, 0) > 5 and sum(v.values()) >= 3
                                 },
                                 "total_plays": sum(1 for e in events if e.get('event_type') == 'channel_play'),
-                            }
+                            })
     except Exception as analytics_err:
         logger.debug(f"Statistics: analytics query skipped ({analytics_err})")
 
     # Build comprehensive result
-    has_analytics = bool(analytics_data.get("total_events"))
+    has_analytics = bool(analytics_data.get("total_events") or analytics_data.get("top_played"))
     result = {
         "total_channels": len(channels),
         "working_channels": working_count,

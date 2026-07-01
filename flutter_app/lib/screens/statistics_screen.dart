@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Community statistics screen showing aggregated usage data.
-/// Fetches pre-aggregated statistics from the server-side cache.
+/// Fetches pre-aggregated statistics from Supabase materialized views.
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({super.key});
 
@@ -14,9 +14,19 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  static Uri get _statisticsApiUri => Uri.parse(
-      const String.fromEnvironment('COMMUNITY_STATS_URL',
-          defaultValue: 'https://tvviewer.app/api/statistics'));
+  static String get _supabaseUrl =>
+      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static String get _supabaseAnonKey =>
+      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+  static bool get _hasSupabaseStatsConfig =>
+      _supabaseUrl.isNotEmpty &&
+      _supabaseAnonKey.isNotEmpty &&
+      _supabaseUrl != 'YOUR_SUPABASE_PROJECT_URL' &&
+      _supabaseAnonKey != 'YOUR_SUPABASE_ANON_KEY';
+  static Uri get _dailyActiveUsersUri =>
+      Uri.parse('$_supabaseUrl/rest/v1/mv_daily_active_users?order=day.desc&limit=30');
+  static Uri get _topChannelsUri =>
+      Uri.parse('$_supabaseUrl/rest/v1/mv_top_channels?order=play_count.desc&limit=15');
   static final Uri _communityStatsUri = Uri.parse('https://tvviewer.app');
 
   bool _loading = true;
@@ -54,35 +64,69 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       }
     }
 
+    if (!_hasSupabaseStatsConfig) {
+      await prefs.remove(_cacheKey);
+      await prefs.remove(_cacheTimeKey);
+      _showCommunityStatsFallback();
+      return;
+    }
+
     final client = http.Client();
     try {
-      final response = await client
-          .get(_statisticsApiUri)
-          .timeout(const Duration(seconds: 15));
+      final headers = {
+        'apikey': _supabaseAnonKey,
+        'Authorization': 'Bearer $_supabaseAnonKey',
+      };
+      final responses = await Future.wait([
+        client
+            .get(_dailyActiveUsersUri, headers: headers)
+            .timeout(const Duration(seconds: 15)),
+        client
+            .get(_topChannelsUri, headers: headers)
+            .timeout(const Duration(seconds: 15)),
+      ]);
 
-      if (response.statusCode == 401 || response.statusCode == 403) {
+      final dailyResponse = responses[0];
+      final channelsResponse = responses[1];
+
+      if (dailyResponse.statusCode == 401 ||
+          dailyResponse.statusCode == 403 ||
+          channelsResponse.statusCode == 401 ||
+          channelsResponse.statusCode == 403) {
         await prefs.remove(_cacheKey);
         await prefs.remove(_cacheTimeKey);
         _showCommunityStatsFallback();
         return;
       }
 
-      if (response.statusCode != 200) {
-        throw Exception('API error: ${response.statusCode}');
+      if (dailyResponse.statusCode != 200 || channelsResponse.statusCode != 200) {
+        throw Exception(
+            'API error: ${dailyResponse.statusCode}/${channelsResponse.statusCode}');
       }
 
-      final dynamic decoded = jsonDecode(response.body);
-      if (decoded is! Map<String, dynamic>) {
+      final dynamic dailyDecoded = jsonDecode(dailyResponse.body);
+      final dynamic channelsDecoded = jsonDecode(channelsResponse.body);
+      if (dailyDecoded is! List || channelsDecoded is! List) {
         await prefs.remove(_cacheKey);
         await prefs.remove(_cacheTimeKey);
         _showCommunityStatsFallback();
         return;
       }
 
-      final result = _normalizeStatisticsPayload(decoded);
+      final result = _normalizeStatisticsPayload(
+        _buildStatisticsFromMaterializedViews(
+          List<Map<String, dynamic>>.from(
+            dailyDecoded.map((item) => Map<String, dynamic>.from(item as Map)),
+          ),
+          List<Map<String, dynamic>>.from(
+            channelsDecoded.map((item) => Map<String, dynamic>.from(item as Map)),
+          ),
+        ),
+      );
       final totalEvents = (result['total_events'] as num?)?.toInt() ?? 0;
+      final totalPlays = (result['total_plays'] as num?)?.toInt() ?? 0;
       final hasAnalytics = result['has_analytics'] == true;
-      if (!hasAnalytics && totalEvents == 0) {
+      if (!hasAnalytics && totalEvents == 0 && totalPlays == 0) {
         await prefs.remove(_cacheKey);
         await prefs.remove(_cacheTimeKey);
         _showCommunityStatsFallback();
@@ -128,6 +172,80 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       _showWebStatsButton = true;
       _loading = false;
     });
+  }
+
+  Map<String, dynamic> _buildStatisticsFromMaterializedViews(
+    List<Map<String, dynamic>> dailyActiveUsers,
+    List<Map<String, dynamic>> topChannels,
+  ) {
+    final platforms = <String, int>{};
+    var totalEvents = 0;
+    var totalUsers = 0;
+
+    for (final row in dailyActiveUsers) {
+      final platform = (row['platform'] as String? ?? 'unknown').trim().isEmpty
+          ? 'unknown'
+          : (row['platform'] as String? ?? 'unknown').trim();
+      final events = (row['total_events'] as num?)?.toInt() ?? 0;
+      final uniqueDevices = (row['unique_devices'] as num?)?.toInt() ?? 0;
+      totalEvents += events;
+      totalUsers += uniqueDevices;
+      platforms[platform] = (platforms[platform] ?? 0) + events;
+    }
+
+    final sortedPlatforms = Map<String, dynamic>.fromEntries(
+      platforms.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+    );
+
+    final topChannelRows = topChannels.take(15).map((channel) {
+      final plays = (channel['play_count'] as num?)?.toInt() ?? 0;
+      return {
+        'name': _formatMaterializedChannel(channel),
+        'plays': plays,
+      };
+    }).toList();
+
+    final countryTopChannels = <String, List<Map<String, dynamic>>>{};
+    for (final channel in topChannels) {
+      final country = (channel['channel_country'] as String? ?? '').trim();
+      if (country.isEmpty) continue;
+      final entry = {
+        'name': _formatMaterializedChannel(channel),
+        'plays': (channel['play_count'] as num?)?.toInt() ?? 0,
+      };
+      final bucket =
+          countryTopChannels.putIfAbsent(country, () => <Map<String, dynamic>>[]);
+      if (bucket.length < 3) {
+        bucket.add(entry);
+      }
+    }
+
+    return {
+      'has_analytics': dailyActiveUsers.isNotEmpty || topChannels.isNotEmpty,
+      'unique_users': totalUsers,
+      'total_events': totalEvents,
+      'total_plays': topChannelRows.fold<int>(
+          0, (sum, item) => sum + ((item['plays'] as int?) ?? 0)),
+      'unique_channels_played': topChannels.length,
+      'platforms': sortedPlatforms,
+      'top_channels': topChannelRows,
+      'countries': const <Map<String, dynamic>>[],
+      'country_last_access': const <Map<String, dynamic>>[],
+      'country_top_channels': countryTopChannels,
+    };
+  }
+
+  String _formatMaterializedChannel(Map<String, dynamic> channel) {
+    final country = (channel['channel_country'] as String? ?? '').trim();
+    final category = (channel['channel_category'] as String? ?? '').trim();
+    final labelParts = <String>[
+      if (country.isNotEmpty) country,
+      if (category.isNotEmpty) category,
+    ];
+    if (labelParts.isNotEmpty) {
+      return labelParts.join(' • ');
+    }
+    return (channel['channel_hash'] as String? ?? 'Unknown channel').trim();
   }
 
   Future<void> _openCommunityStats() async {
@@ -275,7 +393,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           const SizedBox(height: 8),
           Text(
             _showWebStatsButton
-                ? 'Mobile builds use the public anon key only. Full community stats stay in the web client.'
+                ? 'Community stats require anon access to the materialized views. If access is not granted yet, use tvviewer.app.'
                 : 'Statistics require an active internet connection.',
             style:
                 theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline),
