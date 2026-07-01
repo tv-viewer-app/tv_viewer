@@ -5,6 +5,25 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.0] - 2026-07-01
+
+### Security
+- Removed service_role key from docker-compose.yml and all client code
+- Service_role key must be rotated (was exposed in git history)
+
+### Added
+- Verified-first channel browsing with health scoring (reliable/unstable/offline badges)
+- Auto-fallback URLs: tries alternative sources before showing error
+- Classified failure messages (geo-blocked, timeout, not-found, etc.)
+- Per-country top channels and last access dates in statistics
+- Server-side statistics cache (30-min TTL)
+
+### Fixed
+- EPG asyncio event loop lock error in Docker
+- Channel status RLS script for report_channel_working
+- 675 false crash reports (network errors now warnings)
+- Dart SDK constraint updated to >=3.10.0
+
 ## [2.20.15] - 2026-07-01
 
 ### Security
