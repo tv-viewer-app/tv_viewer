@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Community statistics screen showing aggregated usage data.
-/// Queries only event_type, country, platform, channel_name (no device_id).
+/// Fetches pre-aggregated statistics from the server-side cache.
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({super.key});
 
@@ -14,12 +14,9 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  // Supabase statistics reads must use the public anon key only.
-  static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL',
-          defaultValue: 'https://cdtxpefohpwtusmqengu.supabase.co');
-  static String get _supabaseKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+  static Uri get _statisticsApiUri => Uri.parse(
+      const String.fromEnvironment('COMMUNITY_STATS_URL',
+          defaultValue: 'https://tvviewer.app/api/statistics'));
   static final Uri _communityStatsUri = Uri.parse('https://tvviewer.app');
 
   bool _loading = true;
@@ -27,8 +24,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Map<String, dynamic>? _data;
   bool _showWebStatsButton = false;
 
-  static const _cacheKey = 'stats_cache_public_v2';
-  static const _cacheTimeKey = 'stats_cache_public_v2_time';
+  static const _cacheKey = 'stats_cache_public_v3';
+  static const _cacheTimeKey = 'stats_cache_public_v3_time';
   static const _cacheTtl = Duration(minutes: 10);
 
   @override
@@ -57,31 +54,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       }
     }
 
-    if (_supabaseUrl.isEmpty || _supabaseKey.isEmpty) {
-      _showCommunityStatsFallback();
-      return;
-    }
-
-    final client =
-        http.Client(); // Don't use PinnedHttpClient — cert pins may be stale
+    final client = http.Client();
     try {
-      final since = DateTime.now()
-          .subtract(const Duration(days: 30))
-          .toUtc()
-          .toIso8601String();
-      final url = Uri.parse('$_supabaseUrl/rest/v1/analytics_events').replace(
-        queryParameters: {
-          'select': 'event_type,country,platform,event_data,created_at',
-          'created_at': 'gte.$since',
-          'order': 'created_at.desc',
-          'limit': '5000',
-        },
-      );
-
-      final response = await client.get(url, headers: {
-        'apikey': _supabaseKey,
-        'Authorization': 'Bearer $_supabaseKey',
-      }).timeout(const Duration(seconds: 15));
+      final response = await client
+          .get(_statisticsApiUri)
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 401 || response.statusCode == 403) {
         await prefs.remove(_cacheKey);
@@ -94,15 +71,23 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         throw Exception('API error: ${response.statusCode}');
       }
 
-      final List<dynamic> events = jsonDecode(response.body);
-      if (events.isEmpty) {
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
         await prefs.remove(_cacheKey);
         await prefs.remove(_cacheTimeKey);
         _showCommunityStatsFallback();
         return;
       }
 
-      final result = _aggregate(events);
+      final result = _normalizeStatisticsPayload(decoded);
+      final totalEvents = (result['total_events'] as num?)?.toInt() ?? 0;
+      final hasAnalytics = result['has_analytics'] == true;
+      if (!hasAnalytics && totalEvents == 0) {
+        await prefs.remove(_cacheKey);
+        await prefs.remove(_cacheTimeKey);
+        _showCommunityStatsFallback();
+        return;
+      }
 
       await prefs.setString(_cacheKey, jsonEncode(result));
       await prefs.setInt(_cacheTimeKey, now);
@@ -166,94 +151,39 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
-  Map<String, dynamic> _aggregate(List<dynamic> events) {
-    final countries = <String, int>{};
-    final platforms = <String, int>{};
-    final channels = <String, int>{};
-    final countryLastAccess = <String, String>{};
-    final countryChannels = <String, Map<String, int>>{};
-    int plays = 0;
-
-    for (final e in events) {
-      final country = (e['country'] as String?) ?? '';
-      final platform = (e['platform'] as String?) ?? 'unknown';
-      final eventType = (e['event_type'] as String?) ?? '';
-      final createdAt = (e['created_at'] as String?) ?? '';
-
-      // Extract channel name from event_data JSON
-      final eventData = e['event_data'];
-      String channelName = '';
-      if (eventData is Map) {
-        channelName = (eventData['name'] as String?) ??
-            (eventData['channel_name'] as String?) ??
-            '';
-      }
-
-      platforms[platform] = (platforms[platform] ?? 0) + 1;
-      if (country.isNotEmpty && country != 'XX') {
-        countries[country] = (countries[country] ?? 0) + 1;
-        if (createdAt.compareTo(countryLastAccess[country] ?? '') > 0) {
-          countryLastAccess[country] = createdAt;
-        }
-      }
-      if (eventType == 'channel_play' &&
-          channelName.isNotEmpty &&
-          channelName.length < 50) {
-        plays++;
-        channels[channelName] = (channels[channelName] ?? 0) + 1;
-        if (country.isNotEmpty && country != 'XX') {
-          final perCountry =
-              countryChannels.putIfAbsent(country, () => <String, int>{});
-          perCountry[channelName] = (perCountry[channelName] ?? 0) + 1;
-        }
-      }
-    }
-
-    final topChannels =
-        (channels.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
-            .take(15)
-            .toList();
-    final topCountries =
-        (countries.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
-            .take(15)
-            .toList();
-    final lastAccessEntries = (countryLastAccess.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value)))
-        .take(15)
-        .toList();
-    final topChannelsByCountry = <String, List<Map<String, dynamic>>>{};
-    for (final entry in countryChannels.entries) {
-      final totalCountryEvents = countries[entry.key] ?? 0;
-      final totalCountryPlays =
-          entry.value.values.fold<int>(0, (sum, value) => sum + value);
-      if (totalCountryEvents <= 5 || totalCountryPlays < 3) continue;
-      final topPerCountry = (entry.value.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value)))
-          .take(3);
-      topChannelsByCountry[entry.key] = topPerCountry
-          .map((channel) => {'name': channel.key, 'plays': channel.value})
-          .toList();
-    }
-
+  Map<String, dynamic> _normalizeStatisticsPayload(Map<String, dynamic> payload) {
+    final countries = payload['user_countries'];
     return {
-      'period_days': 30,
-      'total_events': events.length,
-      'total_plays': plays,
-      'unique_channels_played': channels.length,
-      'platforms': Map.fromEntries(
-          platforms.entries.toList()..sort((a, b) => b.value.compareTo(a.value))),
-      'top_channels': topChannels
-          .map((e) => {'name': e.key, 'plays': e.value}).toList(),
-      'countries': topCountries
-          .map((e) => {'name': e.key, 'events': e.value}).toList(),
-      'country_last_access': lastAccessEntries
-          .map((e) => {
-                'name': e.key,
-                'last_seen':
-                    e.value.length >= 10 ? e.value.substring(0, 10) : e.value
-              })
-          .toList(),
-      'country_top_channels': topChannelsByCountry,
+      'has_analytics': payload['has_analytics'] == true,
+      'total_events': (payload['total_events'] as num?)?.toInt() ?? 0,
+      'total_plays': (payload['total_plays'] as num?)?.toInt() ?? 0,
+      'unique_channels_played':
+          (payload['unique_channels_played'] as num?)?.toInt() ?? 0,
+      'platforms': payload['platforms'] is Map
+          ? Map<String, dynamic>.from(payload['platforms'] as Map)
+          : <String, dynamic>{},
+      'top_channels': payload['top_channels'] is List
+          ? List<Map<String, dynamic>>.from(
+              (payload['top_channels'] as List).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : <Map<String, dynamic>>[],
+      'countries': countries is List
+          ? List<Map<String, dynamic>>.from(
+              countries.map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : <Map<String, dynamic>>[],
+      'country_last_access': payload['country_last_access'] is List
+          ? List<Map<String, dynamic>>.from(
+              (payload['country_last_access'] as List).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : <Map<String, dynamic>>[],
+      'country_top_channels': payload['country_top_channels'] is Map
+          ? Map<String, dynamic>.from(payload['country_top_channels'] as Map)
+          : <String, dynamic>{},
     };
   }
 
