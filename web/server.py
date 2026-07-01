@@ -1202,9 +1202,8 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
             import aiohttp
             from datetime import datetime, timedelta, timezone
             supabase_url = os.environ.get('SUPABASE_URL', '') or config.SUPABASE_URL
-            # Use service_role key for analytics reads (bypasses RLS)
-            # Falls back to anon key if service_role not available
-            supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '') or os.environ.get('SUPABASE_ANON_KEY', '') or config.SUPABASE_ANON_KEY
+            # Use the server-only secret key for analytics reads (bypasses RLS).
+            supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
 
             since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
             params = {

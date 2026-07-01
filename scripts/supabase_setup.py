@@ -3,19 +3,19 @@
 
 This script helps you configure the Supabase connection for TV Viewer analytics.
 It will:
-  1. Prompt for your Supabase project URL and anon key
+  1. Prompt for your Supabase project URL and publishable key
   2. Validate connectivity by inserting and reading a test event
   3. Save credentials to a .env file (gitignored)
   4. Print instructions for GitHub Secrets (CI builds)
 
 PRIVACY NOTICE:
   No personal data is collected. All device IDs and channel URLs are SHA-256
-  hashed before being sent to Supabase. The anon key only allows INSERT to
+  hashed before being sent to Supabase. The publishable key only allows INSERT to
   analytics_events (write-only) and read/write to channel_status.
 
 Usage:
     python scripts/supabase_setup.py
-    python scripts/supabase_setup.py --url https://xxx.supabase.co --key eyJ...
+    python scripts/supabase_setup.py --url https://xxx.supabase.co --key sb_publishable_...
     python scripts/supabase_setup.py --test-only    # Test existing .env config
     python scripts/supabase_setup.py --verify-schema # Check if tables exist
 
@@ -38,11 +38,6 @@ except ImportError:
     print("ERROR: 'requests' package is required.")
     print("  Install it with: pip install requests")
     sys.exit(1)
-
-try:
-    import base64 as _b64
-except ImportError:
-    _b64 = None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -209,7 +204,7 @@ def insert_test_event(url: str, key: str) -> tuple[bool, str, str | None]:
 
 
 def verify_rls_write_only(url: str, key: str) -> tuple[bool, str]:
-    """Verify that anon key CANNOT read analytics_events (RLS enforcement).
+    """Verify that publishable key CANNOT read analytics_events (RLS enforcement).
 
     After the security hardening (2026-03-11), ae_anon_select is removed,
     so anon should get an empty array or a 403/406.
@@ -226,7 +221,7 @@ def verify_rls_write_only(url: str, key: str) -> tuple[bool, str]:
                 return True, "RLS verified: anon cannot read analytics_events (empty result)"
             else:
                 return False, (
-                    "WARNING: anon key CAN read analytics_events! "
+                    "WARNING: publishable key CAN read analytics_events! "
                     "Run scripts/supabase_security_hardening.sql to fix."
                 )
         # A 403 or other error also means RLS is blocking reads (good)
@@ -300,30 +295,20 @@ def validate_url(url: str) -> tuple[bool, str]:
 
 
 def validate_key(key: str) -> tuple[bool, str]:
-    """Validate Supabase anon key format (JWT) and ensure it's not the service_role key."""
+    """Validate Supabase publishable key format and reject secret keys."""
     key = key.strip()
     if not key:
         return False, "Key cannot be empty"
-    if not key.startswith("eyJ"):
-        return False, "Anon key should be a JWT starting with 'eyJ'"
-    if len(key) < 100:
-        return False, "Anon key seems too short for a Supabase JWT"
-    # Decode JWT payload to verify it's the anon key, not service_role
-    if _b64:
-        try:
-            payload_b64 = key.split(".")[1]
-            # Add padding if needed
-            payload_b64 += "=" * (4 - len(payload_b64) % 4)
-            payload = json.loads(_b64.urlsafe_b64decode(payload_b64))
-            role = payload.get("role", "")
-            if role == "service_role":
-                return False, (
-                    "This is the SERVICE_ROLE key (admin privileges). "
-                    "Use the ANON key instead.\n"
-                    "  → Supabase Dashboard > Project Settings > API > anon (public)"
-                )
-        except Exception:
-            pass  # Can't decode — skip role check, proceed with other validation
+    if key.startswith("sb_secret_"):
+        return False, (
+            "This is the SECRET key (server-only privileges). "
+            "Use the PUBLISHABLE key instead.\n"
+            "  → Supabase Dashboard > Project Settings > API > publishable"
+        )
+    if not key.startswith("sb_publishable_"):
+        return False, "Publishable key should start with 'sb_publishable_'"
+    if len(key) < len("sb_publishable_") + 10:
+        return False, "Publishable key seems too short"
     return True, key
 
 
@@ -331,7 +316,7 @@ def validate_key(key: str) -> tuple[bool, str]:
 # Interactive prompts
 # ---------------------------------------------------------------------------
 def prompt_credentials() -> tuple[str, str]:
-    """Interactively prompt for Supabase URL and anon key."""
+    """Interactively prompt for Supabase URL and publishable key."""
     print()
     print(bold("=" * 60))
     print(bold("  TV Viewer — Supabase Setup"))
@@ -353,9 +338,9 @@ def prompt_credentials() -> tuple[str, str]:
             break
         print(f"  {red('✗')} {result}")
 
-    # Prompt for anon key
+    # Prompt for publishable key
     while True:
-        key = input(cyan("  Supabase Anon Key: ")).strip()
+        key = input(cyan("  Supabase Publishable Key (SUPABASE_ANON_KEY): ")).strip()
         valid, result = validate_key(key)
         if valid:
             key = result
@@ -481,7 +466,7 @@ def main():
         ),
     )
     parser.add_argument("--url", help="Supabase project URL")
-    parser.add_argument("--key", help="Supabase anon key")
+    parser.add_argument("--key", help="Supabase publishable key")
     parser.add_argument(
         "--test-only",
         action="store_true",
@@ -555,7 +540,7 @@ def main():
         print()
         print("  Common fixes:")
         print("  1. Run supabase_setup.sql in the Supabase SQL Editor")
-        print("  2. Check that the URL and anon key are correct")
+        print("  2. Check that the URL and publishable key are correct")
         print("  3. Ensure your Supabase project is active (not paused)")
         sys.exit(1)
 

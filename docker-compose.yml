@@ -16,7 +16,7 @@ services:
       - DATA_DIR=/data
       - TELEMETRY_ENABLED=true
       - SUPABASE_URL=${SUPABASE_URL:-https://cdtxpefohpwtusmqengu.supabase.co}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkdHhwZWZvaHB3dHVzbXFlbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzE4MzYsImV4cCI6MjA4ODA0NzgzNn0.FuzUDNIfxlGHptAZ0vWT4_8BDDEcy9CcSCY3te7_wMo}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-sb_publishable_hp_c_ek7bYv33-fLqmgvnw_KS9T33Oi}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     deploy:
       resources:
