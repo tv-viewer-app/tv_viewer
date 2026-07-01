@@ -331,6 +331,19 @@ class TestProxy:
         r = client.get("/api/proxy")
         assert r.status_code == 422  # FastAPI validation error
 
+    def test_proxy_rejects_long_query_url(self, client):
+        long_url = "https://example.com/" + ("a" * 5000)
+        r = client.get("/api/proxy", params={"url": long_url})
+        assert r.status_code == 414
+
+    def test_proxy_post_returns_tokenized_url_for_long_input(self, client):
+        long_url = "https://example.com/" + ("a" * 5000)
+        r = client.post("/api/proxy", json={"url": long_url})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["tokenized"] is True
+        assert data["proxy_url"].startswith("http://testserver/api/proxy/")
+
     def test_proxy_hls_manifest(self, client):
         """Test proxy with a known working public HLS stream."""
         # Use a public test stream
@@ -351,6 +364,39 @@ class TestProxy:
         r = client.get(f"/api/proxy?url={url}")
         if r.status_code == 200:
             assert r.headers.get("access-control-allow-origin") == "*"
+
+    def test_statistics_include_live_and_today_metrics(self, client, monkeypatch):
+        async def fake_refresh(force=False):
+            return {
+                "total_channels": 12,
+                "working_channels": 10,
+                "has_analytics": True,
+                "unique_users": 7,
+                "live_sessions": 3,
+                "today_plays": 9,
+                "today_active": 4,
+                "total_plays": 21,
+                "total_events": 40,
+                "unique_channels_played": 5,
+                "platforms": {"web": 40},
+                "user_countries": [],
+                "top_channels": [],
+                "channel_countries": [],
+                "categories": [],
+                "recently_added": [],
+                "country_last_access": [],
+                "country_top_channels": {},
+            }
+
+        monkeypatch.setattr(server, "_refresh_statistics_cache", fake_refresh)
+        monkeypatch.setattr(server, "_rate_limit_check", lambda *_args, **_kwargs: True)
+
+        r = client.get("/api/statistics")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["live_sessions"] == 3
+        assert data["today_plays"] == 9
+        assert data["today_active"] == 4
 
 
 # ─── Map ────────────────────────────────────────────────────────────────────

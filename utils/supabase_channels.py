@@ -91,19 +91,42 @@ def _hash_url(url: str) -> str:
     return hashlib.sha256(url.encode('utf-8')).hexdigest()
 
 
+def _resolve_supabase_config() -> tuple[str, str]:
+    """Read the current Supabase URL + publishable key from env/config."""
+    try:
+        import config as runtime_cfg
+    except ImportError:
+        runtime_cfg = None
+
+    supabase_url = (
+        os.environ.get('SUPABASE_URL', '').strip()
+        or getattr(runtime_cfg, 'SUPABASE_URL', '').strip()
+        or _SUPABASE_URL
+    )
+    supabase_key = (
+        os.environ.get('SUPABASE_ANON_KEY', '').strip()
+        or getattr(runtime_cfg, 'SUPABASE_ANON_KEY', '').strip()
+        or _SUPABASE_KEY
+    )
+    return supabase_url, supabase_key
+
+
 def _headers() -> Dict[str, str]:
+    _, supabase_key = _resolve_supabase_config()
     return {
-        'apikey': _SUPABASE_KEY,
-        'Authorization': f'Bearer {_SUPABASE_KEY}',
+        'apikey': supabase_key,
+        'Authorization': f'Bearer {supabase_key}',
         'Content-Type': 'application/json',
     }
 
 
 def is_configured() -> bool:
+    supabase_url, supabase_key = _resolve_supabase_config()
     return (
-        _ENABLED
+        bool(supabase_url and supabase_key)
         and aiohttp is not None
-        and _SUPABASE_URL != 'YOUR_SUPABASE_PROJECT_URL'
+        and supabase_url != 'YOUR_SUPABASE_PROJECT_URL'
+        and supabase_key != 'YOUR_SUPABASE_ANON_KEY'
     )
 
 
@@ -116,7 +139,8 @@ async def _fetch_channel_statuses(session, headers, timeout) -> Optional[Dict[st
     statuses = {}
     offset = 0
     page_size = 5000
-    status_url = f'{_SUPABASE_URL}/rest/v1/channel_status?select=url_hash,status'
+    supabase_url, _ = _resolve_supabase_config()
+    status_url = f'{supabase_url}/rest/v1/channel_status?select=url_hash,status'
     try:
         while True:
             page_url = f'{status_url}&limit={page_size}&offset={offset}'
@@ -159,7 +183,8 @@ async def fetch_channels(max_channels: int = 50_000, working_only: bool = False)
         return []
 
     try:
-        url = f'{_SUPABASE_URL}/rest/v1/{_TABLE}?select=name,urls,category,country,logo,media_type,source,url_hash&order=name.asc'
+        supabase_url, _ = _resolve_supabase_config()
+        url = f'{supabase_url}/rest/v1/{_TABLE}?select=name,urls,category,country,logo,media_type,source,url_hash&order=name.asc'
         headers = _headers()
         del headers['Content-Type']  # GET doesn't need it
 
@@ -311,12 +336,13 @@ async def contribute_channels(
     contributed = 0
     batch_size = 500
     try:
+        supabase_url, _ = _resolve_supabase_config()
         ssl_ctx = _get_ssl_context()
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
         async with aiohttp.ClientSession(connector=connector) as session:
             for i in range(0, len(payload), batch_size):
                 batch = payload[i:i + batch_size]
-                url = f'{_SUPABASE_URL}/rest/v1/{_TABLE}'
+                url = f'{supabase_url}/rest/v1/{_TABLE}'
                 hdrs = _headers()
                 hdrs['Prefer'] = 'resolution=merge-duplicates'
 
@@ -347,10 +373,11 @@ async def _call_rpc(name: str, payload: Dict[str, Any], timeout: int = 15) -> Op
     if not is_configured():
         return None
     try:
+        supabase_url, _ = _resolve_supabase_config()
         ssl_ctx = _get_ssl_context()
         connector = aiohttp.TCPConnector(ssl=ssl_ctx)
         async with aiohttp.ClientSession(connector=connector) as session:
-            url = f'{_SUPABASE_URL}/rest/v1/rpc/{name}'
+            url = f'{supabase_url}/rest/v1/rpc/{name}'
             async with session.post(
                 url, json=payload, headers=_headers(),
                 timeout=aiohttp.ClientTimeout(total=timeout),

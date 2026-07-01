@@ -12,6 +12,7 @@ import sys
 import json
 import uuid
 import asyncio
+import inspect
 import hashlib
 import ipaddress
 import threading
@@ -27,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.background import BackgroundTask
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 
@@ -879,6 +881,9 @@ from urllib.parse import urljoin, quote
 _proxy_timeout = aiohttp.ClientTimeout(total=60, sock_read=30)
 # Shared connector pool — avoids creating per-request connectors (fixes session leak)
 _proxy_connector: Optional[aiohttp.TCPConnector] = None
+_PROXY_QUERY_URL_LIMIT = 4096
+_PROXY_TOKEN_TTL = 1800
+_proxy_token_store: Dict[str, Dict[str, Any]] = {}
 
 
 def classify_failure(error_msg: str) -> str:
@@ -910,8 +915,60 @@ def _get_proxy_connector() -> aiohttp.TCPConnector:
     return _proxy_connector
 
 
-@app.get("/api/proxy")
-async def proxy_stream(request: Request, url: str = Query(..., description="Stream URL to proxy")):
+def _prune_proxy_tokens(now: Optional[float] = None) -> None:
+    current = now or time.time()
+    expired = [
+        token for token, data in _proxy_token_store.items()
+        if float(data.get("expires_at", 0)) <= current
+    ]
+    for token in expired:
+        _proxy_token_store.pop(token, None)
+
+
+def _register_proxy_token(url: str) -> str:
+    _prune_proxy_tokens()
+    token = uuid.uuid4().hex
+    _proxy_token_store[token] = {
+        "url": url,
+        "expires_at": time.time() + _PROXY_TOKEN_TTL,
+    }
+    return token
+
+
+def _build_proxy_url(base_url: str, target_url: str) -> str:
+    if len(target_url) <= _PROXY_QUERY_URL_LIMIT:
+        return f"{base_url}api/proxy?url={quote(target_url, safe='')}"
+    token = _register_proxy_token(target_url)
+    return f"{base_url}api/proxy/{token}"
+
+
+def _resolve_proxy_token(token: str) -> Optional[str]:
+    _prune_proxy_tokens()
+    record = _proxy_token_store.get(token)
+    if not record:
+        return None
+    return str(record.get("url") or "")
+
+
+async def _close_proxy_resources(
+    response: Optional[aiohttp.ClientResponse],
+    session: Optional[aiohttp.ClientSession],
+) -> None:
+    if response is not None:
+        try:
+            release_result = response.release()
+            if inspect.isawaitable(release_result):
+                await release_result
+        except Exception:
+            pass
+    if session is not None and not session.closed:
+        try:
+            await session.close()
+        except Exception:
+            pass
+
+
+async def _proxy_stream_impl(request: Request, url: str):
     """Proxy an HLS stream to bypass CORS restrictions.
     Rewrites .m3u8 manifests so segment URLs also go through the proxy."""
     if not url.startswith(("http://", "https://")):
@@ -948,6 +1005,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
         "Origin": _origin,
     }
     session = None
+    resp = None
     try:
         session = aiohttp.ClientSession(
             timeout=_proxy_timeout,
@@ -958,8 +1016,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
 
         if resp.status != 200:
             status = resp.status
-            await resp.release()
-            await session.close()
+            await _close_proxy_resources(resp, session)
             detail = f"Upstream returned {status}"
             failure_type = classify_failure(detail)
             # Track 4xx for the circuit breaker. 5xx alone shouldn't trip it
@@ -976,8 +1033,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
         # For m3u8 manifests, rewrite URLs to go through proxy
         if ".m3u8" in url or "mpegurl" in (resp.headers.get("content-type", "").lower()):
             body = await resp.text()
-            await resp.release()
-            await session.close()
+            await _close_proxy_resources(resp, session)
             _breaker_record_success(url)
             rewritten = _rewrite_manifest(body, url, str(request.base_url))
             return StreamingResponse(
@@ -1006,18 +1062,15 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
                     type(exc).__name__,
                 )
                 return
-            finally:
-                await resp.release()
-                await session.close()
 
         return StreamingResponse(
             stream_generator(),
             media_type=media_type,
-            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"}
+            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"},
+            background=BackgroundTask(_close_proxy_resources, resp, session),
         )
     except (aiohttp.ClientError, asyncio.TimeoutError, asyncio.CancelledError, OSError) as e:
-        if session and not session.closed:
-            await session.close()
+        await _close_proxy_resources(resp, session)
         detail = f"Upstream connection failed: {type(e).__name__}"
         return JSONResponse(
             status_code=502,
@@ -1028,8 +1081,7 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             headers={"Access-Control-Allow-Origin": "*"}
         )
     except Exception as e:
-        if session and not session.closed:
-            await session.close()
+        await _close_proxy_resources(resp, session)
         logger.error(f"Proxy unexpected error: {e}")
         return JSONResponse(
             status_code=502,
@@ -1039,6 +1091,41 @@ async def proxy_stream(request: Request, url: str = Query(..., description="Stre
             },
             headers={"Access-Control-Allow-Origin": "*"}
         )
+
+
+@app.get("/api/proxy")
+async def proxy_stream(request: Request, url: str = Query(..., description="Stream URL to proxy")):
+    if len(url) > _PROXY_QUERY_URL_LIMIT:
+        raise HTTPException(status_code=414, detail="URL too long for proxy")
+    return await _proxy_stream_impl(request, url)
+
+
+@app.get("/api/proxy/{token}")
+async def proxy_stream_token(request: Request, token: str):
+    url = _resolve_proxy_token(token)
+    if not url:
+        raise HTTPException(status_code=404, detail="Proxy token expired or not found")
+    return await _proxy_stream_impl(request, url)
+
+
+@app.post("/api/proxy")
+async def proxy_stream_post(request: Request):
+    try:
+        body = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    url = str(body.get("url", "") or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing URL")
+
+    return {
+        "proxy_url": _build_proxy_url(str(request.base_url), url),
+        "tokenized": len(url) > _PROXY_QUERY_URL_LIMIT,
+    }
 
 
 def _rewrite_manifest(manifest: str, manifest_url: str, base_url: str) -> str:
@@ -1053,14 +1140,14 @@ def _rewrite_manifest(manifest: str, manifest_url: str, base_url: str) -> str:
                 abs_url = stripped
             else:
                 abs_url = urljoin(manifest_url, stripped)
-            result.append(f"{base_url}api/proxy?url={quote(abs_url, safe='')}")
+            result.append(_build_proxy_url(base_url, abs_url))
         elif stripped.startswith('#EXT-X-MAP:URI="') or 'URI="' in stripped:
             # Rewrite URI= attributes in tags
             def rewrite_uri(m):
                 uri = m.group(1)
                 if not uri.startswith(('http://', 'https://')):
                     uri = urljoin(manifest_url, uri)
-                return f'URI="{base_url}api/proxy?url={quote(uri, safe="")}"'
+                return f'URI="{_build_proxy_url(base_url, uri)}"'
             result.append(re.sub(r'URI="([^"]+)"', rewrite_uri, stripped))
         else:
             result.append(line)
@@ -1295,6 +1382,13 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                             played_channels: Dict[str, int] = {}
                             country_last_access: Dict[str, str] = {}
                             country_channels: Dict[str, Counter] = {}
+                            live_sessions = 0
+                            today_plays = 0
+                            today_devices = set()
+                            live_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                            today_start = datetime.now(timezone.utc).replace(
+                                hour=0, minute=0, second=0, microsecond=0
+                            )
 
                             for ev in events:
                                 devices.add(ev.get('device_id', ''))
@@ -1311,6 +1405,24 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                                 cn = ''
                                 if isinstance(ed, dict):
                                     cn = ed.get('name', '') or ed.get('channel_name', '')
+                                created_at_raw = str(ev.get('created_at', '') or '')
+                                created_at_dt = None
+                                if created_at_raw:
+                                    try:
+                                        created_at_dt = datetime.fromisoformat(
+                                            created_at_raw.replace('Z', '+00:00')
+                                        )
+                                    except ValueError:
+                                        created_at_dt = None
+                                if created_at_dt is not None:
+                                    if created_at_dt >= live_cutoff:
+                                        live_sessions += 1
+                                    if created_at_dt >= today_start:
+                                        device_id = ev.get('device_id', '')
+                                        if device_id:
+                                            today_devices.add(device_id)
+                                        if ev.get('event_type') == 'channel_play':
+                                            today_plays += 1
                                 if cn and ev.get('event_type') == 'channel_play':
                                     played_channels[cn] = played_channels.get(cn, 0) + 1
                                     if uc and uc != 'XX':
@@ -1334,6 +1446,9 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                                     for k, v in country_channels.items()
                                     if user_countries.get(k, 0) > 5 and sum(v.values()) >= 3
                                 },
+                                "live_sessions": live_sessions,
+                                "today_plays": today_plays,
+                                "today_active": len(today_devices),
                                 "total_plays": sum(1 for e in events if e.get('event_type') == 'channel_play'),
                             })
     except Exception as analytics_err:
@@ -1350,6 +1465,9 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
         # Analytics (live user data)
         "has_analytics": has_analytics,
         "unique_users": analytics_data.get("unique_users", 0),
+        "live_sessions": analytics_data.get("live_sessions", 0),
+        "today_plays": analytics_data.get("today_plays", 0),
+        "today_active": analytics_data.get("today_active", 0),
         "total_plays": analytics_data.get("total_plays", 0),
         "total_events": analytics_data.get("total_events", 0),
         "unique_channels_played": analytics_data.get("unique_channels_played", 0),
@@ -1380,7 +1498,15 @@ async def get_statistics(request: Request):
         raise
     except Exception as e:
         logger.warning(f"Statistics error: {e}")
-        return {"error": "temporary_failure", "total_channels": 0, "has_analytics": False, "total_events": 0}
+        return {
+            "error": "temporary_failure",
+            "total_channels": 0,
+            "has_analytics": False,
+            "live_sessions": 0,
+            "today_plays": 0,
+            "today_active": 0,
+            "total_events": 0,
+        }
 
 
 @app.on_event("startup")

@@ -889,18 +889,37 @@ function tryNextSource(channel = currentChannel, urlIndex = currentSourceIdx + 1
     return true;
 }
 
-function startStream(url, video, isRadio) {
+async function resolveProxyStreamUrl(url) {
+    if (url.startsWith('/api/proxy')) {
+        return url;
+    }
+    if (url.length <= 4096) {
+        return `/api/proxy?url=${encodeURIComponent(url)}`;
+    }
+
+    const response = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url}),
+    });
+    if (!response.ok) {
+        throw new Error(`proxy_init_${response.status}`);
+    }
+
+    const payload = await response.json();
+    if (!payload || typeof payload.proxy_url !== 'string' || !payload.proxy_url) {
+        throw new Error('proxy_init_invalid');
+    }
+    return payload.proxy_url;
+}
+
+async function startStream(url, video, isRadio) {
     const streamStartTime = performance.now(); // Perf: measure time-to-first-frame
     const attemptId = ++currentStreamAttemptId;
     currentFailureType = 'unknown';
-    // Use proxy for all streams (most lack CORS headers)
-    let streamUrl = url;
-    if (!url.startsWith('/api/proxy')) {
-        streamUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-    }
-
     const isHls = url.includes('.m3u8') || url.includes('m3u8');
     let settled = false;
+    let loadTimer = null;
 
     const failCurrentSource = (error) => {
         if (attemptId !== currentStreamAttemptId) return false;
@@ -913,8 +932,16 @@ function startStream(url, video, isRadio) {
         return tryNextSource(currentChannel, currentSourceIdx + 1, failureType);
     };
 
+    let streamUrl = url;
+    try {
+        streamUrl = await resolveProxyStreamUrl(url);
+    } catch (error) {
+        failCurrentSource(error);
+        return;
+    }
+
     // Timeout — try next source if nothing plays in 12s
-    const loadTimer = setTimeout(() => {
+    loadTimer = setTimeout(() => {
         if (attemptId !== currentStreamAttemptId) return;
         if (video.readyState < 2) failCurrentSource({ message: 'timeout' });
     }, 12000);
@@ -1517,6 +1544,9 @@ function renderStats(data) {
     const formatNumber = (value) => Number(value || 0).toLocaleString();
     const totalChannels = data.total_channels ?? 0;
     const uniqueUsers = data.unique_users ?? 0;
+    const liveSessions = data.live_sessions ?? 0;
+    const todayPlays = data.today_plays ?? 0;
+    const todayActive = data.today_active ?? 0;
     const totalPlays = data.total_plays ?? 0;
     const hasAnalytics = !!data.has_analytics;
     const userCountries = Array.isArray(data.user_countries) ? data.user_countries : [];
@@ -1538,11 +1568,16 @@ function renderStats(data) {
     }
 
     html += `
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
             <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
                 <div style="font-size:24px">📺</div>
                 <div style="font-size:24px;font-weight:700;color:var(--text)">${formatNumber(totalChannels)}</div>
                 <div style="font-size:12px;color:var(--text-dim)">Total Channels</div>
+            </div>
+            <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
+                <div style="font-size:24px">🟢</div>
+                <div style="font-size:24px;font-weight:700;color:var(--text)">${formatNumber(liveSessions)}</div>
+                <div style="font-size:12px;color:var(--text-dim)">Live Sessions (5m)</div>
             </div>
             <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
                 <div style="font-size:24px">👥</div>
@@ -1553,6 +1588,16 @@ function renderStats(data) {
                 <div style="font-size:24px">▶️</div>
                 <div style="font-size:24px;font-weight:700;color:var(--text)">${formatNumber(totalPlays)}</div>
                 <div style="font-size:12px;color:var(--text-dim)">Plays (30d)</div>
+            </div>
+            <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
+                <div style="font-size:24px">📆</div>
+                <div style="font-size:24px;font-weight:700;color:var(--text)">${formatNumber(todayPlays)}</div>
+                <div style="font-size:12px;color:var(--text-dim)">Today's Plays</div>
+            </div>
+            <div style="background:var(--card-bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
+                <div style="font-size:24px">✨</div>
+                <div style="font-size:24px;font-weight:700;color:var(--text)">${formatNumber(todayActive)}</div>
+                <div style="font-size:12px;color:var(--text-dim)">Today's Active Devices</div>
             </div>
         </div>
     `;
