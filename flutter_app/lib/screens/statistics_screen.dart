@@ -63,7 +63,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       final since = DateTime.now().subtract(const Duration(days: 30)).toUtc().toIso8601String();
       // Query fields that exist — channel info is inside event_data JSON
       final url = Uri.parse('$_supabaseUrl/rest/v1/analytics_events'
-          '?select=event_type,country,platform,event_data'
+          '?select=event_type,country,platform,event_data,created_at'
           '&created_at=gte.$since'
           '&order=created_at.desc'
           '&limit=5000');
@@ -106,12 +106,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final countries = <String, int>{};
     final platforms = <String, int>{};
     final channels = <String, int>{};
+    final countryLastAccess = <String, String>{};
+    final countryChannels = <String, Map<String, int>>{};
     int plays = 0;
 
     for (final e in events) {
       final country = (e['country'] as String?) ?? '';
       final platform = (e['platform'] as String?) ?? 'unknown';
       final eventType = (e['event_type'] as String?) ?? '';
+      final createdAt = (e['created_at'] as String?) ?? '';
 
       // Extract channel name from event_data JSON
       final eventData = e['event_data'];
@@ -123,15 +126,33 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       platforms[platform] = (platforms[platform] ?? 0) + 1;
       if (country.isNotEmpty && country != 'XX') {
         countries[country] = (countries[country] ?? 0) + 1;
+        if (createdAt.compareTo(countryLastAccess[country] ?? '') > 0) {
+          countryLastAccess[country] = createdAt;
+        }
       }
       if (eventType == 'channel_play' && channelName.isNotEmpty && channelName.length < 50) {
         plays++;
         channels[channelName] = (channels[channelName] ?? 0) + 1;
+        if (country.isNotEmpty && country != 'XX') {
+          final perCountry = countryChannels.putIfAbsent(country, () => <String, int>{});
+          perCountry[channelName] = (perCountry[channelName] ?? 0) + 1;
+        }
       }
     }
 
-    final topChannels = (channels.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(10).toList();
+    final topChannels = (channels.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(15).toList();
     final topCountries = (countries.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(15).toList();
+    final lastAccessEntries = (countryLastAccess.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(15).toList();
+    final topChannelsByCountry = <String, List<Map<String, dynamic>>>{};
+    for (final entry in countryChannels.entries) {
+      final totalCountryEvents = countries[entry.key] ?? 0;
+      final totalCountryPlays = entry.value.values.fold<int>(0, (sum, value) => sum + value);
+      if (totalCountryEvents <= 5 || totalCountryPlays < 3) continue;
+      final topPerCountry = (entry.value.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(3);
+      topChannelsByCountry[entry.key] = topPerCountry
+          .map((channel) => {'name': channel.key, 'plays': channel.value})
+          .toList();
+    }
 
     return {
       'period_days': 30,
@@ -141,6 +162,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       'platforms': Map.fromEntries(platforms.entries.toList()..sort((a, b) => b.value.compareTo(a.value))),
       'top_channels': topChannels.map((e) => {'name': e.key, 'plays': e.value}).toList(),
       'countries': topCountries.map((e) => {'name': e.key, 'events': e.value}).toList(),
+      'country_last_access': lastAccessEntries
+          .map((e) => {'name': e.key, 'last_seen': e.value.length >= 10 ? e.value.substring(0, 10) : e.value})
+          .toList(),
+      'country_top_channels': topChannelsByCountry,
     };
   }
 
@@ -176,6 +201,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                         ...[_buildSection('🌍 Countries', _buildCountryList(colorScheme)), const SizedBox(height: 24)],
                       if ((_data?['top_channels'] as List?)?.isNotEmpty == true)
                         ...[_buildSection('🔥 Top Channels', _buildTopChannels(colorScheme)), const SizedBox(height: 24)],
+                      if ((_data?['country_last_access'] as List?)?.isNotEmpty == true)
+                        ...[_buildSection('🕒 Country Last Access', _buildCountryLastAccess(colorScheme)), const SizedBox(height: 24)],
+                      if ((_data?['country_top_channels'] as Map?)?.isNotEmpty == true)
+                        ...[_buildSection('🏁 Top Channels per Country', _buildCountryTopChannels(colorScheme)), const SizedBox(height: 24)],
                       _buildFooter(theme),
                     ],
                   ),
@@ -293,6 +322,71 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           trailing: Text('${ch['plays']} plays', style: TextStyle(color: cs.outline, fontSize: 13)));
       }).toList(),
     )));
+  }
+
+  Widget _buildCountryLastAccess(ColorScheme cs) {
+    final lastAccess = (_data?['country_last_access'] as List?) ?? [];
+    if (lastAccess.isEmpty) return const SizedBox.shrink();
+    return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
+      children: lastAccess.map<Widget>((entry) {
+        final item = entry as Map;
+        return ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(item['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w500)),
+          trailing: Text(item['last_seen'] ?? '', style: TextStyle(color: cs.outline, fontSize: 13)),
+        );
+      }).toList(),
+    )));
+  }
+
+  Widget _buildCountryTopChannels(ColorScheme cs) {
+    final countryTopChannels = (_data?['country_top_channels'] as Map?) ?? {};
+    if (countryTopChannels.isEmpty) return const SizedBox.shrink();
+    final entries = countryTopChannels.entries.where((entry) => entry.value is List && (entry.value as List).isNotEmpty).toList();
+    return Column(
+      children: entries.map<Widget>((entry) {
+        final channels = entry.value as List;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry.key, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ...channels.asMap().entries.map<Widget>((channelEntry) {
+                    final channel = channelEntry.value as Map;
+                    final isLast = channelEntry.key == channels.length - 1;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: isLast
+                          ? null
+                          : BoxDecoration(border: Border(bottom: BorderSide(color: cs.outlineVariant))),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              channel['name'] ?? '',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text('${channel['plays']} plays', style: TextStyle(color: cs.outline, fontSize: 12)),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   Widget _buildFooter(ThemeData theme) {

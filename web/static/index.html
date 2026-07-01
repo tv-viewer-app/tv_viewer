@@ -1442,7 +1442,9 @@ function renderStats(data) {
     const totalPlays = data.total_plays ?? 0;
     const hasAnalytics = !!data.has_analytics;
     const userCountries = Array.isArray(data.user_countries) ? data.user_countries : [];
-    const topChannels = Array.isArray(data.top_channels) ? data.top_channels.slice(0, 10) : [];
+    const topChannels = Array.isArray(data.top_channels) ? data.top_channels.slice(0, 15) : [];
+    const countryLastAccess = Array.isArray(data.country_last_access) ? data.country_last_access : [];
+    const countryTopChannels = data.country_top_channels && typeof data.country_top_channels === 'object' ? data.country_top_channels : {};
     const channelCountries = Array.isArray(data.channel_countries) ? data.channel_countries : [];
     const categories = Array.isArray(data.categories) ? data.categories : [];
     const recentlyAdded = Array.isArray(data.recently_added) ? data.recently_added : [];
@@ -1518,6 +1520,36 @@ function renderStats(data) {
                 <span style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(channel.name || 'Unknown')}</span>
                 <span style="font-size:12px;color:var(--text-dim)">${formatNumber(channel.plays)} plays</span>
             </div>`;
+        });
+        html += '</div>';
+    }
+
+    if (hasAnalytics && countryLastAccess.length > 0) {
+        html += '<h3 style="margin:16px 0 8px;font-size:15px;color:var(--text)">Country Last Access</h3>';
+        html += '<div style="background:var(--card-bg);border-radius:8px;padding:8px;border:1px solid var(--border)">';
+        countryLastAccess.forEach((entry, index) => {
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px;${index < countryLastAccess.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}">
+                <span style="font-size:13px;color:var(--text)">${escapeHtml(entry.name || 'Unknown')}</span>
+                <span style="font-size:12px;color:var(--text-dim)">${escapeHtml(entry.last_seen || 'Unknown')}</span>
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    const countryTopEntries = Object.entries(countryTopChannels).filter(([, channels]) => Array.isArray(channels) && channels.length > 0);
+    if (hasAnalytics && countryTopEntries.length > 0) {
+        html += '<h3 style="margin:16px 0 8px;font-size:15px;color:var(--text)">Top Channels per Country</h3>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">';
+        countryTopEntries.forEach(([country, channels]) => {
+            html += `<div style="background:var(--card-bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
+                <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">${escapeHtml(country)}</div>`;
+            channels.forEach((channel, index) => {
+                html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;${index < channels.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}">
+                    <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(channel.name || 'Unknown')}</span>
+                    <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">${formatNumber(channel.plays)} plays</span>
+                </div>`;
+            });
+            html += '</div>';
         });
         html += '</div>';
     }

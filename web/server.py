@@ -16,6 +16,7 @@ import hashlib
 import ipaddress
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlparse
@@ -1114,7 +1115,7 @@ async def get_statistics(request: Request):
 
                 since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
                 params = {
-                    'select': 'event_type,country,platform,event_data,device_id',
+                    'select': 'event_type,country,platform,event_data,device_id,created_at',
                     'created_at': f'gte.{since}',
                     'order': 'created_at.desc',
                     'limit': '5000',
@@ -1138,6 +1139,8 @@ async def get_statistics(request: Request):
                                 user_countries: Dict[str, int] = {}
                                 platforms: Dict[str, int] = {}
                                 played_channels: Dict[str, int] = {}
+                                country_last_access: Dict[str, str] = {}
+                                country_channels: Dict[str, Counter] = {}
 
                                 for ev in events:
                                     devices.add(ev.get('device_id', ''))
@@ -1146,19 +1149,36 @@ async def get_statistics(request: Request):
                                     uc = ev.get('country', 'XX')
                                     if uc and uc != 'XX':
                                         user_countries[uc] = user_countries.get(uc, 0) + 1
+                                        created_at = ev.get('created_at', '')
+                                        if created_at > country_last_access.get(uc, ''):
+                                            country_last_access[uc] = created_at
                                     # Channel name from event_data
                                     ed = ev.get('event_data') or {}
+                                    cn = ''
                                     if isinstance(ed, dict):
                                         cn = ed.get('name', '') or ed.get('channel_name', '')
-                                        if cn and ev.get('event_type') == 'channel_play':
-                                            played_channels[cn] = played_channels.get(cn, 0) + 1
+                                    if cn and ev.get('event_type') == 'channel_play':
+                                        played_channels[cn] = played_channels.get(cn, 0) + 1
+                                        if uc and uc != 'XX':
+                                            if uc not in country_channels:
+                                                country_channels[uc] = Counter()
+                                            country_channels[uc][cn] += 1
 
                                 analytics_data = {
                                     "unique_users": len(devices),
                                     "total_events": len(events),
                                     "user_countries": sorted(user_countries.items(), key=lambda x: -x[1])[:15],
                                     "platforms": dict(sorted(platforms.items(), key=lambda x: -x[1])),
-                                    "top_played": sorted(played_channels.items(), key=lambda x: -x[1])[:10],
+                                    "top_played": sorted(played_channels.items(), key=lambda x: -x[1])[:15],
+                                    "country_last_access": [
+                                        {"name": k, "last_seen": v[:10]}
+                                        for k, v in sorted(country_last_access.items(), key=lambda x: x[1], reverse=True)[:15]
+                                    ],
+                                    "country_top_channels": {
+                                        k: [{"name": n, "plays": c} for n, c in v.most_common(3)]
+                                        for k, v in country_channels.items()
+                                        if user_countries.get(k, 0) > 5 and sum(v.values()) >= 3
+                                    },
                                     "total_plays": sum(1 for e in events if e.get('event_type') == 'channel_play'),
                                 }
         except Exception as analytics_err:
@@ -1180,6 +1200,8 @@ async def get_statistics(request: Request):
             "platforms": analytics_data.get("platforms", {}),
             "user_countries": [{"name": c[0], "events": c[1]} for c in analytics_data.get("user_countries", [])],
             "top_channels": [{"name": c[0], "plays": c[1]} for c in analytics_data.get("top_played", [])],
+            "country_last_access": analytics_data.get("country_last_access", []),
+            "country_top_channels": analytics_data.get("country_top_channels", {}),
         }
 
         _stats_cache = result
