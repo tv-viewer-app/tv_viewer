@@ -338,7 +338,7 @@ class EPGService:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._init_lock: Optional[asyncio.Lock] = None  # Created lazily in async context
+        self._init_state_lock = threading.Lock()
         self._channel_map: Dict[str, str] = {}          # epg_id → display_name
         self._schedules: Dict[str, List[EPGProgram]] = {}  # epg_id → [programs]
         self._name_to_epg_id: Dict[str, str] = {}       # lowercase name → epg_id
@@ -363,18 +363,14 @@ class EPGService:
 
     async def initialize(self, sources: Optional[List[str]] = None) -> None:
         """Fetch and parse EPG data from configured sources."""
-        # Lazy-create asyncio lock (can't create in __init__ outside event loop)
-        if self._init_lock is None:
-            self._init_lock = asyncio.Lock()
-
-        async with self._init_lock:
-            # Double-check after acquiring lock
+        with self._init_state_lock:
             if self._initializing:
                 return
             self._initializing = True
-            try:
-                await self._do_initialize(sources)
-            finally:
+        try:
+            await self._do_initialize(sources)
+        finally:
+            with self._init_state_lock:
                 self._initializing = False
 
     async def _do_initialize(self, sources: Optional[List[str]] = None) -> None:

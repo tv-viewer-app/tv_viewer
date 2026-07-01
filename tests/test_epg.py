@@ -1,5 +1,6 @@
 """Tests for EPG (Electronic Program Guide) service."""
 
+import asyncio
 import json
 import os
 import tempfile
@@ -220,6 +221,28 @@ class TestEPGService:
         monkeypatch.setattr("utils.epg.EPG_CACHE_FILE", str(tmp_path / "no_cache.json"))
         svc = EPGService()
         assert svc.channel_count == 0
+
+    def test_initialize_can_run_from_different_event_loops(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("utils.epg.EPG_CACHE_FILE", str(tmp_path / "no_cache.json"))
+        svc = EPGService()
+        calls = []
+
+        async def fake_initialize(sources=None):
+            calls.append(tuple(sources or ()))
+            await asyncio.sleep(0)
+
+        monkeypatch.setattr(svc, "_do_initialize", fake_initialize)
+
+        loop1 = asyncio.new_event_loop()
+        loop2 = asyncio.new_event_loop()
+        try:
+            loop1.run_until_complete(svc.initialize(["source-a"]))
+            loop2.run_until_complete(svc.initialize(["source-b"]))
+        finally:
+            loop1.close()
+            loop2.close()
+
+        assert calls == [("source-a",), ("source-b",)]
 
 
 class TestEPGServiceWithData:
