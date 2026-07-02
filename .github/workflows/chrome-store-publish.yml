@@ -1,0 +1,113 @@
+name: Chrome Web Store Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 2.21.2)'
+        required: true
+
+# Requires these secrets:
+#   CHROME_EXTENSION_ID    — Extension ID from Chrome Web Store dashboard
+#   CHROME_CLIENT_ID       — Google Cloud OAuth2 Client ID
+#   CHROME_CLIENT_SECRET   — Google Cloud OAuth2 Client Secret
+#   CHROME_REFRESH_TOKEN   — OAuth2 refresh token (one-time setup)
+#
+# Setup guide:
+#   1. https://console.cloud.google.com/apis/credentials → Create OAuth2 Client (Web app)
+#   2. Enable "Chrome Web Store API" at https://console.cloud.google.com/apis/library/chromewebstore.googleapis.com
+#   3. Get refresh token:
+#      curl "https://accounts.google.com/o/oauth2/auth?response_type=code&scope=https://www.googleapis.com/auth/chromewebstore&client_id=YOUR_CLIENT_ID&redirect_uri=urn:ietf:wg:oauth:2.0:oob"
+#      Then exchange the code for a refresh token.
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update extension version in manifest
+        run: |
+          cd store-listings/chrome-extension
+          jq --arg v "${{ steps.ver.outputs.version }}" '.version = $v' manifest.json > tmp.json && mv tmp.json manifest.json
+
+      - name: Package extension
+        run: |
+          cd store-listings/chrome-extension
+          zip -r /tmp/extension.zip . -x "store-assets/*" -x "*.md"
+          echo "📦 Extension packaged: $(du -h /tmp/extension.zip | cut -f1)"
+
+      - name: Get access token
+        id: auth
+        env:
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$REFRESH_TOKEN" ]; then
+            echo "::error::Chrome Web Store credentials not configured"
+            echo "Add CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN secrets"
+            exit 1
+          fi
+          TOKEN=$(curl -s -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=$CLIENT_ID" \
+            -d "client_secret=$CLIENT_SECRET" \
+            -d "refresh_token=$REFRESH_TOKEN" \
+            -d "grant_type=refresh_token" | jq -r '.access_token')
+          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+            echo "::error::Failed to get access token"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Upload to Chrome Web Store
+        env:
+          TOKEN: ${{ steps.auth.outputs.token }}
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-goog-api-version: 2" \
+            -X PUT \
+            -T /tmp/extension.zip \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$EXTENSION_ID")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Upload response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Upload failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "✅ Uploaded successfully"
+
+      - name: Publish extension
+        env:
+          TOKEN: ${{ steps.auth.outputs.token }}
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-goog-api-version: 2" \
+            -H "Content-Length: 0" \
+            -X POST \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXTENSION_ID/publish")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Publish response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning::Publish returned HTTP $HTTP_CODE — may need manual review"
+          else
+            echo "✅ Published to Chrome Web Store"
+          fi
