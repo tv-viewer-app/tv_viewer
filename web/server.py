@@ -20,6 +20,7 @@ import re
 import threading
 import time
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlparse
@@ -90,6 +91,52 @@ def _normalize_category(cat: str, channel_name: str = None) -> str:
     return _normalize_category_impl(cat, channel_name)
 
 
+_STALE_REPORT_THRESHOLD = 10
+_STALE_CHANNEL_AGE = timedelta(days=7)
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_timestamp(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _is_dead_status(status: Any) -> bool:
+    return str(status or "").lower() in {"broken", "failed", "offline", "stale"}
+
+
+def _is_broken_and_old(ch: Dict[str, Any]) -> bool:
+    if not _is_dead_status(ch.get("status")):
+        return False
+    last_checked = _parse_timestamp(ch.get("last_checked"))
+    if last_checked is None:
+        return False
+    return last_checked <= datetime.now(timezone.utc) - _STALE_CHANNEL_AGE
+
+
+def _is_stale_channel(ch: Dict[str, Any]) -> bool:
+    if ch.get("stale") or ch.get("hidden") or str(ch.get("status") or "").lower() == "stale":
+        return True
+    if not _is_dead_status(ch.get("status")):
+        return False
+    report_count = _coerce_int(ch.get("report_count"))
+    return report_count >= _STALE_REPORT_THRESHOLD and _is_broken_and_old(ch)
+
 
 def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Merge channels with the same normalized name into single entries with multiple URLs.
@@ -99,7 +146,7 @@ def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]
     """
     import re
     merged: Dict[str, Dict[str, Any]] = {}
-    STATUS_PRIORITY = {'working': 0, 'unchecked': 1, 'offline': 2}
+    STATUS_PRIORITY = {'working': 0, 'unchecked': 1, 'broken': 2, 'failed': 2, 'offline': 2, 'stale': 2}
 
     for ch in channels:
         name = (ch.get("name") or "").strip()
@@ -138,7 +185,22 @@ def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]
                 "status": ch.get("status", "unchecked"),
                 "source": ch.get("source", ""),
                 "working_url_index": 0,
+                "report_count": _coerce_int(ch.get("report_count")),
+                "last_checked": ch.get("last_checked"),
+                "stale": bool(ch.get("stale")),
+                "hidden": bool(ch.get("hidden")),
             }
+        existing = merged[key]
+        existing["report_count"] = max(existing.get("report_count", 0), _coerce_int(ch.get("report_count")))
+        current_checked = _parse_timestamp(existing.get("last_checked"))
+        candidate_checked = _parse_timestamp(ch.get("last_checked"))
+        if candidate_checked and (current_checked is None or candidate_checked > current_checked):
+            existing["last_checked"] = ch.get("last_checked")
+        existing["stale"] = bool(existing.get("stale") or ch.get("stale"))
+        existing["hidden"] = bool(existing.get("hidden") or ch.get("hidden"))
+        if not _is_dead_status(existing.get("status")):
+            existing["stale"] = False
+            existing["hidden"] = False
 
     return list(merged.values())
 
@@ -379,7 +441,7 @@ def _channel_health_score(channel: Dict[str, Any], has_epg: Optional[bool] = Non
         score += 50
     elif status == "unchecked":
         score += 10
-    elif status in {"broken", "failed", "offline"}:
+    elif status in {"broken", "failed", "offline", "stale"}:
         score -= 20
 
     urls = channel.get("urls") or []
@@ -400,6 +462,64 @@ def _channel_health_label(score: int) -> str:
     if score >= 20:
         return "unstable"
     return "offline"
+
+
+def _channel_sort_score(ch: Dict[str, Any], play_counts: Dict[str, int]) -> tuple[int, int, str]:
+    """Return the requested health × popularity tuple."""
+    status = (ch.get("status") or "unchecked").lower()
+    if status == "working":
+        status_score = 3
+    elif status in {"broken", "failed", "offline", "stale"}:
+        status_score = 0
+    else:
+        status_score = 1
+    plays = int(play_counts.get(ch.get("url_hash", ""), 0) or 0)
+    return (status_score, plays, (ch.get("name") or "").lower())
+
+
+def _sort_channels_for_api(
+    channels: List[Dict[str, Any]],
+    sort_mode: str,
+    play_counts: Dict[str, int],
+) -> None:
+    """Sort API channels in-place for smart, name, or recent modes."""
+    if sort_mode == "name":
+        channels.sort(key=lambda ch: (ch.get("name") or "").lower())
+        return
+    if sort_mode == "recent":
+        channels.sort(
+            key=lambda ch: (-int(ch.get("_load_index", 0) or 0), (ch.get("name") or "").lower())
+        )
+        return
+
+    def smart_key(ch: Dict[str, Any]) -> tuple[int, int, str]:
+        status_score, plays, name = _channel_sort_score(ch, play_counts)
+        if status_score >= 3:
+            return (0, -plays, name)
+        if status_score > 0 or int(ch.get("health_score", 0) or 0) > 0:
+            return (1, 0, name)
+        return (2, 0, name)
+
+    channels.sort(key=smart_key)
+
+
+def _cached_top_channel_play_counts() -> Dict[str, int]:
+    """Read play counts from the statistics cache without triggering a refresh."""
+    if not _stats_cache or (time.time() - _stats_cache_time) >= _STATS_CACHE_TTL:
+        return {}
+
+    play_counts: Dict[str, int] = {}
+    for item in _stats_cache.get("top_channels", []):
+        if not isinstance(item, dict):
+            continue
+        url_hash = str(item.get("url_hash", "") or "").strip()
+        if not url_hash:
+            continue
+        try:
+            play_counts[url_hash] = int(item.get("plays", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+    return play_counts
 
 app = FastAPI(
     title="TV Viewer Web",
@@ -773,8 +893,10 @@ async def get_channels(
     favorites_only: bool = Query(False),
     verified_only: bool = Query(False),
     show_all: bool = Query(False),
+    include_dead: bool = Query(False),
     limit: int = Query(200, ge=1, le=5000),
     offset: int = Query(0, ge=0),
+    sort: str = Query("smart"),
 ):
     """Get channels with optional filtering. Local (IL) channels shown first."""
     # ── Fast path: O(1) index lookup when category and/or country is specified ──
@@ -809,25 +931,31 @@ async def get_channels(
                     or q in (c.get("category") or "").lower()
                     or q in (c.get("country") or "").lower()]
 
-    # Hide offline (failed) channels by default; show_all=true includes them
-    if not show_all:
-        channels = [c for c in channels if c.get("status") != "offline"]
+    include_dead = include_dead or show_all
+    if not include_dead and not search:
+        channels = [c for c in channels if not _is_stale_channel(c)]
 
     enriched = []
     for ch in channels:
         has_epg = _channel_has_epg(ch.get("name") or "")
         health_score = _channel_health_score(ch, has_epg=has_epg)
+        if _is_broken_and_old(ch):
+            health_score -= 15
         enriched.append({
             **ch,
             "health_score": health_score,
             "health": _channel_health_label(health_score),
+            "stale": _is_stale_channel(ch),
         })
 
     if verified_only:
         enriched = [c for c in enriched if c.get("health") == "reliable"]
 
-    # Stable sort: keep existing local/alphabetical order inside equal scores.
-    enriched.sort(key=lambda ch: ch.get("health_score", 0), reverse=True)
+    play_counts = _cached_top_channel_play_counts()
+    sort_mode = (sort or "smart").strip().lower()
+    if sort_mode not in {"smart", "name", "recent"}:
+        sort_mode = "smart"
+    _sort_channels_for_api(enriched, sort_mode, play_counts)
 
     total = len(enriched)
     channels = enriched[offset:offset + limit]
@@ -844,6 +972,9 @@ async def get_channels(
             "logo": ch.get("logo"),
             "status": ch.get("status"),
             "media_type": ch.get("media_type"),
+            "url_hash": ch.get("url_hash", ""),
+            "_load_index": int(ch.get("_load_index", 0) or 0),
+            "play_count": int(play_counts.get(ch.get("url_hash", ""), 0) or 0),
             "health_score": ch.get("health_score", 0),
             "health": ch.get("health", "offline"),
         })
@@ -1484,15 +1615,30 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                             mv_channels = await mv_resp.json()
                             if mv_channels:
                                 top_played = []
+                                top_channel_rows = []
                                 for channel in mv_channels[:15]:
                                     country = str(channel.get("channel_country", "") or "").strip()
                                     category = str(channel.get("channel_category", "") or "").strip()
+                                    channel_hash = str(
+                                        channel.get("channel_hash")
+                                        or channel.get("url_hash")
+                                        or ""
+                                    ).strip()
+                                    plays = int(channel.get("play_count", 0) or 0)
                                     label = " ".join(part for part in (country, category) if part).strip()
                                     if not label:
-                                        label = str(channel.get("channel_hash", "Unknown channel") or "Unknown channel")
-                                    top_played.append((label, int(channel.get("play_count", 0) or 0)))
+                                        label = channel_hash or "Unknown channel"
+                                    top_played.append((label, plays))
+                                    top_channel_rows.append(
+                                        {
+                                            "name": label,
+                                            "plays": plays,
+                                            "url_hash": channel_hash,
+                                        }
+                                    )
 
                                 analytics_data["top_played"] = top_played
+                                analytics_data["top_channel_rows"] = top_channel_rows
                                 analytics_data["unique_channels_played"] = len(top_played)
                                 analytics_data["total_plays"] = sum(plays for _, plays in top_played)
 
@@ -1634,7 +1780,8 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
         "unique_channels_played": analytics_data.get("unique_channels_played", 0),
         "platforms": analytics_data.get("platforms", {}),
         "user_countries": [{"name": c[0], "events": c[1]} for c in analytics_data.get("user_countries", [])],
-        "top_channels": [{"name": c[0], "plays": c[1]} for c in analytics_data.get("top_played", [])],
+        "top_channels": analytics_data.get("top_channel_rows")
+        or [{"name": c[0], "plays": c[1], "url_hash": ""} for c in analytics_data.get("top_played", [])],
         "country_last_access": analytics_data.get("country_last_access", []),
         "country_top_channels": analytics_data.get("country_top_channels", {}),
     }
@@ -1766,8 +1913,11 @@ _HEALTH_RATE_GLOBAL = (600, 60.0)  # 600 reports per 60s per IP — generous;
                                    # plain reports are local-only and cheap.
 _HEALTH_RATE_PROMOTE = (10, 60.0)  # 10 promotes per 60s per IP — these hit Supabase
                                    # and can be used to manipulate channel ordering.
+_CHANNEL_REQUESTS_RATE_SUBMIT = (5, 3600.0)  # 5 submissions per hour per IP
 _health_buckets: Dict[str, Dict[str, List[float]]] = {}
 _health_buckets_lock = threading.Lock()
+_channel_request_vote_markers: Dict[str, float] = {}
+_channel_request_vote_lock = threading.Lock()
 
 
 def _client_ip(request: Request) -> str:
@@ -1807,6 +1957,238 @@ def _rate_limit_check(ip: str, bucket: str, max_n: int, window: float) -> bool:
             ]:
                 _health_buckets.pop(stale_ip, None)
         return True
+
+
+def _hash_device_id(device_id: str) -> str:
+    return hashlib.sha256(device_id.encode("utf-8")).hexdigest()
+
+
+def _request_device_id(request: Request, payload: Optional[Dict[str, Any]] = None) -> str:
+    payload = payload or {}
+    raw_device_id = str(payload.get("device_id", "") or "").strip()
+    if raw_device_id:
+        return _hash_device_id(raw_device_id[:256])
+    fallback = f"{_client_ip(request)}|{request.headers.get('user-agent', '')[:200]}"
+    return _hash_device_id(fallback)
+
+
+def _prune_vote_markers(now_ts: Optional[float] = None) -> None:
+    cutoff = (now_ts or time.time()) - (30 * 24 * 60 * 60)
+    stale_keys = [key for key, ts in _channel_request_vote_markers.items() if ts < cutoff]
+    for key in stale_keys:
+        _channel_request_vote_markers.pop(key, None)
+
+
+def _record_vote_once(request_id: str, device_hash: str) -> bool:
+    marker = f"{request_id}:{device_hash}"
+    now_ts = time.time()
+    with _channel_request_vote_lock:
+        if marker in _channel_request_vote_markers:
+            return False
+        _channel_request_vote_markers[marker] = now_ts
+        if len(_channel_request_vote_markers) > 50_000:
+            _prune_vote_markers(now_ts)
+        return True
+
+
+def _forget_vote_marker(request_id: str, device_hash: str) -> None:
+    marker = f"{request_id}:{device_hash}"
+    with _channel_request_vote_lock:
+        _channel_request_vote_markers.pop(marker, None)
+
+
+def _validate_channel_request_name(name: str) -> str:
+    cleaned = re.sub(r"[\x00-\x1F\x7F]+", "", str(name or "")).strip()
+    if not cleaned:
+        raise HTTPException(400, "Channel name is required")
+    if len(cleaned) > 100:
+        raise HTTPException(400, "Channel name must be 100 characters or fewer")
+    return cleaned
+
+
+def _validate_channel_request_url(url: str) -> str:
+    cleaned = str(url or "").strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) > 1000:
+        raise HTTPException(400, "Stream URL is too long")
+    parsed = urlparse(cleaned)
+    if parsed.scheme not in ("http", "https", "rtmp", "rtsp"):
+        raise HTTPException(400, "Stream URL must use http, https, rtmp, or rtsp")
+    if not parsed.netloc:
+        raise HTTPException(400, "Stream URL is invalid")
+    return cleaned
+
+
+def _normalize_channel_request_country(country: str) -> str:
+    cleaned = str(country or "").strip()
+    if not cleaned:
+        return ""
+    return _normalize_country(cleaned)[:100]
+
+
+def _normalize_channel_request_category(category: str, channel_name: str) -> str:
+    cleaned = str(category or "").strip()
+    if not cleaned:
+        return ""
+    return _normalize_category(cleaned, channel_name)[:100]
+
+
+def _resolve_supabase_runtime() -> tuple[str, str]:
+    supabase_url = (
+        os.environ.get("SUPABASE_URL", "").strip()
+        or getattr(config, "SUPABASE_URL", "").strip()
+    )
+    supabase_key = (
+        os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        or getattr(config, "SUPABASE_ANON_KEY", "").strip()
+    )
+    return supabase_url, supabase_key
+
+
+def _channel_requests_enabled() -> bool:
+    supabase_url, supabase_key = _resolve_supabase_runtime()
+    return bool(supabase_url and supabase_key)
+
+
+def _channel_requests_headers(*, prefer: Optional[str] = None) -> Dict[str, str]:
+    _, supabase_key = _resolve_supabase_runtime()
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json",
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+    return headers
+
+
+def _channel_request_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": str(row.get("id", "")),
+        "name": str(row.get("name", "") or "")[:100],
+        "url": str(row.get("url", "") or "")[:1000],
+        "country": str(row.get("country", "") or "")[:100],
+        "category": str(row.get("category", "") or "")[:100],
+        "votes": max(0, int(row.get("votes", 0) or 0)),
+        "status": str(row.get("status", "pending") or "pending")[:20],
+        "created_at": str(row.get("created_at", "") or ""),
+    }
+
+
+async def _channel_requests_rest_call(
+    method: str,
+    *,
+    params: Optional[Dict[str, Any]] = None,
+    json_payload: Optional[Any] = None,
+    prefer: Optional[str] = None,
+) -> Any:
+    supabase_url, _ = _resolve_supabase_runtime()
+    if not _channel_requests_enabled():
+        raise HTTPException(503, "Channel suggestions are not configured")
+    endpoint = f"{supabase_url}/rest/v1/channel_requests"
+    connector = aiohttp.TCPConnector(limit=5, ttl_dns_cache=300, ssl=_get_strict_ssl_context())
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        async with session.request(
+            method,
+            endpoint,
+            params=params,
+            json=json_payload,
+            headers=_channel_requests_headers(prefer=prefer),
+        ) as resp:
+            if resp.status in (200, 201):
+                text = await resp.text()
+                return json.loads(text) if text else None
+            if resp.status == 204:
+                return None
+            body = await resp.text()
+            logger.warning(
+                "channel_requests %s failed: %s %s",
+                method,
+                resp.status,
+                body[:200],
+            )
+            raise HTTPException(502, "Channel suggestions backend unavailable")
+
+
+async def _fetch_channel_requests(limit: int = 50) -> List[Dict[str, Any]]:
+    if not _channel_requests_enabled():
+        return []
+    rows = await _channel_requests_rest_call(
+        "GET",
+        params={
+            "select": "id,name,url,country,category,votes,status,created_at",
+            "status": "eq.pending",
+            "order": "votes.desc,created_at.asc",
+            "limit": str(limit),
+        },
+    )
+    return [_channel_request_row(row) for row in (rows or [])]
+
+
+async def _find_existing_channel_request(
+    *,
+    name: str,
+    url: str,
+    submitted_by: str,
+) -> Optional[Dict[str, Any]]:
+    rows = await _channel_requests_rest_call(
+        "GET",
+        params={
+            "select": "id,name,url,country,category,votes,status,created_at,submitted_by",
+            "submitted_by": f"eq.{submitted_by}",
+            "status": "eq.pending",
+            "order": "created_at.desc",
+            "limit": "20",
+        },
+    )
+    for row in rows or []:
+        if (str(row.get("name", "") or "").strip().casefold() == name.casefold()
+                and str(row.get("url", "") or "").strip() == url):
+            return _channel_request_row(row)
+    return None
+
+
+async def _insert_channel_request(payload: Dict[str, Any]) -> Dict[str, Any]:
+    rows = await _channel_requests_rest_call(
+        "POST",
+        json_payload=payload,
+        prefer="return=representation",
+    )
+    if not rows:
+        raise HTTPException(502, "Channel suggestion was not saved")
+    return _channel_request_row(rows[0])
+
+
+async def _get_channel_request_by_id(request_id: str) -> Optional[Dict[str, Any]]:
+    rows = await _channel_requests_rest_call(
+        "GET",
+        params={
+            "select": "id,name,url,country,category,votes,status,created_at",
+            "id": f"eq.{request_id}",
+            "status": "eq.pending",
+            "limit": "1",
+        },
+    )
+    if not rows:
+        return None
+    return _channel_request_row(rows[0])
+
+
+async def _set_channel_request_votes(request_id: str, votes: int) -> Dict[str, Any]:
+    rows = await _channel_requests_rest_call(
+        "PATCH",
+        params={"id": f"eq.{request_id}"},
+        json_payload={
+            "votes": votes,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        prefer="return=representation",
+    )
+    if not rows:
+        raise HTTPException(502, "Vote was not recorded")
+    return _channel_request_row(rows[0])
 
 
 @app.post("/api/health/report")
@@ -1901,6 +2283,81 @@ async def health_report(request: Request):
     except Exception as e:
         logger.debug(f"Health report error: {e}")
         return {"status": "error"}
+
+
+@app.get("/api/channel-requests")
+async def get_channel_requests():
+    requests_list = await _fetch_channel_requests(limit=50)
+    return {"requests": requests_list}
+
+
+@app.post("/api/channel-requests")
+async def submit_channel_request(request: Request):
+    ip = _client_ip(request)
+    if not _rate_limit_check(
+        ip,
+        "channel-request-submit",
+        _CHANNEL_REQUESTS_RATE_SUBMIT[0],
+        _CHANNEL_REQUESTS_RATE_SUBMIT[1],
+    ):
+        raise HTTPException(429, "Too many channel suggestions from this IP")
+    if not _channel_requests_enabled():
+        raise HTTPException(503, "Channel suggestions are not configured")
+
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(400, "Invalid JSON payload") from exc
+    name = _validate_channel_request_name(payload.get("name", ""))
+    url = _validate_channel_request_url(payload.get("url", ""))
+    device_hash = _request_device_id(request, payload)
+
+    existing = await _find_existing_channel_request(
+        name=name,
+        url=url,
+        submitted_by=device_hash,
+    )
+    if existing:
+        return {"status": "duplicate", "request": existing}
+
+    created = await _insert_channel_request({
+        "name": name,
+        "url": url or None,
+        "country": _normalize_channel_request_country(payload.get("country", "")) or None,
+        "category": _normalize_channel_request_category(payload.get("category", ""), name) or None,
+        "submitted_by": device_hash,
+    })
+    return {"status": "submitted", "request": created}
+
+
+@app.post("/api/channel-requests/{request_id}/vote")
+async def vote_channel_request(request_id: str, request: Request):
+    if not _channel_requests_enabled():
+        raise HTTPException(503, "Channel suggestions are not configured")
+    try:
+        normalized_id = str(uuid.UUID(request_id))
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid request id") from exc
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    existing = await _get_channel_request_by_id(normalized_id)
+    if not existing:
+        raise HTTPException(404, "Channel suggestion not found")
+
+    device_hash = _request_device_id(request, payload)
+    if not _record_vote_once(normalized_id, device_hash):
+        raise HTTPException(429, "You already voted for this suggestion")
+
+    try:
+        updated = await _set_channel_request_votes(normalized_id, existing["votes"] + 1)
+    except Exception:
+        _forget_vote_marker(normalized_id, device_hash)
+        raise
+    return {"status": "voted", "request": updated}
 
 
 def _mark_local_working(url: str):

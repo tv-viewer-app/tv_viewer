@@ -224,12 +224,28 @@
         .modal-section label { display: block; font-size: 12px; color: var(--text-sec); margin-bottom: 6px; }
         .modal-section .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .modal-section input[type="range"] { width: 100%; }
-        .modal-section select, .modal-section input[type="number"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: var(--radius-sm); font-size: 12px; width: 100%; }
+        .modal-section select, .modal-section input[type="number"], .modal-section input[type="text"], .modal-section input[type="url"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: var(--radius-sm); font-size: 12px; width: 100%; font-family: var(--font); }
         .modal-close { position: absolute; top: 12px; right: 16px; font-size: 18px; cursor: pointer; color: var(--text-sec); }
         .modal-close:hover { color: var(--text); }
         .shortcuts-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 11px; }
         .shortcuts-grid kbd { background: var(--bg); border: 1px solid var(--border); padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 10px; }
         .shortcuts-grid span { color: var(--text-sec); }
+        .suggest-btn { min-width: 86px; font-size: 12px; }
+        .field-hint { display: block; margin-top: 6px; font-size: 11px; color: var(--text-dim); }
+        .request-list { display: flex; flex-direction: column; gap: 8px; }
+        .request-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+        .request-main { flex: 1; min-width: 0; }
+        .request-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .request-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+        .request-url { font-size: 11px; color: var(--accent); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .request-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        .vote-btn { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 999px; cursor: pointer; font-size: 12px; font-family: var(--font); }
+        .vote-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+        .vote-btn:disabled { opacity: .55; cursor: default; }
+        .vote-count { font-size: 11px; color: var(--text-dim); }
+        .suggest-feedback { min-height: 16px; font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+        .suggest-feedback.error { color: #ff8f8f; }
+        .suggest-feedback.success { color: var(--success); }
 
         /* Map */
         .map-view { display: none; position: absolute; inset: 0; z-index: 50; background: var(--bg); }
@@ -299,6 +315,7 @@
         <span id="search-clear" style="cursor:pointer;color:var(--text-dim);font-size:14px;display:none;padding:0 2px;" title="Clear search">✕</span>
     </div>
     <div class="header-actions">
+        <button class="icon-btn suggest-btn" id="btn-suggest" title="Suggest Channel">➕ Suggest</button>
         <button class="icon-btn" id="btn-stats" title="Community Stats">📊</button>
         <button class="icon-btn" id="btn-map" title="World Map">🗺</button>
         <button class="icon-btn" id="btn-refresh" title="Refresh Channels">🔄</button>
@@ -317,6 +334,12 @@
                 <select id="filter-country"><option value="">All Countries</option></select>
                 <select id="filter-type"><option value="">All Types</option><option value="TV">📺 TV</option><option value="Radio">📻 Radio</option></select>
                 <select id="filter-status"><option value="">Show: All</option><option value="verified">Show: Verified Only</option></select>
+                <select id="filter-sort">
+                    <option value="smart">Smart</option>
+                    <option value="name">A-Z</option>
+                    <option value="name_desc">Z-A</option>
+                    <option value="recent">Recently Added</option>
+                </select>
             </div>
             <div class="grid" id="grid"></div>
         </div>
@@ -430,6 +453,42 @@
     </div>
 </div>
 
+<!-- Suggest Channel Modal -->
+<div class="modal-overlay" id="suggest-modal">
+    <div class="modal" style="max-width:640px">
+        <h2>➕ Suggest a Channel</h2>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">Submit missing channels for community review. Popular suggestions can be approved and added later.</p>
+        <div class="modal-section">
+            <label for="suggest-name">Channel Name</label>
+            <input type="text" id="suggest-name" maxlength="100" placeholder="Channel name" autocomplete="off">
+        </div>
+        <div class="modal-section">
+            <label for="suggest-url">Stream URL (optional)</label>
+            <input type="url" id="suggest-url" maxlength="1000" placeholder="https://example.com/live.m3u8">
+            <span class="field-hint">Don't know the URL? Leave it blank.</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+            <div class="modal-section">
+                <label for="suggest-country">Country</label>
+                <select id="suggest-country"><option value="">Select country</option></select>
+            </div>
+            <div class="modal-section">
+                <label for="suggest-category">Category</label>
+                <select id="suggest-category"><option value="">Select category</option></select>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="p-btn" id="suggest-submit">Submit Suggestion</button>
+        </div>
+        <div class="suggest-feedback" id="suggest-feedback"></div>
+        <h3 style="margin:20px 0 10px;font-size:15px;color:var(--text)">Top Requested Channels</h3>
+        <div id="suggest-list"><div class="spinner" style="margin:20px auto"></div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+            <button class="p-btn" onclick="closeSuggest()">Close</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"
@@ -442,7 +501,7 @@
         referrerpolicy="no-referrer"></script>
 <script>
 // ─── State ──────────────────────────────────────────────────────────────────
-let channels = [], filtered = [], currentCat = null, currentCountry = null, currentView = 'all';
+let channels = [], filtered = [], currentCat = null, currentCountry = null, currentView = 'all', currentSort = 'smart';
 let playIdx = -1, hls = null, mapInstance = null, mapVisible = false;
 let favorites = new Set();
 let settings = JSON.parse(localStorage.getItem('tv_settings') || '{}');
@@ -456,6 +515,9 @@ const api = {
     async channels(p={}) { const u=new URL('/api/channels',location.origin); Object.entries(p).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')u.searchParams.set(k,v)}); return await(await fetch(u)).json(); },
     async categories() { return (await(await fetch('/api/categories')).json()).categories||[]; },
     async countries() { return (await(await fetch('/api/countries')).json()).countries||[]; },
+    async channelRequests() { return (await(await fetch('/api/channel-requests')).json()).requests||[]; },
+    async submitChannelRequest(payload) { return await(await fetch('/api/channel-requests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})).json(); },
+    async voteChannelRequest(id, payload) { return await(await fetch(`/api/channel-requests/${encodeURIComponent(id)}/vote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload||{})})).json(); },
     async status() { return await(await fetch('/api/status')).json(); },
     async epg(name) { try{return await(await fetch(`/api/epg/${encodeURIComponent(name)}`)).json();}catch(e){return {now:null,next:null,schedule:[]};} },
     async report(url,name) { return await(await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,name})})).json(); },
@@ -532,6 +594,7 @@ const analytics = (() => {
     });
 
     return {
+        getDeviceId() { return deviceId; },
         play(ch) { playCount++; send('channel_play', { name: ch.name, category: ch.category || '', country: ch.country || '', media_type: ch.media_type || 'TV' }); },
         fail(ch, reason) { failCount++; send('channel_fail', { name: ch.name, category: ch.category || '', reason: (reason||'').slice(0,50) }); },
         report(ch) { reportCount++; send('channel_report', { name: ch.name }); },
@@ -598,6 +661,8 @@ const analytics = (() => {
 
 // ─── Render ─────────────────────────────────────────────────────────────────
 let allCategories = [], allCountries = [];
+let channelRequests = [];
+const votedRequests = new Set(JSON.parse(localStorage.getItem('tv_voted_requests') || '[]'));
 
 function renderSidebar(cats, countries) {
     const sb = document.getElementById('sidebar');
@@ -671,12 +736,8 @@ function renderChannels(chs) {
         displayChs = displayChs.filter(ch => effectiveHealth(ch) === 'reliable');
     }
 
-    // Preserve server-side verified-first order, then break ties by name.
-    displayChs.sort((a, b) => {
-        const scoreDiff = (b.health_score || 0) - (a.health_score || 0);
-        if (scoreDiff !== 0) return scoreDiff;
-        return (a.name || '').localeCompare(b.name || '', undefined, {sensitivity: 'base'});
-    });
+    displayChs = sortDisplayedChannels(displayChs);
+    filtered = displayChs;
 
     grid.innerHTML = displayChs.map((ch, i) => {
         // SECURITY (v2.16.1): Do NOT inline `onerror="mono('${esc(ch.name)}')"`.
@@ -1674,7 +1735,11 @@ async function showMapCountryChannels(country) {
     list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     setTimeout(()=>mapInstance.invalidateSize(), 50);
 
-    const resp = await api.channels({country, limit: 500});
+    const resp = await api.channels({
+        country,
+        limit: 500,
+        sort: currentSort === 'name_desc' ? 'name' : currentSort,
+    });
     const chs = resp.channels || [];
     if (chs.length === 0) {
         list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center;">No channels found</div>';
@@ -1752,7 +1817,7 @@ function closeSettings() {
     localStorage.setItem('tv_settings', JSON.stringify(settings));
     document.getElementById('settings-modal').classList.remove('active');
     // Re-render with parental filter
-    renderChannels(filtered);
+    renderChannels(clientFilter(allLoaded));
     toast('Settings saved');
 }
 
@@ -1962,6 +2027,128 @@ function renderStats(data) {
     return html;
 }
 
+// ─── Channel Suggestions ──────────────────────────────────────────────────────
+function setSuggestFeedback(message = '', type = '') {
+    const el = document.getElementById('suggest-feedback');
+    el.textContent = message;
+    el.className = `suggest-feedback${type ? ` ${type}` : ''}`;
+}
+
+function populateSuggestFilters() {
+    const countrySel = document.getElementById('suggest-country');
+    const categorySel = document.getElementById('suggest-category');
+    countrySel.innerHTML = '<option value="">Select country</option>' + allCountries.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+    categorySel.innerHTML = '<option value="">Select category</option>' + allCategories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+}
+
+function renderChannelRequests(requests) {
+    const host = document.getElementById('suggest-list');
+    const topRequests = (requests || []).slice(0, 10);
+    if (!topRequests.length) {
+        host.innerHTML = '<div class="empty" style="height:140px"><div style="font-size:30px">💡</div><div>No suggestions yet. Be the first to submit one.</div></div>';
+        return;
+    }
+    host.innerHTML = `<div class="request-list">${topRequests.map(req => {
+        const meta = [req.country, req.category].filter(Boolean).map(esc).join(' • ') || 'Community suggestion';
+        const voted = votedRequests.has(req.id);
+        return `
+            <div class="request-item">
+                <div class="request-main">
+                    <div class="request-name">${esc(req.name)}</div>
+                    <div class="request-meta">${meta}</div>
+                    ${req.url ? `<div class="request-url" title="${esc(req.url)}">${esc(req.url)}</div>` : '<div class="request-url">URL not provided</div>'}
+                </div>
+                <div class="request-actions">
+                    <button class="vote-btn" data-request-vote="${esc(req.id)}" ${voted ? 'disabled' : ''}>👍 ${voted ? 'Voted' : 'Vote'}</button>
+                    <span class="vote-count">${Number(req.votes || 0)} votes</span>
+                </div>
+            </div>`;
+    }).join('')}</div>`;
+    host.querySelectorAll('[data-request-vote]').forEach(btn => {
+        btn.onclick = () => voteForSuggestion(btn.dataset.requestVote);
+    });
+}
+
+async function refreshChannelRequests() {
+    document.getElementById('suggest-list').innerHTML = '<div class="spinner" style="margin:20px auto"></div>';
+    try {
+        channelRequests = await api.channelRequests();
+        renderChannelRequests(channelRequests);
+    } catch (e) {
+        document.getElementById('suggest-list').innerHTML = '<p style="text-align:center;color:var(--text-dim)">Unable to load suggestions right now.</p>';
+    }
+}
+
+async function openSuggest() {
+    populateSuggestFilters();
+    setSuggestFeedback('');
+    document.getElementById('suggest-modal').classList.add('active');
+    await refreshChannelRequests();
+}
+
+function closeSuggest() {
+    document.getElementById('suggest-modal').classList.remove('active');
+}
+
+async function submitSuggestion() {
+    const name = document.getElementById('suggest-name').value.trim();
+    const url = document.getElementById('suggest-url').value.trim();
+    const country = document.getElementById('suggest-country').value;
+    const category = document.getElementById('suggest-category').value;
+    if (!name) {
+        setSuggestFeedback('Channel name is required.', 'error');
+        return;
+    }
+    const btn = document.getElementById('suggest-submit');
+    btn.disabled = true;
+    setSuggestFeedback('Submitting suggestion...');
+    try {
+        const resp = await fetch('/api/channel-requests', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name,
+                url,
+                country,
+                category,
+                device_id: analytics.getDeviceId(),
+            }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Unable to submit suggestion');
+        setSuggestFeedback(data.status === 'duplicate' ? 'You already submitted this suggestion.' : 'Suggestion submitted for review.', 'success');
+        document.getElementById('suggest-name').value = '';
+        document.getElementById('suggest-url').value = '';
+        document.getElementById('suggest-country').value = '';
+        document.getElementById('suggest-category').value = '';
+        await refreshChannelRequests();
+        toast(data.status === 'duplicate' ? 'Suggestion already exists' : 'Channel suggestion submitted');
+    } catch (e) {
+        setSuggestFeedback(e.message || 'Unable to submit suggestion.', 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function voteForSuggestion(requestId) {
+    try {
+        const resp = await fetch(`/api/channel-requests/${encodeURIComponent(requestId)}/vote`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ device_id: analytics.getDeviceId() }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Unable to vote');
+        votedRequests.add(requestId);
+        localStorage.setItem('tv_voted_requests', JSON.stringify([...votedRequests]));
+        setSuggestFeedback('Thanks for voting!', 'success');
+        await refreshChannelRequests();
+        toast('Vote recorded');
+    } catch (e) {
+        setSuggestFeedback(e.message || 'Unable to vote right now.', 'error');
+    }
+}
+
 // ─── Data Loading ───────────────────────────────────────────────────────────
 let currentOffset = 0, hasMore = false, totalChannels = 0;
 let allLoaded = [];  // Full channel list from server (unfiltered)
@@ -1990,6 +2177,45 @@ function effectiveHealth(ch) {
     return ch.health || 'offline';
 }
 
+function channelSortStatusValue(ch) {
+    const localH = channelHealth[ch.url];
+    if (localH === 'working') return 3;
+    if (localH === 'broken') return 0;
+    const status = (ch.status || '').toLowerCase();
+    if (status === 'working') return 3;
+    if (status === 'broken' || status === 'failed' || status === 'offline' || status === 'stale') return 0;
+    return (ch.health_score || 0) > 0 ? 1 : 0;
+}
+
+function sortDisplayedChannels(chs) {
+    const sorted = [...chs];
+    if (currentSort === 'name') {
+        sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+        return sorted;
+    }
+    if (currentSort === 'name_desc') {
+        sorted.sort((a, b) => (b.name || '').localeCompare(a.name || '', undefined, { sensitivity: 'base' }));
+        return sorted;
+    }
+    if (currentSort === 'recent') {
+        sorted.sort((a, b) => ((b._load_index || 0) - (a._load_index || 0))
+            || (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+        return sorted;
+    }
+
+    sorted.sort((a, b) => {
+        const aStatus = channelSortStatusValue(a);
+        const bStatus = channelSortStatusValue(b);
+        if (aStatus !== bStatus) return bStatus - aStatus;
+        if (aStatus >= 3) {
+            const playDiff = (b.play_count || 0) - (a.play_count || 0);
+            if (playDiff !== 0) return playDiff;
+        }
+        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    });
+    return sorted;
+}
+
 async function loadChannels(append = false) {
     const mySeq = ++_loadSeq;
     // Cancel any earlier in-flight fetch so we don't waste bandwidth on
@@ -2007,6 +2233,7 @@ async function loadChannels(append = false) {
     if (document.getElementById('filter-status')?.value === 'verified') p.verified_only = true;
     const typeFilter = document.getElementById('filter-type')?.value;
     if (typeFilter) p.media_type = typeFilter;
+    p.sort = currentSort === 'name_desc' ? 'name' : currentSort;
 
     // Optimistic UI: show the loading state immediately so users get instant
     // feedback that their click was received, even if the network is slow.
@@ -2197,7 +2424,11 @@ document.getElementById('search').addEventListener('input', debounce(async () =>
     }
     analytics.search(q);
     // Search the full database via server (not just loaded page)
-    const resp = await api.channels({ search: q, limit: 500 });
+    const resp = await api.channels({
+        search: q,
+        limit: 500,
+        sort: currentSort === 'name_desc' ? 'name' : currentSort,
+    });
     allLoaded = resp.channels || [];
     hasMore = resp.has_more || false;
     totalChannels = resp.total || 0;
@@ -2218,6 +2449,8 @@ document.getElementById('p-report').onclick = () => { if(playIdx>=0) reportBroke
 document.getElementById('p-fav').onclick = () => { if(playIdx>=0) toggleFav(playIdx); };
 document.getElementById('p-fullscreen').onclick = toggleFullscreen;
 document.getElementById('p-mute').onclick = toggleMute;
+document.getElementById('btn-suggest').onclick = openSuggest;
+document.getElementById('suggest-submit').onclick = submitSuggestion;
 document.getElementById('p-playpause').onclick = () => {
     const v = document.getElementById('player');
     if (v.paused) { v.play(); document.getElementById('p-playpause').textContent = '⏸'; }
@@ -2287,7 +2520,11 @@ document.getElementById('filter-type').onchange = (e) => {
 };
 document.getElementById('filter-status').onchange = (e) => {
     // Client-side health filter applied during render
-    renderChannels(filtered);
+    renderChannels(clientFilter(allLoaded));
+};
+document.getElementById('filter-sort').onchange = (e) => {
+    currentSort = e.target.value || 'smart';
+    loadChannels();
 };
 
 // Keyboard shortcuts
@@ -2299,6 +2536,7 @@ document.addEventListener('keydown', e => {
 
     if (e.key === 'Escape') {
         if (document.getElementById('settings-modal').classList.contains('active')) { closeSettings(); return; }
+        if (document.getElementById('suggest-modal').classList.contains('active')) { closeSuggest(); return; }
         if (playerActive) { closePlayer(); return; }
         if (mapVisible) { toggleMap(); return; }
     }

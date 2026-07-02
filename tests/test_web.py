@@ -11,6 +11,7 @@ import asyncio
 import logging
 import pytest
 import sys
+import uuid
 from pathlib import Path
 
 # Add project root
@@ -83,6 +84,113 @@ class TestHealth:
         assert data["assets"]["android"].endswith(".apk")
 
 
+# ─── Channel Requests ────────────────────────────────────────────────────────
+
+class TestChannelRequests:
+    def test_list_channel_requests(self, client, monkeypatch):
+        async def fake_fetch(limit=50):
+            assert limit == 50
+            return [{
+                "id": str(uuid.uuid4()),
+                "name": "Sky News Extra",
+                "url": "https://example.com/sky.m3u8",
+                "country": "United Kingdom",
+                "category": "News",
+                "votes": 9,
+                "status": "pending",
+                "created_at": "2026-07-02T20:00:00Z",
+            }]
+
+        monkeypatch.setattr(server, "_fetch_channel_requests", fake_fetch)
+        r = client.get("/api/channel-requests")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["requests"]) == 1
+        assert data["requests"][0]["name"] == "Sky News Extra"
+        assert data["requests"][0]["votes"] == 9
+
+    def test_submit_channel_request_rejects_invalid_url(self, client, monkeypatch):
+        monkeypatch.setattr(server, "_channel_requests_enabled", lambda: True)
+        r = client.post(
+            "/api/channel-requests",
+            json={"name": "Test Channel", "url": "ftp://invalid.example.com/stream", "device_id": "abc"},
+        )
+        assert r.status_code == 400
+        assert "Stream URL" in r.json()["detail"]
+
+    def test_submit_channel_request_rate_limit(self, client, monkeypatch):
+        monkeypatch.setattr(server, "_channel_requests_enabled", lambda: True)
+
+        async def fake_existing(**_kwargs):
+            return None
+
+        async def fake_insert(payload):
+            return {
+                "id": str(uuid.uuid4()),
+                "name": payload["name"],
+                "url": payload.get("url") or "",
+                "country": payload.get("country") or "",
+                "category": payload.get("category") or "",
+                "votes": 1,
+                "status": "pending",
+                "created_at": "2026-07-02T20:00:00Z",
+            }
+
+        monkeypatch.setattr(server, "_find_existing_channel_request", fake_existing)
+        monkeypatch.setattr(server, "_insert_channel_request", fake_insert)
+        monkeypatch.setattr(server, "_CHANNEL_REQUESTS_RATE_SUBMIT", (2, 120.0))
+        with server._health_buckets_lock:
+            server._health_buckets.clear()
+
+        payload = {"name": "Rate Limited Channel", "device_id": "device-1"}
+        assert client.post("/api/channel-requests", json=payload).status_code == 200
+        assert client.post("/api/channel-requests", json=payload).status_code == 200
+        third = client.post("/api/channel-requests", json=payload)
+        assert third.status_code == 429
+
+    def test_vote_channel_request_once_per_device(self, client, monkeypatch):
+        request_id = str(uuid.uuid4())
+        monkeypatch.setattr(server, "_channel_requests_enabled", lambda: True)
+
+        async def fake_get(_request_id):
+            assert _request_id == request_id
+            return {
+                "id": request_id,
+                "name": "Vote Me",
+                "url": "",
+                "country": "Israel",
+                "category": "News",
+                "votes": 4,
+                "status": "pending",
+                "created_at": "2026-07-02T20:00:00Z",
+            }
+
+        async def fake_set(_request_id, votes):
+            return {
+                "id": request_id,
+                "name": "Vote Me",
+                "url": "",
+                "country": "Israel",
+                "category": "News",
+                "votes": votes,
+                "status": "pending",
+                "created_at": "2026-07-02T20:00:00Z",
+            }
+
+        monkeypatch.setattr(server, "_get_channel_request_by_id", fake_get)
+        monkeypatch.setattr(server, "_set_channel_request_votes", fake_set)
+        with server._channel_request_vote_lock:
+            server._channel_request_vote_markers.clear()
+
+        first = client.post(f"/api/channel-requests/{request_id}/vote", json={"device_id": "same-device"})
+        assert first.status_code == 200
+        assert first.json()["request"]["votes"] == 5
+
+        second = client.post(f"/api/channel-requests/{request_id}/vote", json={"device_id": "same-device"})
+        assert second.status_code == 429
+        assert "already voted" in second.json()["detail"]
+
+
 # ─── Channel API ────────────────────────────────────────────────────────────
 
 class TestChannels:
@@ -93,7 +201,7 @@ class TestChannels:
         assert "channels" in data
         assert isinstance(data["channels"], list)
 
-    def test_channels_include_health_and_sort_verified_first(self, client, monkeypatch):
+    def test_channels_include_health_and_sort_smart_by_popularity(self, client, monkeypatch):
         class _DummyCache:
             sorted_channels = [
                 {
@@ -105,19 +213,35 @@ class TestChannels:
                     "logo": "",
                     "status": "unchecked",
                     "media_type": "TV",
+                    "url_hash": "unchecked-hash",
+                    "_load_index": 0,
                 },
                 {
-                    "name": "Reliable One",
-                    "url": "https://example.com/reliable.m3u8",
+                    "name": "Reliable Two",
+                    "url": "https://example.com/reliable-two.m3u8",
                     "urls": [
-                        "https://example.com/reliable.m3u8",
-                        "https://backup.example.com/reliable.m3u8",
+                        "https://example.com/reliable-two.m3u8",
+                        "https://backup.example.com/reliable-two.m3u8",
                     ],
                     "category": "News",
                     "country": "Israel",
-                    "logo": "https://example.com/reliable.png",
+                    "logo": "https://example.com/reliable-two.png",
                     "status": "working",
                     "media_type": "TV",
+                    "url_hash": "reliable-two-hash",
+                    "_load_index": 1,
+                },
+                {
+                    "name": "Reliable One",
+                    "url": "https://example.com/reliable-one.m3u8",
+                    "urls": ["https://example.com/reliable-one.m3u8"],
+                    "category": "News",
+                    "country": "United States",
+                    "logo": "https://example.com/reliable-one.png",
+                    "status": "working",
+                    "media_type": "TV",
+                    "url_hash": "reliable-one-hash",
+                    "_load_index": 2,
                 },
                 {
                     "name": "Failed One",
@@ -128,6 +252,8 @@ class TestChannels:
                     "logo": "",
                     "status": "failed",
                     "media_type": "TV",
+                    "url_hash": "failed-hash",
+                    "_load_index": 3,
                 },
             ]
             by_category = {}
@@ -137,20 +263,55 @@ class TestChannels:
             favorites = set()
 
         monkeypatch.setattr(server, "_cache", _DummyCache())
-        monkeypatch.setattr(server, "_channel_has_epg", lambda name: name == "Reliable One")
+        monkeypatch.setattr(server, "_channel_has_epg", lambda name: name.startswith("Reliable"))
+        monkeypatch.setattr(
+            server,
+            "_stats_cache",
+            {
+                "top_channels": [
+                    {"name": "Reliable One", "plays": 25, "url_hash": "reliable-one-hash"},
+                    {"name": "Reliable Two", "plays": 10, "url_hash": "reliable-two-hash"},
+                ]
+            },
+        )
+        monkeypatch.setattr(server, "_stats_cache_time", server.time.time())
 
         r = client.get("/api/channels?show_all=true")
         assert r.status_code == 200
         data = r.json()
         assert [ch["name"] for ch in data["channels"]] == [
             "Reliable One",
+            "Reliable Two",
             "Unchecked One",
             "Failed One",
         ]
-        assert data["channels"][0]["health_score"] == 70
+        assert data["channels"][0]["health_score"] == 60
         assert data["channels"][0]["health"] == "reliable"
-        assert data["channels"][1]["health"] == "offline"
+        assert data["channels"][0]["play_count"] == 25
+        assert data["channels"][1]["play_count"] == 10
         assert data["channels"][2]["health"] == "offline"
+        assert data["channels"][3]["health"] == "offline"
+
+    def test_channels_sort_recent_uses_load_order(self, client, monkeypatch):
+        class _DummyCache:
+            sorted_channels = [
+                {"name": "Alpha", "url": "https://example.com/a.m3u8", "urls": ["https://example.com/a.m3u8"], "category": "News", "country": "US", "logo": "", "status": "working", "media_type": "TV", "_load_index": 0, "url_hash": "a"},
+                {"name": "Beta", "url": "https://example.com/b.m3u8", "urls": ["https://example.com/b.m3u8"], "category": "News", "country": "US", "logo": "", "status": "working", "media_type": "TV", "_load_index": 1, "url_hash": "b"},
+                {"name": "Gamma", "url": "https://example.com/c.m3u8", "urls": ["https://example.com/c.m3u8"], "category": "News", "country": "US", "logo": "", "status": "working", "media_type": "TV", "_load_index": 2, "url_hash": "c"},
+            ]
+            by_category = {}
+            by_country = {}
+            by_cat_country = {}
+            local_channels = []
+            favorites = set()
+
+        monkeypatch.setattr(server, "_cache", _DummyCache())
+        monkeypatch.setattr(server, "_channel_has_epg", lambda _name: False)
+
+        r = client.get("/api/channels?sort=recent")
+        assert r.status_code == 200
+        data = r.json()
+        assert [ch["name"] for ch in data["channels"]] == ["Gamma", "Beta", "Alpha"]
 
     def test_channels_verified_only_filter(self, client, monkeypatch):
         class _DummyCache:
@@ -190,6 +351,7 @@ class TestChannels:
         data = r.json()
         assert [ch["name"] for ch in data["channels"]] == ["Reliable One"]
         assert data["channels"][0]["health"] == "reliable"
+
 
     def test_channels_with_category(self, client):
         r = client.get("/api/channels?category=News")
