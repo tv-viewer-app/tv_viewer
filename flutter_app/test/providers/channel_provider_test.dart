@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tv_viewer/providers/channel_provider.dart';
 import 'package:tv_viewer/models/channel.dart';
+import 'package:tv_viewer/services/shared_db_service.dart';
 
 /// Unit tests for ChannelProvider
 /// Coverage: Filtering logic, state management, search functionality
@@ -273,6 +274,74 @@ void main() {
         
         // Should not crash, returns no matches
         expect(filtered.isEmpty, true);
+      });
+    });
+
+    group('Sorting', () {
+      test('Smart sort prioritizes working channels by popularity', () {
+        final rankedChannels = [
+          Channel(
+            name: 'Unchecked One',
+            url: 'http://example.com/unchecked.m3u8',
+            category: 'News',
+            country: 'US',
+            mediaType: 'TV',
+          ),
+          Channel(
+            name: 'Reliable Low',
+            url: 'http://example.com/reliable-low.m3u8',
+            category: 'News',
+            country: 'US',
+            mediaType: 'TV',
+            isWorking: true,
+            lastChecked: DateTime(2026, 1, 1),
+          ),
+          Channel(
+            name: 'Reliable High',
+            url: 'http://example.com/reliable-high.m3u8',
+            category: 'News',
+            country: 'US',
+            mediaType: 'TV',
+            isWorking: true,
+            lastChecked: DateTime(2026, 1, 1),
+          ),
+          Channel(
+            name: 'Broken One',
+            url: 'http://example.com/broken.m3u8',
+            category: 'News',
+            country: 'US',
+            mediaType: 'TV',
+            isWorking: false,
+            lastChecked: DateTime(2026, 1, 1),
+          ),
+        ];
+
+        provider.setChannelsForTesting(rankedChannels);
+        provider.setChannelPlayCountsForTesting({
+          SharedDbService.hashUrl('http://example.com/reliable-high.m3u8'): 20,
+          SharedDbService.hashUrl('http://example.com/reliable-low.m3u8'): 5,
+        });
+
+        expect(
+          provider.channels.map((ch) => ch.name).toList(),
+          equals(['Reliable High', 'Reliable Low', 'Unchecked One', 'Broken One']),
+        );
+      });
+
+      test('Recently added sort reverses source order', () {
+        provider.setSortField(SortField.recent);
+        provider.setSortDirection(true);
+
+        expect(
+          provider.channels.map((ch) => ch.name).toList(),
+          equals([
+            'France 24',
+            'BBC Radio 1',
+            'ESPN Sports',
+            'BBC World News',
+            'CNN International',
+          ]),
+        );
       });
     });
 

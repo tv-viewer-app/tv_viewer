@@ -269,6 +269,52 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
+          Consumer<ChannelProvider>(
+            builder: (context, provider, _) => PopupMenuButton<String>(
+              tooltip: 'Sort Channels',
+              icon: const Icon(Icons.sort),
+              iconSize: compactAppBar ? 20 : null,
+              padding: compactAppBar ? EdgeInsets.zero : null,
+              constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
+              onSelected: (value) {
+                if (value == 'smart') {
+                  provider.setSortField(SortField.smart);
+                  provider.setSortDirection(true);
+                } else if (value == 'name_asc') {
+                  provider.setSortField(SortField.name);
+                  provider.setSortDirection(true);
+                } else if (value == 'name_desc') {
+                  provider.setSortField(SortField.name);
+                  provider.setSortDirection(false);
+                } else if (value == 'recent') {
+                  provider.setSortField(SortField.recent);
+                  provider.setSortDirection(true);
+                }
+              },
+              itemBuilder: (context) => [
+                CheckedPopupMenuItem<String>(
+                  value: 'smart',
+                  checked: provider.sortField == SortField.smart,
+                  child: const Text('Smart'),
+                ),
+                CheckedPopupMenuItem<String>(
+                  value: 'name_asc',
+                  checked: provider.sortField == SortField.name && provider.sortAscending,
+                  child: const Text('A-Z'),
+                ),
+                CheckedPopupMenuItem<String>(
+                  value: 'name_desc',
+                  checked: provider.sortField == SortField.name && !provider.sortAscending,
+                  child: const Text('Z-A'),
+                ),
+                CheckedPopupMenuItem<String>(
+                  value: 'recent',
+                  checked: provider.sortField == SortField.recent,
+                  child: const Text('Recently Added'),
+                ),
+              ],
+            ),
+          ),
           // Settings gear button
           IconButton(
             icon: const Icon(Icons.settings),
@@ -283,9 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'sort') {
-                _showSortOptions();
-              } else if (value == 'help') {
+              if (value == 'help') {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -325,17 +369,6 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (context) => [
-              // ── Tools ──────────────────────────────────────────────
-              const PopupMenuItem(
-                value: 'sort',
-                child: Row(
-                  children: [
-                    Icon(Icons.sort),
-                    SizedBox(width: 8),
-                    Text('Sort Channels'),
-                  ],
-                ),
-              ),
               const PopupMenuItem(
                 value: 'radio',
                 child: Row(
@@ -1624,7 +1657,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Show sort options bottom sheet (#145)
+  /// Legacy sort options bottom sheet (#145)
   void _showSortOptions() {
     final provider = context.read<ChannelProvider>();
     showModalBottomSheet(
@@ -1643,12 +1676,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              _buildSortOption(context, provider, 'Default', SortField.none, true),
+              _buildSortOption(context, provider, 'Smart', SortField.smart, true),
               _buildSortOption(context, provider, 'Name (A→Z)', SortField.name, true),
               _buildSortOption(context, provider, 'Name (Z→A)', SortField.name, false),
-              _buildSortOption(context, provider, 'Status', SortField.status, true),
-              _buildSortOption(context, provider, 'Category', SortField.category, true),
-              _buildSortOption(context, provider, 'Country', SortField.country, true),
+              _buildSortOption(context, provider, 'Recently Added', SortField.recent, true),
               const SizedBox(height: 8),
             ],
           ),
@@ -1665,7 +1696,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool ascending,
   ) {
     final isSelected = provider.sortField == field &&
-        (field == SortField.none || provider.sortAscending == ascending);
+        ((field != SortField.name) || provider.sortAscending == ascending);
     return ListTile(
       leading: Icon(
         isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,

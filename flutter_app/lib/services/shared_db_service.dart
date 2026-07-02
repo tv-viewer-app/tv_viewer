@@ -105,6 +105,51 @@ class SharedDbService {
       return {}; // Return empty map on error - don't block the app
     }
   }
+
+  /// Fetch aggregated play counts keyed by channel hash from mv_top_channels.
+  Future<Map<String, int>> fetchTopChannelPlayCounts({int limit = 100}) async {
+    if (!isConfigured) {
+      logger.debug('SharedDbService: Popularity view unavailable (service not configured)');
+      return {};
+    }
+
+    try {
+      final url = Uri.parse('$_supabaseUrl/rest/v1/mv_top_channels').replace(
+        queryParameters: {
+          'select': 'channel_hash,play_count',
+          'order': 'play_count.desc',
+          'limit': '$limit',
+        },
+      );
+
+      final response = await http.get(
+        url,
+        headers: {
+          'apikey': _supabaseAnonKey,
+          'Authorization': '******',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        logger.warning('Failed to fetch top channel play counts: ${response.statusCode}');
+        return {};
+      }
+
+      final List<dynamic> data = json.decode(response.body);
+      final playCounts = <String, int>{};
+      for (final item in data) {
+        final row = Map<String, dynamic>.from(item as Map);
+        final channelHash = (row['channel_hash'] as String? ?? '').trim();
+        if (channelHash.isEmpty) continue;
+        playCounts[channelHash] = (row['play_count'] as num?)?.toInt() ?? 0;
+      }
+      logger.info('Fetched ${playCounts.length} channel popularity rows');
+      return playCounts;
+    } catch (e, stackTrace) {
+      logger.error('Error fetching top channel play counts', e, stackTrace);
+      return {};
+    }
+  }
   
   /// Upload channel validation results to shared database
   /// 

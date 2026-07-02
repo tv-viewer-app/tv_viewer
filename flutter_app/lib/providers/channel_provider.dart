@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -16,7 +17,7 @@ import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 
 /// #145: Sort field options for channel list.
-enum SortField { none, name, status, category, country }
+enum SortField { smart, name, recent, status, category, country }
 
 /// #144: Parsed advanced search query.
 class _ParsedQuery {
@@ -218,8 +219,10 @@ class ChannelProvider extends ChangeNotifier {
   int _failedCount = 0;
 
   // #145: Sort state
-  SortField _sortField = SortField.none;
+  SortField _sortField = SortField.smart;
   bool _sortAscending = true;
+  Map<String, int> _channelPlayCounts = {};
+  Map<String, int> _recentChannelOrder = {};
 
   /// Generation counter to prevent stale fetch results from overwriting
   /// newer state when multiple fetches race (#80).
@@ -345,9 +348,11 @@ class ChannelProvider extends ChangeNotifier {
       }
       
       _updateCategories();
+      _rebuildRecentChannelOrder();
       _applyFilters();
       _isLoading = false;
       notifyListeners();
+      unawaited(_refreshPopularityScores());
 
       // Load EPG data in the background (non-blocking)
       _loadEpgInBackground();
@@ -420,8 +425,10 @@ class ChannelProvider extends ChangeNotifier {
       _isOffline = false;
       _errorMessage = '';
       _updateCategories();
+      _rebuildRecentChannelOrder();
       _applyFilters();
       await _saveToCache();
+      unawaited(_refreshPopularityScores());
 
       // Load EPG data in the background (non-blocking)
       _loadEpgInBackground();
@@ -475,8 +482,10 @@ class ChannelProvider extends ChangeNotifier {
         _isOffline = false;
         _errorMessage = '';
         _updateCategories();
+        _rebuildRecentChannelOrder();
         _applyFilters();
         notifyListeners();
+        unawaited(_refreshPopularityScores());
         // Save cache off the critical path — don't block UI rebuild
         _saveToCacheDeferred();
       } else {
@@ -1032,6 +1041,46 @@ class ChannelProvider extends ChangeNotifier {
   /// Category names that indicate adult/NSFW content
   static const _adultCategories = {'Xxx', 'XXX', 'xxx', 'Adult', 'adult', 'NSFW', 'nsfw'};
 
+  void _rebuildRecentChannelOrder() {
+    _recentChannelOrder = <String, int>{};
+    for (int i = 0; i < _channels.length; i++) {
+      _recentChannelOrder[_channels[i].url] = i;
+    }
+  }
+
+  int _smartStatusScore(Channel channel) {
+    if (channel.isWorking && channel.lastChecked != null) return 3;
+    if (!channel.isWorking && channel.lastChecked != null) return 0;
+    return channel.healthScore > 0 ? 1 : 0;
+  }
+
+  int _channelPlayCount(Channel channel) {
+    final urlHash = SharedDbService.hashUrl(channel.url);
+    return _channelPlayCounts[urlHash] ?? 0;
+  }
+
+  Future<void> _refreshPopularityScores() async {
+    if (!SharedDbService.isConfigured) {
+      if (_channelPlayCounts.isNotEmpty) {
+        _channelPlayCounts = {};
+        _applyFilters();
+        notifyListeners();
+      }
+      return;
+    }
+
+    try {
+      final counts = await SharedDbService()
+          .fetchTopChannelPlayCounts(limit: 200)
+          .timeout(const Duration(seconds: 5));
+      _channelPlayCounts = counts;
+      _applyFilters();
+      notifyListeners();
+    } catch (e) {
+      logger.info('Channel popularity unavailable (smart sort falls back to health): $e');
+    }
+  }
+
   void _applyFilters() {
     final parentalService = ParentalControlsService.instance;
 
@@ -1146,11 +1195,16 @@ class ChannelProvider extends ChangeNotifier {
       return true;
     }).toList();
 
-    // Default to verified-first browsing when no explicit sort is active.
-    if (_sortField == SortField.none) {
+    if (_sortField == SortField.smart) {
       _filteredChannels.sort((a, b) {
-        final cmp = b.healthScore.compareTo(a.healthScore);
-        if (cmp != 0) return cmp;
+        final aStatus = _smartStatusScore(a);
+        final bStatus = _smartStatusScore(b);
+        final statusCmp = bStatus.compareTo(aStatus);
+        if (statusCmp != 0) return statusCmp;
+        if (aStatus >= 3) {
+          final playCmp = _channelPlayCount(b).compareTo(_channelPlayCount(a));
+          if (playCmp != 0) return playCmp;
+        }
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
     } else {
@@ -1159,6 +1213,12 @@ class ChannelProvider extends ChangeNotifier {
         switch (_sortField) {
           case SortField.name:
             cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            break;
+          case SortField.recent:
+            cmp = (_recentChannelOrder[b.url] ?? -1).compareTo(
+              _recentChannelOrder[a.url] ?? -1,
+            );
+            if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
             break;
           case SortField.status:
             final aStatus = a.isWorking ? 1 : 0;
@@ -1176,7 +1236,7 @@ class ChannelProvider extends ChangeNotifier {
                   (b.country ?? 'zzz').toLowerCase());
             if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
             break;
-          case SortField.none:
+          case SortField.smart:
             cmp = 0;
             break;
         }
@@ -1501,6 +1561,14 @@ class ChannelProvider extends ChangeNotifier {
   void setChannelsForTesting(List<Channel> channels) {
     _channels = channels;
     _updateCategories();
+    _rebuildRecentChannelOrder();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setChannelPlayCountsForTesting(Map<String, int> playCounts) {
+    _channelPlayCounts = Map<String, int>.from(playCounts);
     _applyFilters();
     notifyListeners();
   }
