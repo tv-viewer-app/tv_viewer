@@ -1,0 +1,45 @@
+name: Channel Cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mark-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Validate secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Repo secrets SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
+            exit 1
+          fi
+
+      - name: Mark stale channels
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python scripts/mark_stale_channels.py | tee cleanup_output.txt
+          {
+            echo "## Weekly channel cleanup"
+            echo ""
+            echo '```'
+            cat cleanup_output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

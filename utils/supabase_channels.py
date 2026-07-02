@@ -130,18 +130,41 @@ def is_configured() -> bool:
     )
 
 
-async def _fetch_channel_statuses(session, headers, timeout) -> Optional[Dict[str, str]]:
-    """Fetch url_hash -> status mapping from channel_status table.
+async def _fetch_channel_statuses(session, headers, timeout) -> Optional[Dict[str, Dict[str, Any]]]:
+    """Fetch url_hash -> health metadata from channel_status table.
 
-    Returns dict {url_hash: 'working'|'failed'}, or None if unavailable.
+    Returns dict of shape:
+        {
+            url_hash: {
+                'status': 'working'|'broken'|'failed'|'stale',
+                'report_count': int,
+                'last_checked': str|None,
+                'stale': bool,
+            }
+        }
+
     Channels NOT in this dict are 'unchecked' (never tested — show by default).
     """
-    statuses = {}
+    statuses: Dict[str, Dict[str, Any]] = {}
     offset = 0
     page_size = 5000
     supabase_url, _ = _resolve_supabase_config()
-    status_url = f'{supabase_url}/rest/v1/channel_status?select=url_hash,status'
+    select_variants = (
+        'url_hash,status,report_count,last_checked,stale',
+        'url_hash,status,report_count,last_checked',
+    )
+    status_url = None
     try:
+        for select_clause in select_variants:
+            probe_url = f'{supabase_url}/rest/v1/channel_status?select={select_clause}&limit=1'
+            async with session.get(probe_url, headers=headers, timeout=timeout) as probe_resp:
+                if probe_resp.status == 200:
+                    status_url = f'{supabase_url}/rest/v1/channel_status?select={select_clause}'
+                    break
+        if status_url is None:
+            logger.warning('channel_status fetch failed: could not resolve supported select list')
+            return None
+
         while True:
             page_url = f'{status_url}&limit={page_size}&offset={offset}'
             async with session.get(page_url, headers=headers, timeout=timeout) as resp:
@@ -152,11 +175,20 @@ async def _fetch_channel_statuses(session, headers, timeout) -> Optional[Dict[st
                 if not data:
                     break
                 for row in data:
-                    statuses[row['url_hash']] = row.get('status', 'unknown')
+                    statuses[row['url_hash']] = {
+                        'status': row.get('status', 'unknown'),
+                        'report_count': int(row.get('report_count') or 0),
+                        'last_checked': row.get('last_checked'),
+                        'stale': bool(row.get('stale', False)),
+                    }
                 offset += page_size
                 if len(data) < page_size:
                     break
-        logger.info(f'Fetched {len(statuses)} channel statuses ({sum(1 for v in statuses.values() if v == "working")} working)')
+        logger.info(
+            'Fetched %d channel statuses (%d working)',
+            len(statuses),
+            sum(1 for v in statuses.values() if v.get('status') == 'working'),
+        )
         return statuses if statuses else None
     except Exception as e:
         logger.warning(f'channel_status fetch error: {e}')
@@ -217,15 +249,17 @@ async def fetch_channels(max_channels: int = 50_000, working_only: bool = False)
                         # Determine status: working, offline (failed), or unchecked (never tested)
                         url_hash = row.get('url_hash', '')
                         if status_map is not None:
-                            raw_status = status_map.get(url_hash)
+                            status_meta = status_map.get(url_hash)
+                            raw_status = status_meta.get('status') if status_meta else None
                             if raw_status == 'working':
                                 status = 'working'
-                            elif raw_status == 'failed':
-                                status = 'offline'
+                            elif raw_status in ('failed', 'broken', 'offline', 'stale'):
+                                status = 'stale' if raw_status == 'stale' else 'broken'
                             else:
                                 status = 'unchecked'  # Not in status table = never tested
                         else:
                             status = 'unchecked'
+                            status_meta = None
 
                         # Skip non-working if explicitly requested
                         if working_only and status != 'working':
@@ -259,6 +293,10 @@ async def fetch_channels(max_channels: int = 50_000, working_only: bool = False)
                             'source': row.get('source', 'supabase'),
                             'status': status,
                             'working_url_index': 0,
+                            'report_count': int((status_meta or {}).get('report_count') or 0),
+                            'last_checked': (status_meta or {}).get('last_checked'),
+                            'stale': bool((status_meta or {}).get('stale', False) or status == 'stale'),
+                            'hidden': bool((status_meta or {}).get('stale', False) or status == 'stale'),
                         })
 
                     offset += page_size
