@@ -177,7 +177,28 @@
         .player-btns { display: flex; gap: 8px; flex-wrap: wrap; }
         .p-btn { padding: 7px 14px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: var(--font); }
         .p-btn:hover { border-color: var(--accent); color: var(--accent); }
-        .p-btn.cast-btn { color: var(--fav); border-color: var(--fav); }
+        .cast-button {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-sec, #b3b3b3);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 12px;
+            font-family: var(--font);
+        }
+        .cast-button svg { flex-shrink: 0; }
+        .cast-button:hover { color: #fff; border-color: var(--accent); background: rgba(255,255,255,.1); }
+        .cast-button.casting { color: #4da6ff; border-color: #4da6ff; }
+        .casting-indicator {
+            display: none;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #4da6ff;
+        }
         .p-btn.report-btn:hover { border-color: var(--live); color: var(--live); }
         .p-btn.fav-active { color: var(--fav); border-color: var(--fav); }
         .player-quality { display: flex; align-items: center; gap: 8px; min-height: 32px; }
@@ -287,17 +308,15 @@
             .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
         }
     </style>
-    <!-- Google Cast Web Sender SDK (loaded async; ignored if blocked/Chromecast unavailable) -->
+    <!-- Google Cast Web Sender SDK. Requires HTTPS or localhost in production browsers. -->
     <script>
-      window['__onGCastApiAvailable'] = function (loaded) {
-        try {
-          if (!loaded || !window.chrome || !chrome.cast) { window.__castReady = false; return; }
-          cast.framework.CastContext.getInstance().setOptions({
-            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-          });
-          window.__castReady = true;
-        } catch (e) { window.__castReady = false; }
+      window.__castReady = false;
+      window['__onGCastApiAvailable'] = function(isAvailable) {
+        if (isAvailable && typeof window.initializeCast === 'function') {
+          window.initializeCast();
+        } else {
+          window.__castReady = false;
+        }
       };
     </script>
     <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" async onerror="window.__castReady=false"></script>
@@ -383,6 +402,7 @@
             <div class="player-epg" id="player-epg"></div>
             <div class="player-epg-next" id="player-epg-next"></div>
             <div class="player-schedule" id="player-schedule"></div>
+            <div class="casting-indicator" id="cast-indicator"></div>
         </div>
         <div class="player-btns">
             <div class="player-quality" id="player-quality-controls" style="display:none">
@@ -394,7 +414,12 @@
             <button class="p-btn" id="p-prev" title="Previous (←)">⏮ Prev</button>
             <button class="p-btn" id="p-next" title="Next (→)">Next ⏭</button>
             <button class="p-btn" id="p-fav" title="Favorite">☆ Favorite</button>
-            <button class="p-btn cast-btn" id="p-cast">📡 Cast</button>
+            <button class="cast-button" id="cast-btn" title="Cast to TV">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                </svg>
+                <span>Cast</span>
+            </button>
             <button class="p-btn report-btn" id="p-report">⚠ Report</button>
             <button class="p-btn" id="p-close" title="Close (Esc)">✕ Close</button>
         </div>
@@ -507,6 +532,9 @@ let favorites = new Set();
 let settings = JSON.parse(localStorage.getItem('tv_settings') || '{}');
 let numberBuf = '', numberTimer = null;
 let channelHealth = JSON.parse(localStorage.getItem('tv_channel_health') || '{}');
+let castListenerRegistered = false;
+let currentOriginalStreamUrl = '';
+let currentProxyStreamUrl = '';
 const MONO_COLORS = ['#1E3A5F','#2D1B4E','#1B4332','#4A1D1D','#3D3415','#1A3A3A'];
 const CAT_ICONS = {'News':'📰','Sports':'⚽','Entertainment':'🎬','Music':'🎵','Kids':'🧸','Movies':'🎥','Documentary':'🌍','Science':'🔬','Education':'📚','Religious':'🕌','Business':'💼','Lifestyle':'🏡','Food':'🍳','Travel':'✈️','Comedy':'😂','Drama':'🎭','Technology':'💻','Health':'❤️','Gaming':'🎮','Animation':'🎞️','Weather':'🌦️','Nature':'🌿','Shopping':'🛍️','Radio':'📻'};
 
@@ -755,11 +783,12 @@ function renderChannels(chs) {
             <div class="card-dot ${health}"></div>
             <div class="card-top">${logo}<div class="card-info"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div><div class="health-badge ${health}">${esc(health)}</div></div></div>
             <div class="card-epg" id="epg-${i}"></div>
-            <div class="card-actions"><button onclick="event.stopPropagation();playChannel(${i})">▶ Play</button><button onclick="event.stopPropagation();toggleFav(${i})" style="${isFav?'color:var(--fav);border-color:var(--fav)':''}">${isFav?'★':'☆'}</button><button onclick="event.stopPropagation();castChannel(${i})">📡</button><button class="report-btn" onclick="event.stopPropagation();reportBroken(${i})">⚠</button></div>
+            <div class="card-actions"><button onclick="event.stopPropagation();playChannel(${i})">▶ Play</button><button onclick="event.stopPropagation();toggleFav(${i})" style="${isFav?'color:var(--fav);border-color:var(--fav)':''}">${isFav?'★':'☆'}</button><button class="card-cast-btn" style="display:none" onclick="event.stopPropagation();castChannel(${i})" title="Cast to TV">📡</button><button class="report-btn" onclick="event.stopPropagation();reportBroken(${i})">⚠</button></div>
         </div>`;
     }).join('');
 
     grid.querySelectorAll('.card').forEach(c => c.addEventListener('click', () => playChannel(+c.dataset.idx)));
+    updateCastAvailability();
     // Bind logo-error fallback programmatically (avoids XSS via inline handler).
     grid.querySelectorAll('img.card-logo').forEach(img => {
         img.addEventListener('error', () => {
@@ -877,6 +906,98 @@ function updatePlayerFavBtn() {
         btn.classList.toggle('fav-active', isFav);
     }
 }
+
+function isCastReady() {
+    return !!(window.__castReady && window.cast && window.chrome && window.chrome.cast && cast.framework);
+}
+
+function isCastDeviceAvailable() {
+    if (!isCastReady()) return false;
+    try {
+        return cast.framework.CastContext.getInstance().getCastState() !== cast.framework.CastState.NO_DEVICES_AVAILABLE;
+    } catch (e) {
+        return false;
+    }
+}
+
+function updateCastAvailability() {
+    const castBtn = document.getElementById('cast-btn');
+    const available = isCastDeviceAvailable();
+    if (castBtn) castBtn.style.display = available ? 'inline-flex' : 'none';
+    document.querySelectorAll('.card-cast-btn').forEach(btn => {
+        btn.style.display = available ? 'inline-flex' : 'none';
+    });
+    if (!available) hideCastingIndicator();
+}
+
+function hideCastingIndicator() {
+    const indicator = document.getElementById('cast-indicator');
+    const castBtn = document.getElementById('cast-btn');
+    if (indicator) {
+        indicator.style.display = 'none';
+        indicator.textContent = '';
+    }
+    if (castBtn) castBtn.classList.remove('casting');
+}
+
+function showCastingIndicator(deviceName = '') {
+    const indicator = document.getElementById('cast-indicator');
+    const castBtn = document.getElementById('cast-btn');
+    if (castBtn) castBtn.classList.add('casting');
+    if (indicator) {
+        indicator.textContent = deviceName ? `Casting to ${deviceName}` : 'Casting to TV';
+        indicator.style.display = 'block';
+    }
+}
+
+function onCastStateChanged(event) {
+    const context = isCastReady() ? cast.framework.CastContext.getInstance() : null;
+    const state = event && event.castState ? event.castState : (context ? context.getCastState() : null);
+    updateCastAvailability();
+    if (state === cast.framework.CastState.CONNECTED) {
+        const session = context ? context.getCurrentSession() : null;
+        const deviceName = session && session.getCastDevice ? session.getCastDevice().friendlyName : '';
+        showCastingIndicator(deviceName || '');
+        return;
+    }
+    if (state === cast.framework.CastState.CONNECTING) {
+        showCastingIndicator('device…');
+        return;
+    }
+    hideCastingIndicator();
+}
+
+function initializeCast() {
+    try {
+        if (!window.chrome || !chrome.cast || !window.cast || !cast.framework) {
+            window.__castReady = false;
+            updateCastAvailability();
+            return;
+        }
+        const context = cast.framework.CastContext.getInstance();
+        context.setOptions({
+            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+        });
+        if (!castListenerRegistered) {
+            context.addEventListener(
+                cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+                onCastStateChanged
+            );
+            context.addEventListener(
+                cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+                onCastStateChanged
+            );
+            castListenerRegistered = true;
+        }
+        window.__castReady = true;
+    } catch (e) {
+        window.__castReady = false;
+    }
+    onCastStateChanged({ castState: cast.framework.CastContext.getInstance().getCastState() });
+}
+
+window.initializeCast = initializeCast;
 
 // ─── Player ─────────────────────────────────────────────────────────────────
 let audioCtx = null, analyser = null, animFrameId = null, statsInterval = null;
@@ -1126,6 +1247,9 @@ function playChannel(idx) {
     currentSources = getChannelSources(ch);
     currentSourceIdx = 0;
     _triedSources = new Set();
+    currentOriginalStreamUrl = '';
+    currentProxyStreamUrl = '';
+    hideCastingIndicator();
 
     // Check for a remembered working source — start from it
     try {
@@ -1173,6 +1297,8 @@ function tryNextSource(channel = currentChannel, urlIndex = currentSourceIdx + 1
 
     currentSourceIdx = urlIndex;
     const url = currentSources[urlIndex];
+    currentOriginalStreamUrl = url;
+    currentProxyStreamUrl = '';
     const video = document.getElementById('player');
     stopStats();
     if (hls) { hls.destroy(); hls = null; }
@@ -1211,6 +1337,8 @@ async function startStream(url, video, isRadio) {
     const streamStartTime = performance.now(); // Perf: measure time-to-first-frame
     const attemptId = ++currentStreamAttemptId;
     currentFailureType = 'unknown';
+    currentOriginalStreamUrl = url;
+    currentProxyStreamUrl = '';
     const isHls = url.includes('.m3u8') || url.includes('m3u8');
     let settled = false;
     let loadTimer = null;
@@ -1230,6 +1358,7 @@ async function startStream(url, video, isRadio) {
     hideQualitySelector();
     try {
         streamUrl = await resolveProxyStreamUrl(url);
+        currentProxyStreamUrl = streamUrl;
     } catch (error) {
         failCurrentSource(error);
         return;
@@ -1534,6 +1663,9 @@ function closePlayer() {
     document.getElementById('player-overlay').classList.remove('active');
     const v = document.getElementById('player');
     if (hls) { hls.destroy(); hls=null; } v.pause(); v.src=''; playIdx=-1;
+    currentOriginalStreamUrl = '';
+    currentProxyStreamUrl = '';
+    hideCastingIndicator();
 }
 
 function toggleFullscreen() {
@@ -1552,131 +1684,69 @@ function toggleMute() {
 }
 
 // ─── Cast ───────────────────────────────────────────────────────────────────
-async function castChannel(idx) {
-    const ch = filtered[idx]; if (!ch) return;
-    const url = ch.url;
-
-    // Build cast options menu
-    const options = [];
-    const isSecure = window.isSecureContext;
-
-    // 1. Google Cast SDK (real Chromecast, plays HLS natively on the receiver).
-    // The Cast Web Sender SDK only registers in a secure context (HTTPS or
-    // localhost). On HTTP-LAN deployments (Docker on the home network) the
-    // SDK is silently disabled by the browser — surface that explicitly so
-    // users know to either enable HTTPS or use the browser's built-in cast.
-    if (window.__castReady && window.cast && cast.framework) {
-        const ctx = cast.framework.CastContext.getInstance();
-        options.push({ label: '📺 Cast to Chromecast', action: async () => {
-            try {
-                await ctx.requestSession();
-                const session = ctx.getCurrentSession();
-                if (!session) { toast('No Chromecast device selected'); return; }
-                const mediaInfo = new chrome.cast.media.MediaInfo(url, 'application/x-mpegURL');
-                mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
-                mediaInfo.metadata.title = ch.name;
-                if (ch.logo) mediaInfo.metadata.images = [new chrome.cast.Image(ch.logo)];
-                const request = new chrome.cast.media.LoadRequest(mediaInfo);
-                await session.loadMedia(request);
-                toast(`Casting ${ch.name} to Chromecast`);
-            } catch(e) {
-                const msg = (e && e.code) ? e.code : (e && e.message) || 'unknown error';
-                if (msg === 'cancel' || msg === 'CANCEL') toast('Cast cancelled');
-                else toast('Cast failed: ' + msg);
-            }
-        }});
-    } else if (!isSecure) {
-        // Insecure context — explain *why* Chromecast option is missing.
-        options.push({ label: '🔒 Chromecast needs HTTPS — click for help', action: () => {
-            alert(
-                'Chromecast / Cast Web Sender requires a secure (HTTPS) context.\n\n' +
-                'You are accessing this app over HTTP, so the browser blocked ' +
-                'the Cast SDK from loading.\n\nWorkarounds:\n' +
-                '  • Use your browser\'s built-in cast feature (Chrome ⋮ menu → Cast…)\n' +
-                '  • Open this app over HTTPS (reverse-proxy with TLS, e.g. Caddy/Traefik)\n' +
-                '  • Or pick "Copy stream URL" below and paste into VLC on the cast device'
-            );
-        }});
-    } else {
-        // Secure but SDK still didn't load (network block / gstatic unreachable)
-        options.push({ label: '⚠ Chromecast SDK unavailable — see Copy URL below', action: () => {
-            toast('Cast SDK failed to load. Use Copy URL → VLC instead.');
-        }});
-    }
-
-    // 2. Remote Playback API (AirPlay on Safari, some smart TVs)
-    const video = document.getElementById('player');
-    if (video.remote && typeof video.remote.prompt === 'function') {
-        options.push({ label: '📡 Cast via Remote Playback (AirPlay)', action: async () => {
-            try {
-                await video.remote.prompt();
-                toast(`Casting ${ch.name} to remote device...`);
-            } catch(e) { toast('Cast cancelled or unavailable'); }
-        }});
-    }
-
-    // 2. Presentation API
-    if ('presentation' in navigator) {
-        options.push({ label: '🖥 Present to external display', action: async () => {
-            try {
-                const req = new PresentationRequest([url]);
-                await req.start();
-                toast(`Presenting ${ch.name}...`);
-            } catch(e) { toast('Presentation failed: ' + e.message); }
-        }});
-    }
-
-    // 3. Picture-in-Picture
-    if (document.pictureInPictureEnabled && video.readyState >= 2) {
-        options.push({ label: '🪟 Picture-in-Picture', action: async () => {
-            try {
-                await video.requestPictureInPicture();
-                toast('Playing in Picture-in-Picture');
-            } catch(e) { toast('PiP unavailable'); }
-        }});
-    }
-
-    // 4. Open stream URL in new tab (for VLC/other player)
-    options.push({ label: '🔗 Open stream in new tab', action: () => {
-        window.open(url, '_blank');
-        toast('Opened stream URL in new tab');
-    }});
-
-    // 5. Copy URL
-    options.push({ label: '📋 Copy stream URL', action: async () => {
-        try { await navigator.clipboard.writeText(url); toast('Stream URL copied to clipboard'); }
-        catch(e) { toast('Copy failed'); }
-    }});
-
-    // Show cast menu
-    showCastMenu(options);
+function getCurrentStreamUrl() {
+    // Chromecast fetches media directly, so always use the original stream URL.
+    return currentOriginalStreamUrl || currentSources[currentSourceIdx] || (currentChannel && currentChannel.url) || '';
 }
 
-function showCastMenu(options) {
-    // Remove existing menu
-    const existing = document.getElementById('cast-menu');
-    if (existing) existing.remove();
+function getCurrentChannelName() {
+    return currentChannel && currentChannel.name ? currentChannel.name : 'TV Viewer Stream';
+}
 
-    const menu = document.createElement('div');
-    menu.id = 'cast-menu';
-    menu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;z-index:4000;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.5);';
-    menu.innerHTML = `<div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text);">📡 Cast / Send to...</div>` +
-        options.map((o, i) => `<button class="cast-option" data-idx="${i}" style="display:block;width:100%;text-align:left;padding:10px 12px;margin:4px 0;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-family:var(--font);">${o.label}</button>`).join('') +
-        `<button id="cast-menu-close" style="display:block;width:100%;text-align:center;padding:8px;margin-top:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-sec);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:var(--font);">Cancel</button>`;
+async function castCurrentStream() {
+    if (!isCastReady()) return;
+    const context = cast.framework.CastContext.getInstance();
+    const session = context.getCurrentSession();
+    if (!session) {
+        try {
+            await context.requestSession();
+            await startCasting();
+        } catch (err) {
+            const message = err && (err.code || err.message) ? String(err.code || err.message) : 'cancel';
+            if (message.toLowerCase() !== 'cancel') console.log('Cast request failed:', err);
+        }
+        return;
+    }
+    await startCasting();
+}
 
-    document.body.appendChild(menu);
+async function castChannel(idx) {
+    if (!isCastReady()) return;
+    const ch = filtered[idx];
+    if (!ch) return;
+    const streamUrl = getChannelSources(ch)[0] || ch.url;
+    const context = cast.framework.CastContext.getInstance();
+    if (!context.getCurrentSession()) {
+        try {
+            await context.requestSession();
+        } catch (err) {
+            return;
+        }
+    }
+    await startCasting(ch, streamUrl);
+}
 
-    // Wire up buttons
-    menu.querySelectorAll('.cast-option').forEach(btn => {
-        btn.onmouseenter = () => { btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; };
-        btn.onmouseleave = () => { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text)'; };
-        btn.onclick = () => { const idx = +btn.dataset.idx; options[idx].action(); menu.remove(); };
-    });
-    document.getElementById('cast-menu-close').onclick = () => menu.remove();
+async function startCasting(channel = currentChannel, streamUrl = getCurrentStreamUrl()) {
+    const session = isCastReady() ? cast.framework.CastContext.getInstance().getCurrentSession() : null;
+    if (!session || !channel || !streamUrl) return;
 
-    // Close on Escape
-    const esc = (e) => { if (e.key === 'Escape') { menu.remove(); document.removeEventListener('keydown', esc); } };
-    document.addEventListener('keydown', esc);
+    try {
+        const mediaInfo = new chrome.cast.media.MediaInfo(streamUrl, 'application/x-mpegurl');
+        mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+        mediaInfo.metadata.title = (channel && channel.name) || getCurrentChannelName();
+        if (channel && channel.logo) {
+            mediaInfo.metadata.images = [new chrome.cast.Image(channel.logo)];
+        }
+
+        const request = new chrome.cast.media.LoadRequest(mediaInfo);
+        await session.loadMedia(request);
+        const deviceName = session.getCastDevice ? session.getCastDevice().friendlyName : '';
+        showCastingIndicator(deviceName || '');
+        toast(`Casting ${(channel && channel.name) || 'stream'} to ${deviceName || 'TV'}`);
+    } catch (err) {
+        console.error('Cast load failed:', err);
+        toast('Cast failed — Chromecast fetches the original stream directly, so proxy-only streams may not work.');
+    }
 }
 
 // ─── Report ─────────────────────────────────────────────────────────────────
@@ -2444,7 +2514,7 @@ document.getElementById('search-clear').onclick = () => {
 document.getElementById('p-close').onclick = closePlayer;
 document.getElementById('p-next').onclick = () => { if(playIdx<filtered.length-1) playChannel(playIdx+1); };
 document.getElementById('p-prev').onclick = () => { if(playIdx>0) playChannel(playIdx-1); };
-document.getElementById('p-cast').onclick = () => { if(playIdx>=0) castChannel(playIdx); };
+document.getElementById('cast-btn').onclick = () => { if(playIdx>=0) castCurrentStream(); };
 document.getElementById('p-report').onclick = () => { if(playIdx>=0) reportBroken(playIdx); };
 document.getElementById('p-fav').onclick = () => { if(playIdx>=0) toggleFav(playIdx); };
 document.getElementById('p-fullscreen').onclick = toggleFullscreen;
