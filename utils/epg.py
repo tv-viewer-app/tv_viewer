@@ -342,6 +342,7 @@ class EPGService:
         self._channel_map: Dict[str, str] = {}          # epg_id → display_name
         self._schedules: Dict[str, List[EPGProgram]] = {}  # epg_id → [programs]
         self._name_to_epg_id: Dict[str, str] = {}       # lowercase name → epg_id
+        self._aggressive_name_to_epg_ids: Dict[str, set] = {}  # tier-2 fuzzy matching
         self._initialized = False
         self._initializing = False
         self._last_fetch: float = 0
