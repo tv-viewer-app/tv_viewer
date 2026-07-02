@@ -30,7 +30,7 @@ jobs:
         run: |
           iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
-      - name: Update and submit
+      - name: Submit to WinGet
         shell: pwsh
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
@@ -38,13 +38,39 @@ jobs:
           $version = "${{ steps.ver.outputs.version }}"
           $url = "https://github.com/tv-viewer-app/tv_viewer/releases/download/v${version}/TV_Viewer-windows.zip"
 
-          if ($env:WINGET_TOKEN) {
-            ./wingetcreate.exe update TVViewerApp.TVViewer `
+          if (-not $env:WINGET_TOKEN) {
+            Write-Host "::error::WINGET_GITHUB_TOKEN not set"
+            exit 1
+          }
+
+          # Try update first (for existing packages)
+          Write-Host "Attempting update for TVViewerApp.TVViewer..."
+          ./wingetcreate.exe update TVViewerApp.TVViewer `
+            --version $version `
+            --urls $url `
+            --submit `
+            --token $env:WINGET_TOKEN
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Update failed — attempting new package submission..."
+            # First submission: use 'new' command
+            ./wingetcreate.exe new $url `
+              --id TVViewerApp.TVViewer `
+              --name "TV Viewer" `
+              --publisher "TVViewerApp" `
               --version $version `
-              --urls $url `
+              --license MIT `
+              --license-url "https://github.com/tv-viewer-app/tv_viewer/blob/master/LICENSE" `
+              --homepage "https://github.com/tv-viewer-app/tv_viewer" `
+              --description "Free IPTV streaming — 21,000+ live TV and radio channels from 100+ countries" `
+              --short-description "Cross-platform IPTV streaming application" `
+              --tags "iptv,streaming,tv,radio,vlc" `
               --submit `
               --token $env:WINGET_TOKEN
-          } else {
-            echo "WINGET_GITHUB_TOKEN not set — skipping submission"
-            echo "To enable: create a GitHub PAT and add as repo secret WINGET_GITHUB_TOKEN"
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::Both update and new submission failed"
+              exit 1
+            }
           }
+          Write-Host "✅ WinGet submission successful"
