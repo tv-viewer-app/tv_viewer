@@ -1,3 +1,4 @@
+# WinGet package submission workflow
 name: WinGet Submit
 
 on:
