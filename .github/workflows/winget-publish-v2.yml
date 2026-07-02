@@ -1,0 +1,86 @@
+name: WinGet Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 2.21.3)'
+        required: true
+
+jobs:
+  submit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Submit to WinGet
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          $url = "https://github.com/tv-viewer-app/tv_viewer/releases/download/v${version}/TV_Viewer-windows.zip"
+
+          if (-not $env:WINGET_TOKEN) {
+            Write-Host "::error::WINGET_GITHUB_TOKEN not set"
+            exit 1
+          }
+
+          # Try update first (for existing packages)
+          Write-Host "Attempting update for TVViewerApp.TVViewer..."
+          ./wingetcreate.exe update TVViewerApp.TVViewer --version $version --urls $url --submit --token $env:WINGET_TOKEN
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Update failed — creating new package submission..."
+
+            # Download installer to compute SHA256
+            Write-Host "Downloading installer for hash..."
+            Invoke-WebRequest -Uri $url -OutFile installer.zip -UseBasicParsing
+            $hash = (Get-FileHash installer.zip -Algorithm SHA256).Hash
+            Write-Host "SHA256: $hash"
+
+            # Create manifest directory
+            $dir = "manifests/t/TVViewerApp/TVViewer/$version"
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
+            # Write version manifest
+            $versionYaml = "PackageIdentifier: TVViewerApp.TVViewer`nPackageVersion: $version`nDefaultLocale: en-US`nManifestType: version`nManifestVersion: 1.6.0`n"
+            [System.IO.File]::WriteAllText("$dir/TVViewerApp.TVViewer.yaml", $versionYaml)
+
+            # Write installer manifest
+            $installerYaml = "PackageIdentifier: TVViewerApp.TVViewer`nPackageVersion: $version`nInstallerType: zip`nInstallers:`n- Architecture: x64`n  InstallerUrl: $url`n  InstallerSha256: $hash`n  NestedInstallerType: portable`n  NestedInstallerFiles:`n  - RelativeFilePath: TVViewer\TVViewer.exe`n    PortableCommandAlias: tvviewer`nManifestType: installer`nManifestVersion: 1.6.0`n"
+            [System.IO.File]::WriteAllText("$dir/TVViewerApp.TVViewer.installer.yaml", $installerYaml)
+
+            # Write locale manifest
+            $localeYaml = "PackageIdentifier: TVViewerApp.TVViewer`nPackageVersion: $version`nPackageLocale: en-US`nPublisher: TVViewerApp`nPackageName: TV Viewer`nLicense: MIT`nShortDescription: Cross-platform IPTV streaming application`nDescription: Free IPTV streaming with 21000+ live TV and radio channels from 100+ countries. No ads, no account needed.`nPackageUrl: https://github.com/tv-viewer-app/tv_viewer`nLicenseUrl: https://github.com/tv-viewer-app/tv_viewer/blob/master/LICENSE`nTags:`n- iptv`n- streaming`n- tv`n- radio`n- vlc`nManifestType: defaultLocale`nManifestVersion: 1.6.0`n"
+            [System.IO.File]::WriteAllText("$dir/TVViewerApp.TVViewer.locale.en-US.yaml", $localeYaml)
+
+            Write-Host "Manifest files created:"
+            Get-ChildItem $dir
+
+            # Submit manifests
+            ./wingetcreate.exe submit --token $env:WINGET_TOKEN manifests
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::WinGet submission failed"
+              exit 1
+            }
+          }
+
+          Write-Host "WinGet submission successful"
