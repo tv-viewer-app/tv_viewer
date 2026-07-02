@@ -131,6 +131,7 @@ class MainWindow:
         self._ui_update_queue = []
         self._ui_batch_timer = None
         self._min_update_interval = 50
+        self._update_banner_version: Optional[str] = None
         
         # Create UI
         self._create_sidebar()
@@ -714,10 +715,17 @@ class MainWindow:
         """Create the content header."""
         header_frame = ttk.Frame(self.main_frame)
         header_frame.grid(row=0, column=0, sticky="ew")
+
+        self.update_banner_frame = ttk.Frame(header_frame)
+        self.update_banner_frame.pack(fill=tk.X, padx=20, pady=(10, 0))
+        self.update_banner_frame.pack_forget()
+
+        title_row = ttk.Frame(header_frame)
+        title_row.pack(fill=tk.X)
         
         # Title
         self.channel_header = ttk.Label(
-            header_frame,
+            title_row,
             text="Select a category",
             font=("Segoe UI", 18, "bold")
         )
@@ -725,7 +733,7 @@ class MainWindow:
         
         # Count label
         self.channel_count_label = ttk.Label(
-            header_frame,
+            title_row,
             text="",
             font=("Segoe UI", 12)
         )
@@ -2680,12 +2688,17 @@ class MainWindow:
     def _show_update_banner(self, new_version: str):
         """Show a non-intrusive update notification banner."""
         from utils.update_checker import dismiss_version, open_releases_page
-        
-        banner = ttk.Frame(self.root)
-        banner.configure(style="info.TFrame")
-        
-        inner = ttk.Frame(banner)
-        inner.pack(fill=tk.X, padx=10, pady=6)
+
+        if self._update_banner_version == new_version:
+            return
+
+        self._update_banner_version = new_version
+
+        for child in self.update_banner_frame.winfo_children():
+            child.destroy()
+
+        inner = ttk.Frame(self.update_banner_frame)
+        inner.pack(fill=tk.X, padx=12, pady=8)
         
         ttk.Label(
             inner,
@@ -2695,20 +2708,24 @@ class MainWindow:
         
         ttk.Button(
             inner,
-            text="Update",
+            text="Download",
             bootstyle="info",
-            command=lambda: [open_releases_page(), banner.destroy()],
+            command=lambda: [open_releases_page(), self._hide_update_banner()],
         ).pack(side=tk.RIGHT, padx=(5, 0))
         
         ttk.Button(
             inner,
             text="Dismiss",
             bootstyle="secondary-outline",
-            command=lambda: [dismiss_version(new_version), banner.destroy()],
+            command=lambda: [dismiss_version(new_version), self._hide_update_banner()],
         ).pack(side=tk.RIGHT)
-        
-        # Place banner at top of main content area
-        self.toast.show_info(f"New version v{new_version} available! Check Help menu to update.")
+
+        self.update_banner_frame.pack(fill=tk.X, padx=20, pady=(10, 0))
+        self.toast.show_info(f"New version v{new_version} available.")
+
+    def _hide_update_banner(self):
+        """Hide the update banner without affecting the rest of the layout."""
+        self.update_banner_frame.pack_forget()
     
     # ── First Run ─────────────────────────────────────────────────────────
     

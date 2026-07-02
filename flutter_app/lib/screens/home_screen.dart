@@ -101,9 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _checkForUpdates() async {
     final info = await UpdateService.checkForUpdate();
     if (info != null && mounted) {
-      // Use the rich dialog directly — release notes + in-app install
-      // path (#207). Banner is no longer used on auto-check.
-      UpdateService.showUpdateDialog(context, info);
+      UpdateService.showUpdateBanner(context, info);
     }
   }
   

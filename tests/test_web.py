@@ -54,6 +54,25 @@ class TestHealth:
         assert r.status_code == 200
         assert "image/png" in r.headers["content-type"]
 
+    def test_version_endpoint(self, client, monkeypatch):
+        async def fake_refresh(force=False):
+            assert force is False
+            return {
+                "current": "2.21.3",
+                "latest": "2.21.4",
+                "update_available": True,
+                "download_url": "https://github.com/tv-viewer-app/tv_viewer/releases/tag/v2.21.4",
+            }
+
+        monkeypatch.setattr(server, "_refresh_version_cache", fake_refresh)
+        r = client.get("/api/version")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["current"] == "2.21.3"
+        assert data["latest"] == "2.21.4"
+        assert data["update_available"] is True
+        assert data["download_url"].endswith("/v2.21.4")
+
 
 # ─── Channel API ────────────────────────────────────────────────────────────
 

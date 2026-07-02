@@ -40,14 +40,14 @@ class UpdateService {
       'https://github.com/$_repoOwner/$_repoName/releases';
   static const _checkIntervalKey = 'last_update_check';
   static const _dismissedVersionKey = 'dismissed_update_version';
-  static const _checkIntervalHours = 24;
+  static const _checkIntervalHours = 6;
 
   /// Check for updates. Returns [UpdateInfo] if a newer release exists
   /// and the user has not dismissed it. Returns null when up-to-date, when
-  /// the 24-hour window has not elapsed, or on any network/parse failure.
+  /// the 6-hour window has not elapsed, or on any network/parse failure.
   ///
   /// Pass [force]=true from the Settings "Check for updates" button to
-  /// bypass both the 24-hour rate limit and the user-dismissed flag.
+  /// bypass both the 6-hour rate limit and the user-dismissed flag.
   static Future<UpdateInfo?> checkForUpdate({bool force = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -229,14 +229,15 @@ class UpdateService {
     );
   }
 
-  /// Back-compat: show a lightweight banner. Newer callers should prefer
-  /// [showUpdateDialog].
+  /// Show a lightweight banner that links straight to the download page.
   static void showUpdateBanner(BuildContext context, UpdateInfo info) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentMaterialBanner()
       ..showMaterialBanner(
         MaterialBanner(
+          backgroundColor:
+              Theme.of(context).colorScheme.primaryContainer.withOpacity(0.35),
           content: Text(
             'A new version (v${info.version}) is available!',
             style: const TextStyle(fontWeight: FontWeight.w500),
@@ -253,9 +254,9 @@ class UpdateService {
             FilledButton.tonal(
               onPressed: () {
                 ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-                showUpdateDialog(context, info);
+                openReleasesPage(info.htmlUrl);
               },
-              child: const Text('VIEW'),
+              child: const Text('DOWNLOAD'),
             ),
           ],
         ),

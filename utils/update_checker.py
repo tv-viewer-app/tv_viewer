@@ -1,7 +1,7 @@
 """Auto-update version checker for TV Viewer.
 
 Checks the latest GitHub release tag on startup and notifies the user
-if a newer version is available. Rate-limited to one check per 24 hours.
+if a newer version is available. Rate-limited to one check per 6 hours.
 """
 
 import json
@@ -13,9 +13,9 @@ import webbrowser
 import config
 
 _RELEASES_API = "https://api.github.com/repos/tv-viewer-app/tv_viewer/releases/latest"
-_RELEASES_PAGE = "https://github.com/tv-viewer-app/tv_viewer/releases"
+_RELEASES_PAGE = "https://github.com/tv-viewer-app/tv_viewer/releases/latest"
 _STATE_FILE = os.path.join(config.BASE_DIR, ".update_check.json")
-_CHECK_INTERVAL = 24 * 3600  # 24 hours in seconds
+_CHECK_INTERVAL = 6 * 3600  # 6 hours in seconds
 
 
 def _parse_version(version_str: str):

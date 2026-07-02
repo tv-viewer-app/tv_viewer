@@ -336,6 +336,25 @@ class _ChannelCache:
 _cache = _ChannelCache()
 
 
+def _parse_version_string(version_str: str) -> tuple[int, int, int]:
+    """Parse a version string like 'v2.21.3' into a comparable tuple."""
+    parts = str(version_str or "").lstrip("v").split(".")
+    parsed: List[int] = []
+    for part in parts[:3]:
+        try:
+            parsed.append(int(part.split("-")[0]))
+        except (TypeError, ValueError):
+            parsed.append(0)
+    while len(parsed) < 3:
+        parsed.append(0)
+    return tuple(parsed)
+
+
+def _is_newer_version(latest: str, current: str) -> bool:
+    """Return True when the latest version is newer than the current version."""
+    return _parse_version_string(latest) > _parse_version_string(current)
+
+
 def _channel_has_epg(channel_name: str) -> bool:
     """Return True when the channel has at least one loaded EPG entry."""
     if not channel_name:
@@ -870,6 +889,60 @@ async def get_status():
         "status": "running",
         "refresh_in_progress": _refresh_in_progress,
     }
+
+
+_version_cache: Dict[str, Any] = {}
+_version_cache_time: float = 0
+_VERSION_CACHE_TTL = 6 * 3600  # 6 hours
+_LATEST_RELEASE_URL = "https://github.com/tv-viewer-app/tv_viewer/releases/latest"
+_LATEST_RELEASE_API = "https://api.github.com/repos/tv-viewer-app/tv_viewer/releases/latest"
+
+
+async def _refresh_version_cache(force: bool = False) -> Dict[str, Any]:
+    """Fetch and cache latest release metadata for client-side update banners."""
+    global _version_cache, _version_cache_time
+
+    now = time.time()
+    if not force and _version_cache and (now - _version_cache_time) < _VERSION_CACHE_TTL:
+        return _version_cache
+
+    current = config.APP_VERSION
+    latest = current
+    download_url = _LATEST_RELEASE_URL
+
+    try:
+        connector = aiohttp.TCPConnector(limit=2, ttl_dns_cache=300, ssl=_get_strict_ssl_context())
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.get(
+                _LATEST_RELEASE_API,
+                headers={
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": f"tv-viewer/{current}",
+                },
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    latest = str(data.get("tag_name", "") or current).lstrip("v") or current
+                    download_url = str(data.get("html_url", "") or _LATEST_RELEASE_URL)
+    except Exception as exc:
+        logger.debug(f"Version check skipped ({exc})")
+
+    result = {
+        "current": current,
+        "latest": latest,
+        "update_available": _is_newer_version(latest, current),
+        "download_url": download_url,
+    }
+    _version_cache = result
+    _version_cache_time = now
+    return result
+
+
+@app.get("/api/version")
+async def get_version():
+    """Return the running version and latest available GitHub release metadata."""
+    return await _refresh_version_cache()
 
 
 # ─── Stream Proxy (CORS bypass) ─────────────────────────────────────────────
