@@ -5,6 +5,24 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.2] - 2026-07-02
+
+### Added
+- PWA support: web app installable from Chrome/Edge/mobile browsers
+- Service worker for offline caching of static assets
+- WinGet auto-submit workflow (submits on every release)
+- Live statistics: today's active users, play count, live sessions
+- POST proxy bootstrap for long URLs (fixes 414 errors with PlutoTV/Samsung streams)
+
+### Fixed
+- Legacy Supabase key errors in Docker RPC calls (report_channel_working/broken)
+- Unclosed aiohttp sessions in proxy endpoint
+- Channel repos updated: added German/Canadian sources, removed 5 dead repos
+
+### Changed
+- Chrome Extension packaged for sideloading from GitHub
+- Statistics endpoint uses 30-min cached materialized views
+
 ## [2.21.1] - 2026-07-01
 
 ### Security
