@@ -1471,7 +1471,7 @@ async def get_sources(channel_name: str):
     return {"channel": channel_name, "sources": sources}
 
 
-@app.get("/api/epg/{channel_name}")
+@app.get("/api/epg/{channel_name:path}")
 async def get_epg(channel_name: str, hours: int = Query(6, ge=1, le=24)):
     """Get EPG schedule for a channel."""
     try:

@@ -55,10 +55,12 @@ logger = get_logger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Default EPG sources — community XMLTV mirrors (verified working May 2026)
+# Default EPG sources — community XMLTV mirrors (verified July 2026)
 DEFAULT_EPG_SOURCES = [
     # epgshare01 — Israeli EPG (Yes/HOT channels, updated daily)
     "https://epgshare01.online/epgshare01/epg_ripper_IL1.xml.gz",
+    # Open-EPG — broad Israeli coverage, including Kan Educational/Knesset fallbacks
+    "http://www.open-epg.com/files/israel.xml.gz",
     # epgshare01 — UK Freeview/Sky channels
     "https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz",
     # matthuisman/i.mjh.nz — Pluto TV US
@@ -74,7 +76,9 @@ DEFAULT_EPG_SOURCES = [
 # Cache settings
 EPG_CACHE_FILE = "epg_cache.json"
 EPG_CACHE_MAX_AGE_HOURS = 6
-EPG_FETCH_TIMEOUT = 60
+EPG_FETCH_TIMEOUT = 30
+EPG_FETCH_RETRIES = 1
+EPG_FETCH_RETRY_BACKOFF_SEC = 2
 EPG_MAX_PROGRAMS_PER_CHANNEL = 48  # ~24 hours of 30-min programs
 
 
@@ -116,6 +120,107 @@ _LOCALE_CHANNEL_ALIASES: Dict[str, str] = {
     "הכנסת": "Knesset",
     "כנסת": "Knesset",
     "i24 news": "i24NEWS",
+    "חינוכית": "Kan Kids / Educational",
+    "כאן חינוכית": "Kan Kids / Educational",
+    "ערוץ הכנסת": "Knesset Channel",
+    "ערוץ 23 חינוכית": "Kan Kids / Educational",
+    "עברית i24": "i24NEWS Hebrew",
+    "i24 עברית": "i24NEWS Hebrew",
+}
+
+# English/bilingual aliases for Israeli channel variants seen across M3U files,
+# community EPG feeds, and provider-specific guide scrapers.
+_CHANNEL_ALIASES: Dict[str, List[str]] = {
+    "kan kids / educational": [
+        "kaneducation.il",
+        "channel23education.il",
+        "כאן.חינוכית.il",
+        "kan educational",
+        "כאן חינוכית",
+        "חינוכית",
+    ],
+    "kan bet / reshet bet": [
+        "kan-bet.kan.org.il",
+        "kanbet",
+        "reshet bet",
+        "reshetbet",
+    ],
+    "kan 11 news": [
+        "kan11.kan.org.il",
+        "kan11news",
+        "כאן.11.il",
+        "ערוץ.11.כאן.שידור.חי.il",
+        "kan 11",
+        "כאן 11",
+    ],
+    "kan 11": [
+        "kan11.kan.org.il",
+        "kan11news",
+        "כאן.11.il",
+        "ערוץ.11.כאן.שידור.חי.il",
+        "kan hd",
+        "kan hd ll",
+        "כאן 11",
+    ],
+    "kan 11 subtitled": [
+        "kan11.kan.org.il",
+        "kan hd sub",
+        "kan hd ll",
+        "kan hd",
+    ],
+    "knesset channel": [
+        "knesset.kan.org.il",
+        "knesset.il",
+        "ערוץ.הכנסת.il",
+        "ערוץ הכנסת",
+    ],
+    "reshet 13": [
+        "reshet13.mako.co.il",
+        "channel13",
+        "channel13.il",
+        "רשת.il",
+        "רשת",
+        "ערוץ 13",
+    ],
+    "channel 13": [
+        "reshet13.mako.co.il",
+        "channel13",
+        "channel13.il",
+        "רשת.il",
+        "רשת",
+        "ערוץ 13",
+    ],
+    "channel 10 business": [
+        "10tv.mako.co.il",
+    ],
+    "channel 14": [
+        "now14.co.il",
+        "channel14",
+        "channel14.il",
+        "ערוץ.14.hd.il",
+        "ערוץ.14.שידור.חי.il",
+        "ערוץ 14",
+    ],
+    "i24news hebrew": [
+        "i24news-he.i24news.tv",
+        "i24hebrew.il",
+        "עברית.i24.il",
+        "i24 עברית",
+        "עברית i24",
+    ],
+    "i24news english": [
+        "i24news-en.i24news.tv",
+        "i24english.il",
+        "i24news.english.il",
+        "i24news english",
+        "i24 english",
+    ],
+    "eco99fm": [
+        "eco99.co.il",
+    ],
+    "galei zahal": [
+        "glz.co.il",
+    ],
 }
 
 
@@ -125,6 +230,43 @@ def _alias_channel(name: str) -> str:
         return name
     key = name.strip().lower()
     return _LOCALE_CHANNEL_ALIASES.get(key, name)
+
+
+def _normalize_lookup_key(value: str) -> str:
+    """Normalize lookup keys for resilient channel matching."""
+    if not value:
+        return ""
+    return re.sub(r"\s+", " ", value.lower().strip())
+
+
+def _iter_lookup_variants(value: str) -> List[str]:
+    """Generate stable lookup variants for names and EPG IDs."""
+    base = _normalize_lookup_key(value)
+    if not base:
+        return []
+
+    variants = {
+        base,
+        re.sub(r"\s+", "", base),
+    }
+
+    slash_as_space = re.sub(r"\s*/\s*", " ", base)
+    slash_as_space = re.sub(r"\s+", " ", slash_as_space).strip()
+    if slash_as_space:
+        variants.add(slash_as_space)
+        variants.add(re.sub(r"\s+", "", slash_as_space))
+
+    no_slash = base.replace("/", "")
+    if no_slash:
+        variants.add(no_slash)
+
+    punct_as_space = re.sub(r"[-_.]+", " ", base)
+    punct_as_space = re.sub(r"\s+", " ", punct_as_space).strip()
+    if punct_as_space:
+        variants.add(punct_as_space)
+        variants.add(re.sub(r"\s+", "", punct_as_space))
+
+    return [variant for variant in variants if variant]
 
 
 class EPGProgram:
@@ -590,7 +732,10 @@ class EPGService:
             # Locale alias: e.g. "ערוץ 14" → "Channel 14" so existing fuzzy
             # logic can match against the English-name EPG index.
             aliased = _alias_channel(name)
-            clean = aliased.lower().strip()
+            clean = _normalize_lookup_key(aliased)
+            alias_hit = self._lookup_alias_epg_id(clean)
+            if alias_hit:
+                return alias_hit
             # ── Tier 1: safe lookups ──
             # Direct match
             if clean in self._name_to_epg_id:
@@ -654,8 +799,9 @@ class EPGService:
             self._aggressive_name_to_epg_ids.setdefault(key, set()).add(epg_id)
 
         for epg_id, name in self._channel_map.items():
-            clean_name = name.lower().strip()
-            self._name_to_epg_id[clean_name] = epg_id
+            clean_name = _normalize_lookup_key(name)
+            for variant in _iter_lookup_variants(name):
+                self._name_to_epg_id[variant] = epg_id
             # Country-suffix base (e.g., "BBC One" from "BBC One.uk")
             if '.' in epg_id:
                 base = epg_id.rsplit('.', 1)[0]
@@ -665,7 +811,8 @@ class EPGService:
             if normalized != clean_name:
                 self._name_to_epg_id[normalized] = epg_id
             # Index the EPG ID itself lowercased
-            self._name_to_epg_id[epg_id.lower()] = epg_id
+            for variant in _iter_lookup_variants(epg_id):
+                self._name_to_epg_id[variant] = epg_id
 
             # Aggressive index: also key by partials so unique-match lookups work
             _add_aggressive(clean_name, epg_id)
@@ -675,6 +822,33 @@ class EPGService:
             for i in range(len(words) - 1, 0, -1):
                 _add_aggressive(' '.join(words[:i]), epg_id)
                 _add_aggressive(''.join(words[:i]), epg_id)
+
+        for alias_name, targets in _CHANNEL_ALIASES.items():
+            resolved = self._lookup_alias_epg_id(alias_name, alias_targets=targets)
+            if not resolved:
+                continue
+            for variant in _iter_lookup_variants(alias_name):
+                self._name_to_epg_id[variant] = resolved
+                _add_aggressive(variant, resolved)
+
+    def _lookup_alias_epg_id(
+        self,
+        channel_name: str,
+        alias_targets: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """Resolve a configured alias to a loaded EPG channel ID."""
+        clean = _normalize_lookup_key(channel_name)
+        targets = alias_targets if alias_targets is not None else _CHANNEL_ALIASES.get(clean)
+        if not targets:
+            return None
+
+        for target in targets:
+            for variant in _iter_lookup_variants(target):
+                if variant in self._name_to_epg_id:
+                    return self._name_to_epg_id[variant]
+            if target in self._channel_map:
+                return target
+        return None
 
     async def _fetch_source(self, session: aiohttp.ClientSession,
                              url: str) -> Tuple[Dict[str, str], Dict[str, List[EPGProgram]]]:
@@ -687,84 +861,97 @@ class EPGService:
         MAX_EPG_DECOMPRESSED = 300 * 1024 * 1024  # 300 MB decompressed
 
         logger.info("Fetching EPG: %s", url)
-        try:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    logger.warning("EPG fetch failed (HTTP %d): %s", response.status, url)
-                    return {}, {}
-
-                # IMPORTANT: stream-read in chunks until EOF rather than
-                # ``response.content.read(N)``. The single-arg read can return
-                # *fewer* than N bytes on chunked-transfer responses (it
-                # returns whatever's in the buffer when the syscall returns),
-                # leaving us with a truncated payload that gzip.decompress
-                # then rejects with "Compressed file ended before end-of-
-                # stream". Looping until EOF gives us the complete body.
-                buf = bytearray()
-                async for chunk in response.content.iter_chunked(256 * 1024):
-                    buf.extend(chunk)
-                    if len(buf) > MAX_EPG_DOWNLOAD:
-                        logger.warning("EPG source too large (>%d MB): %s",
-                                       MAX_EPG_DOWNLOAD // (1024 * 1024), url)
+        for attempt in range(EPG_FETCH_RETRIES + 1):
+            try:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        logger.warning("EPG fetch failed (HTTP %d): %s", response.status, url)
+                        if response.status >= 500 and attempt < EPG_FETCH_RETRIES:
+                            backoff = EPG_FETCH_RETRY_BACKOFF_SEC * (attempt + 1)
+                            logger.info("Retrying EPG fetch for %s in %ss", url, backoff)
+                            await asyncio.sleep(backoff)
+                            continue
                         return {}, {}
-                data = bytes(buf)
-                content_length = response.headers.get("Content-Length")
-                if content_length and content_length.isdigit():
-                    expected = int(content_length)
-                    if len(data) < expected:
-                        logger.warning(
-                            "EPG download truncated for %s: got %d / %d bytes",
-                            url, len(data), expected,
-                        )
-                        return {}, {}
-                logger.debug("EPG downloaded %d bytes from %s", len(data), url)
 
-                # Detect gzip by magic bytes rather than trusting the URL or
-                # Content-Encoding header — some sources serve raw XML at .gz
-                # URLs after a CDN strips the gzip layer, and some servers
-                # return gzipped data without setting Content-Encoding.
-                is_gzipped = data[:2] == b"\x1f\x8b"
-                if is_gzipped:
-                    try:
-                        data = gzip.decompress(data)
-                        if len(data) > MAX_EPG_DECOMPRESSED:
-                            logger.warning("EPG decompressed content too large (>%d MB): %s",
-                                           MAX_EPG_DECOMPRESSED // (1024 * 1024), url)
+                    # IMPORTANT: stream-read in chunks until EOF rather than
+                    # ``response.content.read(N)``. The single-arg read can return
+                    # *fewer* than N bytes on chunked-transfer responses (it
+                    # returns whatever's in the buffer when the syscall returns),
+                    # leaving us with a truncated payload that gzip.decompress
+                    # then rejects with "Compressed file ended before end-of-
+                    # stream". Looping until EOF gives us the complete body.
+                    buf = bytearray()
+                    async for chunk in response.content.iter_chunked(256 * 1024):
+                        buf.extend(chunk)
+                        if len(buf) > MAX_EPG_DOWNLOAD:
+                            logger.warning("EPG source too large (>%d MB): %s",
+                                           MAX_EPG_DOWNLOAD // (1024 * 1024), url)
                             return {}, {}
-                    except Exception as exc:
-                        logger.warning(
-                            "EPG gzip decompression failed for %s (%d bytes): %s",
-                            url, len(data), exc,
-                        )
-                        return {}, {}
-                elif url.endswith(".gz"):
-                    # URL claims gzip but bytes aren't gzipped — likely the CDN
-                    # already decompressed for us. Treat as plain XML and let
-                    # the parser decide if it's valid.
-                    logger.debug("EPG source %s served decompressed content despite .gz URL", url)
+                    data = bytes(buf)
+                    content_length = response.headers.get("Content-Length")
+                    if content_length and content_length.isdigit():
+                        expected = int(content_length)
+                        if len(data) < expected:
+                            logger.warning(
+                                "EPG download truncated for %s: got %d / %d bytes",
+                                url, len(data), expected,
+                            )
+                            return {}, {}
+                    logger.debug("EPG downloaded %d bytes from %s", len(data), url)
 
-                xml_content = data.decode('utf-8', errors='replace')
-        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
-            # Some aiohttp exception subclasses have empty str(exc).
-            # Always include the type name so logs are diagnosable.
-            detail = str(exc) or repr(exc) or "<no detail>"
-            logger.warning("EPG fetch error for %s: %s: %s",
-                           url, type(exc).__name__, detail)
-            return {}, {}
-        except Exception as exc:
-            # Catch-all: gzip/IncompleteReadError/etc. can sneak through.
-            logger.warning("EPG unexpected error for %s: %s: %s",
-                           url, type(exc).__name__, exc or repr(exc))
-            return {}, {}
+                    # Detect gzip by magic bytes rather than trusting the URL or
+                    # Content-Encoding header — some sources serve raw XML at .gz
+                    # URLs after a CDN strips the gzip layer, and some servers
+                    # return gzipped data without setting Content-Encoding.
+                    is_gzipped = data[:2] == b"\x1f\x8b"
+                    if is_gzipped:
+                        try:
+                            data = gzip.decompress(data)
+                            if len(data) > MAX_EPG_DECOMPRESSED:
+                                logger.warning("EPG decompressed content too large (>%d MB): %s",
+                                               MAX_EPG_DECOMPRESSED // (1024 * 1024), url)
+                                return {}, {}
+                        except Exception as exc:
+                            logger.warning(
+                                "EPG gzip decompression failed for %s (%d bytes): %s",
+                                url, len(data), exc,
+                            )
+                            return {}, {}
+                    elif url.endswith(".gz"):
+                        # URL claims gzip but bytes aren't gzipped — likely the CDN
+                        # already decompressed for us. Treat as plain XML and let
+                        # the parser decide if it's valid.
+                        logger.debug("EPG source %s served decompressed content despite .gz URL", url)
 
-        try:
-            channels, schedules = parse_xmltv(xml_content)
-        except Exception as exc:
-            logger.warning("EPG parse failed for %s: %s", url, exc)
-            return {}, {}
-        logger.info("EPG fetched %d channels / %d schedules from %s",
-                    len(channels), len(schedules), url)
-        return channels, schedules
+                    xml_content = data.decode('utf-8', errors='replace')
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
+                # Some aiohttp exception subclasses have empty str(exc).
+                # Always include the type name so logs are diagnosable.
+                detail = str(exc) or repr(exc) or "<no detail>"
+                logger.warning("EPG fetch error for %s: %s: %s",
+                               url, type(exc).__name__, detail)
+                if attempt < EPG_FETCH_RETRIES:
+                    backoff = EPG_FETCH_RETRY_BACKOFF_SEC * (attempt + 1)
+                    logger.info("Retrying EPG fetch for %s in %ss", url, backoff)
+                    await asyncio.sleep(backoff)
+                    continue
+                return {}, {}
+            except Exception as exc:
+                # Catch-all: gzip/IncompleteReadError/etc. can sneak through.
+                logger.warning("EPG unexpected error for %s: %s: %s",
+                               url, type(exc).__name__, exc or repr(exc))
+                return {}, {}
+
+            try:
+                channels, schedules = parse_xmltv(xml_content)
+            except Exception as exc:
+                logger.warning("EPG parse failed for %s: %s", url, exc)
+                return {}, {}
+            logger.info("EPG fetched %d channels / %d schedules from %s",
+                        len(channels), len(schedules), url)
+            return channels, schedules
+
+        return {}, {}
 
     # ------------------------------------------------------------------
     # Cache

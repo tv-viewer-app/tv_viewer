@@ -1,6 +1,7 @@
 """Tests for EPG (Electronic Program Guide) service."""
 
 import asyncio
+import gzip
 import json
 import os
 import tempfile
@@ -13,6 +14,7 @@ import pytest
 
 from utils.epg import (
     EPGProgram,
+    EPG_FETCH_RETRY_BACKOFF_SEC,
     EPGService,
     _parse_xmltv_datetime,
     parse_xmltv,
@@ -298,6 +300,35 @@ class TestEPGServiceWithData:
     def test_nonexistent_channel(self, svc):
         assert svc.get_current_program(channel_name="ZZZZ") is None
 
+    def test_israeli_alias_lookup(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("utils.epg.EPG_CACHE_FILE", str(tmp_path / "no_cache.json"))
+        svc = EPGService()
+        now = datetime.now(timezone.utc)
+        channels = {
+            "kaneducation.il": "חינוכית",
+            "ערוץ.הכנסת.il": "ערוץ הכנסת",
+            "channel13.il": "ערוץ 13",
+            "channel14.il": "ערוץ 14",
+            "i24hebrew.il": "I24 עברית",
+            "i24english.il": "I24 English",
+        }
+        schedules = {
+            ch_id: [EPGProgram("Test", now - timedelta(minutes=5), now + timedelta(minutes=25), channel_id=ch_id)]
+            for ch_id in channels
+        }
+        with svc._lock:
+            svc._channel_map = channels
+            svc._schedules = schedules
+            svc._build_name_index()
+            svc._initialized = True
+
+        assert svc.get_current_program(channel_name="Kan Kids / Educational") is not None
+        assert svc.get_current_program(channel_name="Knesset Channel") is not None
+        assert svc.get_current_program(channel_name="Reshet 13") is not None
+        assert svc.get_current_program(channel_name="Channel 14") is not None
+        assert svc.get_current_program(channel_name="i24NEWS Hebrew") is not None
+        assert svc.get_current_program(channel_name="i24NEWS English") is not None
+
     def test_thread_safe_read(self, svc):
         """Concurrent reads should not raise."""
         errors = []
@@ -343,3 +374,54 @@ class TestEPGCache:
             svc = EPGService()
             # Should not crash
             assert svc.channel_count == 0
+
+
+def test_fetch_source_retries_once_after_timeout(monkeypatch, tmp_path):
+    monkeypatch.setattr("utils.epg.EPG_CACHE_FILE", str(tmp_path / "no_cache.json"))
+    svc = EPGService()
+    payload = gzip.compress(_make_xmltv().encode("utf-8"))
+    sleep_calls = []
+
+    class _FakeContent:
+        def __init__(self, data):
+            self._data = data
+
+        async def iter_chunked(self, _size):
+            yield self._data
+
+    class _FakeResponse:
+        def __init__(self, data):
+            self.status = 200
+            self.headers = {}
+            self.content = _FakeContent(data)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeSession:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, _url):
+            self.calls += 1
+            if self.calls == 1:
+                raise asyncio.TimeoutError()
+            return _FakeResponse(payload)
+
+    async def _fake_sleep(delay):
+        sleep_calls.append(delay)
+
+    session = _FakeSession()
+    monkeypatch.setattr("utils.epg.asyncio.sleep", _fake_sleep)
+
+    channels, schedules = asyncio.run(
+        svc._fetch_source(session, "https://example.com/guide.xml.gz")
+    )
+
+    assert session.calls == 2
+    assert sleep_calls == [EPG_FETCH_RETRY_BACKOFF_SEC]
+    assert "BBCOne.uk" in channels
+    assert "BBCOne.uk" in schedules

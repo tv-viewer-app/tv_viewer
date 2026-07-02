@@ -781,6 +781,30 @@ class TestEpg:
         assert "next" in data
         assert "schedule" in data
 
+    def test_epg_endpoint_accepts_slashes_in_channel_name(self, client, monkeypatch):
+        from utils import epg as epg_module
+
+        class _DummyEPG:
+            _initialized = True
+
+            async def initialize(self):
+                return None
+
+            def get_now_next(self, channel_name="", channel_id=""):
+                assert channel_name == "Kan Kids / Educational"
+                return (None, None)
+
+            def get_schedule(self, channel_name="", channel_id="", hours=6):
+                assert channel_name == "Kan Kids / Educational"
+                assert hours == 6
+                return []
+
+        monkeypatch.setattr(epg_module, "epg_service", _DummyEPG())
+
+        r = client.get("/api/epg/Kan%20Kids%20/%20Educational")
+        assert r.status_code == 200
+        assert r.json()["channel"] == "Kan Kids / Educational"
+
 
 # ─── Docker & Deployment ────────────────────────────────────────────────────
 
