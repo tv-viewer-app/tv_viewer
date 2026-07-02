@@ -74,8 +74,8 @@ jobs:
             Write-Host "Manifest files created:"
             Get-ChildItem $dir
 
-            # Submit manifests
-            ./wingetcreate.exe submit --token $env:WINGET_TOKEN manifests
+            # Submit manifests — pass the version directory path
+            ./wingetcreate.exe submit --token $env:WINGET_TOKEN $dir
 
             if ($LASTEXITCODE -ne 0) {
               Write-Host "::error::WinGet submission failed"
