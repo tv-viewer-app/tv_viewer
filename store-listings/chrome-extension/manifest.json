@@ -1,22 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "TV Viewer - IPTV Streaming",
+  "name": "TV Viewer - Free IPTV Streaming",
   "short_name": "TV Viewer",
-  "version": "2.21.1",
+  "version": "2.21.2",
   "description": "Free IPTV streaming — 21,000+ live TV and radio channels from 100+ countries. No ads, no account needed.",
   "icons": {
-    "16": "icon-16.png",
-    "48": "icon-48.png",
-    "128": "icon-128.png"
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
-      "16": "icon-16.png",
-      "48": "icon-48.png",
-      "128": "icon-128.png"
-    }
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "Open TV Viewer"
   },
-  "permissions": [],
-  "host_permissions": []
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://cdtxpefohpwtusmqengu.supabase.co/*"
+  ]
 }

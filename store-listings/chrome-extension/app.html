@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TV Viewer</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <header class="topbar">
+      <div class="brand-group">
+        <button class="icon-button sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar">☰</button>
+        <div>
+          <div class="brand">TV Viewer</div>
+          <div class="brand-subtitle">Supabase-powered live TV and radio streaming</div>
+        </div>
+      </div>
+
+      <div class="topbar-search">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="search" placeholder="Search channels, countries, or categories" autocomplete="off">
+        <button class="clear-search" id="clearSearch" type="button" hidden aria-label="Clear search">✕</button>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="filter-pill-group" role="tablist" aria-label="Library views">
+          <button class="view-pill active" data-view="all" type="button">All Channels</button>
+          <button class="view-pill" data-view="favorites" type="button">Favorites <span id="favoritesBadge">0</span></button>
+        </div>
+        <button class="icon-button" id="refreshButton" type="button" aria-label="Refresh channels">↻</button>
+      </div>
+    </header>
+
+    <section class="player-dock hidden" id="playerDock" aria-live="polite">
+      <div class="player-video-wrap">
+        <video id="videoPlayer" controls playsinline></video>
+      </div>
+      <div class="player-meta">
+        <div class="eyebrow">Now Playing</div>
+        <h1 id="playerTitle">Select a channel to start streaming</h1>
+        <p id="playerSubtitle">Native playback is used when available, with HLS.js fallback for broader support.</p>
+        <div class="player-chips">
+          <span class="badge badge-accent" id="playerCategory">Category</span>
+          <span class="badge" id="playerCountry">Country</span>
+          <span class="badge" id="playerType">Type</span>
+        </div>
+        <div class="player-controls-row">
+          <select id="sourceSelect" class="field-select" aria-label="Select source"></select>
+          <button class="primary-button" id="favoriteButton" type="button">☆ Save favorite</button>
+          <button class="secondary-button" id="closePlayerButton" type="button">Close player</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="layout">
+      <aside class="sidebar" id="sidebar">
+        <section class="sidebar-section">
+          <div class="sidebar-title">Browse</div>
+          <button class="sidebar-link active" data-view="all" type="button"><span>All channels</span></button>
+          <button class="sidebar-link" data-view="favorites" type="button"><span>Favorite channels</span></button>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="sidebar-title">Categories</div>
+          <div class="sidebar-list" id="categoryList"></div>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="sidebar-title">Countries</div>
+          <div class="sidebar-list" id="countryList"></div>
+        </section>
+      </aside>
+
+      <main class="content">
+        <section class="hero-card">
+          <div>
+            <div class="eyebrow">Standalone extension app</div>
+            <h2>Stream directly from Supabase — no local server required</h2>
+            <p>Browse community IPTV channels, filter by country or category, and pin favorites to your browser profile.</p>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <span class="hero-stat-value" id="visibleCount">0</span>
+              <span class="hero-stat-label">Visible</span>
+            </div>
+            <div class="hero-stat">
+              <span class="hero-stat-value" id="loadedCount">0</span>
+              <span class="hero-stat-label">Loaded</span>
+            </div>
+            <div class="hero-stat">
+              <span class="hero-stat-value" id="totalCount">0</span>
+              <span class="hero-stat-label">Available</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="toolbar-card">
+          <div class="toolbar-left">
+            <select id="categorySelect" class="field-select" aria-label="Filter by category">
+              <option value="">All categories</option>
+            </select>
+            <select id="countrySelect" class="field-select" aria-label="Filter by country">
+              <option value="">All countries</option>
+            </select>
+            <select id="typeSelect" class="field-select" aria-label="Filter by type">
+              <option value="">All media types</option>
+              <option value="TV">TV</option>
+              <option value="Radio">Radio</option>
+            </select>
+          </div>
+          <div class="toolbar-right">
+            <span class="status-pill" id="statusPill">Connecting to Supabase…</span>
+            <span class="channel-summary" id="channelSummary">Preparing channel catalog…</span>
+          </div>
+        </section>
+
+        <section class="loading-grid" id="loadingGrid" aria-hidden="true"></section>
+
+        <section class="empty-state hidden" id="emptyState">
+          <div class="empty-icon">📡</div>
+          <h3>No channels match the current filters</h3>
+          <p>Try changing the search, category, country, or favorites filter.</p>
+        </section>
+
+        <section class="channel-grid" id="channelGrid"></section>
+
+        <footer class="load-footer" id="loadFooter">
+          <span id="loadStatus">Ready.</span>
+        </footer>
+        <div id="loadSentinel"></div>
+      </main>
+    </div>
+  </div>
+
+  <script src="hls.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
