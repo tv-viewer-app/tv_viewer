@@ -165,7 +165,7 @@
         .player-box { width: 90vw; max-width: 1280px; aspect-ratio: 16/9; background: #000; border-radius: var(--radius); overflow: hidden; position: relative; }
         .player-box video { width: 100%; height: 100%; object-fit: contain; }
         .player-box.fullscreen { width: 100vw; max-width: none; height: 100vh; aspect-ratio: unset; border-radius: 0; position: fixed; inset: 0; z-index: 2000; }
-        .player-controls { display: flex; align-items: center; gap: 12px; width: 90vw; max-width: 1280px; padding: 10px 0; }
+        .player-controls { display: flex; align-items: center; gap: 12px; width: 90vw; max-width: 1280px; padding: 10px 0; flex-wrap: wrap; }
         .volume-group { display: flex; align-items: center; gap: 6px; }
         .volume-slider { -webkit-appearance: none; width: 80px; height: 4px; border-radius: 2px; background: var(--border); outline: none; cursor: pointer; }
         .volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
@@ -180,6 +180,31 @@
         .p-btn.cast-btn { color: var(--fav); border-color: var(--fav); }
         .p-btn.report-btn:hover { border-color: var(--live); color: var(--live); }
         .p-btn.fav-active { color: var(--fav); border-color: var(--fav); }
+        .player-quality { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+        .quality-select {
+            background: var(--bg-card, #2d2c31);
+            color: #fff;
+            border: 1px solid #3b3a3f;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 96px;
+        }
+        .quality-select:hover, .quality-select:focus { border-color: var(--accent); outline: none; }
+        .quality-badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            padding: 3px 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(76,194,255,.1);
+            color: var(--accent);
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .quality-badge.hidden { display: none; }
 
         /* Player stats overlay */
         .player-stats { position: absolute; top: 8px; right: 8px; display: flex; gap: 8px; font-size: 10px; font-family: 'Consolas', monospace; color: var(--text-dim); background: rgba(0,0,0,.7); padding: 4px 8px; border-radius: 4px; z-index: 10; }
@@ -337,6 +362,12 @@
             <div class="player-schedule" id="player-schedule"></div>
         </div>
         <div class="player-btns">
+            <div class="player-quality" id="player-quality-controls" style="display:none">
+                <select id="quality-selector" class="quality-select" title="Stream quality">
+                    <option value="-1">Auto</option>
+                </select>
+                <span class="quality-badge hidden" id="quality-indicator">Auto</span>
+            </div>
             <button class="p-btn" id="p-prev" title="Previous (←)">⏮ Prev</button>
             <button class="p-btn" id="p-next" title="Next (→)">Next ⏭</button>
             <button class="p-btn" id="p-fav" title="Favorite">☆ Favorite</button>
@@ -795,6 +826,8 @@ let currentChannel = null;
 let currentIsRadio = false;
 let currentFailureType = 'unknown';
 let currentStreamAttemptId = 0;
+let currentQualityLevels = [];
+const SESSION_QUALITY_KEY = 'tv_session_quality_preference';
 // Sources that already failed during the *current* play attempt. Reset to
 // empty whenever the user picks a different channel. Without this, the old
 // `(idx + 1) % length` rotation would cycle dead sources forever — a single
@@ -866,6 +899,136 @@ function updateSourceSelector(url) {
     if (sel && sel.style.display !== 'none') sel.value = url;
 }
 
+function getStoredQualityPreference() {
+    try {
+        const raw = sessionStorage.getItem(SESSION_QUALITY_KEY);
+        if (!raw) return { mode: 'auto' };
+        const parsed = JSON.parse(raw);
+        return parsed && parsed.mode ? parsed : { mode: 'auto' };
+    } catch (e) {
+        return { mode: 'auto' };
+    }
+}
+
+function setStoredQualityPreference(pref) {
+    try {
+        sessionStorage.setItem(SESSION_QUALITY_KEY, JSON.stringify(pref));
+    } catch (e) {}
+}
+
+function formatBitrateLabel(bitrate) {
+    if (!bitrate || bitrate <= 0) return '';
+    const kbps = Math.round(bitrate / 1000);
+    return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbps` : `${kbps} kbps`;
+}
+
+function formatQualityLabel(level, fallbackIndex = 0) {
+    if (!level) return `Quality ${fallbackIndex + 1}`;
+    if (level.height) return `${level.height}p`;
+    if (level.bitrate) return formatBitrateLabel(level.bitrate);
+    return `Quality ${fallbackIndex + 1}`;
+}
+
+function findMatchingQualityLevel(levels, preference) {
+    if (!preference || preference.mode !== 'manual' || !Array.isArray(levels) || levels.length === 0) return -1;
+    if (preference.height) {
+        const exactHeight = levels.findIndex(level => Number(level.height || 0) === Number(preference.height));
+        if (exactHeight >= 0) return exactHeight;
+        let closestIdx = -1;
+        let closestDiff = Number.POSITIVE_INFINITY;
+        levels.forEach((level, idx) => {
+            if (!level.height) return;
+            const diff = Math.abs(Number(level.height) - Number(preference.height));
+            if (diff < closestDiff) {
+                closestDiff = diff;
+                closestIdx = idx;
+            }
+        });
+        if (closestIdx >= 0) return closestIdx;
+    }
+    if (preference.bitrate) {
+        const exactBitrate = levels.findIndex(level => Number(level.bitrate || 0) === Number(preference.bitrate));
+        if (exactBitrate >= 0) return exactBitrate;
+    }
+    return -1;
+}
+
+function updateQualityIndicator(activeLevel = -1) {
+    const badge = document.getElementById('quality-indicator');
+    const controls = document.getElementById('player-quality-controls');
+    const selector = document.getElementById('quality-selector');
+    if (!badge || !controls || !selector || controls.style.display === 'none' || currentQualityLevels.length <= 1) {
+        if (badge) badge.classList.add('hidden');
+        return;
+    }
+
+    const selectedLevel = Number(selector.value);
+    let text = 'Auto';
+    if (selectedLevel >= 0 && currentQualityLevels[selectedLevel]) {
+        text = formatQualityLabel(currentQualityLevels[selectedLevel], selectedLevel);
+    } else if (activeLevel >= 0 && currentQualityLevels[activeLevel]) {
+        text = `Auto · ${formatQualityLabel(currentQualityLevels[activeLevel], activeLevel)}`;
+    } else if (hls && hls.currentLevel >= 0 && currentQualityLevels[hls.currentLevel]) {
+        text = `Auto · ${formatQualityLabel(currentQualityLevels[hls.currentLevel], hls.currentLevel)}`;
+    }
+
+    badge.textContent = text;
+    badge.classList.remove('hidden');
+}
+
+function hideQualitySelector() {
+    currentQualityLevels = [];
+    const controls = document.getElementById('player-quality-controls');
+    const selector = document.getElementById('quality-selector');
+    const badge = document.getElementById('quality-indicator');
+    if (controls) controls.style.display = 'none';
+    if (selector) selector.innerHTML = '<option value="-1">Auto</option>';
+    if (badge) {
+        badge.textContent = 'Auto';
+        badge.classList.add('hidden');
+    }
+}
+
+function applyQualitySelection(levelIndex) {
+    if (!hls) return;
+    if (levelIndex === -1) {
+        hls.currentLevel = -1;
+        hls.nextLevel = -1;
+        hls.loadLevel = -1;
+        setStoredQualityPreference({ mode: 'auto' });
+    } else if (currentQualityLevels[levelIndex]) {
+        hls.currentLevel = levelIndex;
+        hls.nextLevel = levelIndex;
+        setStoredQualityPreference({
+            mode: 'manual',
+            height: currentQualityLevels[levelIndex].height || null,
+            bitrate: currentQualityLevels[levelIndex].bitrate || null,
+        });
+    }
+    updateQualityIndicator(levelIndex);
+}
+
+function updateQualitySelector(levels) {
+    const controls = document.getElementById('player-quality-controls');
+    const selector = document.getElementById('quality-selector');
+    if (!controls || !selector || !Array.isArray(levels) || levels.length <= 1 || currentIsRadio) {
+        hideQualitySelector();
+        return;
+    }
+
+    currentQualityLevels = levels.slice();
+    selector.innerHTML = '<option value="-1">Auto</option>' + currentQualityLevels
+        .map((level, idx) => `<option value="${idx}">${esc(formatQualityLabel(level, idx))}</option>`)
+        .join('');
+    controls.style.display = 'flex';
+
+    const preference = getStoredQualityPreference();
+    const preferredLevel = findMatchingQualityLevel(currentQualityLevels, preference);
+    const appliedLevel = preferredLevel >= 0 ? preferredLevel : -1;
+    selector.value = String(appliedLevel);
+    applyQualitySelection(appliedLevel);
+}
+
 function playChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
     playIdx = idx;
@@ -892,6 +1055,7 @@ function playChannel(idx) {
     video.src = '';
     video.style.display = 'block';
     hideRadioOverlay();
+    hideQualitySelector();
 
     const isRadio = ch.media_type === 'Radio' || (ch.category && ch.category.toLowerCase().includes('radio'));
     currentIsRadio = isRadio;
@@ -1002,6 +1166,7 @@ async function startStream(url, video, isRadio) {
     };
 
     let streamUrl = url;
+    hideQualitySelector();
     try {
         streamUrl = await resolveProxyStreamUrl(url);
     } catch (error) {
@@ -1058,13 +1223,17 @@ async function startStream(url, video, isRadio) {
             });
             hls.loadSource(streamUrl);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                updateQualitySelector((data && data.levels) || hls.levels || []);
                 video.play().catch(e => {
                     // Autoplay blocked — show play button overlay
                     console.warn('Autoplay blocked:', e.message);
                     video.muted = true;
                     video.play().catch(()=>{});
                 });
+            });
+            hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+                updateQualityIndicator(data && typeof data.level === 'number' ? data.level : -1);
             });
             hls.on(Hls.Events.ERROR, (e, data) => {
                 console.warn('HLS error:', data.type, data.details, data.fatal);
@@ -1087,13 +1256,16 @@ async function startStream(url, video, isRadio) {
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            hideQualitySelector();
             video.src = streamUrl; video.play().catch(()=>{});
         } else {
+            hideQualitySelector();
             video.src = streamUrl; video.play().catch(() => {
                 failCurrentSource({ message: 'HLS not supported' });
             });
         }
     } else {
+        hideQualitySelector();
         video.src = streamUrl;
         video.play().catch((e) => {
             failCurrentSource(e);
@@ -1297,6 +1469,7 @@ function closePlayer() {
     stopVisualizer();
     stopStats();
     hideRadioOverlay();
+    hideQualitySelector();
     document.getElementById('player-overlay').classList.remove('active');
     const v = document.getElementById('player');
     if (hls) { hls.destroy(); hls=null; } v.pause(); v.src=''; playIdx=-1;
@@ -2071,6 +2244,12 @@ document.getElementById('p-sources').onchange = (e) => {
     startStream(url, video, currentIsRadio);
     startStats(video);
     toast('Switched source');
+};
+
+document.getElementById('quality-selector').onchange = (e) => {
+    const level = parseInt(e.target.value, 10);
+    if (!hls || Number.isNaN(level)) return;
+    applyQualitySelection(level);
 };
 
 // Volume slider
