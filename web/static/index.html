@@ -46,12 +46,64 @@
         .icon-btn { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-sec); border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; transition: all .2s; }
         .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
         .icon-btn.active-btn { background: rgba(76,194,255,.15); border-color: var(--accent); color: var(--accent); }
-        .update-banner { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; background: rgba(76,194,255,.10); border-bottom: 1px solid rgba(76,194,255,.35); color: var(--text); font-size: 13px; }
-        .update-banner[hidden] { display: none; }
-        .update-banner a { color: var(--accent); font-weight: 600; text-decoration: none; }
-        .update-banner a:hover { text-decoration: underline; }
-        .update-banner button { border: none; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 15px; line-height: 1; }
-        .update-banner button:hover { color: var(--text); }
+        .update-banner {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d2c31 100%);
+            border: 1px solid #4da6ff;
+            border-radius: 8px;
+            color: #fff;
+            padding: 16px 20px;
+            margin: 8px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .update-content { flex: 1; }
+        .update-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .update-notes {
+            font-size: 12px;
+            color: #b3b3b3;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        .update-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .update-btn-download {
+            background: #4da6ff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .update-btn-download:hover { background: #60b4ff; }
+        .update-btn-dismiss {
+            background: none;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: #b3b3b3;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .update-close {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 18px;
+            cursor: pointer;
+        }
 
         /* Layout */
         .main { display: flex; flex: 1; min-height: 0; position: relative; }
@@ -229,12 +281,6 @@
     </div>
     <span class="badge" id="badge"></span>
 </header>
-<div class="update-banner" id="update-banner" hidden>
-    <span id="update-banner-text"></span>
-    <a id="update-banner-link" href="https://github.com/tv-viewer-app/tv_viewer/releases/latest" target="_blank" rel="noopener noreferrer">Download</a>
-    <button id="update-banner-dismiss" title="Dismiss">✕</button>
-</div>
-
 <div class="main">
     <aside class="sidebar" id="sidebar"></aside>
     <main class="content" id="content">
@@ -1909,19 +1955,47 @@ async function init() {
 }
 
 async function checkForUpdates() {
-    const banner = document.getElementById('update-banner');
-    const text = document.getElementById('update-banner-text');
-    const link = document.getElementById('update-banner-link');
     try {
         const data = await api.version();
-        const dismissedVersion = localStorage.getItem('tv_update_banner_dismissed');
-        if (!data.update_available || dismissedVersion === data.latest) {
-            banner.hidden = true;
-            return;
-        }
-        text.textContent = `🆕 Update available: v${data.latest}`;
-        link.href = data.download_url || 'https://github.com/tv-viewer-app/tv_viewer/releases/latest';
-        banner.hidden = false;
+        if (!data.update_available) return;
+
+        const dismissed = localStorage.getItem('dismissed_update') || localStorage.getItem('tv_update_banner_dismissed');
+        if (dismissed === data.latest) return;
+
+        document.querySelector('.update-banner')?.remove();
+
+        const notes = (data.release_notes || '')
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean)
+            .slice(0, 4)
+            .map(line => esc(line))
+            .join('<br>');
+
+        const banner = document.createElement('div');
+        banner.className = 'update-banner';
+        banner.innerHTML = `
+            <div class="update-content">
+                <div class="update-title">🆕 TV Viewer v${esc(data.latest)} is available!</div>
+                <div class="update-notes">${notes || 'Bug fixes and improvements'}</div>
+                <div class="update-actions">
+                    <a href="${esc(data.download_url || 'https://github.com/tv-viewer-app/tv_viewer/releases/latest')}" target="_blank" rel="noopener noreferrer" class="update-btn-download">⬇️ Download Update</a>
+                    <button type="button" class="update-btn-dismiss">Later</button>
+                </div>
+            </div>
+            <button type="button" class="update-close" title="Dismiss">✕</button>
+        `;
+
+        const dismiss = () => {
+            localStorage.setItem('dismissed_update', data.latest);
+            banner.remove();
+        };
+        banner.querySelector('.update-btn-dismiss').onclick = dismiss;
+        banner.querySelector('.update-close').onclick = dismiss;
+
+        const nav = document.querySelector('nav') || document.querySelector('.top-bar') || document.querySelector('.header') || document.body.firstElementChild;
+        if (nav) nav.after(banner);
+        else document.body.prepend(banner);
     } catch (e) {
         console.warn('update check failed', e);
     }
@@ -1980,11 +2054,6 @@ document.getElementById('btn-map').onclick = toggleMap;
 document.getElementById('btn-refresh').onclick = refreshChannels;
 document.getElementById('btn-settings').onclick = openSettings;
 document.getElementById('btn-stats').onclick = openStats;
-document.getElementById('update-banner-dismiss').onclick = () => {
-    const version = (document.getElementById('update-banner-text').textContent || '').match(/v(.+)$/)?.[1];
-    if (version) localStorage.setItem('tv_update_banner_dismissed', version);
-    document.getElementById('update-banner').hidden = true;
-};
 document.getElementById('map-close').onclick = toggleMap;
 document.getElementById('set-parental').onchange = () => {
     document.getElementById('pin-section').style.display = document.getElementById('set-parental').checked ? 'block' : 'none';

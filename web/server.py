@@ -16,6 +16,7 @@ import asyncio
 import inspect
 import hashlib
 import ipaddress
+import re
 import threading
 import time
 from collections import Counter
@@ -896,6 +897,42 @@ _version_cache_time: float = 0
 _VERSION_CACHE_TTL = 6 * 3600  # 6 hours
 _LATEST_RELEASE_URL = "https://github.com/tv-viewer-app/tv_viewer/releases/latest"
 _LATEST_RELEASE_API = "https://api.github.com/repos/tv-viewer-app/tv_viewer/releases/latest"
+_DOCKER_IMAGE = "asummoner/tvviewerapp"
+
+
+def _format_release_notes(body: str, limit: int = 500) -> str:
+    """Strip markdown headers and trim release notes for update banners."""
+    lines = []
+    for raw_line in str(body or "").splitlines():
+        line = raw_line.strip()
+        if not line or re.match(r"^#{1,6}\s+", line):
+            continue
+        lines.append(line)
+    return "\n".join(lines)[:limit].strip()
+
+
+def _extract_release_assets(assets: List[Any], version: str) -> Dict[str, str]:
+    """Return per-platform asset URLs from a GitHub release assets array."""
+    result = {
+        "windows": "",
+        "android": "",
+        "linux": "",
+        "docker": f"docker pull {_DOCKER_IMAGE}:{version}",
+    }
+    for asset in assets or []:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name", "")).lower()
+        url = str(asset.get("browser_download_url", "")).strip()
+        if not url:
+            continue
+        if not result["windows"] and "windows" in name:
+            result["windows"] = url
+        elif not result["android"] and (name.endswith(".apk") or "android" in name):
+            result["android"] = url
+        elif not result["linux"] and "linux" in name:
+            result["linux"] = url
+    return result
 
 
 async def _refresh_version_cache(force: bool = False) -> Dict[str, Any]:
@@ -909,6 +946,8 @@ async def _refresh_version_cache(force: bool = False) -> Dict[str, Any]:
     current = config.APP_VERSION
     latest = current
     download_url = _LATEST_RELEASE_URL
+    release_notes = ""
+    assets = _extract_release_assets([], current)
 
     try:
         connector = aiohttp.TCPConnector(limit=2, ttl_dns_cache=300, ssl=_get_strict_ssl_context())
@@ -925,6 +964,8 @@ async def _refresh_version_cache(force: bool = False) -> Dict[str, Any]:
                     data = await resp.json()
                     latest = str(data.get("tag_name", "") or current).lstrip("v") or current
                     download_url = str(data.get("html_url", "") or _LATEST_RELEASE_URL)
+                    release_notes = _format_release_notes(data.get("body", ""))
+                    assets = _extract_release_assets(data.get("assets") or [], latest)
     except Exception as exc:
         logger.debug(f"Version check skipped ({exc})")
 
@@ -933,6 +974,8 @@ async def _refresh_version_cache(force: bool = False) -> Dict[str, Any]:
         "latest": latest,
         "update_available": _is_newer_version(latest, current),
         "download_url": download_url,
+        "release_notes": release_notes,
+        "assets": assets,
     }
     _version_cache = result
     _version_cache_time = now
@@ -948,7 +991,6 @@ async def get_version():
 # ─── Stream Proxy (CORS bypass) ─────────────────────────────────────────────
 
 import aiohttp
-import re
 from urllib.parse import urljoin, quote
 
 # Proxy timeout for upstream connections

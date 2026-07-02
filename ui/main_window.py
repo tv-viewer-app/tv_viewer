@@ -2677,15 +2677,18 @@ class MainWindow:
         try:
             from utils.update_checker import check_for_update_async
             
-            def _on_update(version):
+            def _on_update(version, release_notes):
                 if version:
-                    self.root.after(0, lambda v=version: self._show_update_banner(v))
+                    self.root.after(
+                        0,
+                        lambda v=version, notes=release_notes: self._show_update_banner(v, notes),
+                    )
             
             check_for_update_async(_on_update)
         except Exception as e:
             logger.debug(f"Update check setup failed: {e}")
     
-    def _show_update_banner(self, new_version: str):
+    def _show_update_banner(self, new_version: str, release_notes: str = ""):
         """Show a non-intrusive update notification banner."""
         from utils.update_checker import dismiss_version, open_releases_page
 
@@ -2699,22 +2702,36 @@ class MainWindow:
 
         inner = ttk.Frame(self.update_banner_frame)
         inner.pack(fill=tk.X, padx=12, pady=8)
-        
+        inner.grid_columnconfigure(0, weight=1)
+
+        notes_text = release_notes.strip() or "Bug fixes and improvements."
+
         ttk.Label(
             inner,
             text=f"\U0001f514 New version v{new_version} is available!",
             font=("Segoe UI", 10, "bold"),
-        ).pack(side=tk.LEFT)
-        
-        ttk.Button(
+        ).grid(row=0, column=0, sticky="w")
+
+        ttk.Label(
             inner,
+            text=notes_text,
+            font=("Segoe UI", 9),
+            wraplength=640,
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+        actions = ttk.Frame(inner)
+        actions.grid(row=0, column=1, rowspan=2, sticky="e", padx=(12, 0))
+
+        ttk.Button(
+            actions,
             text="Download",
             bootstyle="info",
             command=lambda: [open_releases_page(), self._hide_update_banner()],
         ).pack(side=tk.RIGHT, padx=(5, 0))
-        
+
         ttk.Button(
-            inner,
+            actions,
             text="Dismiss",
             bootstyle="secondary-outline",
             command=lambda: [dismiss_version(new_version), self._hide_update_banner()],

@@ -52,12 +52,25 @@ def _save_state(state: dict):
         pass
 
 
+def _format_release_notes(body: str, max_lines: int = 3, max_chars: int = 320) -> str:
+    """Return a short, header-free release notes summary for compact UI banners."""
+    lines = []
+    for raw_line in str(body or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        lines.append(line)
+        if len(lines) >= max_lines:
+            break
+    return "\n".join(lines)[:max_chars].strip()
+
+
 def check_for_update_async(callback):
     """Check for updates in a background thread.
     
     Args:
-        callback: Function(latest_version: str) called on the main thread
-                  if a newer version is available. Called with None if up-to-date.
+        callback: Function(latest_version: str, release_notes: str) called on
+                  the main thread if a newer version is available.
     """
     def _check():
         try:
@@ -85,11 +98,12 @@ def check_for_update_async(callback):
             
             data = resp.json()
             tag = data.get("tag_name", "")
+            release_notes = _format_release_notes(data.get("body", ""))
             latest = _parse_version(tag)
             current = _parse_version(config.APP_VERSION)
             
             if latest > current and tag.lstrip("v") != dismissed:
-                callback(tag.lstrip("v"))
+                callback(tag.lstrip("v"), release_notes)
         except Exception as e:
             print(f"Update check failed (non-critical): {e}")
     

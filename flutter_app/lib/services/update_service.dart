@@ -42,6 +42,16 @@ class UpdateService {
   static const _dismissedVersionKey = 'dismissed_update_version';
   static const _checkIntervalHours = 6;
 
+  static String _releaseNotesPreview(String notes, {int maxLines = 4}) {
+    final lines = notes
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty && !line.startsWith('#'))
+        .take(maxLines)
+        .toList();
+    return lines.isEmpty ? 'Bug fixes and improvements.' : lines.join('\n');
+  }
+
   /// Check for updates. Returns [UpdateInfo] if a newer release exists
   /// and the user has not dismissed it. Returns null when up-to-date, when
   /// the 6-hour window has not elapsed, or on any network/parse failure.
@@ -229,38 +239,9 @@ class UpdateService {
     );
   }
 
-  /// Show a lightweight banner that links straight to the download page.
-  static void showUpdateBanner(BuildContext context, UpdateInfo info) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentMaterialBanner()
-      ..showMaterialBanner(
-        MaterialBanner(
-          backgroundColor:
-              Theme.of(context).colorScheme.primaryContainer.withOpacity(0.35),
-          content: Text(
-            'A new version (v${info.version}) is available!',
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          leading: const Icon(Icons.system_update, color: Color(0xFF4da6ff)),
-          actions: [
-            TextButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-                dismissVersion(info.version);
-              },
-              child: const Text('LATER'),
-            ),
-            FilledButton.tonal(
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-                openReleasesPage(info.htmlUrl);
-              },
-              child: const Text('DOWNLOAD'),
-            ),
-          ],
-        ),
-      );
+  /// Backward-compatible wrapper for older callers.
+  static Future<void> showUpdateBanner(BuildContext context, UpdateInfo info) {
+    return showUpdateDialog(context, info);
   }
 }
 
@@ -327,7 +308,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         children: [
           const Icon(Icons.system_update, color: Color(0xFF4da6ff)),
           const SizedBox(width: 8),
-          Expanded(child: Text('Update to v${info.version}')),
+          Expanded(child: Text('Update Available: v${info.version}')),
         ],
       ),
       content: ConstrainedBox(
@@ -343,9 +324,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
               ),
               const SizedBox(height: 6),
               Text(
-                info.releaseNotes.isEmpty
-                    ? 'No release notes provided.'
-                    : info.releaseNotes,
+                UpdateService._releaseNotesPreview(info.releaseNotes),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               if (_downloading) ...[
@@ -384,19 +363,19 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                 },
           child: const Text('LATER'),
         ),
-        TextButton(
+        FilledButton(
           onPressed: _downloading
               ? null
               : () {
                   UpdateService.openReleasesPage(info.htmlUrl);
                 },
-          child: const Text('OPEN IN BROWSER'),
+          child: const Text('DOWNLOAD'),
         ),
         if (_canInAppInstall)
-          FilledButton.icon(
+          FilledButton.tonalIcon(
             onPressed: _downloading ? null : _install,
             icon: const Icon(Icons.download),
-            label: Text(_downloading ? 'DOWNLOADING…' : 'INSTALL'),
+            label: Text(_downloading ? 'DOWNLOADING…' : 'INSTALL APK'),
           ),
       ],
     );

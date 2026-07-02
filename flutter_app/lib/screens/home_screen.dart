@@ -101,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _checkForUpdates() async {
     final info = await UpdateService.checkForUpdate();
     if (info != null && mounted) {
-      UpdateService.showUpdateBanner(context, info);
+      await UpdateService.showUpdateDialog(context, info);
     }
   }
   

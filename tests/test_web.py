@@ -62,6 +62,13 @@ class TestHealth:
                 "latest": "2.21.4",
                 "update_available": True,
                 "download_url": "https://github.com/tv-viewer-app/tv_viewer/releases/tag/v2.21.4",
+                "release_notes": "Fixed refresh button crash.\nImproved update banner.",
+                "assets": {
+                    "windows": "https://github.com/tv-viewer-app/tv_viewer/releases/download/v2.21.4/TV_Viewer-windows.zip",
+                    "android": "https://github.com/tv-viewer-app/tv_viewer/releases/download/v2.21.4/TV_Viewer_v2.21.4_Android.apk",
+                    "linux": "https://github.com/tv-viewer-app/tv_viewer/releases/download/v2.21.4/TV_Viewer_v2.21.4_linux_x86_64",
+                    "docker": "docker pull asummoner/tvviewerapp:2.21.4",
+                },
             }
 
         monkeypatch.setattr(server, "_refresh_version_cache", fake_refresh)
@@ -72,6 +79,8 @@ class TestHealth:
         assert data["latest"] == "2.21.4"
         assert data["update_available"] is True
         assert data["download_url"].endswith("/v2.21.4")
+        assert data["release_notes"].startswith("Fixed refresh button crash")
+        assert data["assets"]["android"].endswith(".apk")
 
 
 # ─── Channel API ────────────────────────────────────────────────────────────
