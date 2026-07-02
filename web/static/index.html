@@ -757,13 +757,20 @@ const failMessages = {
 
 function classifyFailure(errorMsg) {
     const msg = String(errorMsg || '').toLowerCase();
+    if (msg.includes('geo_blocked') || msg.includes('geo blocked')) return 'geo_blocked';
     if (msg.includes('403') || msg.includes('forbidden')) return 'geo_blocked';
+    if (msg.includes('not_found') || msg.includes('not found')) return 'not_found';
     if (msg.includes('404') || msg.includes('not found')) return 'not_found';
     if (msg.includes('timeout') || msg.includes('timed out')) return 'timeout';
+    if (msg.includes('tls_error') || msg.includes('tls error')) return 'tls_error';
     if (msg.includes('ssl') || msg.includes('tls') || msg.includes('certificate')) return 'tls_error';
+    if (msg.includes('dns_error') || msg.includes('dns error')) return 'dns_error';
     if (msg.includes('dns') || msg.includes('resolve') || msg.includes('getaddrinfo')) return 'dns_error';
+    if (msg.includes('server_error') || msg.includes('server error')) return 'server_error';
     if (/\b5\d{2}\b/.test(msg) || msg.includes('server error')) return 'server_error';
+    if (msg.includes('unsupported_format') || msg.includes('unsupported format')) return 'unsupported_format';
     if (msg.includes('codec') || msg.includes('format') || msg.includes('unsupported') || msg.includes('notsupportederror')) return 'unsupported_format';
+    if (msg.includes('connection_error') || msg.includes('connection error')) return 'connection_error';
     if (msg.includes('connection') || msg.includes('refused') || msg.includes('reset')) return 'connection_error';
     return 'unknown';
 }
@@ -2063,6 +2070,8 @@ function _shouldReport(url, status, promote) {
 }
 
 function reportHealth(url, status, reason = '') {
+    const failureType = reason ? classifyFailure(reason) : 'unknown';
+    if (status === 'broken' && failureType === 'geo_blocked') return;
     // Update local state
     channelHealth[url] = status;
     localStorage.setItem('tv_channel_health', JSON.stringify(channelHealth));

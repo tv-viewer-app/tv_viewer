@@ -7,6 +7,7 @@ Usage:
     Docker:      docker run -p 8765:8765 tv-viewer-web
 """
 
+import copy
 import os
 import sys
 import json
@@ -889,23 +890,58 @@ _proxy_token_store: Dict[str, Dict[str, Any]] = {}
 def classify_failure(error_msg: str) -> str:
     """Classify stream failure for analytics and user messaging."""
     msg = str(error_msg or "").lower()
+    if "geo_blocked" in msg or "geo blocked" in msg:
+        return "geo_blocked"
     if "403" in msg or "forbidden" in msg:
         return "geo_blocked"
+    if "not_found" in msg or "not found" in msg:
+        return "not_found"
     if "404" in msg or "not found" in msg:
         return "not_found"
     if "timeout" in msg or "timed out" in msg:
         return "timeout"
+    if "tls_error" in msg or "tls error" in msg:
+        return "tls_error"
     if "ssl" in msg or "tls" in msg or "certificate" in msg:
         return "tls_error"
+    if "dns_error" in msg or "dns error" in msg:
+        return "dns_error"
     if "dns" in msg or "resolve" in msg or "getaddrinfo" in msg:
         return "dns_error"
+    if "server_error" in msg or "server error" in msg:
+        return "server_error"
     if re.search(r"\b5\d{2}\b", msg) or "server error" in msg:
         return "server_error"
+    if "unsupported_format" in msg or "unsupported format" in msg:
+        return "unsupported_format"
     if "codec" in msg or "format" in msg or "unsupported" in msg:
         return "unsupported_format"
+    if "connection_error" in msg or "connection error" in msg:
+        return "connection_error"
     if "connection" in msg or "refused" in msg or "reset" in msg:
         return "connection_error"
     return "unknown"
+
+
+def _stream_failure_headers(
+    failure_type: str,
+    *,
+    upstream_status: Optional[int] = None,
+    breaker: bool = False,
+) -> Dict[str, str]:
+    """Headers that distinguish upstream failures from proxy failures."""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "X-Proxy-Upstream": "true",
+        "X-Stream-Status": "failed",
+        "X-Stream-Failure-Type": failure_type,
+        "X-Stream-Status-Reason": failure_type,
+    }
+    if upstream_status is not None:
+        headers["X-Upstream-Status"] = str(upstream_status)
+    if breaker:
+        headers["X-Proxy-Circuit-Breaker"] = "tripped"
+    return headers
 
 
 def _get_proxy_connector() -> aiohttp.TCPConnector:
@@ -984,13 +1020,18 @@ async def _proxy_stream_impl(request: Request, url: str):
     short_circuit_status = _breaker_should_short_circuit(url)
     if short_circuit_status is not None:
         detail = f"Upstream {short_circuit_status} (breaker)"
+        failure_type = classify_failure(detail)
         return JSONResponse(
             status_code=short_circuit_status,
             content={
                 "detail": detail,
-                "failure_type": classify_failure(detail),
+                "failure_type": failure_type,
             },
-            headers={"Access-Control-Allow-Origin": "*"}
+            headers=_stream_failure_headers(
+                failure_type,
+                upstream_status=short_circuit_status,
+                breaker=True,
+            ),
         )
 
     # Extract origin from URL for CDN compatibility
@@ -1027,7 +1068,10 @@ async def _proxy_stream_impl(request: Request, url: str):
             return JSONResponse(
                 status_code=status,
                 content={"detail": detail, "failure_type": failure_type},
-                headers={"Access-Control-Allow-Origin": "*"}
+                headers=_stream_failure_headers(
+                    failure_type,
+                    upstream_status=status,
+                ),
             )
 
         # For m3u8 manifests, rewrite URLs to go through proxy
@@ -1072,24 +1116,26 @@ async def _proxy_stream_impl(request: Request, url: str):
     except (aiohttp.ClientError, asyncio.TimeoutError, asyncio.CancelledError, OSError) as e:
         await _close_proxy_resources(resp, session)
         detail = f"Upstream connection failed: {type(e).__name__}"
+        failure_type = classify_failure(f"{detail} {e}")
         return JSONResponse(
             status_code=502,
             content={
                 "detail": detail,
-                "failure_type": classify_failure(f"{detail} {e}")
+                "failure_type": failure_type
             },
-            headers={"Access-Control-Allow-Origin": "*"}
+            headers=_stream_failure_headers(failure_type)
         )
     except Exception as e:
         await _close_proxy_resources(resp, session)
         logger.error(f"Proxy unexpected error: {e}")
+        failure_type = classify_failure(str(e))
         return JSONResponse(
             status_code=502,
             content={
                 "detail": "Proxy error",
-                "failure_type": classify_failure(str(e))
+                "failure_type": failure_type
             },
-            headers={"Access-Control-Allow-Origin": "*"}
+            headers=_stream_failure_headers(failure_type)
         )
 
 
@@ -1674,6 +1720,9 @@ async def health_report(request: Request):
         ch_name = body.get("name", "") or ""
         reason = str(body.get("reason", "") or "")[:200]
         failure_type = classify_failure(reason) if reason else "unknown"
+        should_record_broken = not (
+            status == "broken" and failure_type == "geo_blocked"
+        )
         if not url or status not in ("working", "broken"):
             return {"status": "ignored"}
 
@@ -1700,12 +1749,17 @@ async def health_report(request: Request):
             # Promote this URL to primary position in the channel's urls array
             if promote and ch_name:
                 _promote_source(ch_name, url)
-        else:
+        elif should_record_broken:
             _mark_local_broken(url)
             logger.debug(
                 "health_report: broken stream classified as %s for %s",
                 failure_type,
                 ch_name[:80] if isinstance(ch_name, str) else "",
+            )
+        else:
+            logger.debug(
+                "health_report: skipping geo-blocked broken report for %s",
+                ch_name[:80] if isinstance(ch_name, str) else url[:80],
             )
 
         # Best-effort Supabase push
@@ -1713,9 +1767,9 @@ async def health_report(request: Request):
             from utils import supabase_channels
             if supabase_channels.is_configured():
                 url_hash = hashlib.sha256(url.encode()).hexdigest()
-                if status == "broken":
+                if status == "broken" and should_record_broken:
                     await supabase_channels.report_channel(url_hash)
-                else:
+                elif status == "working":
                     await supabase_channels.report_channel_working(url_hash)
                     # Promote in Supabase too
                     if promote and ch_name:
@@ -1727,6 +1781,7 @@ async def health_report(request: Request):
             "status": "recorded",
             "channel_status": status,
             "failure_type": failure_type,
+            "counted": status != "broken" or should_record_broken,
         }
     except Exception as e:
         logger.debug(f"Health report error: {e}")
@@ -1990,17 +2045,19 @@ async def refresh_channels():
         try:
             from core.channel_manager import ChannelManager
             mgr = ChannelManager()
-            mgr.load_cached_channels()
+            cached_channels = _load_channels()
+            if cached_channels:
+                mgr.channels = copy.deepcopy(cached_channels)
+                mgr._organize_channels()
+            else:
+                mgr.load_cached_channels()
 
             # Run async fetch in a new event loop
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                from core.repository import RepositoryHandler
-                handler = RepositoryHandler()
-                channels = loop.run_until_complete(handler.fetch_all_repositories())
-                if channels:
-                    mgr.merge_channels(channels)
+                loop.run_until_complete(mgr._fetch_and_update())
+                if mgr.channels:
                     # Save to DATA_DIR so Docker volume persists it
                     channels_file = DATA_DIR / "channels.json"
                     with open(channels_file, "w", encoding="utf-8") as f:

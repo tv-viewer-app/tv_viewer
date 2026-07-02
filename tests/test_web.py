@@ -244,6 +244,8 @@ class TestProxy:
         ("message", "expected"),
         [
             ("Upstream returned 403", "geo_blocked"),
+            ("geo_blocked", "geo_blocked"),
+            ("not_found", "not_found"),
             ("timed out while loading stream", "timeout"),
             ("SSL certificate verify failed", "tls_error"),
             ("codec unsupported", "unsupported_format"),
@@ -335,6 +337,45 @@ class TestProxy:
         long_url = "https://example.com/" + ("a" * 5000)
         r = client.get("/api/proxy", params={"url": long_url})
         assert r.status_code == 414
+
+    def test_proxy_forwards_upstream_failure_headers(self, client, monkeypatch):
+        class _FakeResponse:
+            def __init__(self):
+                self.status = 403
+                self.headers = {"content-type": "application/vnd.apple.mpegurl"}
+                self.released = False
+
+            async def release(self):
+                self.released = True
+
+        class _FakeSession:
+            def __init__(self, response):
+                self._response = response
+                self.closed = False
+
+            async def get(self, *_args, **_kwargs):
+                return self._response
+
+            async def close(self):
+                self.closed = True
+
+        fake_response = _FakeResponse()
+        fake_session = _FakeSession(fake_response)
+
+        monkeypatch.setattr(server, "_validate_proxy_url", lambda _url: None)
+        monkeypatch.setattr(server.aiohttp, "ClientSession", lambda **_kwargs: fake_session)
+
+        r = client.get("/api/proxy", params={"url": "https://example.com/live.m3u8"})
+
+        assert r.status_code == 403
+        assert r.json()["failure_type"] == "geo_blocked"
+        assert r.headers["x-stream-status"] == "failed"
+        assert r.headers["x-stream-failure-type"] == "geo_blocked"
+        assert r.headers["x-stream-status-reason"] == "geo_blocked"
+        assert r.headers["x-upstream-status"] == "403"
+        assert r.headers["x-proxy-upstream"] == "true"
+        assert fake_response.released is True
+        assert fake_session.closed is True
 
     def test_proxy_post_returns_tokenized_url_for_long_input(self, client):
         long_url = "https://example.com/" + ("a" * 5000)
@@ -462,6 +503,34 @@ class TestHealthReportSecurity:
         )
         assert r.status_code == 200
         assert r.json().get("failure_type") == "geo_blocked"
+
+    def test_health_report_skips_geo_blocked_broken_votes(self, client, monkeypatch):
+        import utils.supabase_channels as supabase_channels
+
+        called = {"broken": 0, "local_broken": 0}
+
+        async def _fake_report_channel(_url_hash):
+            called["broken"] += 1
+            return True
+
+        monkeypatch.setattr(server, "_mark_local_broken", lambda _url: called.__setitem__("local_broken", called["local_broken"] + 1))
+        monkeypatch.setattr(supabase_channels, "is_configured", lambda: True)
+        monkeypatch.setattr(supabase_channels, "report_channel", _fake_report_channel)
+
+        r = client.post(
+            "/api/health/report",
+            json={
+                "url": "https://example.com/stream.m3u8",
+                "status": "broken",
+                "reason": "geo_blocked",
+            },
+        )
+
+        assert r.status_code == 200
+        assert r.json().get("failure_type") == "geo_blocked"
+        assert r.json().get("counted") is False
+        assert called["broken"] == 0
+        assert called["local_broken"] == 0
 
     def test_health_report_ignores_missing_fields(self, client):
         r = client.post("/api/health/report", json={"url": ""})
