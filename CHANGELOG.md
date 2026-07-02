@@ -5,6 +5,21 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.3] - 2026-07-02
+
+### Fixed
+- Refresh button crash: 'ChannelManager' has no attribute 'merge_channels'
+- EPG race condition: '_aggressive_name_to_epg_ids' AttributeError spam in logs
+- Channel health: 403 geo-blocked streams no longer falsely reported as broken
+- Proxy endpoint returns X-Stream-Status header for upstream failures
+
+### Improved
+- Channel failure classification: geo_blocked, expired, unavailable categories
+- Client receives structured failure reasons for better UX messaging
+- Flutter CI upgraded from 3.32.0 to 3.44.4 (stable)
+- Standalone Chrome extension (no Docker dependency)
+- PWA manifest for installable web app
+
 ## [2.21.2] - 2026-07-02
 
 ### Added
