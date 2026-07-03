@@ -5,6 +5,21 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.0] - 2026-07-03
+
+### Added
+- Smart channel sorting: channels ranked by health score × community play count
+- Stream quality selector: choose Auto/1080p/720p/480p for HLS streams
+- Chromecast support: cast streams to TV from the web player
+- Channel request feature: suggest new channels and vote on suggestions
+- EPG improvements: Israeli channel aliases, retry with backoff, slash-safe routing
+- Auto-hide dead channels: 10+ broken reports hides from default listing
+
+### Improved
+- Israeli EPG coverage with dedicated sources and Hebrew name matching
+- Weekly channel cleanup workflow removes stale broken channels
+- Channel failure classification prevents false-positive broken reports
+
 ## [2.21.3] - 2026-07-02
 
 ### Fixed
