@@ -221,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               iconSize: 20,
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.all(0),
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               tooltip: 'Filters',
               onPressed: () => _scaffoldKey.currentState?.openDrawer(),
@@ -230,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.add_circle_outline),
             iconSize: compactAppBar ? 20 : null,
-            padding: compactAppBar ? EdgeInsets.zero : null,
+            padding: compactAppBar ? const EdgeInsets.all(0) : null,
             constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
             tooltip: 'Contribute Channel',
             onPressed: () => ContributeChannelDialog.show(context),
@@ -252,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   key: _scanButtonKey,
                   icon: const Icon(Icons.stop),
                   iconSize: compactAppBar ? 20 : null,
-                  padding: compactAppBar ? EdgeInsets.zero : null,
+                  padding: compactAppBar ? const EdgeInsets.all(0) : null,
                   constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
                   tooltip: 'Stop Scan',
                   onPressed: () => provider.stopValidation(),
@@ -262,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 key: _scanButtonKey,
                 icon: const Icon(Icons.refresh),
                 iconSize: compactAppBar ? 20 : null,
-                padding: compactAppBar ? EdgeInsets.zero : null,
+                padding: compactAppBar ? const EdgeInsets.all(0) : null,
                 constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
                 tooltip: 'Scan Channels',
                 onPressed: () => provider.validateChannels(),
@@ -274,7 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
               tooltip: 'Sort Channels',
               icon: const Icon(Icons.sort),
               iconSize: compactAppBar ? 20 : null,
-              padding: compactAppBar ? EdgeInsets.zero : null,
+              padding: compactAppBar ? const EdgeInsets.all(0) : null,
               constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
               onSelected: (value) {
                 if (value == 'smart') {
@@ -319,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.settings),
             iconSize: compactAppBar ? 20 : null,
-            padding: compactAppBar ? EdgeInsets.zero : null,
+            padding: compactAppBar ? const EdgeInsets.all(0) : null,
             constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
             tooltip: 'Settings',
             onPressed: () => Navigator.push(
@@ -544,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? null
               : IconButton(
                   icon: const Icon(Icons.clear, size: 16),
-                  padding: EdgeInsets.zero,
+                  padding: const EdgeInsets.all(0),
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () {
                     _searchController.clear();
@@ -746,7 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
               itemBuilder: (context, index) {
                 final channel = provider.channels[index];
                 return Card(
-                  margin: EdgeInsets.zero,
+                  margin: const EdgeInsets.all(0),
                   child: ChannelTile(
                     channel: channel,
                     onTap: () => _playChannel(channel, index),
