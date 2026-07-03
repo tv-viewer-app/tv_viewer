@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-07-02T08:43:08.429206+00:00",
-  "total_channels": 21049,
+  "updated_at": "2026-07-03T08:50:57.738114+00:00",
+  "total_channels": 21108,
   "countries": 31,
-  "categories": 21,
+  "categories": 24,
   "top_countries": [
     {
       "name": "France",
-      "count": 345
+      "count": 335
     },
     {
       "name": "China",
@@ -21,6 +21,10 @@
       "count": 58
     },
     {
+      "name": "CZ",
+      "count": 33
+    },
+    {
       "name": "AE",
       "count": 32
     },
@@ -30,10 +34,6 @@
     },
     {
       "name": "Australia",
-      "count": 25
-    },
-    {
-      "name": "CZ",
       "count": 25
     },
     {
@@ -57,11 +57,11 @@
       "count": 18
     },
     {
-      "name": "AL",
-      "count": 13
+      "name": "CL",
+      "count": 14
     },
     {
-      "name": "CL",
+      "name": "AL",
       "count": 13
     },
     {
@@ -73,15 +73,15 @@
       "count": 11
     },
     {
+      "name": "BA",
+      "count": 10
+    },
+    {
       "name": "BY",
       "count": 10
     },
     {
       "name": "AT",
-      "count": 9
-    },
-    {
-      "name": "BA",
       "count": 9
     }
   ],
@@ -92,7 +92,7 @@
     },
     {
       "name": "Entertainment",
-      "count": 272
+      "count": 262
     },
     {
       "name": "Documentary",
@@ -123,6 +123,10 @@
       "count": 8
     },
     {
+      "name": "Czech Republic",
+      "count": 8
+    },
+    {
       "name": "Cooking",
       "count": 6
     },
@@ -141,10 +145,6 @@
     {
       "name": "Culture;Entertainment",
       "count": 2
-    },
-    {
-      "name": "Andorra",
-      "count": 1
     }
   ]
 }
