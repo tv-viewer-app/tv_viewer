@@ -1625,12 +1625,27 @@ _STATS_CACHE_TTL = 1800  # 30 minutes
 
 
 def _top_channel_name_map(channels: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Build url_hash → channel_name map for ALL known URLs (not just primary).
+    
+    Analytics may record any URL's hash, so we need to map all of them.
+    """
     name_map: Dict[str, str] = {}
     for channel in channels:
-        url_hash = str(channel.get("url_hash", "") or "").strip()
         name = str(channel.get("name", "") or "").strip()
-        if url_hash and name and url_hash not in name_map:
-            name_map[url_hash] = name
+        if not name:
+            continue
+        # Primary url_hash
+        url_hash = str(channel.get("url_hash", "") or "").strip()
+        if url_hash:
+            name_map.setdefault(url_hash, name)
+        # Also hash ALL urls in the urls list
+        urls = channel.get("urls") or []
+        primary_url = channel.get("url", "")
+        all_urls = list(urls) + ([primary_url] if primary_url and primary_url not in urls else [])
+        for url in all_urls:
+            if url:
+                h = hashlib.sha256(url.encode('utf-8')).hexdigest()
+                name_map.setdefault(h, name)
     return name_map
 
 
