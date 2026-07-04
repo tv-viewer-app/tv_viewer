@@ -5,6 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.1] - 2026-07-04
+
+### Fixed
+- Statistics shows actual channel names (KAN 11, Reshet 13) instead of 'Israel General'
+- Channel name resolution maps ALL URL hashes, not just primary
+- Proxy SSRF hardened (redirects disabled)
+- Channel requests voting secured (atomic RPC, no direct UPDATE)
+
 ## [2.22.0] - 2026-07-03
 
 ### Added
