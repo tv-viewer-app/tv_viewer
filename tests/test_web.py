@@ -151,6 +151,7 @@ class TestChannelRequests:
     def test_vote_channel_request_once_per_device(self, client, monkeypatch):
         request_id = str(uuid.uuid4())
         monkeypatch.setattr(server, "_channel_requests_enabled", lambda: True)
+        state = {"votes": 4}
 
         async def fake_get(_request_id):
             assert _request_id == request_id
@@ -160,25 +161,18 @@ class TestChannelRequests:
                 "url": "",
                 "country": "Israel",
                 "category": "News",
-                "votes": 4,
+                "votes": state["votes"],
                 "status": "pending",
                 "created_at": "2026-07-02T20:00:00Z",
             }
 
-        async def fake_set(_request_id, votes):
-            return {
-                "id": request_id,
-                "name": "Vote Me",
-                "url": "",
-                "country": "Israel",
-                "category": "News",
-                "votes": votes,
-                "status": "pending",
-                "created_at": "2026-07-02T20:00:00Z",
-            }
+        async def fake_vote_rpc(_request_id, device_hash):
+            assert _request_id == request_id
+            assert device_hash == server._hash_device_id("same-device")
+            state["votes"] += 1
 
         monkeypatch.setattr(server, "_get_channel_request_by_id", fake_get)
-        monkeypatch.setattr(server, "_set_channel_request_votes", fake_set)
+        monkeypatch.setattr(server, "_vote_channel_request_rpc", fake_vote_rpc)
         with server._channel_request_vote_lock:
             server._channel_request_vote_markers.clear()
 
@@ -567,6 +561,56 @@ class TestProxy:
         assert fake_response.released is True
         assert fake_session.closed is True
 
+    def test_proxy_blocks_redirects_and_validates_target(self, client, monkeypatch):
+        validated = []
+
+        def fake_validate(url):
+            validated.append(url)
+            if "127.0.0.1" in url:
+                raise server.HTTPException(status_code=403, detail="Access to internal network addresses is forbidden")
+
+        class _FakeResponse:
+            def __init__(self):
+                self.status = 302
+                self.headers = {"location": "http://127.0.0.1/internal"}
+                self.released = False
+
+            async def release(self):
+                self.released = True
+
+        class _FakeSession:
+            def __init__(self, response):
+                self._response = response
+                self.closed = False
+
+            async def get(self, *_args, **kwargs):
+                assert kwargs["allow_redirects"] is False
+                return self._response
+
+            async def close(self):
+                self.closed = True
+
+        fake_response = _FakeResponse()
+        fake_session = _FakeSession(fake_response)
+
+        monkeypatch.setattr(server, "_validate_proxy_url", fake_validate)
+        monkeypatch.setattr(server.aiohttp, "ClientSession", lambda **_kwargs: fake_session)
+
+        r = client.get("/api/proxy", params={"url": "https://example.com/live.m3u8"})
+
+        assert r.status_code == 403
+        assert validated == [
+            "https://example.com/live.m3u8",
+            "http://127.0.0.1/internal",
+        ]
+        assert fake_response.released is True
+        assert fake_session.closed is True
+
+    def test_proxy_rate_limit_returns_429(self, client, monkeypatch):
+        monkeypatch.setattr(server, "_rate_limit_check", lambda *_args, **_kwargs: False)
+        r = client.get("/api/proxy", params={"url": "https://example.com/live.m3u8"})
+        assert r.status_code == 429
+
     def test_proxy_post_returns_tokenized_url_for_long_input(self, client):
         long_url = "https://example.com/" + ("a" * 5000)
         r = client.post("/api/proxy", json={"url": long_url})
@@ -643,6 +687,63 @@ class TestMap:
         for c in data["countries"][:5]:
             assert "name" in c
             assert "count" in c
+
+
+class TestStatisticsHelpers:
+    def test_deduplicate_channels_preserves_url_hash(self):
+        merged = server._deduplicate_channels(
+            [
+                {
+                    "name": "Kan 11 News",
+                    "url": "https://example.com/kan-1.m3u8",
+                    "urls": ["https://example.com/kan-1.m3u8"],
+                    "url_hash": "hash-1",
+                    "status": "working",
+                    "category": "News",
+                    "country": "IL",
+                },
+                {
+                    "name": "Kan 11 News (Backup)",
+                    "url": "https://example.com/kan-2.m3u8",
+                    "urls": ["https://example.com/kan-2.m3u8"],
+                    "url_hash": "hash-2",
+                    "status": "unchecked",
+                    "category": "News",
+                    "country": "Israel",
+                },
+            ]
+        )
+        assert merged[0]["url_hash"] == "hash-1"
+
+    def test_build_top_channel_rows_resolves_channel_names(self):
+        rows = server._build_top_channel_rows(
+            [
+                {
+                    "channel_hash": "kan-hash",
+                    "channel_country": "IL",
+                    "channel_category": "General",
+                    "play_count": 12,
+                },
+                {
+                    "channel_hash": "unknown-hash",
+                    "channel_country": "Israel",
+                    "channel_category": "News",
+                    "play_count": 4,
+                },
+            ],
+            [{"name": "Kan 11 News", "url_hash": "kan-hash"}],
+        )
+        assert rows[0]["name"] == "Kan 11 News"
+        assert rows[0]["channel_name"] == "Kan 11 News"
+        assert rows[1]["name"] == "Israel News"
+
+    def test_cached_top_channel_play_counts_falls_back_to_dedicated_cache(self, monkeypatch):
+        monkeypatch.setattr(server, "_stats_cache", {})
+        monkeypatch.setattr(server, "_stats_cache_time", 0)
+        monkeypatch.setattr(server, "_top_channel_play_counts_cache", {"kan-hash": 9})
+        monkeypatch.setattr(server, "_top_channel_play_counts_cache_time", server.time.time())
+
+        assert server._cached_top_channel_play_counts() == {"kan-hash": 9}
 
 
 # ─── Health report security (v2.15.2) ──────────────────────────────────────

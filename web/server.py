@@ -91,6 +91,16 @@ def _normalize_category(cat: str, channel_name: str = None) -> str:
     return _normalize_category_impl(cat, channel_name)
 
 
+def _normalize_country_display(country: str) -> str:
+    raw = str(country or "").strip()
+    if not raw or raw.upper() == "XX":
+        return ""
+    normalized = _normalize_country(raw)
+    if normalized and normalized != "Unknown":
+        return normalized
+    return _COUNTRY_CODES.get(raw.upper(), raw)
+
+
 _STALE_REPORT_THRESHOLD = 10
 _STALE_CHANNEL_AGE = timedelta(days=7)
 
@@ -184,6 +194,7 @@ def _deduplicate_channels(channels: List[Dict[str, Any]]) -> List[Dict[str, Any]
                 "media_type": ch.get("media_type"),
                 "status": ch.get("status", "unchecked"),
                 "source": ch.get("source", ""),
+                "url_hash": str(ch.get("url_hash", "") or ""),
                 "working_url_index": 0,
                 "report_count": _coerce_int(ch.get("report_count")),
                 "last_checked": ch.get("last_checked"),
@@ -506,6 +517,22 @@ def _sort_channels_for_api(
 def _cached_top_channel_play_counts() -> Dict[str, int]:
     """Read play counts from the statistics cache without triggering a refresh."""
     if not _stats_cache or (time.time() - _stats_cache_time) >= _STATS_CACHE_TTL:
+        if _top_channel_play_counts_cache and (
+            time.time() - _top_channel_play_counts_cache_time
+        ) < _STATS_CACHE_TTL:
+            return dict(_top_channel_play_counts_cache)
+        try:
+            loop = asyncio.get_running_loop()
+            global _top_channel_play_counts_refresh_task
+            if (
+                _top_channel_play_counts_refresh_task is None
+                or _top_channel_play_counts_refresh_task.done()
+            ):
+                _top_channel_play_counts_refresh_task = loop.create_task(
+                    _refresh_top_channel_play_counts_cache(force=True)
+                )
+        except RuntimeError:
+            pass
         return {}
 
     play_counts: Dict[str, int] = {}
@@ -1256,6 +1283,14 @@ async def _proxy_stream_impl(request: Request, url: str):
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL")
 
+    if not _rate_limit_check(
+        _client_ip(request),
+        "proxy",
+        _PROXY_RATE_LIMIT[0],
+        _PROXY_RATE_LIMIT[1],
+    ):
+        raise HTTPException(status_code=429, detail="Too many proxy requests")
+
     # SSRF protection
     _validate_proxy_url(url)
 
@@ -1299,7 +1334,46 @@ async def _proxy_stream_impl(request: Request, url: str):
             connector=_get_proxy_connector(),
             connector_owner=False  # Don't close shared connector when session closes
         )
-        resp = await session.get(url, headers=headers, ssl=_proxy_ssl_param())
+        resp = await session.get(
+            url,
+            headers=headers,
+            ssl=_proxy_ssl_param(),
+            allow_redirects=False,
+        )
+
+        if resp.status in (301, 302, 307, 308):
+            location = str(resp.headers.get("location", "") or "").strip()
+            redirect_target = urljoin(url, location) if location else ""
+            await _close_proxy_resources(resp, session)
+            if redirect_target:
+                try:
+                    _validate_proxy_url(redirect_target)
+                except HTTPException as exc:
+                    failure_type = classify_failure(exc.detail)
+                    return JSONResponse(
+                        status_code=exc.status_code,
+                        content={
+                            "detail": exc.detail,
+                            "failure_type": failure_type,
+                        },
+                        headers=_stream_failure_headers(
+                            failure_type,
+                            upstream_status=resp.status,
+                        ),
+                    )
+            detail = "Upstream redirect blocked"
+            failure_type = classify_failure(detail)
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "detail": detail,
+                    "failure_type": failure_type,
+                },
+                headers=_stream_failure_headers(
+                    failure_type,
+                    upstream_status=resp.status,
+                ),
+            )
 
         if resp.status != 200:
             status = resp.status
@@ -1409,6 +1483,14 @@ async def proxy_stream_post(request: Request):
 
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid request body")
+
+    if not _rate_limit_check(
+        _client_ip(request),
+        "proxy",
+        _PROXY_RATE_LIMIT[0],
+        _PROXY_RATE_LIMIT[1],
+    ):
+        raise HTTPException(status_code=429, detail="Too many proxy requests")
 
     url = str(body.get("url", "") or "").strip()
     if not url:
@@ -1536,7 +1618,106 @@ async def refresh_epg():
 
 _stats_cache: Dict[str, Any] = {}
 _stats_cache_time: float = 0
+_top_channel_play_counts_cache: Dict[str, int] = {}
+_top_channel_play_counts_cache_time: float = 0
+_top_channel_play_counts_refresh_task: Optional[asyncio.Task] = None
 _STATS_CACHE_TTL = 1800  # 30 minutes
+
+
+def _top_channel_name_map(channels: List[Dict[str, Any]]) -> Dict[str, str]:
+    name_map: Dict[str, str] = {}
+    for channel in channels:
+        url_hash = str(channel.get("url_hash", "") or "").strip()
+        name = str(channel.get("name", "") or "").strip()
+        if url_hash and name and url_hash not in name_map:
+            name_map[url_hash] = name
+    return name_map
+
+
+def _build_top_channel_rows(
+    mv_channels: List[Dict[str, Any]],
+    channels: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    resolved_names = _top_channel_name_map(channels)
+    rows: List[Dict[str, Any]] = []
+    for channel in mv_channels[:15]:
+        country = _normalize_country_display(channel.get("channel_country", ""))
+        category = str(channel.get("channel_category", "") or "").strip()
+        channel_hash = str(
+            channel.get("channel_hash")
+            or channel.get("url_hash")
+            or ""
+        ).strip()
+        channel_name = resolved_names.get(channel_hash, "")
+        plays = _coerce_int(channel.get("play_count"))
+        label = channel_name or " ".join(
+            part for part in (country, category) if part
+        ).strip()
+        if not label:
+            label = channel_hash or "Unknown channel"
+        rows.append(
+            {
+                "name": label,
+                "channel_name": channel_name,
+                "plays": plays,
+                "url_hash": channel_hash,
+            }
+        )
+    return rows
+
+
+def _update_top_channel_play_counts_cache(
+    top_channels: List[Dict[str, Any]],
+    *,
+    timestamp: Optional[float] = None,
+) -> None:
+    global _top_channel_play_counts_cache, _top_channel_play_counts_cache_time
+    cache: Dict[str, int] = {}
+    for item in top_channels:
+        if not isinstance(item, dict):
+            continue
+        url_hash = str(item.get("url_hash", "") or "").strip()
+        if not url_hash:
+            continue
+        cache[url_hash] = _coerce_int(item.get("plays"))
+    _top_channel_play_counts_cache = cache
+    _top_channel_play_counts_cache_time = timestamp if timestamp is not None else time.time()
+
+
+async def _refresh_top_channel_play_counts_cache(force: bool = False) -> Dict[str, int]:
+    global _top_channel_play_counts_cache, _top_channel_play_counts_cache_time
+    now = time.time()
+    if (
+        not force
+        and _top_channel_play_counts_cache
+        and (now - _top_channel_play_counts_cache_time) < _STATS_CACHE_TTL
+    ):
+        return dict(_top_channel_play_counts_cache)
+
+    supabase_url, supabase_key = _resolve_supabase_runtime()
+    if not supabase_url or not supabase_key:
+        return dict(_top_channel_play_counts_cache)
+
+    headers_req = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+    }
+    connector = aiohttp.TCPConnector(limit=5, ttl_dns_cache=300, ssl=_get_strict_ssl_context())
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        async with session.get(
+            f"{supabase_url}/rest/v1/mv_top_channels?order=play_count.desc&limit=50",
+            headers=headers_req,
+            ssl=_get_strict_ssl_context(),
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                logger.debug("Top channel play-count warm-up skipped: %s %s", resp.status, body[:120])
+                return dict(_top_channel_play_counts_cache)
+            mv_channels = await resp.json()
+    rows = _build_top_channel_rows(mv_channels or [], _load_channels())
+    _update_top_channel_play_counts_cache(rows, timestamp=now)
+    return dict(_top_channel_play_counts_cache)
 
 
 async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
@@ -1555,7 +1736,7 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
     working_count = 0
 
     for ch in channels:
-        c = ch.get('country', 'Unknown')
+        c = _normalize_country_display(ch.get('country', 'Unknown'))
         if c and c != 'Unknown':
             ch_countries[c] = ch_countries.get(c, 0) + 1
         cat = ch.get('category', 'General')
@@ -1614,28 +1795,9 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                         if mv_resp.status == 200:
                             mv_channels = await mv_resp.json()
                             if mv_channels:
-                                top_played = []
-                                top_channel_rows = []
-                                for channel in mv_channels[:15]:
-                                    country = str(channel.get("channel_country", "") or "").strip()
-                                    category = str(channel.get("channel_category", "") or "").strip()
-                                    channel_hash = str(
-                                        channel.get("channel_hash")
-                                        or channel.get("url_hash")
-                                        or ""
-                                    ).strip()
-                                    plays = int(channel.get("play_count", 0) or 0)
-                                    label = " ".join(part for part in (country, category) if part).strip()
-                                    if not label:
-                                        label = channel_hash or "Unknown channel"
-                                    top_played.append((label, plays))
-                                    top_channel_rows.append(
-                                        {
-                                            "name": label,
-                                            "plays": plays,
-                                            "url_hash": channel_hash,
-                                        }
-                                    )
+                                top_channel_rows = _build_top_channel_rows(mv_channels, channels)
+                                top_played = [(item["name"], item["plays"]) for item in top_channel_rows]
+                                _update_top_channel_play_counts_cache(top_channel_rows, timestamp=now)
 
                                 analytics_data["top_played"] = top_played
                                 analytics_data["top_channel_rows"] = top_channel_rows
@@ -1702,11 +1864,12 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                                 p = ev.get('platform', 'unknown')
                                 platforms[p] = platforms.get(p, 0) + 1
                                 uc = ev.get('country', 'XX')
-                                if uc and uc != 'XX':
-                                    user_countries[uc] = user_countries.get(uc, 0) + 1
+                                uc_display = _normalize_country_display(uc)
+                                if uc_display:
+                                    user_countries[uc_display] = user_countries.get(uc_display, 0) + 1
                                     created_at = ev.get('created_at', '')
-                                    if created_at > country_last_access.get(uc, ''):
-                                        country_last_access[uc] = created_at
+                                    if created_at > country_last_access.get(uc_display, ''):
+                                        country_last_access[uc_display] = created_at
                                 # Channel name from event_data
                                 ed = ev.get('event_data') or {}
                                 cn = ''
@@ -1732,10 +1895,10 @@ async def _refresh_statistics_cache(force: bool = False) -> Dict[str, Any]:
                                             today_plays += 1
                                 if cn and ev.get('event_type') == 'channel_play':
                                     played_channels[cn] = played_channels.get(cn, 0) + 1
-                                    if uc and uc != 'XX':
-                                        if uc not in country_channels:
-                                            country_channels[uc] = Counter()
-                                        country_channels[uc][cn] += 1
+                                    if uc_display:
+                                        if uc_display not in country_channels:
+                                            country_channels[uc_display] = Counter()
+                                        country_channels[uc_display][cn] += 1
 
                             analytics_data.update({
                                 "unique_users": len(devices),
@@ -1822,7 +1985,12 @@ async def _warm_statistics_cache_on_startup():
     """Pre-warm statistics cache shortly after startup."""
 
     async def _warm_cache():
-        await asyncio.sleep(30)
+        await asyncio.sleep(5)
+        try:
+            await _refresh_top_channel_play_counts_cache(force=True)
+        except Exception as exc:
+            logger.debug(f"Top-channel warm-up skipped ({exc})")
+        await asyncio.sleep(25)
         try:
             await _refresh_statistics_cache(force=True)
         except Exception as exc:
@@ -1913,6 +2081,7 @@ _HEALTH_RATE_GLOBAL = (600, 60.0)  # 600 reports per 60s per IP — generous;
                                    # plain reports are local-only and cheap.
 _HEALTH_RATE_PROMOTE = (10, 60.0)  # 10 promotes per 60s per IP — these hit Supabase
                                    # and can be used to manipulate channel ordering.
+_PROXY_RATE_LIMIT = (100, 60.0)    # 100 proxied upstream requests per 60s per IP
 _CHANNEL_REQUESTS_RATE_SUBMIT = (5, 3600.0)  # 5 submissions per hour per IP
 _health_buckets: Dict[str, Dict[str, List[float]]] = {}
 _health_buckets_lock = threading.Lock()
@@ -2112,6 +2281,34 @@ async def _channel_requests_rest_call(
             raise HTTPException(502, "Channel suggestions backend unavailable")
 
 
+async def _channel_requests_rpc_call(function_name: str, json_payload: Dict[str, Any]) -> Any:
+    supabase_url, _ = _resolve_supabase_runtime()
+    if not _channel_requests_enabled():
+        raise HTTPException(503, "Channel suggestions are not configured")
+    endpoint = f"{supabase_url}/rest/v1/rpc/{function_name}"
+    connector = aiohttp.TCPConnector(limit=5, ttl_dns_cache=300, ssl=_get_strict_ssl_context())
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        async with session.post(
+            endpoint,
+            json=json_payload,
+            headers=_channel_requests_headers(),
+        ) as resp:
+            if resp.status in (200, 201):
+                text = await resp.text()
+                return json.loads(text) if text else None
+            if resp.status == 204:
+                return None
+            body = await resp.text()
+            logger.warning(
+                "channel_requests rpc %s failed: %s %s",
+                function_name,
+                resp.status,
+                body[:200],
+            )
+            raise HTTPException(502, "Channel suggestions backend unavailable")
+
+
 async def _fetch_channel_requests(limit: int = 50) -> List[Dict[str, Any]]:
     if not _channel_requests_enabled():
         return []
@@ -2176,19 +2373,14 @@ async def _get_channel_request_by_id(request_id: str) -> Optional[Dict[str, Any]
     return _channel_request_row(rows[0])
 
 
-async def _set_channel_request_votes(request_id: str, votes: int) -> Dict[str, Any]:
-    rows = await _channel_requests_rest_call(
-        "PATCH",
-        params={"id": f"eq.{request_id}"},
-        json_payload={
-            "votes": votes,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+async def _vote_channel_request_rpc(request_id: str, device_hash: str) -> None:
+    await _channel_requests_rpc_call(
+        "vote_channel_request",
+        {
+            "p_request_id": request_id,
+            "p_device_hash": device_hash,
         },
-        prefer="return=representation",
     )
-    if not rows:
-        raise HTTPException(502, "Vote was not recorded")
-    return _channel_request_row(rows[0])
 
 
 @app.post("/api/health/report")
@@ -2353,7 +2545,10 @@ async def vote_channel_request(request_id: str, request: Request):
         raise HTTPException(429, "You already voted for this suggestion")
 
     try:
-        updated = await _set_channel_request_votes(normalized_id, existing["votes"] + 1)
+        await _vote_channel_request_rpc(normalized_id, device_hash)
+        updated = await _get_channel_request_by_id(normalized_id)
+        if not updated:
+            raise HTTPException(404, "Channel suggestion not found")
     except Exception:
         _forget_vote_marker(normalized_id, device_hash)
         raise

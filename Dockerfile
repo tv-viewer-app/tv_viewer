@@ -10,9 +10,11 @@ RUN pip install --no-cache-dir --no-compile --prefix=/install -r requirements.tx
 # ─── Final image ─────────────────────────────────────────────────────────────
 FROM python:3.12-alpine
 
+ARG APP_VERSION=2.22.0
+
 LABEL org.opencontainers.image.title="TV Viewer Web" \
       org.opencontainers.image.description="Lightweight IPTV streaming web interface with 16,000+ live TV channels. Self-hosted, browser-based, NAS-ready." \
-      org.opencontainers.image.version="2.16.1" \
+      org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.source="https://github.com/tv-viewer-app/tv_viewer" \
       org.opencontainers.image.url="https://tv-viewer-app.github.io/tv_viewer/" \
       org.opencontainers.image.documentation="https://github.com/tv-viewer-app/tv_viewer/blob/master/DOCKER_README.md" \
