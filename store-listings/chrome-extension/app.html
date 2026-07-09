@@ -7,13 +7,13 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div class="app-shell" id="appShell">
+  <div class="app-shell sidebar-collapsed" id="appShell">
     <header class="topbar">
       <div class="brand-group">
-        <button class="icon-button sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar">☰</button>
-        <div>
+        <button class="icon-button sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle filters">☰</button>
+        <div class="brand-stack">
           <div class="brand">TV Viewer</div>
-          <div class="brand-subtitle">Supabase-powered live TV and radio streaming</div>
+          <div class="brand-subtitle">Popup streaming app</div>
         </div>
       </div>
 
@@ -25,112 +25,102 @@
 
       <div class="topbar-actions">
         <div class="filter-pill-group" role="tablist" aria-label="Library views">
-          <button class="view-pill active" data-view="all" type="button">All Channels</button>
+          <button class="view-pill active" data-view="all" type="button">All</button>
           <button class="view-pill" data-view="favorites" type="button">Favorites <span id="favoritesBadge">0</span></button>
         </div>
         <button class="icon-button" id="refreshButton" type="button" aria-label="Refresh channels">↻</button>
       </div>
     </header>
 
-    <section class="player-dock hidden" id="playerDock" aria-live="polite">
-      <div class="player-video-wrap">
-        <video id="videoPlayer" controls playsinline></video>
-      </div>
-      <div class="player-meta">
-        <div class="eyebrow">Now Playing</div>
-        <h1 id="playerTitle">Select a channel to start streaming</h1>
-        <p id="playerSubtitle">Native playback is used when available, with HLS.js fallback for broader support.</p>
-        <div class="player-chips">
-          <span class="badge badge-accent" id="playerCategory">Category</span>
-          <span class="badge" id="playerCountry">Country</span>
-          <span class="badge" id="playerType">Type</span>
+    <aside class="sidebar" id="sidebar" aria-label="Filters">
+      <section class="sidebar-section">
+        <div class="sidebar-title">Library</div>
+        <button class="sidebar-link active" data-view="all" type="button"><span>All channels</span></button>
+        <button class="sidebar-link" data-view="favorites" type="button"><span>Favorite channels</span></button>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="sidebar-title">Quick filters</div>
+        <label class="field-label" for="categorySelect">Category</label>
+        <select id="categorySelect" class="field-select" aria-label="Filter by category">
+          <option value="">All categories</option>
+        </select>
+
+        <label class="field-label" for="countrySelect">Country</label>
+        <select id="countrySelect" class="field-select" aria-label="Filter by country">
+          <option value="">All countries</option>
+        </select>
+
+        <label class="field-label" for="typeSelect">Media type</label>
+        <select id="typeSelect" class="field-select" aria-label="Filter by type">
+          <option value="">All media types</option>
+          <option value="TV">TV</option>
+          <option value="Radio">Radio</option>
+        </select>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="sidebar-title">Categories</div>
+        <div class="sidebar-list" id="categoryList"></div>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="sidebar-title">Countries</div>
+        <div class="sidebar-list" id="countryList"></div>
+      </section>
+    </aside>
+
+    <main class="content">
+      <section class="player-dock hidden" id="playerDock" aria-live="polite">
+        <div class="player-video-wrap">
+          <video id="videoPlayer" controls playsinline></video>
         </div>
-        <div class="player-controls-row">
-          <select id="sourceSelect" class="field-select" aria-label="Select source"></select>
-          <button class="primary-button" id="favoriteButton" type="button">☆ Save favorite</button>
-          <button class="secondary-button" id="closePlayerButton" type="button">Close player</button>
+        <div class="player-meta">
+          <div class="eyebrow">Now playing</div>
+          <h1 id="playerTitle">Select a channel to start streaming</h1>
+          <p id="playerSubtitle">Built-in playback runs directly inside the extension popup.</p>
+          <div class="player-chips">
+            <span class="badge badge-accent" id="playerCategory">Category</span>
+            <span class="badge" id="playerCountry">Country</span>
+            <span class="badge" id="playerType">Type</span>
+          </div>
+          <div class="player-controls-row">
+            <select id="sourceSelect" class="field-select" aria-label="Select source"></select>
+            <button class="primary-button" id="favoriteButton" type="button">☆ Save favorite</button>
+            <button class="secondary-button" id="closePlayerButton" type="button">Close</button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <div class="layout">
-      <aside class="sidebar" id="sidebar">
-        <section class="sidebar-section">
-          <div class="sidebar-title">Browse</div>
-          <button class="sidebar-link active" data-view="all" type="button"><span>All channels</span></button>
-          <button class="sidebar-link" data-view="favorites" type="button"><span>Favorite channels</span></button>
-        </section>
+      <section class="chip-bar" aria-label="Popular categories">
+        <div class="chip-list" id="categoryChipList"></div>
+      </section>
 
-        <section class="sidebar-section">
-          <div class="sidebar-title">Categories</div>
-          <div class="sidebar-list" id="categoryList"></div>
-        </section>
+      <section class="loading-grid" id="loadingGrid" aria-hidden="true"></section>
 
-        <section class="sidebar-section">
-          <div class="sidebar-title">Countries</div>
-          <div class="sidebar-list" id="countryList"></div>
-        </section>
-      </aside>
+      <section class="empty-state hidden" id="emptyState">
+        <div class="empty-icon">📡</div>
+        <h3>No channels match the current filters</h3>
+        <p>Try changing the search, category, country, media type, or favorites filter.</p>
+      </section>
 
-      <main class="content">
-        <section class="hero-card">
-          <div>
-            <div class="eyebrow">Standalone extension app</div>
-            <h2>Stream directly from Supabase — no local server required</h2>
-            <p>Browse community IPTV channels, filter by country or category, and pin favorites to your browser profile.</p>
-          </div>
-          <div class="hero-stats">
-            <div class="hero-stat">
-              <span class="hero-stat-value" id="visibleCount">0</span>
-              <span class="hero-stat-label">Visible</span>
-            </div>
-            <div class="hero-stat">
-              <span class="hero-stat-value" id="loadedCount">0</span>
-              <span class="hero-stat-label">Loaded</span>
-            </div>
-            <div class="hero-stat">
-              <span class="hero-stat-value" id="totalCount">0</span>
-              <span class="hero-stat-label">Available</span>
-            </div>
-          </div>
-        </section>
+      <section class="channel-grid" id="channelGrid"></section>
 
-        <section class="toolbar-card">
-          <div class="toolbar-left">
-            <select id="categorySelect" class="field-select" aria-label="Filter by category">
-              <option value="">All categories</option>
-            </select>
-            <select id="countrySelect" class="field-select" aria-label="Filter by country">
-              <option value="">All countries</option>
-            </select>
-            <select id="typeSelect" class="field-select" aria-label="Filter by type">
-              <option value="">All media types</option>
-              <option value="TV">TV</option>
-              <option value="Radio">Radio</option>
-            </select>
-          </div>
-          <div class="toolbar-right">
-            <span class="status-pill" id="statusPill">Connecting to Supabase…</span>
-            <span class="channel-summary" id="channelSummary">Preparing channel catalog…</span>
-          </div>
-        </section>
+      <footer class="load-footer" id="loadFooter">
+        <div class="footer-status">
+          <span class="status-pill" id="statusPill">Connecting to Supabase…</span>
+          <span class="channel-summary" id="channelSummary">Preparing channel catalog…</span>
+        </div>
+        <div class="footer-counts">
+          <span class="count-pill">Visible <strong id="visibleCount">0</strong></span>
+          <span class="count-pill">Loaded <strong id="loadedCount">0</strong></span>
+          <span class="count-pill">Total <strong id="totalCount">0</strong></span>
+        </div>
+        <span class="load-status" id="loadStatus">Ready.</span>
+      </footer>
 
-        <section class="loading-grid" id="loadingGrid" aria-hidden="true"></section>
-
-        <section class="empty-state hidden" id="emptyState">
-          <div class="empty-icon">📡</div>
-          <h3>No channels match the current filters</h3>
-          <p>Try changing the search, category, country, or favorites filter.</p>
-        </section>
-
-        <section class="channel-grid" id="channelGrid"></section>
-
-        <footer class="load-footer" id="loadFooter">
-          <span id="loadStatus">Ready.</span>
-        </footer>
-        <div id="loadSentinel"></div>
-      </main>
-    </div>
+      <div id="loadSentinel"></div>
+    </main>
   </div>
 
   <script src="hls.min.js"></script>

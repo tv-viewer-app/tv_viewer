@@ -35,10 +35,8 @@ const state = {
 };
 
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
-let searchTimer = null;
-let loadObserver = null;
-
 const elements = {};
+let searchTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   cacheElements();
@@ -54,18 +52,20 @@ document.addEventListener('DOMContentLoaded', () => {
 function cacheElements() {
   Object.assign(elements, {
     appShell: document.getElementById('appShell'),
+    sidebar: document.getElementById('sidebar'),
+    sidebarToggle: document.getElementById('sidebarToggle'),
     searchInput: document.getElementById('searchInput'),
     clearSearch: document.getElementById('clearSearch'),
     refreshButton: document.getElementById('refreshButton'),
-    sidebarToggle: document.getElementById('sidebarToggle'),
     categorySelect: document.getElementById('categorySelect'),
     countrySelect: document.getElementById('countrySelect'),
     typeSelect: document.getElementById('typeSelect'),
+    categoryChipList: document.getElementById('categoryChipList'),
+    categoryList: document.getElementById('categoryList'),
+    countryList: document.getElementById('countryList'),
     loadingGrid: document.getElementById('loadingGrid'),
     emptyState: document.getElementById('emptyState'),
     channelGrid: document.getElementById('channelGrid'),
-    categoryList: document.getElementById('categoryList'),
-    countryList: document.getElementById('countryList'),
     visibleCount: document.getElementById('visibleCount'),
     loadedCount: document.getElementById('loadedCount'),
     totalCount: document.getElementById('totalCount'),
@@ -89,10 +89,8 @@ function cacheElements() {
 
 async function initialize() {
   state.favorites = new Set(await storageGet(STORAGE_KEYS.favorites, []));
-  const collapsed = await storageGet(STORAGE_KEYS.sidebarCollapsed, false);
-  if (collapsed) {
-    elements.appShell.classList.add('sidebar-collapsed');
-  }
+  const collapsed = await storageGet(STORAGE_KEYS.sidebarCollapsed, true);
+  elements.appShell.classList.toggle('sidebar-collapsed', collapsed);
 
   updateFavoritesBadge();
   setupInfiniteScroll();
@@ -112,12 +110,12 @@ function bindEvents() {
   });
   elements.categorySelect.addEventListener('change', () => {
     state.filters.category = elements.categorySelect.value;
-    syncSidebarFilters();
+    syncFacetOptions();
     resetAndLoad();
   });
   elements.countrySelect.addEventListener('change', () => {
     state.filters.country = elements.countrySelect.value;
-    syncSidebarFilters();
+    syncFacetOptions();
     resetAndLoad();
   });
   elements.typeSelect.addEventListener('change', () => {
@@ -125,7 +123,10 @@ function bindEvents() {
     resetAndLoad();
   });
   elements.refreshButton.addEventListener('click', () => resetAndLoad(true));
-  elements.sidebarToggle.addEventListener('click', toggleSidebar);
+  elements.sidebarToggle.addEventListener('click', () => {
+    const collapsed = elements.appShell.classList.toggle('sidebar-collapsed');
+    storageSet(STORAGE_KEYS.sidebarCollapsed, collapsed);
+  });
   elements.closePlayerButton.addEventListener('click', closePlayer);
   elements.favoriteButton.addEventListener('click', () => {
     if (state.activeChannel) {
@@ -142,12 +143,29 @@ function bindEvents() {
     button.addEventListener('click', () => setView(button.dataset.view || 'all'));
   }
 
+  document.addEventListener('click', handleDocumentClick);
   window.addEventListener('beforeunload', destroyHls);
 }
 
-function toggleSidebar() {
-  const collapsed = elements.appShell.classList.toggle('sidebar-collapsed');
-  storageSet(STORAGE_KEYS.sidebarCollapsed, collapsed);
+function handleDocumentClick(event) {
+  const isCollapsed = elements.appShell.classList.contains('sidebar-collapsed');
+  if (isCollapsed) {
+    return;
+  }
+
+  if (
+    elements.sidebar.contains(event.target) ||
+    elements.sidebarToggle.contains(event.target)
+  ) {
+    return;
+  }
+
+  closeSidebar();
+}
+
+function closeSidebar() {
+  elements.appShell.classList.add('sidebar-collapsed');
+  storageSet(STORAGE_KEYS.sidebarCollapsed, true);
 }
 
 function handleSearchInput() {
@@ -160,6 +178,7 @@ function handleSearchInput() {
   if (searchTimer) {
     clearTimeout(searchTimer);
   }
+
   searchTimer = window.setTimeout(() => {
     resetAndLoad();
   }, 300);
@@ -167,6 +186,7 @@ function handleSearchInput() {
 
 function setView(view) {
   if (state.view === view) {
+    closeSidebar();
     return;
   }
 
@@ -174,21 +194,17 @@ function setView(view) {
   for (const button of document.querySelectorAll('[data-view]')) {
     button.classList.toggle('active', button.dataset.view === view);
   }
+  closeSidebar();
   resetAndLoad();
 }
 
 function setupInfiniteScroll() {
-  loadObserver = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting && state.hasMore && !state.loading) {
-        loadChannels();
-      }
+  elements.channelGrid.addEventListener('scroll', () => {
+    const remaining = elements.channelGrid.scrollHeight - elements.channelGrid.scrollTop - elements.channelGrid.clientHeight;
+    if (remaining < 220 && state.hasMore && !state.loading) {
+      loadChannels();
     }
-  }, {
-    rootMargin: '400px 0px 400px 0px'
   });
-
-  loadObserver.observe(elements.loadSentinel);
 }
 
 async function resetAndLoad(force = false) {
@@ -201,7 +217,7 @@ async function resetAndLoad(force = false) {
   state.channels = [];
   renderLoadingSkeleton();
   renderChannels();
-  updateCounts();
+  updateCounts(0);
   if (force) {
     setStatus('Refreshing channel catalog…');
   }
@@ -215,15 +231,17 @@ async function loadChannels({ reset = false } = {}) {
 
   const token = state.requestToken;
   const favoriteIds = Array.from(state.favorites);
+
   if (state.view === 'favorites' && favoriteIds.length === 0) {
     state.channels = [];
     state.totalCount = 0;
     state.offset = 0;
     state.hasMore = false;
-    renderChannels();
-    updateCounts();
     elements.loadingGrid.classList.add('hidden');
+    renderChannels();
+    updateCounts(0);
     setStatus('No favorites saved yet.');
+    elements.loadStatus.textContent = 'Save a few favorites to build your list.';
     return;
   }
 
@@ -257,19 +275,19 @@ async function loadChannels({ reset = false } = {}) {
     state.offset += fetchedChannels.length;
     state.hasMore = state.channels.length < state.totalCount && fetchedChannels.length > 0;
 
+    elements.loadingGrid.classList.toggle('hidden', state.channels.length > 0);
     renderChannels();
     updateCounts();
-    elements.loadingGrid.classList.add('hidden');
     syncFacetOptions();
 
     if (state.totalCount > 0) {
-      setStatus(`Connected to Supabase • ${state.totalCount.toLocaleString()} channels`, false, true);
+      setStatus(`Connected • ${state.totalCount.toLocaleString()} channels`, false, true);
     } else {
       setStatus('No channels returned for the current filters.');
     }
 
     elements.loadStatus.textContent = state.hasMore
-      ? `Loaded ${state.channels.length.toLocaleString()} of ${state.totalCount.toLocaleString()} channels. Scroll to continue.`
+      ? `Loaded ${state.channels.length.toLocaleString()} of ${state.totalCount.toLocaleString()} channels.`
       : `Loaded ${state.channels.length.toLocaleString()} channels.`;
   } catch (error) {
     console.error('Failed to load channels', error);
@@ -353,7 +371,7 @@ function normalizeChannel(channel) {
 
 function renderLoadingSkeleton() {
   elements.loadingGrid.innerHTML = '';
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < 7; index += 1) {
     const card = document.createElement('div');
     card.className = 'skeleton-card';
     elements.loadingGrid.appendChild(card);
@@ -399,8 +417,8 @@ function createChannelCard(channel) {
     card.classList.add('is-playing');
   }
 
-  const header = document.createElement('div');
-  header.className = 'channel-header';
+  const main = document.createElement('div');
+  main.className = 'channel-main';
 
   const logo = document.createElement('div');
   logo.className = 'channel-logo';
@@ -430,9 +448,6 @@ function createChannelCard(channel) {
   source.className = 'channel-source';
   source.textContent = `${channel.country} • ${channel.source}`;
 
-  titleWrap.append(title, source);
-  header.append(logo, titleWrap);
-
   const meta = document.createElement('div');
   meta.className = 'channel-meta';
   meta.append(
@@ -442,13 +457,16 @@ function createChannelCard(channel) {
     createMetaPill(`${channel.urls.length} source${channel.urls.length === 1 ? '' : 's'}`, 'sources')
   );
 
+  titleWrap.append(title, source, meta);
+  main.append(logo, titleWrap);
+
   const actions = document.createElement('div');
   actions.className = 'channel-actions';
 
   const playButton = document.createElement('button');
   playButton.className = 'primary-button';
   playButton.type = 'button';
-  playButton.textContent = 'Play';
+  playButton.textContent = '▶ Play';
   playButton.addEventListener('click', () => playChannel(channel));
 
   const favoriteButton = document.createElement('button');
@@ -458,7 +476,7 @@ function createChannelCard(channel) {
   favoriteButton.addEventListener('click', () => toggleFavorite(channel.url_hash));
 
   actions.append(playButton, favoriteButton);
-  card.append(header, meta, actions);
+  card.append(main, actions);
   return card;
 }
 
@@ -517,13 +535,13 @@ async function playChannel(channel) {
   updatePlayerFavoriteState();
   renderChannels();
   await loadStream(channel.url);
-  elements.playerDock.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function updatePlayerFavoriteState() {
   if (!state.activeChannel) {
     return;
   }
+
   const isFavorite = state.favorites.has(state.activeChannel.url_hash);
   elements.favoriteButton.textContent = isFavorite ? '★ Saved favorite' : '☆ Save favorite';
   elements.favoriteButton.classList.toggle('favorite-active', isFavorite);
@@ -622,11 +640,9 @@ async function loadFacetCounts() {
     }
 
     offset += rows.length;
-    if (offset === rows.length || offset % (FACET_BATCH_SIZE * 2) === 0) {
-      state.facetCounts.categories = categories;
-      state.facetCounts.countries = countries;
-      syncFacetOptions();
-    }
+    state.facetCounts.categories = categories;
+    state.facetCounts.countries = countries;
+    syncFacetOptions();
 
     if (rows.length < FACET_BATCH_SIZE) {
       break;
@@ -655,6 +671,7 @@ function syncFacetOptions() {
   populateSelect(elements.countrySelect, countryMap, 'All countries', state.filters.country);
   populateSidebarList(elements.categoryList, categoryMap, state.filters.category, 'category');
   populateSidebarList(elements.countryList, countryMap, state.filters.country, 'country');
+  populateCategoryChips(categoryMap, state.filters.category);
 }
 
 function buildLocalFacetMap(field) {
@@ -679,9 +696,7 @@ function populateSelect(select, valuesMap, placeholder, selectedValue) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = `${value} (${count.toLocaleString()})`;
-    if (value === selectedValue) {
-      option.selected = true;
-    }
+    option.selected = value === selectedValue;
     select.appendChild(option);
   }
 }
@@ -707,6 +722,27 @@ function populateSidebarList(container, valuesMap, selectedValue, type) {
   }
 }
 
+function populateCategoryChips(valuesMap, selectedValue) {
+  const values = sortFacetEntries(valuesMap).slice(0, 10);
+  elements.categoryChipList.innerHTML = '';
+
+  const allChip = document.createElement('button');
+  allChip.type = 'button';
+  allChip.className = `category-chip${selectedValue ? '' : ' active'}`;
+  allChip.textContent = 'All';
+  allChip.addEventListener('click', () => applySidebarFilter('category', ''));
+  elements.categoryChipList.appendChild(allChip);
+
+  for (const [value] of values) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `category-chip${value === selectedValue ? ' active' : ''}`;
+    chip.textContent = value;
+    chip.addEventListener('click', () => applySidebarFilter('category', value));
+    elements.categoryChipList.appendChild(chip);
+  }
+}
+
 function sumFacetCounts(map) {
   let total = 0;
   for (const count of map.values()) {
@@ -724,23 +760,10 @@ function applySidebarFilter(type, value) {
     state.filters.country = value;
     elements.countrySelect.value = value;
   }
-  syncSidebarFilters();
-  resetAndLoad();
-}
 
-function syncSidebarFilters() {
-  populateSidebarList(
-    elements.categoryList,
-    state.facetsLoaded ? state.facetCounts.categories : buildLocalFacetMap('category'),
-    state.filters.category,
-    'category'
-  );
-  populateSidebarList(
-    elements.countryList,
-    state.facetsLoaded ? state.facetCounts.countries : buildLocalFacetMap('country'),
-    state.filters.country,
-    'country'
-  );
+  syncFacetOptions();
+  closeSidebar();
+  resetAndLoad();
 }
 
 function sortFacetEntries(map) {
@@ -757,7 +780,7 @@ function updateCounts(visibleCount = getVisibleChannels().length) {
   elements.loadedCount.textContent = state.channels.length.toLocaleString();
   elements.totalCount.textContent = state.totalCount.toLocaleString();
   elements.channelSummary.textContent = state.totalCount
-    ? `Showing ${visibleCount.toLocaleString()} currently visible items from ${state.channels.length.toLocaleString()} loaded channels.`
+    ? `Showing ${visibleCount.toLocaleString()} visible results from ${state.channels.length.toLocaleString()} loaded channels.`
     : 'No channels loaded yet.';
 }
 
@@ -773,18 +796,20 @@ function showToast(message, isError = false) {
     toast = document.createElement('div');
     toast.id = 'toast';
     toast.className = 'status-pill';
-    toast.style.position = 'fixed';
-    toast.style.right = '24px';
-    toast.style.bottom = '24px';
-    toast.style.zIndex = '200';
-    toast.style.maxWidth = '360px';
-    toast.style.boxShadow = '0 10px 24px rgba(0,0,0,0.28)';
+    Object.assign(toast.style, {
+      position: 'fixed',
+      right: '12px',
+      bottom: '12px',
+      zIndex: '200',
+      maxWidth: '320px',
+      boxShadow: '0 10px 24px rgba(0,0,0,0.28)'
+    });
     document.body.appendChild(toast);
   }
 
   toast.textContent = message;
   toast.classList.toggle('error', isError);
-  toast.classList.add('ready');
+  toast.classList.toggle('ready', !isError);
   toast.hidden = false;
 
   clearTimeout(showToast.timer);
