@@ -352,7 +352,8 @@ button {
 .player-meta p,
 .channel-source,
 .channel-summary,
-.load-status {
+.load-status,
+.app-footer {
   margin: 0;
   color: var(--defender-text-secondary);
 }
@@ -556,6 +557,24 @@ button {
   gap: 8px 12px;
   align-items: center;
   padding: 8px 10px;
+}
+
+.app-footer {
+  flex: 0 0 auto;
+  padding: 0 4px 2px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.app-footer a {
+  color: var(--defender-accent);
+  text-decoration: none;
+}
+
+.app-footer a:hover,
+.app-footer a:focus-visible {
+  color: var(--defender-accent-hover);
+  text-decoration: underline;
 }
 
 .footer-status,

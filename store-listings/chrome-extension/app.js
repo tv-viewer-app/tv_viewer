@@ -354,8 +354,47 @@ function sanitizeSearch(value) {
   return value.replace(/[,*:()]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function isValidUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function isSafeMediaUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return false;
+  }
+
+  const normalizedUrl = url.trim().toLowerCase();
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return false;
+    }
+    if (
+      normalizedUrl.startsWith('javascript:') ||
+      normalizedUrl.startsWith('data:') ||
+      normalizedUrl.startsWith('blob:') ||
+      normalizedUrl.startsWith('file:')
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeChannel(channel) {
-  const urls = Array.isArray(channel.urls) ? channel.urls.filter(Boolean) : [];
+  const urls = Array.isArray(channel.urls) ? channel.urls.filter(isSafeMediaUrl) : [];
   return {
     url_hash: channel.url_hash,
     name: channel.name || 'Unknown Channel',
@@ -363,7 +402,7 @@ function normalizeChannel(channel) {
     country: channel.country || 'Unknown',
     media_type: channel.media_type || 'TV',
     source: channel.source || 'Community',
-    logo: channel.logo || '',
+    logo: isValidUrl(channel.logo) ? channel.logo : '',
     urls,
     url: urls[0] || ''
   };
@@ -422,7 +461,7 @@ function createChannelCard(channel) {
 
   const logo = document.createElement('div');
   logo.className = 'channel-logo';
-  if (channel.logo) {
+  if (isValidUrl(channel.logo)) {
     const image = document.createElement('img');
     image.loading = 'lazy';
     image.src = channel.logo;
@@ -466,7 +505,8 @@ function createChannelCard(channel) {
   const playButton = document.createElement('button');
   playButton.className = 'primary-button';
   playButton.type = 'button';
-  playButton.textContent = '▶ Play';
+  playButton.textContent = channel.urls.length > 0 ? '▶ Play' : 'No stream';
+  playButton.disabled = channel.urls.length === 0;
   playButton.addEventListener('click', () => playChannel(channel));
 
   const favoriteButton = document.createElement('button');
@@ -516,6 +556,11 @@ function updateFavoritesBadge() {
 }
 
 async function playChannel(channel) {
+  if (!channel.url || channel.urls.length === 0) {
+    showToast('No valid HTTP(S) stream sources are available for this channel.', true);
+    return;
+  }
+
   state.activeChannel = channel;
   elements.playerDock.classList.remove('hidden');
   elements.playerTitle.textContent = channel.name;
@@ -548,6 +593,11 @@ function updatePlayerFavoriteState() {
 }
 
 async function loadStream(url) {
+  if (!isSafeMediaUrl(url)) {
+    showToast('Blocked a non-HTTP(S) stream URL.', true);
+    return;
+  }
+
   destroyHls();
   const video = elements.videoPlayer;
   video.pause();
