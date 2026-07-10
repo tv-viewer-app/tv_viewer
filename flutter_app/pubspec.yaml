@@ -47,6 +47,7 @@ dependencies:
   
   # Cached images for channel logos (#147)
   cached_network_image: ^3.3.1
+  flutter_cache_manager: ^3.4.1
   
   # Device & Connectivity Info (BL-024, BL-032)
   device_info_plus: ^10.1.0

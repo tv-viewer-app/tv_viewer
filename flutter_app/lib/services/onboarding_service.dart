@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/prefs_lock.dart';
 
 /// Service for managing first-time user onboarding experience
 class OnboardingService {
@@ -14,19 +15,19 @@ class OnboardingService {
   /// Mark onboarding as complete
   static Future<void> completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingKey, true);
+    await prefs.safeSetBool(_onboardingKey, true);
   }
 
   /// Reset onboarding (for testing or user request)
   static Future<void> resetOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingKey, false);
+    await prefs.safeSetBool(_onboardingKey, false);
     
     // Clear all individual tooltip states
     final keys = prefs.getKeys();
     for (final key in keys) {
       if (key.startsWith(_tooltipShownPrefix)) {
-        await prefs.remove(key);
+        await prefs.safeRemove(key);
       }
     }
   }
@@ -40,7 +41,7 @@ class OnboardingService {
   /// Mark a specific tooltip as shown
   static Future<void> markTooltipAsShown(String tooltipId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('$_tooltipShownPrefix$tooltipId', true);
+    await prefs.safeSetBool('$_tooltipShownPrefix$tooltipId', true);
   }
 
   /// Get list of tooltips that should be shown on home screen

@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// Persists the user's last-used filter selections across launches.
 ///
@@ -45,7 +46,7 @@ class FiltersService {
   static Future<void> saveFavoritesOnly(bool v) async {
     try {
       final p = await SharedPreferences.getInstance();
-      await p.setBool(_kFavOnly, v);
+      await p.safeSetBool(_kFavOnly, v);
     } catch (e) {
       logger.warning('FiltersService.saveFavoritesOnly failed', e);
     }
@@ -55,12 +56,12 @@ class FiltersService {
   static Future<void> clear() async {
     try {
       final p = await SharedPreferences.getInstance();
-      await p.remove(_kCategory);
-      await p.remove(_kCountry);
-      await p.remove(_kLanguage);
-      await p.remove(_kMediaType);
-      await p.remove(_kStatus);
-      await p.remove(_kFavOnly);
+      await p.safeRemove(_kCategory);
+      await p.safeRemove(_kCountry);
+      await p.safeRemove(_kLanguage);
+      await p.safeRemove(_kMediaType);
+      await p.safeRemove(_kStatus);
+      await p.safeRemove(_kFavOnly);
     } catch (e) {
       logger.warning('FiltersService.clear failed', e);
     }
@@ -69,7 +70,7 @@ class FiltersService {
   static Future<void> _putString(String key, String value) async {
     try {
       final p = await SharedPreferences.getInstance();
-      await p.setString(key, value);
+      await p.safeSetString(key, value);
     } catch (e) {
       logger.warning('FiltersService set "$key" failed', e);
     }

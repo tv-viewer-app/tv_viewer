@@ -4,6 +4,7 @@ import '../../models/channel.dart';
 import '../../services/m3u_service.dart';
 import '../../services/favorites_service.dart';
 import '../../utils/logger_service.dart';
+import '../../utils/prefs_lock.dart';
 import '../channel_repository.dart';
 import 'playlist_repository_impl.dart';
 
@@ -70,7 +71,7 @@ class ChannelRepositoryImpl implements ChannelRepository {
     try {
       final prefs = await SharedPreferences.getInstance();
       final json = jsonEncode(channels.map((c) => c.toJson()).toList());
-      final success = await prefs.setString(_channelsCacheKey, json);
+      final success = await prefs.safeSetString(_channelsCacheKey, json);
       
       if (success) {
         logger.info('ChannelRepository: Successfully cached ${channels.length} channels');
@@ -170,7 +171,7 @@ class ChannelRepositoryImpl implements ChannelRepository {
       final prefs = await SharedPreferences.getInstance();
       
       // Clear channels cache
-      await prefs.remove(_channelsCacheKey);
+      await prefs.safeRemove(_channelsCacheKey);
       
       // Clear favorites
       await FavoritesService.clearFavorites();

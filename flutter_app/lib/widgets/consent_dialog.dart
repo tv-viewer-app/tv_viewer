@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/analytics_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// First-launch consent dialog for analytics and age verification.
 ///
@@ -172,9 +173,9 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
 
   Future<void> _accept(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(ConsentDialog._consentShownKey, true);
-    await prefs.setBool(ConsentDialog._ageVerifiedKey, true);
-    await prefs.setBool(ConsentDialog._analyticsConsentKey, _analyticsOptIn);
+    await prefs.safeSetBool(ConsentDialog._consentShownKey, true);
+    await prefs.safeSetBool(ConsentDialog._ageVerifiedKey, true);
+    await prefs.safeSetBool(ConsentDialog._analyticsConsentKey, _analyticsOptIn);
 
     // Update analytics opt-in
     await AnalyticsService.instance.setEnabled(_analyticsOptIn);

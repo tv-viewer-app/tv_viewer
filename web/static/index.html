@@ -603,9 +603,23 @@ const analytics = (() => {
             if (tzMap[tz]) return tzMap[tz];
             if (tz.startsWith('America/')) return 'US';
             if (tz.startsWith('Europe/')) return tz.split('/')[1] === 'Istanbul' ? 'TR' : 'DE';
-            if (tz.startsWith('Asia/')) return 'XX';
-            return 'XX';
-        } catch(e) { return 'XX'; }
+            const fallback = detectCountryFromLanguage();
+            if (tz.startsWith('Asia/')) return fallback;
+            return fallback;
+        } catch(e) { return detectCountryFromLanguage(); }
+    }
+
+    function detectCountryFromLanguage() {
+        try {
+            const lang = navigator.language || (navigator.languages && navigator.languages[0]) || '';
+            const normalized = lang.replace('_', '-');
+            if (normalized.includes('-')) {
+                const parts = normalized.split('-');
+                const country = parts[parts.length - 1].toUpperCase();
+                if (country.length === 2) return country;
+            }
+        } catch(e) {}
+        return 'XX';
     }
 
     // Session start (once per page load)

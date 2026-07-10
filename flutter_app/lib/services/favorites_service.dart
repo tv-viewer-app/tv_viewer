@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// Service for managing channel favorites persistence.
 ///
@@ -31,7 +33,7 @@ class FavoritesService {
   static Future<bool> saveFavorites(Set<String> favoriteUrls) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return await prefs.setStringList(_favoritesKey, favoriteUrls.toList());
+      return await prefs.safeSetStringList(_favoritesKey, favoriteUrls.toList());
     } catch (e) {
       logger.warning('Error saving favorites', e);
       return false;
@@ -77,7 +79,7 @@ class FavoritesService {
   static Future<bool> clearFavorites() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return await prefs.remove(_favoritesKey);
+      return await prefs.safeRemove(_favoritesKey);
     } catch (e) {
       logger.warning('Error clearing favorites', e);
       return false;

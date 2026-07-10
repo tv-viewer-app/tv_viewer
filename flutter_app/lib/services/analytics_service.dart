@@ -126,10 +126,7 @@ class AnalyticsService {
       _deviceId = prefs.getString(_deviceIdKey) ?? '';
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuidV4();
-        await PrefsLock.instance.synchronized(() async {
-          final lockedPrefs = await SharedPreferences.getInstance();
-          await lockedPrefs.setString(_deviceIdKey, _deviceId);
-        });
+        await prefs.safeSetString(_deviceIdKey, _deviceId);
       }
 
       // Start periodic flush
@@ -164,10 +161,8 @@ class AnalyticsService {
   /// Allow user to opt in/out of anonymous analytics collection.
   Future<void> setEnabled(bool enabled) async {
     _userOptedIn = enabled;
-    await PrefsLock.instance.synchronized(() async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_analyticsEnabledKey, enabled);
-    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.safeSetBool(_analyticsEnabledKey, enabled);
     _logger.info('[Analytics] User opted ${enabled ? "in" : "out"}');
   }
 
@@ -479,19 +474,35 @@ class AnalyticsService {
       }
 
       // Fallback: offset-based rough detection
-      if (offsetHours >= 2.0 && offsetHours <= 3.0) return 'IL'; // Israel is dominant user base
-      if (offsetHours >= -5.0 && offsetHours <= -4.0) return 'US';
-      if (offsetHours >= -8.0 && offsetHours <= -7.0) return 'US';
-      if (offsetHours >= 0.0 && offsetHours <= 1.0) return 'GB';
-      if (offsetHours >= 1.0 && offsetHours < 2.0) return 'DE';
-      if (offsetHours >= 5.0 && offsetHours <= 6.0) return 'IN';
-      if (offsetHours >= 8.0 && offsetHours <= 9.0) return 'CN';
-      if (offsetHours >= 9.0 && offsetHours <= 10.0) return 'JP';
+      String country = 'XX';
+      if (offsetHours >= 2.0 && offsetHours <= 3.0) country = 'IL'; // Israel is dominant user base
+      if (offsetHours >= -5.0 && offsetHours <= -4.0) country = 'US';
+      if (offsetHours >= -8.0 && offsetHours <= -7.0) country = 'US';
+      if (offsetHours >= 0.0 && offsetHours <= 1.0) country = 'GB';
+      if (offsetHours >= 1.0 && offsetHours < 2.0) country = 'DE';
+      if (offsetHours >= 5.0 && offsetHours <= 6.0) country = 'IN';
+      if (offsetHours >= 8.0 && offsetHours <= 9.0) country = 'CN';
+      if (offsetHours >= 9.0 && offsetHours <= 10.0) country = 'JP';
 
-      return 'XX';
+      if (country != 'XX') return country;
+      return _detectCountryFromLocale();
     } catch (_) {
-      return 'XX';
+      return _detectCountryFromLocale();
     }
+  }
+
+  static String _detectCountryFromLocale() {
+    try {
+      final locale = Platform.localeName.trim();
+      final normalized = locale.replaceAll('-', '_');
+      if (normalized.contains('_')) {
+        final country = normalized.split('_').last.toUpperCase();
+        if (country.length == 2) {
+          return country;
+        }
+      }
+    } catch (_) {}
+    return 'XX';
   }
 
   /// Track session end with engagement depth.

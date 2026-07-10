@@ -20,6 +20,7 @@ import '../widgets/pin_dialog.dart';
 import '../widgets/quality_badge.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 import '../constants.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -411,22 +412,24 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       logger.info('Health report: ${widget.channel.name} url=${url.substring(0, url.length.clamp(0, 40))} working=$isWorking');
       
       // 1. ALWAYS save to LOCAL cache FIRST (primary source of truth)
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString('channel_health_cache');
-      Map<String, dynamic> healthMap = {};
-      
-      if (json != null) {
-        healthMap = jsonDecode(json) as Map<String, dynamic>;
-      }
-      
-      final urlHash = SharedDbService.hashUrl(url);
-      healthMap[urlHash] = {
-        'status': isWorking ? 'working' : 'failed',
-        'lastChecked': DateTime.now().toUtc().toIso8601String(),
-        'responseTimeMs': null,
-      };
-      
-      await prefs.setString('channel_health_cache', jsonEncode(healthMap));
+      await PrefsLock.instance.guardWrite(() async {
+        final lockedPrefs = await SharedPreferences.getInstance();
+        final json = lockedPrefs.getString('channel_health_cache');
+        Map<String, dynamic> healthMap = {};
+
+        if (json != null) {
+          healthMap = jsonDecode(json) as Map<String, dynamic>;
+        }
+
+        final urlHash = SharedDbService.hashUrl(url);
+        healthMap[urlHash] = {
+          'status': isWorking ? 'working' : 'failed',
+          'lastChecked': DateTime.now().toUtc().toIso8601String(),
+          'responseTimeMs': null,
+        };
+
+        await lockedPrefs.setString('channel_health_cache', jsonEncode(healthMap));
+      }, operation: 'player health cache');
       logger.debug('Saved health status to LOCAL cache: working=$isWorking');
       
       // 2. THEN report to Supabase (SECONDARY, optional, fire-and-forget)
@@ -666,7 +669,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = 'preferred_source_${widget.channel.name.toLowerCase().hashCode}';
-      await prefs.setInt(key, index);
+      await prefs.safeSetInt(key, index);
     } catch (_) {}
   }
 

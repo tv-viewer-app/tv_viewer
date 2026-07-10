@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// Parental controls service for TV Viewer.
 ///
@@ -272,20 +273,20 @@ class ParentalControlsService extends ChangeNotifier {
   Future<void> _save() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_keyEnabled, _enabled);
+      await prefs.safeSetBool(_keyEnabled, _enabled);
       if (_pinHash != null) {
-        await prefs.setString(_keyPinHash, _pinHash!);
+        await prefs.safeSetString(_keyPinHash, _pinHash!);
       } else {
-        await prefs.remove(_keyPinHash);
+        await prefs.safeRemove(_keyPinHash);
       }
-      await prefs.setStringList(_keyBlockedCategories, _blockedCategories);
-      await prefs.setBool(_keyIsOver18, _isOver18);
+      await prefs.safeSetStringList(_keyBlockedCategories, _blockedCategories);
+      await prefs.safeSetBool(_keyIsOver18, _isOver18);
       // Persist lockout state
-      await prefs.setInt('parental_failed_attempts', _failedAttempts);
+      await prefs.safeSetInt('parental_failed_attempts', _failedAttempts);
       if (_lockoutUntil != null) {
-        await prefs.setInt('parental_lockout_until', _lockoutUntil!.millisecondsSinceEpoch);
+        await prefs.safeSetInt('parental_lockout_until', _lockoutUntil!.millisecondsSinceEpoch);
       } else {
-        await prefs.remove('parental_lockout_until');
+        await prefs.safeRemove('parental_lockout_until');
       }
       logger.debug('Parental settings saved');
     } catch (e, stackTrace) {
@@ -307,8 +308,8 @@ class ParentalControlsService extends ChangeNotifier {
         // Backward compatibility: old parental_min_age == 18 → over 18.
         _isOver18 = (prefs.getInt(_legacyKeyMinAge) ?? 0) >= 18;
         // Persist as new key so next load is clean.
-        await prefs.setBool(_keyIsOver18, _isOver18);
-        await prefs.remove(_legacyKeyMinAge);
+        await prefs.safeSetBool(_keyIsOver18, _isOver18);
+        await prefs.safeRemove(_legacyKeyMinAge);
       } else {
         _isOver18 = false;
       }

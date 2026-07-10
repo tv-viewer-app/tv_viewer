@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'analytics_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// BL-032: Feedback service for app rating and in-app feedback
 class FeedbackService {
@@ -30,7 +31,7 @@ class FeedbackService {
     
     // Increment session count
     final sessionCount = prefs.getInt(_sessionCountKey) ?? 0;
-    await prefs.setInt(_sessionCountKey, sessionCount + 1);
+    await prefs.safeSetInt(_sessionCountKey, sessionCount + 1);
     
     // Show prompt after 5 sessions
     return sessionCount >= _sessionsBeforePrompt;
@@ -39,13 +40,13 @@ class FeedbackService {
   /// Mark that rating prompt was shown
   static Future<void> markPromptShown() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lastPromptKey, DateTime.now().millisecondsSinceEpoch);
+    await prefs.safeSetInt(_lastPromptKey, DateTime.now().millisecondsSinceEpoch);
   }
   
   /// Mark that user has rated the app
   static Future<void> markAsRated() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_hasRatedKey, true);
+    await prefs.safeSetBool(_hasRatedKey, true);
   }
   
   /// Open Play Store for rating (Android)
@@ -303,8 +304,8 @@ _Submitted via TV Viewer in-app feedback (${DateTime.now().toIso8601String()})_
   /// Reset session counter (for testing)
   static Future<void> resetSessionCount() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_sessionCountKey);
-    await prefs.remove(_hasRatedKey);
-    await prefs.remove(_lastPromptKey);
+    await prefs.safeRemove(_sessionCountKey);
+    await prefs.safeRemove(_hasRatedKey);
+    await prefs.safeRemove(_lastPromptKey);
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/prefs_lock.dart';
 
 /// Community statistics screen showing aggregated usage data.
 /// Fetches pre-aggregated statistics from Supabase materialized views.
@@ -65,8 +66,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
 
     if (!_hasSupabaseStatsConfig) {
-      await prefs.remove(_cacheKey);
-      await prefs.remove(_cacheTimeKey);
+      await prefs.safeRemove(_cacheKey);
+      await prefs.safeRemove(_cacheTimeKey);
       _showCommunityStatsFallback();
       return;
     }
@@ -93,8 +94,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           dailyResponse.statusCode == 403 ||
           channelsResponse.statusCode == 401 ||
           channelsResponse.statusCode == 403) {
-        await prefs.remove(_cacheKey);
-        await prefs.remove(_cacheTimeKey);
+        await prefs.safeRemove(_cacheKey);
+        await prefs.safeRemove(_cacheTimeKey);
         _showCommunityStatsFallback();
         return;
       }
@@ -107,8 +108,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       final dynamic dailyDecoded = jsonDecode(dailyResponse.body);
       final dynamic channelsDecoded = jsonDecode(channelsResponse.body);
       if (dailyDecoded is! List || channelsDecoded is! List) {
-        await prefs.remove(_cacheKey);
-        await prefs.remove(_cacheTimeKey);
+        await prefs.safeRemove(_cacheKey);
+        await prefs.safeRemove(_cacheTimeKey);
         _showCommunityStatsFallback();
         return;
       }
@@ -127,14 +128,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       final totalPlays = (result['total_plays'] as num?)?.toInt() ?? 0;
       final hasAnalytics = result['has_analytics'] == true;
       if (!hasAnalytics && totalEvents == 0 && totalPlays == 0) {
-        await prefs.remove(_cacheKey);
-        await prefs.remove(_cacheTimeKey);
+        await prefs.safeRemove(_cacheKey);
+        await prefs.safeRemove(_cacheTimeKey);
         _showCommunityStatsFallback();
         return;
       }
 
-      await prefs.setString(_cacheKey, jsonEncode(result));
-      await prefs.setInt(_cacheTimeKey, now);
+      await prefs.safeSetString(_cacheKey, jsonEncode(result));
+      await prefs.safeSetInt(_cacheTimeKey, now);
 
       if (!mounted) return;
       setState(() {
@@ -319,7 +320,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               : RefreshIndicator(
                   onRefresh: () async {
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove(_cacheTimeKey);
+                    await prefs.safeRemove(_cacheTimeKey);
                     if (!mounted) return;
                     setState(() {
                       _loading = true;

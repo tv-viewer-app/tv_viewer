@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 import '../utils/pinned_http_client.dart';
 
 /// Result of a release lookup against GitHub.
@@ -103,7 +104,7 @@ class UpdateService {
 
       // Always record the timestamp on a successful API call so we don't
       // hammer the rate limit. (Forced checks also update it.)
-      await prefs.setInt(_checkIntervalKey, now);
+      await prefs.safeSetInt(_checkIntervalKey, now);
 
       final info = await PackageInfo.fromPlatform();
       final currentVersion = info.version;
@@ -149,7 +150,7 @@ class UpdateService {
   /// checks won't surface this version again (forced checks still will).
   static Future<void> dismissVersion(String version) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_dismissedVersionKey, version);
+    await prefs.safeSetString(_dismissedVersionKey, version);
   }
 
   /// Download the APK from [info] to the app's external files dir and

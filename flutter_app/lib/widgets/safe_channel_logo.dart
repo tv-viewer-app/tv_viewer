@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 /// Safe wrapper around channel logo loading.
 ///
@@ -31,6 +32,15 @@ class SafeChannelLogo extends StatelessWidget {
     this.fit = BoxFit.cover,
   });
 
+  static final CacheManager _cacheManager = CacheManager(
+    Config(
+      'tv_viewer_logo_cache',
+      stalePeriod: const Duration(days: 14),
+      maxNrOfCacheObjects: 400,
+      repo: JsonCacheInfoRepository(databaseName: 'tv_viewer_logo_cache'),
+    ),
+  );
+
   /// Returns true iff [url] is non-null, non-empty, and parseable as an
   /// http or https URL with a host. Anything else (file://, content://,
   /// raw paths, garbage strings, null) is rejected.
@@ -52,11 +62,20 @@ class SafeChannelLogo extends StatelessWidget {
 
     return CachedNetworkImage(
       imageUrl: url!,
+      cacheManager: _cacheManager,
       width: size,
       height: size,
       fit: fit,
       memCacheWidth: (size * 2).toInt(),
       maxWidthDiskCache: 160,
+      imageBuilder: (context, imageProvider) => Image(
+        image: imageProvider,
+        width: size,
+        height: size,
+        fit: fit,
+        errorBuilder: (_, __, ___) =>
+            SizedBox(width: size, height: size, child: Center(child: fallback)),
+      ),
       placeholder: (_, __) => SizedBox(
         width: size,
         height: size,

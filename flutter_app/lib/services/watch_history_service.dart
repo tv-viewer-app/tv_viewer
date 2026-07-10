@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger_service.dart';
+import '../utils/prefs_lock.dart';
 
 /// Service for managing watch history persistence.
 ///
@@ -109,7 +110,7 @@ class WatchHistoryService {
   static Future<bool> clear() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return await prefs.remove(_historyKey);
+      return await prefs.safeRemove(_historyKey);
     } catch (e) {
       logger.warning('Error clearing watch history', e);
       return false;
@@ -157,7 +158,7 @@ class WatchHistoryService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final data = json.encode({'entries': entries.values.toList()});
-      return await prefs.setString(_historyKey, data);
+      return await prefs.safeSetString(_historyKey, data);
     } catch (e) {
       logger.warning('Error saving watch history', e);
       return false;
