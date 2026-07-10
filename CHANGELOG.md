@@ -5,6 +5,24 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.2] - 2026-07-10
+
+### Fixed
+- Android crash: DatabaseException(database_closed) — 172 crash events eliminated
+- Android crash: Could not decompress image — logo loading hardened
+- Country detection fallback to device locale when timezone fails
+- Docker healthcheck reduced from 60s to 300s (less log noise)
+- Chrome extension rebuilt as popup app (Chrome Store compliance)
+- Statistics now shows actual channel names instead of 'Israel General'
+- Channel name resolution maps ALL URL hashes
+- Israeli channels: 18 fixed, 5 dead pirate streams removed
+
+### Security
+- Chrome extension: URL validation rejects non-http(s) schemes
+- Chrome extension: explicit CSP (script-src 'self')
+- Proxy SSRF: redirects disabled
+- channel_requests: anon UPDATE revoked, atomic RPC voting
+
 ## [2.22.1] - 2026-07-04
 
 ### Fixed
