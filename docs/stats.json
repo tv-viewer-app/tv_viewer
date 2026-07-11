@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-07-10T09:20:29.233884+00:00",
-  "total_channels": 21109,
+  "updated_at": "2026-07-11T07:41:54.799204+00:00",
+  "total_channels": 21270,
   "countries": 31,
-  "categories": 24,
+  "categories": 26,
   "top_countries": [
     {
       "name": "France",
-      "count": 335
+      "count": 301
     },
     {
       "name": "China",
@@ -17,12 +17,12 @@
       "count": 103
     },
     {
-      "name": "Canada",
-      "count": 58
+      "name": "CZ",
+      "count": 61
     },
     {
-      "name": "CZ",
-      "count": 33
+      "name": "Canada",
+      "count": 58
     },
     {
       "name": "AE",
@@ -57,6 +57,10 @@
       "count": 18
     },
     {
+      "name": "BY",
+      "count": 16
+    },
+    {
       "name": "CL",
       "count": 14
     },
@@ -77,10 +81,6 @@
       "count": 10
     },
     {
-      "name": "BY",
-      "count": 10
-    },
-    {
       "name": "AT",
       "count": 9
     }
@@ -88,11 +88,11 @@
   "top_categories": [
     {
       "name": "Education",
-      "count": 382
+      "count": 383
     },
     {
       "name": "Entertainment",
-      "count": 262
+      "count": 221
     },
     {
       "name": "Documentary",
@@ -103,8 +103,12 @@
       "count": 44
     },
     {
+      "name": "Czech Republic",
+      "count": 36
+    },
+    {
       "name": "Business",
-      "count": 27
+      "count": 31
     },
     {
       "name": "Animation",
@@ -112,7 +116,7 @@
     },
     {
       "name": "Comedy",
-      "count": 16
+      "count": 17
     },
     {
       "name": "Classic",
@@ -123,8 +127,8 @@
       "count": 8
     },
     {
-      "name": "Czech Republic",
-      "count": 8
+      "name": "Belarus",
+      "count": 6
     },
     {
       "name": "Cooking",
@@ -140,10 +144,6 @@
     },
     {
       "name": "Azerbaijan",
-      "count": 2
-    },
-    {
-      "name": "Culture;Entertainment",
       "count": 2
     }
   ]
