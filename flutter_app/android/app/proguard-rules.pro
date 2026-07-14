@@ -81,3 +81,9 @@
 
 # Suppress missing Play Core classes (not needed for sideloaded APKs)
 -dontwarn com.google.android.play.core.**
+
+# F-Droid: Remove splitinstall classes (Google Play dynamic delivery)
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.splitcompat.**
+-keep class com.google.android.play.core.splitinstall.** { *; }
+-keep class com.google.android.play.core.splitcompat.** { *; }

@@ -77,6 +77,12 @@ android {
             versionNameSuffix "-DEBUG"
         }
     }
+
+    // F-Droid: disable DependencyInfoBlock (encrypted with Google key)
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 flutter {
