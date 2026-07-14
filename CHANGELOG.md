@@ -5,6 +5,13 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.3] - 2026-07-14
+
+### Fixed
+- Android statistics screen shows actual channel names (KAN 11, Reshet 13) instead of 'IL General'
+- Country code normalization: IL/Israel merged, US/United States unified
+- Channel name resolution queries Supabase channels table by hash
+
 ## [2.22.2] - 2026-07-10
 
 ### Fixed
