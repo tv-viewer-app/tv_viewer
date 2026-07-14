@@ -114,14 +114,19 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         return;
       }
 
+      final topChannelsList = List<Map<String, dynamic>>.from(
+        channelsDecoded.map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+
+      // Resolve actual channel names from hashes
+      await _resolveChannelNames(topChannelsList, headers);
+
       final result = _normalizeStatisticsPayload(
         _buildStatisticsFromMaterializedViews(
           List<Map<String, dynamic>>.from(
             dailyDecoded.map((item) => Map<String, dynamic>.from(item as Map)),
           ),
-          List<Map<String, dynamic>>.from(
-            channelsDecoded.map((item) => Map<String, dynamic>.from(item as Map)),
-          ),
+          topChannelsList,
         ),
       );
       final totalEvents = (result['total_events'] as num?)?.toInt() ?? 0;
@@ -208,7 +213,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     final countryTopChannels = <String, List<Map<String, dynamic>>>{};
     for (final channel in topChannels) {
-      final country = (channel['channel_country'] as String? ?? '').trim();
+      final rawCountry = (channel['channel_country'] as String? ?? '').trim();
+      if (rawCountry.isEmpty) continue;
+      final country = _normalizeCountryCode(rawCountry);
       if (country.isEmpty) continue;
       final entry = {
         'name': _formatMaterializedChannel(channel),
@@ -237,7 +244,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   String _formatMaterializedChannel(Map<String, dynamic> channel) {
-    final country = (channel['channel_country'] as String? ?? '').trim();
+    // If we resolved the channel name, use it
+    final resolvedName = (channel['resolved_name'] as String? ?? '').trim();
+    if (resolvedName.isNotEmpty) return resolvedName;
+
+    final country = _normalizeCountryCode(
+        (channel['channel_country'] as String? ?? '').trim());
     final category = (channel['channel_category'] as String? ?? '').trim();
     final labelParts = <String>[
       if (country.isNotEmpty) country,
@@ -247,6 +259,62 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       return labelParts.join(' • ');
     }
     return (channel['channel_hash'] as String? ?? 'Unknown channel').trim();
+  }
+
+  /// Normalize country codes: IL -> Israel, US -> United States, etc.
+  String _normalizeCountryCode(String code) {
+    const countryMap = {
+      'IL': 'Israel', 'US': 'United States', 'GB': 'United Kingdom',
+      'DE': 'Germany', 'FR': 'France', 'CA': 'Canada', 'RU': 'Russia',
+      'IN': 'India', 'CN': 'China', 'GR': 'Greece', 'ES': 'Spain',
+      'IT': 'Italy', 'BR': 'Brazil', 'AU': 'Australia', 'XX': '',
+    };
+    return countryMap[code.toUpperCase()] ?? code;
+  }
+
+  /// Resolve channel names from hashes by querying the channels table
+  Future<void> _resolveChannelNames(
+      List<Map<String, dynamic>> topChannels, Map<String, String> headers) async {
+    if (topChannels.isEmpty || !_hasSupabaseStatsConfig) return;
+
+    try {
+      // Get hashes to look up
+      final hashes = topChannels
+          .map((c) => (c['channel_hash'] as String? ?? '').trim())
+          .where((h) => h.isNotEmpty)
+          .toSet()
+          .toList();
+      if (hashes.isEmpty) return;
+
+      // Query channels table for matching url_hash -> name
+      // Use IN filter with PostgREST: url_hash=in.(hash1,hash2,...)
+      final hashFilter = 'in.(${hashes.join(",")})';
+      final uri = Uri.parse(
+          '$_supabaseUrl/rest/v1/channels?select=url_hash,name&url_hash=$hashFilter');
+      final resp = await http.get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) {
+        final List<dynamic> rows = jsonDecode(resp.body);
+        final nameMap = <String, String>{};
+        for (final row in rows) {
+          final hash = (row['url_hash'] as String? ?? '').trim();
+          final name = (row['name'] as String? ?? '').trim();
+          if (hash.isNotEmpty && name.isNotEmpty) {
+            nameMap[hash] = name;
+          }
+        }
+        // Apply resolved names
+        for (final channel in topChannels) {
+          final hash = (channel['channel_hash'] as String? ?? '').trim();
+          if (nameMap.containsKey(hash)) {
+            channel['resolved_name'] = nameMap[hash];
+          }
+        }
+      }
+    } catch (_) {
+      // Name resolution failed — fall back to country/category display
+    }
   }
 
   Future<void> _openCommunityStats() async {
