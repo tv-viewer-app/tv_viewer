@@ -438,7 +438,7 @@ class SharedDbService {
           return http.Response('', 408);
         },
       ).catchError((_) {
-        // Silently ignore all errors
+        return http.Response('', 500);
       });
     } catch (_) {
       // Silently ignore all errors - never block the UI

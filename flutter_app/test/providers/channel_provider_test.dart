@@ -324,7 +324,7 @@ void main() {
 
         expect(
           provider.channels.map((ch) => ch.name).toList(),
-          equals(['Reliable High', 'Reliable Low', 'Unchecked One', 'Broken One']),
+          equals(['Reliable High', 'Reliable Low', 'Broken One', 'Unchecked One']),
         );
       });
 
