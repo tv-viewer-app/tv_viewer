@@ -75,6 +75,7 @@ class AnalyticsService {
   String _userCountry = 'XX';
 
   final List<Map<String, dynamic>> _queue = [];
+  final Set<String> _sentErrors = <String>{};
   Timer? _flushTimer;
 
   // ---------------------------------------------------------------------------
@@ -211,23 +212,99 @@ class AnalyticsService {
     });
   }
 
-  /// Track when a user plays a channel (NO names or URLs — only country/category).
-  Future<void> trackChannelPlay(String url, {String country = '', String category = ''}) async {
-    await trackEvent('channel_play', {
-      'url_hash': _hashUrl(url),
+  Map<String, dynamic> _channelEventData(
+    String url, {
+    String name = '',
+    String? urlHash,
+    String country = '',
+    String category = '',
+    String source = 'browse',
+    Map<String, dynamic>? extra,
+  }) {
+    return {
+      'name': name,
+      'url_hash': urlHash ?? _hashUrl(url),
       'country': _normalizeCountry(country),
       'category': category,
-    });
+      'source': source,
+      ...?extra,
+    };
   }
 
-  /// Track when a stream fails to play (NO names or URLs).
-  Future<void> trackChannelFail(String url, String error, {String country = '', String category = ''}) async {
-    await trackEvent('channel_fail', {
-      'url_hash': _hashUrl(url),
-      'error_code': error,
-      'country': _normalizeCountry(country),
-      'category': category,
-    });
+  /// Track when a user starts a playback attempt.
+  Future<void> trackChannelPlayAttempt(
+    String url, {
+    String name = '',
+    String? urlHash,
+    String country = '',
+    String category = '',
+    String source = 'browse',
+  }) async {
+    await trackEvent(
+      'channel_play_attempt',
+      _channelEventData(
+        url,
+        name: name,
+        urlHash: urlHash,
+        country: country,
+        category: category,
+        source: source,
+      ),
+    );
+  }
+
+  /// Track when a channel actually starts playing.
+  Future<void> trackChannelPlay(
+    String url, {
+    String name = '',
+    String? urlHash,
+    String country = '',
+    String category = '',
+    String source = 'browse',
+  }) async {
+    await trackEvent(
+      'channel_play',
+      _channelEventData(
+        url,
+        name: name,
+        urlHash: urlHash,
+        country: country,
+        category: category,
+        source: source,
+      ),
+    );
+  }
+
+  /// Track when a stream fails to play.
+  Future<void> trackChannelFail(
+    String url,
+    String failureType, {
+    String name = '',
+    String? urlHash,
+    String country = '',
+    String category = '',
+    String source = 'browse',
+    int? httpStatus,
+    int? sourceUrlIndex,
+    String? errorCode,
+  }) async {
+    await trackEvent(
+      'channel_fail',
+      _channelEventData(
+        url,
+        name: name,
+        urlHash: urlHash,
+        country: country,
+        category: category,
+        source: source,
+        extra: {
+          'failure_type': failureType,
+          if (httpStatus != null) 'http_status': httpStatus,
+          if (sourceUrlIndex != null) 'source_url_index': sourceUrlIndex,
+          if (errorCode != null && errorCode.isNotEmpty) 'error_code': errorCode,
+        },
+      ),
+    );
   }
 
   /// Track when a channel validation scan finishes.
@@ -281,6 +358,14 @@ class AnalyticsService {
   }) async {
     const allowedSeverity = {'warning', 'error', 'fatal'};
     final sev = allowedSeverity.contains(severity) ? severity : 'error';
+    final errorType = error.runtimeType.toString();
+    final errorMessage = _sanitizeErrorMessage(error.toString());
+    final signature =
+        '$errorType:${errorMessage.substring(0, min(50, errorMessage.length))}';
+    if (_sentErrors.contains(signature)) {
+      return;
+    }
+    _sentErrors.add(signature);
 
     var stackTop = '';
     final stackSummary = <String>[];
@@ -300,8 +385,8 @@ class AnalyticsService {
     }
 
     await trackEvent('client_error', {
-      'error_type': error.runtimeType.toString(),
-      'error_message': _sanitizeErrorMessage(error.toString()),
+      'error_type': errorType,
+      'error_message': errorMessage,
       'stack_top': stackTop,
       'stack_summary': stackSummary,
       'severity': sev,

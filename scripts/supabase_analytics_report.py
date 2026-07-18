@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 try:
     import requests
@@ -37,7 +38,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 MIN_VERSION = os.environ.get("MIN_VERSION", "2.6.0")
 DAYS_BACK = int(os.environ.get("DAYS_BACK", "30"))
-REPORT_PATH = "/tmp/analytics-report.json"
+REPORT_PATH = str(Path(__file__).resolve().with_name("analytics-report.json"))
 
 
 def _headers():
@@ -109,6 +110,119 @@ def query_channels_reports() -> list[dict]:
     return resp.json()
 
 
+def _parse_created_at(value: str) -> datetime | None:
+    """Parse an ISO timestamp from Supabase."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _week_start(value: datetime) -> datetime.date:
+    """Return the Monday for the given timestamp."""
+    day = value.date()
+    return day - timedelta(days=day.weekday())
+
+
+def query_device_activity(limit: int = 1000) -> list[dict]:
+    """Fetch device activity with pagination so retention is not sample-capped."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=DAYS_BACK)).isoformat()
+    url = f"{SUPABASE_URL}/rest/v1/analytics_events"
+    params = {
+        "created_at": f"gte.{cutoff}",
+        "select": "device_id,platform,app_version,created_at",
+        "order": "created_at.asc",
+        "limit": str(limit),
+    }
+
+    all_rows = []
+    offset = 0
+    while offset < 50000:  # Safety cap
+        params["offset"] = str(offset)
+        resp = requests.get(url, headers=_headers(), params=params, timeout=30)
+        if resp.status_code != 200:
+            log.warning("Device activity query failed: %d - %s", resp.status_code, resp.text[:200])
+            break
+        rows = resp.json()
+        if not rows:
+            break
+        all_rows.extend(rows)
+        if len(rows) < limit:
+            break
+        offset += limit
+
+    filtered = [
+        row for row in all_rows
+        if row.get("device_id") and _version_gte(row.get("app_version", "0"), MIN_VERSION)
+    ]
+    log.info(
+        "Fetched %d device activity rows (%d after version filter >= %s)",
+        len(all_rows),
+        len(filtered),
+        MIN_VERSION,
+    )
+    return filtered
+
+
+def measure_retention(rows: list[dict] | None = None) -> dict:
+    """Measure weekly device cohorts without relying on sampled event pages."""
+    rows = rows or query_device_activity()
+    if not rows:
+        return {
+            "weekly_active_devices": [],
+            "weekly_cohorts": [],
+        }
+
+    weekly_active: dict[tuple[str, str], set[str]] = {}
+    device_weeks: dict[str, set[datetime.date]] = {}
+    first_seen_week: dict[str, datetime.date] = {}
+
+    for row in rows:
+        created_at = _parse_created_at(row.get("created_at", ""))
+        device_id = row.get("device_id")
+        if not created_at or not device_id:
+            continue
+
+        week = _week_start(created_at)
+        platform = row.get("platform") or "unknown"
+        weekly_active.setdefault((week.isoformat(), platform), set()).add(device_id)
+        device_weeks.setdefault(device_id, set()).add(week)
+        first_seen_week.setdefault(device_id, week)
+
+    weekly_active_devices = [
+        {
+            "week_start": week,
+            "platform": platform,
+            "unique_devices": len(devices),
+        }
+        for (week, platform), devices in sorted(weekly_active.items())
+    ]
+
+    cohorts: dict[datetime.date, set[str]] = {}
+    for device_id, cohort_week in first_seen_week.items():
+        cohorts.setdefault(cohort_week, set()).add(device_id)
+
+    weekly_cohorts = []
+    for cohort_week, devices in sorted(cohorts.items()):
+        next_week = cohort_week + timedelta(days=7)
+        retained_next_week = sum(
+            1 for device_id in devices if next_week in device_weeks.get(device_id, set())
+        )
+        weekly_cohorts.append({
+            "cohort_week": cohort_week.isoformat(),
+            "new_devices": len(devices),
+            "retained_next_week": retained_next_week,
+            "retention_rate_next_week": round(retained_next_week / len(devices), 4) if devices else 0.0,
+        })
+
+    return {
+        "weekly_active_devices": weekly_active_devices,
+        "weekly_cohorts": weekly_cohorts,
+    }
+
+
 def build_report() -> dict:
     """Build comprehensive analytics report."""
     report = {
@@ -128,17 +242,13 @@ def build_report() -> dict:
         "by_version_platform": dict(sorted(version_platform.items(), key=lambda x: -x[1])),
     }
 
-    # 2. Active users (unique device_ids from launches)
-    device_ids = set()
-    for ev in launches:
-        ed = ev.get("event_data", {})
-        if isinstance(ed, dict):
-            did = ed.get("device_id")
-            if did:
-                device_ids.add(did)
+    # 2. Active users + retention (device_id-based, not sampled event pages)
+    device_activity = query_device_activity()
+    device_ids = {row["device_id"] for row in device_activity if row.get("device_id")}
     report["active_users"] = {
         "unique_devices": len(device_ids),
     }
+    report["retention"] = measure_retention(device_activity)
 
     # 3. Channel plays — most popular
     plays = query_analytics_events("channel_play")

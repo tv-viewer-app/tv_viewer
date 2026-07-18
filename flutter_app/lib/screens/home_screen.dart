@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -34,6 +36,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  Timer? _searchAnalyticsTimer;
   
   // Keys for onboarding tooltips
   final GlobalKey _scanButtonKey = GlobalKey();
@@ -181,9 +184,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _searchAnalyticsTimer?.cancel();
     _searchController.dispose();
     OnboardingOverlay.dismiss();
     super.dispose();
+  }
+
+  void _clearSearch({bool refreshUi = false}) {
+    _searchAnalyticsTimer?.cancel();
+    _searchController.clear();
+    context.read<ChannelProvider>().setSearchQuery('');
+    if (refreshUi && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleSearchChanged(String value, {bool refreshUi = false}) {
+    final provider = context.read<ChannelProvider>();
+    provider.setSearchQuery(value);
+    if (refreshUi && mounted) {
+      setState(() {});
+    }
+
+    _searchAnalyticsTimer?.cancel();
+    final trimmedQuery = value.trim();
+    if (trimmedQuery.isEmpty) {
+      return;
+    }
+
+    _searchAnalyticsTimer = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      final currentQuery = _searchController.text.trim();
+      if (currentQuery.isEmpty) return;
+
+      AnalyticsService.instance.trackEvent('search', {
+        'query_length': currentQuery.length,
+        'result_count': context.read<ChannelProvider>().channels.length,
+        'platform': 'android',
+      });
+    });
   }
 
   @override
@@ -547,9 +586,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(0),
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () {
-                    _searchController.clear();
-                    context.read<ChannelProvider>().setSearchQuery('');
-                    setState(() {});
+                    _clearSearch(refreshUi: true);
                   },
                 ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
@@ -558,10 +595,7 @@ class _HomeScreenState extends State<HomeScreen> {
             borderSide: BorderSide.none,
           ),
         ),
-        onChanged: (v) {
-          context.read<ChannelProvider>().setSearchQuery(v);
-          setState(() {}); // refresh suffix clear icon
-        },
+        onChanged: (v) => _handleSearchChanged(v, refreshUi: true),
       ),
     );
   }
@@ -581,10 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (_searchController.text.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.clear),
-              onPressed: () {
-                _searchController.clear();
-                context.read<ChannelProvider>().setSearchQuery('');
-              },
+              onPressed: () => _clearSearch(),
             ),
         ],
         elevation: MaterialStateProperty.all(0),
@@ -596,9 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(28),
           ),
         ),
-        onChanged: (value) {
-          context.read<ChannelProvider>().setSearchQuery(value);
-        },
+        onChanged: (value) => _handleSearchChanged(value),
       ),
     );
   }
@@ -970,6 +999,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: provider.showFavoritesOnly ? Colors.amber.shade700 : null,
                           ),
                           onSelected: (_) => provider.toggleFavoritesFilter(),
+                        ),
+                        const SizedBox(height: 8),
+                        FilterChip(
+                          label: const Text('Show all channels'),
+                          selected: provider.showAllChannels,
+                          avatar: Icon(
+                            provider.showAllChannels ? Icons.visibility : Icons.visibility_off,
+                            size: 18,
+                          ),
+                          onSelected: (_) => provider.toggleShowAllChannels(),
                         ),
                         // Recently played
                         if (_recentChannels.isNotEmpty) ...[
@@ -1568,6 +1607,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       : null,
                 ),
                 onSelected: (_) => provider.toggleFavoritesFilter(),
+              ),
+              const SizedBox(width: 8),
+              FilterChip(
+                label: const Text('Show all channels'),
+                selected: provider.showAllChannels,
+                avatar: Icon(
+                  provider.showAllChannels ? Icons.visibility : Icons.visibility_off,
+                  size: 18,
+                ),
+                onSelected: (_) => provider.toggleShowAllChannels(),
               ),
             ],
           ),

@@ -535,6 +535,7 @@ let channelHealth = JSON.parse(localStorage.getItem('tv_channel_health') || '{}'
 let castListenerRegistered = false;
 let currentOriginalStreamUrl = '';
 let currentProxyStreamUrl = '';
+let currentPlaySource = 'browse';
 const MONO_COLORS = ['#1E3A5F','#2D1B4E','#1B4332','#4A1D1D','#3D3415','#1A3A3A'];
 const CAT_ICONS = {'News':'📰','Sports':'⚽','Entertainment':'🎬','Music':'🎵','Kids':'🧸','Movies':'🎥','Documentary':'🌍','Science':'🔬','Education':'📚','Religious':'🕌','Business':'💼','Lifestyle':'🏡','Food':'🍳','Travel':'✈️','Comedy':'😂','Drama':'🎭','Technology':'💻','Health':'❤️','Gaming':'🎮','Animation':'🎞️','Weather':'🌦️','Nature':'🌿','Shopping':'🛍️','Radio':'📻'};
 
@@ -572,6 +573,7 @@ const analytics = (() => {
     const sessionId = uuid();
     const sessionStart = Date.now();
     let playCount = 0, failCount = 0, reportCount = 0;
+    const sentErrors = new Set();
 
     function send(eventType, data = {}) {
         try {
@@ -587,6 +589,27 @@ const analytics = (() => {
                 })
             }).catch(() => {});
         } catch(e) {}
+    }
+
+    function defaultSource() {
+        const searchValue = document.getElementById('search')?.value?.trim();
+        if (searchValue) return 'search';
+        if (currentView === 'favorites') return 'favorites';
+        if (currentView === 'recent') return 'recommendation';
+        return 'browse';
+    }
+
+    function channelData(ch, extra = {}) {
+        const data = {
+            name: ch?.name || '',
+            url_hash: ch?.url_hash || '',
+            country: ch?.country || '',
+            category: ch?.category || '',
+            media_type: ch?.media_type || 'TV',
+            ...extra,
+        };
+        data.source = extra.source || defaultSource();
+        return data;
     }
 
     function detectCountry() {
@@ -637,10 +660,16 @@ const analytics = (() => {
 
     return {
         getDeviceId() { return deviceId; },
-        play(ch) { playCount++; send('channel_play', { name: ch.name, category: ch.category || '', country: ch.country || '', media_type: ch.media_type || 'TV' }); },
-        fail(ch, reason) { failCount++; send('channel_fail', { name: ch.name, category: ch.category || '', reason: (reason||'').slice(0,50) }); },
+        playAttempt(ch, source) { send('channel_play_attempt', channelData(ch, { source })); },
+        play(ch, source) { playCount++; send('channel_play', channelData(ch, { source })); },
+        fail(ch, reason, source) { failCount++; send('channel_fail', channelData(ch, { source, reason: (reason||'').slice(0,50) })); },
         report(ch) { reportCount++; send('channel_report', { name: ch.name }); },
-        search(q) { send('search', { query_length: q.length }); },
+        search(q, resultCount) {
+            send('search', {
+                query_length: q.length,
+                result_count: Number.isFinite(resultCount) ? resultCount : 0,
+            });
+        },
         feature(name) { send('feature_use', { feature: name }); },
         perf(metric, durationMs, extra) { send('perf_metric', { metric, duration_ms: durationMs, ...extra }); },
         error(err, opts) {
@@ -649,13 +678,17 @@ const analytics = (() => {
                 const o = opts || {};
                 const e = err || {};
                 const msg = (e.message || String(e) || '').slice(0, 200);
+                const errorType = (e.name || 'Error').slice(0, 64);
+                const sig = `${errorType}:${msg.substring(0, 50)}`;
+                if (sentErrors.has(sig)) return;
+                sentErrors.add(sig);
                 const stack = (e.stack || '').toString();
                 const stackLines = stack.split('\n').map(s => s.trim()).filter(Boolean);
                 const stackTop = stackLines[0] ? stackLines[0].slice(0, 200) : '';
                 const stackSummary = stackLines.slice(0, 3).map(l => l.slice(0, 120));
                 const severity = ['warning','error','fatal'].includes(o.severity) ? o.severity : 'error';
                 send('client_error', {
-                    error_type: (e.name || 'Error').slice(0, 64),
+                    error_type: errorType,
                     error_message: msg,
                     stack_top: stackTop,
                     stack_summary: stackSummary,
@@ -1229,7 +1262,14 @@ function playChannel(idx) {
     const ch = filtered[idx]; if (!ch) return;
     playIdx = idx;
     currentChannel = ch;
-    analytics.play(ch);
+    currentPlaySource = document.getElementById('search')?.value?.trim()
+        ? 'search'
+        : currentView === 'favorites'
+            ? 'favorites'
+            : currentView === 'recent'
+                ? 'recommendation'
+                : 'browse';
+    analytics.playAttempt(ch, currentPlaySource);
     const overlay = document.getElementById('player-overlay');
     const video = document.getElementById('player');
     const box = document.getElementById('player-box');
@@ -1271,6 +1311,16 @@ function playChannel(idx) {
         const remembered = mem[ch.name];
         if (remembered && currentSources.includes(remembered) && currentSources[0] !== remembered) {
             currentSources = [remembered, ...currentSources.filter(url => url !== remembered)];
+        } else {
+            const storedIndexes = JSON.parse(localStorage.getItem('tv_working_source_indices') || '{}');
+            const rememberedIndex = storedIndexes[ch.name];
+            if (Number.isInteger(rememberedIndex) &&
+                rememberedIndex >= 0 &&
+                rememberedIndex < currentSources.length &&
+                rememberedIndex !== 0) {
+                const preferredUrl = currentSources[rememberedIndex];
+                currentSources = [preferredUrl, ...currentSources.filter(url => url !== preferredUrl)];
+            }
         }
     } catch(e) {}
 
@@ -1305,7 +1355,7 @@ function tryNextSource(channel = currentChannel, urlIndex = currentSourceIdx + 1
         const video = document.getElementById('player');
         video.pause();
         toast(getFailureMessage(currentFailureType, channel.name, true));
-        analytics.fail(channel, `all_urls_failed:${currentFailureType}`);
+        analytics.fail(channel, `all_urls_failed:${currentFailureType}`, currentPlaySource);
         return false;
     }
 
@@ -1391,6 +1441,7 @@ async function startStream(url, video, isRadio) {
         currentFailureType = 'unknown';
         currentSourceIdx = Math.max(0, currentSources.indexOf(url));
         markPlaying(url);
+        if (currentChannel) analytics.play(currentChannel, currentPlaySource);
         // Perf: report stream latency
         const latencyMs = Math.round(performance.now() - streamStartTime);
         analytics.perf('stream_to_first_frame', latencyMs);
@@ -2506,7 +2557,6 @@ document.getElementById('search').addEventListener('input', debounce(async () =>
         await loadChannels();
         return;
     }
-    analytics.search(q);
     // Search the full database via server (not just loaded page)
     const resp = await api.channels({
         search: q,
@@ -2517,6 +2567,7 @@ document.getElementById('search').addEventListener('input', debounce(async () =>
     hasMore = resp.has_more || false;
     totalChannels = resp.total || 0;
     filtered = allLoaded;
+    analytics.search(q, filtered.length);
     renderChannels(filtered);
     renderLoadMore();
 }, 300));
@@ -2663,7 +2714,7 @@ function hash(s) { let h=0; for(let i=0;i<(s||'').length;i++){h=((h<<5)-h)+s.cha
 function mono(name) { const l=(name||'?')[0].toUpperCase(); const c=MONO_COLORS[Math.abs(hash(name))%MONO_COLORS.length]; return `<div class="card-mono" style="background:${c}">${l}</div>`; }
 function debounce(fn,ms) { let t; return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}; }
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
-function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,category:ch.category,country:ch.country,logo:ch.logo,status:ch.status,health:ch.health,health_score:ch.health_score});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,50)));}catch(e){} }
+function saveRecent(ch) { try{let r=JSON.parse(localStorage.getItem('tv_recent')||'[]');r=r.filter(x=>x.url!==ch.url);r.unshift({name:ch.name,url:ch.url,url_hash:ch.url_hash,category:ch.category,country:ch.country,logo:ch.logo,status:ch.status,health:ch.health,health_score:ch.health_score});localStorage.setItem('tv_recent',JSON.stringify(r.slice(0,50)));}catch(e){} }
 
 // ─── Channel Health ─────────────────────────────────────────────────────────
 // Per-session dedup: don't re-POST the same (url,status) within the session.
@@ -2699,8 +2750,11 @@ function markPlaying(url) {
     if (ch) {
         try {
             const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
+            const indexMem = JSON.parse(localStorage.getItem('tv_working_source_indices') || '{}');
             mem[ch.name] = url;
+            indexMem[ch.name] = Math.max(0, currentSourceIdx);
             localStorage.setItem('tv_working_sources', JSON.stringify(mem));
+            localStorage.setItem('tv_working_source_indices', JSON.stringify(indexMem));
         } catch(e) {}
     }
     // Update local health state
@@ -2734,8 +2788,8 @@ function markPlaying(url) {
 
 function markBroken(url, failureType = 'unknown') {
     reportHealth(url, 'broken', failureType);
-    const ch = filtered[playIdx];
-    if (ch) analytics.fail(ch, failureType);
+    const ch = currentChannel || filtered[playIdx];
+    if (ch) analytics.fail(ch, failureType, currentPlaySource);
 }
 
 // ─── Background Source Revalidation ─────────────────────────────────────────
