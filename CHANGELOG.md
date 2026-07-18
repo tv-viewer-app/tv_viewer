@@ -5,6 +5,14 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Flutter channel catalog now merges Supabase `channel_status` health metadata into fetched channels
+- Reliable-first browsing hides broken channels with 5+ reports by default and adds a Show all channels toggle
+- Successful fallback sources are persisted in both Flutter and Web players for faster future playback
+- Broken-channel quarantine threshold lowered from 10 reports to 5 reports
+
 ## [2.22.4] - 2026-07-14
 
 ### Fixed

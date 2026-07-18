@@ -18,6 +18,7 @@ class FiltersService {
   static const String _kMediaType = 'tv_viewer_filters_media_type';
   static const String _kStatus = 'tv_viewer_filters_status';
   static const String _kFavOnly = 'tv_viewer_filters_favorites_only';
+  static const String _kShowAllChannels = 'tv_viewer_filters_show_all_channels';
 
   /// Snapshot of the persisted selection (all default to `'All'`/`false`).
   static Future<FiltersSnapshot> load() async {
@@ -30,6 +31,7 @@ class FiltersService {
         mediaType: p.getString(_kMediaType) ?? 'All',
         status: p.getString(_kStatus) ?? 'All',
         favoritesOnly: p.getBool(_kFavOnly) ?? false,
+        showAllChannels: p.getBool(_kShowAllChannels) ?? false,
       );
     } catch (e) {
       logger.warning('FiltersService.load failed', e);
@@ -52,6 +54,15 @@ class FiltersService {
     }
   }
 
+  static Future<void> saveShowAllChannels(bool v) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.safeSetBool(_kShowAllChannels, v);
+    } catch (e) {
+      logger.warning('FiltersService.saveShowAllChannels failed', e);
+    }
+  }
+
   /// Reset all filter prefs to their defaults (used by "Clear filters").
   static Future<void> clear() async {
     try {
@@ -62,6 +73,7 @@ class FiltersService {
       await p.safeRemove(_kMediaType);
       await p.safeRemove(_kStatus);
       await p.safeRemove(_kFavOnly);
+      await p.safeRemove(_kShowAllChannels);
     } catch (e) {
       logger.warning('FiltersService.clear failed', e);
     }
@@ -85,6 +97,7 @@ class FiltersSnapshot {
   final String mediaType;
   final String status;
   final bool favoritesOnly;
+  final bool showAllChannels;
 
   const FiltersSnapshot({
     this.category = 'All',
@@ -93,5 +106,6 @@ class FiltersSnapshot {
     this.mediaType = 'All',
     this.status = 'All',
     this.favoritesOnly = false,
+    this.showAllChannels = false,
   });
 }

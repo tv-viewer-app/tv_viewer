@@ -238,7 +238,53 @@ class SharedDbService {
           return [];
         }
         final List<dynamic> data = json.decode(response.body);
-        final channels = data.cast<Map<String, dynamic>>();
+        final channels = data
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+
+        for (final channel in channels) {
+          channel.putIfAbsent('status', () => 'unchecked');
+          channel.putIfAbsent('report_count', () => 0);
+        }
+
+        final healthUrl = Uri.parse('$_supabaseUrl/rest/v1/channel_status').replace(
+          queryParameters: {
+            'select': 'url_hash,status,report_count',
+          },
+        );
+
+        try {
+          final healthResp = await http.get(
+            healthUrl,
+            headers: {
+              'apikey': _supabaseAnonKey,
+              'Authorization': '******',
+            },
+          ).timeout(const Duration(seconds: 15));
+
+          if (healthResp.statusCode == 200) {
+            final List<dynamic> healthList = json.decode(healthResp.body);
+            final healthMap = <String, Map<String, dynamic>>{
+              for (final item in healthList)
+                (item['url_hash'] as String? ?? ''): Map<String, dynamic>.from(item as Map),
+            };
+
+            for (final channel in channels) {
+              final urlHash = channel['url_hash'] as String?;
+              if (urlHash == null || urlHash.isEmpty) continue;
+              final health = healthMap[urlHash];
+              if (health == null) continue;
+              channel['status'] = health['status'] ?? channel['status'] ?? 'unchecked';
+              channel['report_count'] = health['report_count'] ?? channel['report_count'] ?? 0;
+            }
+            logger.info('Merged health metadata into ${channels.length} channels');
+          } else {
+            logger.warning('Failed to fetch channel health metadata: ${healthResp.statusCode}');
+          }
+        } catch (e, stackTrace) {
+          logger.error('Failed to merge channel health metadata', e, stackTrace);
+        }
+
         logger.info('Fetched ${channels.length} channels from shared database');
         return channels;
       } else {

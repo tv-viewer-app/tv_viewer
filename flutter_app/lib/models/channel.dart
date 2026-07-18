@@ -13,6 +13,8 @@ class Channel {
   final String? country;
   final String? language;
   final String mediaType; // 'TV' or 'Radio'
+  final String status;
+  final int reportCount;
   final bool isWorking;
   final DateTime? lastChecked;
   
@@ -38,6 +40,8 @@ class Channel {
     this.country,
     this.language,
     this.mediaType = 'TV',
+    this.status = 'unchecked',
+    this.reportCount = 0,
     this.isWorking = true,
     this.lastChecked,
     this.resolution,
@@ -570,6 +574,8 @@ class Channel {
         'country': country,
         'language': language,
         'mediaType': mediaType,
+        'status': status,
+        'reportCount': reportCount,
         'isWorking': isWorking,
         'lastChecked': lastChecked?.toIso8601String(),
         'resolution': resolution,
@@ -590,6 +596,15 @@ class Channel {
           urls = [singleUrl is String ? singleUrl : singleUrl.toString()];
         }
         final workingUrlIndex = json['workingUrlIndex'] ?? json['working_url_index'] ?? 0;
+        final status = (json['status'] as String? ?? '').trim().toLowerCase();
+        final reportCount = (json['reportCount'] as num? ?? json['report_count'] as num?)?.toInt() ?? 0;
+        final lastCheckedRaw = json['lastChecked'] ?? json['last_checked'];
+        final lastChecked = lastCheckedRaw != null
+            ? DateTime.parse(lastCheckedRaw.toString())
+            : null;
+        final isWorking = status.isNotEmpty
+            ? status == 'working'
+            : (json['is_working'] ?? json['isWorking'] ?? true) as bool;
         // Use primary URL for country normalization
         final primaryUrl = urls.isNotEmpty ? urls[0] : '';
 
@@ -605,10 +620,12 @@ class Channel {
           country: country,
           language: language,
           mediaType: json['media_type'] ?? json['mediaType'] ?? 'TV',
-          isWorking: json['is_working'] ?? json['isWorking'] ?? true,
-          lastChecked: json['lastChecked'] != null
-              ? DateTime.parse(json['lastChecked'])
-              : null,
+          status: status.isNotEmpty
+              ? status
+              : (isWorking ? 'working' : (lastChecked != null ? 'failed' : 'unchecked')),
+          reportCount: reportCount,
+          isWorking: isWorking,
+          lastChecked: lastChecked,
           resolution: json['resolution'],
           bitrate: json['bitrate'],
         );
@@ -652,6 +669,8 @@ class Channel {
     String? country,
     String? language,
     String? mediaType,
+    String? status,
+    int? reportCount,
     bool? isWorking,
     DateTime? lastChecked,
     String? resolution,
@@ -671,6 +690,8 @@ class Channel {
       country: country ?? this.country,
       language: language ?? this.language,
       mediaType: mediaType ?? this.mediaType,
+      status: status ?? this.status,
+      reportCount: reportCount ?? this.reportCount,
       isWorking: isWorking ?? this.isWorking,
       lastChecked: lastChecked ?? this.lastChecked,
       resolution: resolution ?? this.resolution,

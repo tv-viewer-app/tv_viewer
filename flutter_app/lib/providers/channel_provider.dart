@@ -211,6 +211,7 @@ class ChannelProvider extends ChangeNotifier {
   bool _isScanning = false;
   bool _isOffline = false; // #41: Offline state tracking
   bool _showFavoritesOnly = false; // Dedicated favorites toggle
+  bool _showAllChannels = false; // Reliable-first default catalog
   // Adult content visibility is controlled solely by ParentalControlsService.isOver18
   String _errorMessage = ''; // #41: User-facing error message
   int _scanProgress = 0;
@@ -247,6 +248,7 @@ class ChannelProvider extends ChangeNotifier {
   bool get isScanning => _isScanning;
   bool get isOffline => _isOffline; // #41
   bool get showFavoritesOnly => _showFavoritesOnly;
+  bool get showAllChannels => _showAllChannels;
   String get errorMessage => _errorMessage; // #41
   int get scanProgress => _scanProgress;
   int get scanTotal => _scanTotal;
@@ -340,6 +342,7 @@ class ChannelProvider extends ChangeNotifier {
             _channels[i] = _channels[i].copyWith(
               isWorking: cached.status,
               lastChecked: cached.lastChecked,
+              status: cached.status ? 'working' : 'failed',
             );
             updated++;
           }
@@ -894,6 +897,7 @@ class ChannelProvider extends ChangeNotifier {
     final idx = _channels.indexWhere((c) => c.url == channel.url);
     if (idx >= 0) {
       _channels[idx] = _channels[idx].copyWith(
+        status: 'failed',
         isWorking: false,
         lastChecked: DateTime.now(),
       );
@@ -912,9 +916,12 @@ class ChannelProvider extends ChangeNotifier {
   /// Updates in-memory state + local cache + Supabase.
   void markChannelWorking(String url, {int? workingUrlIndex}) {
     final idx = _channels.indexWhere((c) => c.urls.contains(url));
-    if (idx >= 0 && !_channels[idx].isWorking) {
-      logger.info('Playback verified working: ${_channels[idx].name} (was marked broken)');
+    if (idx >= 0) {
+      if (!_channels[idx].isWorking || _channels[idx].status != 'working') {
+        logger.info('Playback verified working: ${_channels[idx].name} (was marked broken)');
+      }
       _channels[idx] = _channels[idx].copyWith(
+        status: 'working',
         isWorking: true,
         lastChecked: DateTime.now(),
         workingUrlIndex: workingUrlIndex ?? _channels[idx].urls.indexOf(url),
@@ -932,6 +939,14 @@ class ChannelProvider extends ChangeNotifier {
     _applyFilters();
     notifyListeners();
     FiltersService.saveFavoritesOnly(_showFavoritesOnly);
+  }
+
+  /// Toggle reliable-first default hiding of stale/broken channels.
+  void toggleShowAllChannels() {
+    _showAllChannels = !_showAllChannels;
+    _applyFilters();
+    notifyListeners();
+    FiltersService.saveShowAllChannels(_showAllChannels);
   }
 
   /// Re-fetch channels after parental controls change (e.g. over-18 toggle).
@@ -969,6 +984,7 @@ class ChannelProvider extends ChangeNotifier {
     _selectedMediaType = 'All';
     _selectedStatus = 'All';
     _showFavoritesOnly = false;
+    _showAllChannels = false;
     _searchQuery = '';
     _applyFilters();
     notifyListeners();
@@ -987,6 +1003,7 @@ class ChannelProvider extends ChangeNotifier {
       _selectedMediaType = s.mediaType;
       _selectedStatus = s.status;
       _showFavoritesOnly = s.favoritesOnly;
+      _showAllChannels = s.showAllChannels;
     } catch (e) {
       logger.warning('Failed to restore persisted filters', e);
     }
@@ -1000,6 +1017,7 @@ class ChannelProvider extends ChangeNotifier {
         _selectedMediaType != 'All' ||
         _selectedStatus != 'All' ||
         _showFavoritesOnly ||
+        _showAllChannels ||
         _searchQuery.isNotEmpty;
   }
 
@@ -1049,9 +1067,33 @@ class ChannelProvider extends ChangeNotifier {
   }
 
   int _smartStatusScore(Channel channel) {
-    if (channel.isWorking && channel.lastChecked != null) return 3;
-    if (!channel.isWorking && channel.lastChecked != null) return 0;
-    return channel.healthScore > 0 ? 1 : 0;
+    final status = channel.status.toLowerCase();
+    if (status == 'working' || (channel.isWorking && channel.lastChecked != null)) {
+      return 3;
+    }
+    if (_isBrokenCatalogStatus(channel)) {
+      return 0;
+    }
+    return 1;
+  }
+
+  bool _isBrokenCatalogStatus(Channel channel) {
+    final status = channel.status.toLowerCase();
+    return status == 'broken' || status == 'failed';
+  }
+
+  bool _isWorkingCatalogStatus(Channel channel) {
+    final status = channel.status.toLowerCase();
+    return status == 'working' || (channel.isWorking && channel.lastChecked != null);
+  }
+
+  bool _isUncheckedCatalogStatus(Channel channel) {
+    return !_isWorkingCatalogStatus(channel) && !_isBrokenCatalogStatus(channel);
+  }
+
+  bool _isHiddenByReliableDefault(Channel channel) {
+    if (_showAllChannels) return false;
+    return _isBrokenCatalogStatus(channel) && channel.reportCount >= 5;
   }
 
   int _channelPlayCount(Channel channel) {
@@ -1113,6 +1155,10 @@ class ChannelProvider extends ChangeNotifier {
         }
       }
 
+      if (_isHiddenByReliableDefault(channel)) {
+        return false;
+      }
+
       // Category filter
       if (_selectedCategory != 'All') {
         if ((channel.category ?? 'Other') != _selectedCategory) {
@@ -1144,15 +1190,15 @@ class ChannelProvider extends ChangeNotifier {
 
       // Channel status filter
       if (_selectedStatus == 'Working') {
-        if (!(channel.isWorking && channel.lastChecked != null)) {
+        if (!_isWorkingCatalogStatus(channel)) {
           return false;
         }
       } else if (_selectedStatus == 'Failed') {
-        if (channel.isWorking || channel.lastChecked == null) {
+        if (!_isBrokenCatalogStatus(channel)) {
           return false;
         }
       } else if (_selectedStatus == 'Unchecked') {
-        if (channel.lastChecked != null) {
+        if (!_isUncheckedCatalogStatus(channel)) {
           return false;
         }
       }
@@ -1179,9 +1225,9 @@ class ChannelProvider extends ChangeNotifier {
         }
         if (parsed.statusFilter != null) {
           final status = parsed.statusFilter!;
-          if (status == 'working' && !(channel.isWorking && channel.lastChecked != null)) return false;
-          if (status == 'failed' && (channel.isWorking || channel.lastChecked == null)) return false;
-          if (status == 'unchecked' && channel.lastChecked != null) return false;
+          if (status == 'working' && !_isWorkingCatalogStatus(channel)) return false;
+          if (status == 'failed' && !_isBrokenCatalogStatus(channel)) return false;
+          if (status == 'unchecked' && !_isUncheckedCatalogStatus(channel)) return false;
         }
 
         // Free-text name search (remaining text after prefix:value extraction)
@@ -1201,10 +1247,6 @@ class ChannelProvider extends ChangeNotifier {
         final bStatus = _smartStatusScore(b);
         final statusCmp = bStatus.compareTo(aStatus);
         if (statusCmp != 0) return statusCmp;
-        if (aStatus >= 3) {
-          final playCmp = _channelPlayCount(b).compareTo(_channelPlayCount(a));
-          if (playCmp != 0) return playCmp;
-        }
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
     } else {
@@ -1221,9 +1263,7 @@ class ChannelProvider extends ChangeNotifier {
             if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
             break;
           case SortField.status:
-            final aStatus = a.isWorking ? 1 : 0;
-            final bStatus = b.isWorking ? 1 : 0;
-            cmp = bStatus.compareTo(aStatus); // Working first
+            cmp = _smartStatusScore(b).compareTo(_smartStatusScore(a));
             if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
             break;
           case SortField.category:

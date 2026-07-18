@@ -282,6 +282,9 @@ class M3UService {
             country: ch['country'] as String?,
             logo: ch['logo'] as String?,
             mediaType: (ch['media_type'] as String?) ?? 'TV',
+            status: (ch['status'] as String? ?? 'unchecked').toLowerCase(),
+            reportCount: (ch['report_count'] as num?)?.toInt() ?? 0,
+            isWorking: (ch['status'] as String? ?? '').toLowerCase() == 'working',
           ));
         }
         logger.info('Loaded ${supabaseChannels.length} channels from Supabase');

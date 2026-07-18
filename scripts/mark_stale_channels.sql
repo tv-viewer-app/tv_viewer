@@ -6,7 +6,7 @@ ALTER TABLE channel_status
     ADD COLUMN IF NOT EXISTS stale BOOLEAN NOT NULL DEFAULT FALSE;
 
 COMMENT ON COLUMN channel_status.stale IS
-    'True when a channel has been broken for 7+ days with 10+ broken reports and should be hidden from default browsing.';
+    'True when a channel has been broken for 7+ days with 5+ broken reports and should be hidden from default browsing.';
 
 CREATE INDEX IF NOT EXISTS idx_channel_status_stale_true
     ON channel_status (stale)
@@ -27,7 +27,7 @@ BEGIN
        SET stale = TRUE
      WHERE stale IS DISTINCT FROM TRUE
        AND status IN ('broken', 'failed', 'offline', 'stale')
-       AND report_count >= 10
+       AND report_count >= 5
        AND last_checked < NOW() - INTERVAL '7 days';
     GET DIAGNOSTICS v_marked = ROW_COUNT;
 
@@ -36,7 +36,7 @@ BEGIN
      WHERE stale IS DISTINCT FROM FALSE
        AND NOT (
            status IN ('broken', 'failed', 'offline', 'stale')
-           AND report_count >= 10
+           AND report_count >= 5
            AND last_checked < NOW() - INTERVAL '7 days'
        );
     GET DIAGNOSTICS v_cleared = ROW_COUNT;

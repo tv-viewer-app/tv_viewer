@@ -101,7 +101,7 @@ def _normalize_country_display(country: str) -> str:
     return _COUNTRY_CODES.get(raw.upper(), raw)
 
 
-_STALE_REPORT_THRESHOLD = 10
+_STALE_REPORT_THRESHOLD = 5
 _STALE_CHANNEL_AGE = timedelta(days=7)
 
 
