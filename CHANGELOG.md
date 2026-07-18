@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Successful fallback sources are persisted in both Flutter and Web players for faster future playback
 - Broken-channel quarantine threshold lowered from 10 reports to 5 reports
 
+## [2.23.0] - 2026-07-18
+
+### Added
+- Watch Now landing: Popular, Sports, Movies, News sections (horizontal scroll)
+- Quick category chips for one-tap filtering
+- Android search telemetry (query_length + result_count)
+- Retention cohort report script
+
+### Fixed
+- Analytics: all play/fail events now include channel name + url_hash (fixes 37% unnamed)
+- channel_play fires on actual stream success, not tap (new channel_play_attempt for taps)
+- Android failure reasons normalized (geo_blocked, server_error, not_found — fixes 38% unknown)
+- Flutter loads channel health metadata from Supabase for smart sorting
+- Broken channels (5+ reports) hidden by default on all clients
+- Successful fallback source persisted for future sessions
+- Client error telemetry deduped per session (115 identical warnings eliminated)
+
 ## [2.22.4] - 2026-07-14
 
 ### Fixed
