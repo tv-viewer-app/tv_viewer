@@ -2751,8 +2751,9 @@ function markPlaying(url) {
         try {
             const mem = JSON.parse(localStorage.getItem('tv_working_sources') || '{}');
             const indexMem = JSON.parse(localStorage.getItem('tv_working_source_indices') || '{}');
+            const sourceIndex = Math.max(0, getChannelSources(ch).indexOf(url));
             mem[ch.name] = url;
-            indexMem[ch.name] = Math.max(0, currentSourceIdx);
+            indexMem[ch.name] = sourceIndex >= 0 ? sourceIndex : Math.max(0, currentSourceIdx);
             localStorage.setItem('tv_working_sources', JSON.stringify(mem));
             localStorage.setItem('tv_working_source_indices', JSON.stringify(indexMem));
         } catch(e) {}

@@ -1653,12 +1653,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigateToPlayer(Channel channel, [int? index]) {
-    // Track channel play telemetry (no names/URLs)
-    AnalyticsService.instance.trackChannelPlay(
-      channel.url,
-      country: channel.country ?? '',
-      category: channel.category ?? '',
-    );
     // Boost scan priority for this channel's country
     if (channel.country != null && channel.country!.isNotEmpty) {
       final provider = Provider.of<ChannelProvider>(context, listen: false);

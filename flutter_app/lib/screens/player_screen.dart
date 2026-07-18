@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show HttpException, Platform, SocketException;
 import '../models/channel.dart';
 import '../services/background_audio_service.dart';
 import '../services/pip_service.dart';
@@ -22,6 +22,20 @@ import '../utils/error_handler.dart';
 import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 import '../constants.dart';
+
+class _AnalyticsFailure {
+  final String failureType;
+  final int? httpStatus;
+  final int sourceUrlIndex;
+  final String rawError;
+
+  const _AnalyticsFailure({
+    required this.failureType,
+    required this.sourceUrlIndex,
+    required this.rawError,
+    this.httpStatus,
+  });
+}
 
 class PlayerScreen extends StatefulWidget {
   final Channel channel;
@@ -75,6 +89,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   bool _isPipMode = false;
   bool _isPipSupported = false;
   bool _reportSent = false; // Debounce: one report per player session
+  bool _playAttemptTracked = false;
+  bool _successfulPlayTracked = false;
+  bool _terminalFailureTracked = false;
+  DateTime? _playAttemptStartedAt;
+  _AnalyticsFailure? _lastFailure;
 
   // Fullscreen toggle state (#189)
   // When true: orientations locked to landscape only.
@@ -87,6 +106,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     if (mounted) setState(fn);
   }
 
+  String get _channelUrlHash => SharedDbService.hashUrl(widget.channel.url);
+
   // Channel navigation
   bool get _hasChannelList =>
       widget.channelList != null && widget.channelList!.length > 1;
@@ -97,12 +118,191 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       widget.channelIndex != null &&
       widget.channelIndex! < widget.channelList!.length - 1;
 
+  void _trackPlayAttemptIfNeeded() {
+    if (_playAttemptTracked) return;
+    _playAttemptTracked = true;
+    _playAttemptStartedAt = DateTime.now();
+    AnalyticsService.instance.trackChannelPlayAttempt(
+      widget.channel.url,
+      name: widget.channel.name,
+      urlHash: _channelUrlHash,
+      country: widget.channel.country ?? '',
+      category: widget.channel.category ?? '',
+    );
+  }
+
+  void _trackSuccessfulPlayIfNeeded() {
+    if (_successfulPlayTracked) return;
+    _successfulPlayTracked = true;
+    _terminalFailureTracked = false;
+    AnalyticsService.instance.trackChannelPlay(
+      widget.channel.url,
+      name: widget.channel.name,
+      urlHash: _channelUrlHash,
+      country: widget.channel.country ?? '',
+      category: widget.channel.category ?? '',
+    );
+
+    final startedAt = _playAttemptStartedAt;
+    if (startedAt != null) {
+      final latencyMs = DateTime.now().difference(startedAt).inMilliseconds;
+      AnalyticsService.instance.trackStreamLatency(
+        latencyMs,
+        category: widget.channel.category ?? '',
+        fromCache: _currentUrlIndex == widget.channel.workingUrlIndex,
+      );
+    }
+  }
+
+  void _trackTerminalFailure(_AnalyticsFailure failure, {String? errorCode}) {
+    if (_terminalFailureTracked) return;
+    _terminalFailureTracked = true;
+    AnalyticsService.instance.trackChannelFail(
+      widget.channel.url,
+      failure.failureType,
+      name: widget.channel.name,
+      urlHash: _channelUrlHash,
+      country: widget.channel.country ?? '',
+      category: widget.channel.category ?? '',
+      httpStatus: failure.httpStatus,
+      sourceUrlIndex: failure.sourceUrlIndex,
+      errorCode: errorCode ?? failure.rawError,
+    );
+  }
+
+  int? _extractHttpStatus(String message) {
+    final match = RegExp(r'\b(403|404|500|502|503)\b').firstMatch(message);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
+
+  _AnalyticsFailure _normalizeAnalyticsFailure(dynamic error, int sourceUrlIndex) {
+    final appError = ErrorHandler.handle(error);
+    final rawError = [
+      error.toString(),
+      if (error is AppError) error.technicalDetails,
+      appError.technicalDetails,
+    ].join(' ');
+    final message = rawError.toLowerCase();
+    final httpStatus = _extractHttpStatus(rawError);
+
+    if (httpStatus == 403) {
+      return _AnalyticsFailure(
+        failureType: 'geo_blocked',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+    if (httpStatus == 404) {
+      return _AnalyticsFailure(
+        failureType: 'not_found',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+    if (httpStatus != null && const {500, 502, 503}.contains(httpStatus)) {
+      return _AnalyticsFailure(
+        failureType: 'server_error',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+    if (error is TimeoutException ||
+        error is SocketException ||
+        appError.code == ErrorCode.timeout ||
+        appError.code == ErrorCode.noInternet ||
+        message.contains('timeoutexception') ||
+        message.contains('timed out') ||
+        message.contains('socketexception')) {
+      return _AnalyticsFailure(
+        failureType: 'timeout',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+    if (error is FormatException ||
+        appError.code == ErrorCode.m3uInvalid ||
+        appError.code == ErrorCode.streamFormatUnsupported ||
+        appError.code == ErrorCode.streamCodecError ||
+        message.contains('formatexception') ||
+        message.contains('unsupported') ||
+        message.contains('codec') ||
+        message.contains('format')) {
+      return _AnalyticsFailure(
+        failureType: 'format_error',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+    if (error is HttpException ||
+        appError.code == ErrorCode.serverError ||
+        message.contains('500') ||
+        message.contains('502') ||
+        message.contains('503') ||
+        message.contains('server error')) {
+      return _AnalyticsFailure(
+        failureType: 'server_error',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+    if (appError.code == ErrorCode.connectionRefused ||
+        message.contains('connection refused') ||
+        message.contains('connection reset') ||
+        message.contains('failed host lookup') ||
+        message.contains('unable to connect') ||
+        message.contains('network')) {
+      return _AnalyticsFailure(
+        failureType: 'connection_error',
+        httpStatus: httpStatus,
+        sourceUrlIndex: sourceUrlIndex,
+        rawError: rawError,
+      );
+    }
+
+    return _AnalyticsFailure(
+      failureType: 'connection_error',
+      httpStatus: httpStatus,
+      sourceUrlIndex: sourceUrlIndex,
+      rawError: rawError,
+    );
+  }
+
+  void _attachPlayerListener(VideoPlayerController controller, int sourceUrlIndex) {
+    _playerListener = () {
+      if (!mounted || _videoController != controller) {
+        return;
+      }
+
+      final value = controller.value;
+      _safeSetState(() {
+        _isPlaying = value.isPlaying;
+      });
+
+      if (value.isInitialized && value.isPlaying) {
+        _trackSuccessfulPlayIfNeeded();
+      }
+
+      if (value.hasError && !_isLoading && !_isFallingBack) {
+        _onPlaybackError(sourceUrlIndex, value.errorDescription ?? 'unknown');
+      }
+    };
+    controller.addListener(_playerListener!);
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _isFullscreen = widget.isFullscreen;
-    
+
+    _trackPlayAttemptIfNeeded();
     _initializePlayer();
     _initializeWakeLock();
     _initializePip();
@@ -240,7 +440,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   Future<void> _initializePlayer({int? startIndex}) async {
     // Dispose existing controller before creating new one (fixes memory leak on retry)
     _disposeController();
-    final playStartTime = DateTime.now(); // Performance: measure time-to-first-frame
+    if (startIndex == null) {
+      _playAttemptStartedAt = DateTime.now();
+      _successfulPlayTracked = false;
+      _terminalFailureTracked = false;
+      _lastFailure = null;
+    }
     
     final urls = widget.channel.urls;
     if (urls.isEmpty) {
@@ -283,9 +488,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
             );
           },
         );
-        
-        _videoController!.play();
+
+        _attachPlayerListener(_videoController!, idx);
         _videoController!.setVolume(_volume);
+        _videoController!.play();
         
         // Get video info
         final value = _videoController!.value;
@@ -296,6 +502,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
 
         _currentUrlIndex = idx;
         _activeStreamUrl = streamUrl;
+        await _savePreferredSource(idx);
         
         _safeSetState(() {
           _isLoading = false;
@@ -311,21 +518,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           'category': widget.channel.category ?? '',
           'logo': widget.channel.logo,
         });
-
-        // Create named listener for proper cleanup
-        _playerListener = () {
-          if (mounted && _videoController != null) {
-            final vc = _videoController!.value;
-            _safeSetState(() {
-              _isPlaying = vc.isPlaying;
-            });
-            // Detect playback failure mid-stream
-            if (vc.hasError && !_isLoading && !_isFallingBack) {
-              _onPlaybackError(idx, vc.errorDescription ?? 'unknown');
-            }
-          }
-        };
-        _videoController!.addListener(_playerListener!);
         
         // Attach to background audio service for notification
         if (_backgroundPlayback) {
@@ -340,31 +532,25 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         // Report success
         _reportHealth(streamUrl, true);
         
-        // Performance: track time-to-first-frame
-        final latencyMs = DateTime.now().difference(playStartTime).inMilliseconds;
-        AnalyticsService.instance?.trackStreamLatency(
-          latencyMs,
-          category: widget.channel.category ?? '',
-          fromCache: (startIndex == null && _currentUrlIndex == idx),
-        );
-        
         return; // Success — stop trying URLs
         
-      } catch (e, stackTrace) {
+      } catch (e) {
         logger.warning('URL $idx failed for ${widget.channel.name}: $e');
         _failedIndices.add(idx);
-        _reportHealth(streamUrl, false, e.toString());
+        final failure = _normalizeAnalyticsFailure(e, idx);
+        _lastFailure = failure;
+        _reportHealth(streamUrl, false, failure.rawError);
         // Continue to next URL
       }
     }
     
     // All URLs failed — track failure telemetry
-    AnalyticsService.instance.trackChannelFail(
-      urls.first,
-      'all_urls_failed',
-      country: widget.channel.country ?? '',
-      category: widget.channel.category ?? '',
+    final failure = _lastFailure ?? _AnalyticsFailure(
+      failureType: 'connection_error',
+      sourceUrlIndex: _currentUrlIndex,
+      rawError: 'all_urls_failed',
     );
+    _trackTerminalFailure(failure, errorCode: 'all_urls_failed');
     final appError = ErrorHandler.streamError(
       'all_failed',
       'All ${urls.length} sources failed for ${widget.channel.name}',
@@ -380,15 +566,21 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   void _onPlaybackError(int failedIndex, String error) {
     final urls = widget.channel.urls;
     _failedIndices.add(failedIndex);
-    _reportHealth(urls[failedIndex], false, error);
+    final failure = _normalizeAnalyticsFailure(error, failedIndex);
+    _lastFailure = failure;
+    _reportHealth(urls[failedIndex], false, failure.rawError);
     
-    if (urls.length <= 1) return;
+    if (urls.length <= 1) {
+      _trackTerminalFailure(failure);
+      return;
+    }
     
     // Find next untried source
     final nextIdx = (failedIndex + 1) % urls.length;
     if (_failedIndices.length >= urls.length) {
       // All sources have failed — show error with source selector
       logger.error('All sources exhausted for ${widget.channel.name}');
+      _trackTerminalFailure(failure, errorCode: 'all_urls_failed');
       _safeSetState(() {
         _isLoading = false;
         _error = ErrorHandler.streamError(
@@ -536,10 +728,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     AnalyticsService.instance.trackFeature('switch_source');
     
     _currentUrlIndex = index;
-    
-    // Save preferred source via SharedPreferences
-    _savePreferredSource(index);
-    
+
     // Reinitialize player with the selected URL
     _disposeController();
     _safeSetState(() {
@@ -634,18 +823,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       
       _videoController = controller;
       _activeStreamUrl = streamUrl;
-      _playerListener = () {
-        if (mounted) {
-          _safeSetState(() {
-            _isPlaying = controller.value.isPlaying;
-          });
-          if (controller.value.hasError) {
-            final idx = widget.channel.urls.indexOf(streamUrl);
-            _onPlaybackError(idx >= 0 ? idx : _currentUrlIndex, controller.value.errorDescription ?? 'Unknown');
-          }
-        }
-      };
-      controller.addListener(_playerListener!);
+      final resolvedIndex = widget.channel.urls.indexOf(streamUrl);
+      if (resolvedIndex >= 0) {
+        _currentUrlIndex = resolvedIndex;
+        await _savePreferredSource(resolvedIndex);
+      }
+      _attachPlayerListener(controller, resolvedIndex >= 0 ? resolvedIndex : _currentUrlIndex);
       controller.setVolume(_volume);
       controller.play();
       
@@ -658,6 +841,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       });
     } catch (e) {
       logger.error('Failed to play source: $streamUrl', e);
+      final resolvedIndex = widget.channel.urls.indexOf(streamUrl);
+      _trackTerminalFailure(
+        _normalizeAnalyticsFailure(e, resolvedIndex >= 0 ? resolvedIndex : _currentUrlIndex),
+      );
       _safeSetState(() {
         _isLoading = false;
         _error = ErrorHandler.streamError('source_fail', e.toString());
