@@ -127,6 +127,23 @@
         .filters select { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-sec); padding: 5px 10px; border-radius: var(--radius-sm); font-size: 11px; font-family: var(--font); cursor: pointer; min-width: 120px; }
         .filters select:hover { border-color: var(--accent); }
         .filters select:focus { border-color: var(--accent); outline: none; }
+        .quick-categories { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+        .category-chip { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-sec); padding: 6px 12px; border-radius: 999px; font-size: 11px; font-family: var(--font); cursor: pointer; transition: all .15s; }
+        .category-chip:hover { border-color: var(--accent); color: var(--text); }
+        .category-chip.active { background: rgba(76,194,255,.12); border-color: var(--accent); color: var(--accent); }
+
+        .watch-now-sections { padding: 8px 16px; }
+        .watch-now-section { margin-bottom: 16px; }
+        .watch-now-section h3 { color: var(--defender-text-primary, var(--text)); font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+        .horizontal-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; }
+        .horizontal-scroll::-webkit-scrollbar { height: 4px; }
+        .horizontal-scroll::-webkit-scrollbar-thumb { background: var(--defender-border, var(--border)); border-radius: 2px; }
+        .watch-now-card { min-width: 160px; max-width: 160px; background: var(--defender-bg-card, var(--bg-card)); border-radius: 8px; padding: 10px; cursor: pointer; border: 1px solid var(--defender-border-subtle, var(--border)); flex-shrink: 0; transition: border-color .15s, transform .15s; }
+        .watch-now-card:hover { border-color: var(--defender-accent, var(--accent)); transform: translateY(-1px); }
+        .watch-now-card .card-name { color: #fff; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .watch-now-card .card-meta { color: var(--defender-text-secondary, var(--text-sec)); font-size: 11px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .watch-now-card .card-status { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+        .watch-now-card .card-status.working { background: var(--defender-success, var(--success)); }
 
         /* Grid */
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
@@ -359,6 +376,32 @@
                     <option value="name_desc">Z-A</option>
                     <option value="recent">Recently Added</option>
                 </select>
+                <div class="quick-categories">
+                    <button class="category-chip" data-category="Sports">Sports</button>
+                    <button class="category-chip" data-category="Movies">Movies</button>
+                    <button class="category-chip" data-category="News">News</button>
+                    <button class="category-chip" data-category="Entertainment">Entertainment</button>
+                    <button class="category-chip" data-category="Music">Music</button>
+                    <button class="category-chip" data-category="Kids">Kids</button>
+                </div>
+            </div>
+            <div id="watchNow" class="watch-now-sections">
+                <div class="watch-now-section" id="popularNow">
+                    <h3>Popular Now</h3>
+                    <div class="horizontal-scroll"></div>
+                </div>
+                <div class="watch-now-section" id="sportChannels">
+                    <h3>Sports</h3>
+                    <div class="horizontal-scroll"></div>
+                </div>
+                <div class="watch-now-section" id="movieChannels">
+                    <h3>Movies</h3>
+                    <div class="horizontal-scroll"></div>
+                </div>
+                <div class="watch-now-section" id="newsChannels">
+                    <h3>News</h3>
+                    <div class="horizontal-scroll"></div>
+                </div>
             </div>
             <div class="grid" id="grid"></div>
         </div>
@@ -778,8 +821,10 @@ function renderSidebarActive() {
 
 function renderChannels(chs) {
     const grid = document.getElementById('grid');
+    const watchNow = document.getElementById('watchNow');
     document.getElementById('loading').style.display = 'none';
     if (!chs.length) {
+        if (watchNow) watchNow.style.display = 'none';
         // If server has 0 total channels, keep showing loading (startup fetch in progress)
         if (totalChannels === 0 && currentView !== 'favorites' && currentView !== 'recent') {
             document.getElementById('loading').style.display = 'flex';
@@ -813,6 +858,8 @@ function renderChannels(chs) {
 
     displayChs = sortDisplayedChannels(displayChs);
     filtered = displayChs;
+    syncQuickCategoryChips();
+    populateWatchNow(displayChs);
 
     grid.innerHTML = displayChs.map((ch, i) => {
         // SECURITY (v2.16.1): Do NOT inline `onerror="mono('${esc(ch.name)}')"`.
@@ -2322,6 +2369,21 @@ function channelSortStatusValue(ch) {
     return (ch.health_score || 0) > 0 ? 1 : 0;
 }
 
+function sortReliableFirstChannels(chs) {
+    const sorted = [...chs];
+    sorted.sort((a, b) => {
+        const aStatus = channelSortStatusValue(a);
+        const bStatus = channelSortStatusValue(b);
+        if (aStatus !== bStatus) return bStatus - aStatus;
+        if (aStatus >= 3) {
+            const playDiff = (b.play_count || 0) - (a.play_count || 0);
+            if (playDiff !== 0) return playDiff;
+        }
+        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    });
+    return sorted;
+}
+
 function sortDisplayedChannels(chs) {
     const sorted = [...chs];
     if (currentSort === 'name') {
@@ -2337,18 +2399,77 @@ function sortDisplayedChannels(chs) {
             || (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
         return sorted;
     }
+    return sortReliableFirstChannels(sorted);
+}
 
-    sorted.sort((a, b) => {
-        const aStatus = channelSortStatusValue(a);
-        const bStatus = channelSortStatusValue(b);
-        if (aStatus !== bStatus) return bStatus - aStatus;
-        if (aStatus >= 3) {
-            const playDiff = (b.play_count || 0) - (a.play_count || 0);
-            if (playDiff !== 0) return playDiff;
-        }
-        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+function shouldShowWatchNow() {
+    const searchActive = !!document.getElementById('search')?.value.trim();
+    const typeActive = !!document.getElementById('filter-type')?.value;
+    const statusActive = !!document.getElementById('filter-status')?.value;
+    return currentView === 'all' && !currentCat && !currentCountry && !searchActive && !typeActive && !statusActive;
+}
+
+function syncQuickCategoryChips() {
+    document.querySelectorAll('.category-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.category === currentCat);
     });
-    return sorted;
+}
+
+function renderWatchNowRow(sectionId, channels, indexByUrl) {
+    const section = document.getElementById(sectionId);
+    const row = section?.querySelector('.horizontal-scroll');
+    if (!row) return;
+
+    row.innerHTML = channels.map(ch => {
+        const idx = indexByUrl.get(ch.url);
+        const meta = [ch.category, ch.country].filter(Boolean).join(' • ') || 'Verified first';
+        return `<div class="watch-now-card" data-idx="${idx}" title="${esc(ch.name || '')}">
+            <div class="card-name">${esc(ch.name || '')}</div>
+            <div class="card-meta"><span class="card-status working"></span>${esc(meta)}</div>
+        </div>`;
+    }).join('');
+
+    row.querySelectorAll('.watch-now-card').forEach(card => {
+        const idx = Number(card.dataset.idx);
+        card.addEventListener('click', () => {
+            if (Number.isInteger(idx) && idx >= 0) playChannel(idx);
+        });
+    });
+}
+
+function populateWatchNow(channels) {
+    const watchNow = document.getElementById('watchNow');
+    if (!watchNow) return;
+
+    if (!shouldShowWatchNow()) {
+        watchNow.style.display = 'none';
+        return;
+    }
+
+    const reliableFirst = sortReliableFirstChannels(channels);
+    const working = reliableFirst.filter(ch => ch.status === 'working' || !ch.status);
+    const popular = working.slice(0, 15);
+    const sports = working.filter(ch => ch.category === 'Sports').slice(0, 15);
+    const movies = working.filter(ch => ch.category === 'Movies').slice(0, 15);
+    const news = working.filter(ch => ch.category === 'News').slice(0, 15);
+    const indexByUrl = new Map(filtered.map((ch, idx) => [ch.url, idx]));
+
+    renderWatchNowRow('popularNow', popular, indexByUrl);
+    renderWatchNowRow('sportChannels', sports, indexByUrl);
+    renderWatchNowRow('movieChannels', movies, indexByUrl);
+    renderWatchNowRow('newsChannels', news, indexByUrl);
+
+    let visibleSections = 0;
+    ['popularNow', 'sportChannels', 'movieChannels', 'newsChannels'].forEach(id => {
+        const el = document.getElementById(id);
+        const row = el?.querySelector('.horizontal-scroll');
+        if (!el || !row) return;
+        const hasItems = row.children.length > 0;
+        el.style.display = hasItems ? '' : 'none';
+        if (hasItems) visibleSections++;
+    });
+
+    watchNow.style.display = visibleSections > 0 ? 'block' : 'none';
 }
 
 async function loadChannels(append = false) {
@@ -2541,6 +2662,7 @@ function populateFilters(cats, countries) {
     const countrySel = document.getElementById('filter-country');
     catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${esc(c.name)}">${esc(c.name)} (${c.count})</option>`).join('');
     countrySel.innerHTML = '<option value="">All Countries</option>' + countries.map(c => `<option value="${esc(c.name)}">${esc(c.name)} (${c.count})</option>`).join('');
+    syncQuickCategoryChips();
 }
 
 // ─── Events ─────────────────────────────────────────────────────────────────
@@ -2661,6 +2783,17 @@ document.getElementById('filter-sort').onchange = (e) => {
     currentSort = e.target.value || 'smart';
     loadChannels();
 };
+document.querySelectorAll('.category-chip').forEach(btn => btn.onclick = () => {
+    currentCat = btn.dataset.category || null;
+    currentCountry = null;
+    document.getElementById('filter-category').value = currentCat || '';
+    document.getElementById('filter-country').value = '';
+    document.getElementById('search').value = '';
+    document.getElementById('search-clear').style.display = 'none';
+    loadChannels();
+    renderSidebarActive();
+    syncQuickCategoryChips();
+});
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {

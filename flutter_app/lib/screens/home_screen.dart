@@ -17,6 +17,7 @@ import '../widgets/pin_dialog.dart';
 import '../widgets/scan_progress_bar.dart';
 import '../widgets/onboarding_tooltip.dart';
 import '../widgets/consent_dialog.dart';
+import '../widgets/safe_channel_logo.dart';
 import 'diagnostics_screen.dart';
 import 'help_screen.dart';
 import 'map_screen.dart';
@@ -669,6 +670,173 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool _shouldShowWatchNow(ChannelProvider provider) {
+    return !provider.hasActiveFilters && provider.channels.isNotEmpty;
+  }
+
+  bool _isWatchNowWorking(Channel channel) {
+    final status = channel.status.toLowerCase();
+    return status != 'broken' && status != 'failed';
+  }
+
+  Widget _buildWatchNowSections(
+    List<Channel> channels, {
+    required ValueChanged<Channel> onChannelTap,
+    bool compact = false,
+  }) {
+    final working = channels.where(_isWatchNowWorking).toList();
+    final sports = working.where((c) => c.category == 'Sports').take(15).toList();
+    final movies = working.where((c) => c.category == 'Movies').take(15).toList();
+    final news = working.where((c) => c.category == 'News').take(15).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (working.isNotEmpty)
+          _buildHorizontalSection(
+            'Popular Now',
+            working.take(15).toList(),
+            onChannelTap: onChannelTap,
+            compact: compact,
+          ),
+        if (sports.isNotEmpty)
+          _buildHorizontalSection(
+            'Sports',
+            sports,
+            onChannelTap: onChannelTap,
+            compact: compact,
+          ),
+        if (movies.isNotEmpty)
+          _buildHorizontalSection(
+            'Movies',
+            movies,
+            onChannelTap: onChannelTap,
+            compact: compact,
+          ),
+        if (news.isNotEmpty)
+          _buildHorizontalSection(
+            'News',
+            news,
+            onChannelTap: onChannelTap,
+            compact: compact,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHorizontalSection(
+    String title,
+    List<Channel> channels, {
+    required ValueChanged<Channel> onChannelTap,
+    bool compact = false,
+  }) {
+    final titleStyle = compact
+        ? Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)
+        : Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700);
+    final cardHeight = compact ? 104.0 : 120.0;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 8 : 12, compact ? 8 : 10, compact ? 8 : 12, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(title, style: titleStyle),
+          ),
+          SizedBox(
+            height: cardHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: channels.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final channel = channels[index];
+                return _buildWatchNowCard(
+                  channel,
+                  compact: compact,
+                  onTap: () => onChannelTap(channel),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWatchNowCard(
+    Channel channel, {
+    required VoidCallback onTap,
+    bool compact = false,
+  }) {
+    final meta = [
+      if ((channel.category ?? '').isNotEmpty) channel.category!,
+      if ((channel.country ?? '').isNotEmpty && channel.country != 'Unknown') channel.country!,
+    ].join(' • ');
+    final width = compact ? 146.0 : 164.0;
+    final logoSize = compact ? 26.0 : 30.0;
+
+    return SizedBox(
+      width: width,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 10 : 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: logoSize / 2,
+                      backgroundColor: channel.isWorking ? Colors.green : Colors.grey,
+                      child: ClipOval(
+                        child: SafeChannelLogo(
+                          url: channel.logo,
+                          size: logoSize,
+                          fallbackIcon: channel.mediaType == 'Radio' ? Icons.radio : Icons.tv,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.circle,
+                      size: 8,
+                      color: _isWatchNowWorking(channel) ? Colors.green : Colors.grey,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  channel.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 12 : 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  meta.isEmpty ? 'Working first' : meta,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    fontSize: compact ? 10.5 : 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Pull-to-refresh: fetch channels + check for app updates.
   Future<void> _onRefreshChannels() async {
     final provider = context.read<ChannelProvider>();
@@ -760,44 +928,115 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         if (useGridView) {
+          final showWatchNow = _shouldShowWatchNow(provider);
           return RefreshIndicator(
             onRefresh: _onRefreshChannels,
-            child: GridView.builder(
+            child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(8),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 3.5,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 4,
-              ),
-              itemCount: provider.channels.length,
-              itemBuilder: (context, index) {
-                final channel = provider.channels[index];
-                return Card(
-                  margin: const EdgeInsets.all(0),
-                  child: ChannelTile(
-                    channel: channel,
-                    onTap: () => _playChannel(channel, index),
+              slivers: [
+                if (showWatchNow)
+                  SliverToBoxAdapter(
+                    child: _buildWatchNowSections(
+                      provider.channels,
+                      onChannelTap: (channel) {
+                        _playChannel(channel, provider.channels.indexOf(channel));
+                      },
+                    ),
                   ),
-                );
-              },
+                SliverPadding(
+                  padding: const EdgeInsets.all(8),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 3.5,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 4,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final channel = provider.channels[index];
+                        return Card(
+                          margin: const EdgeInsets.all(0),
+                          child: ChannelTile(
+                            channel: channel,
+                            onTap: () => _playChannel(channel, index),
+                          ),
+                        );
+                      },
+                      childCount: provider.channels.length,
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         }
+
+        final showWatchNow = _shouldShowWatchNow(provider);
+        final headerCount = showWatchNow ? 1 : 0;
 
         return RefreshIndicator(
           onRefresh: _onRefreshChannels,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: provider.channels.length,
+            itemCount: provider.channels.length + headerCount,
             itemBuilder: (context, index) {
-              final channel = provider.channels[index];
+              if (showWatchNow && index == 0) {
+                return _buildWatchNowSections(
+                  provider.channels,
+                  onChannelTap: (channel) {
+                    _playChannel(channel, provider.channels.indexOf(channel));
+                  },
+                );
+              }
+
+              final channelIndex = index - headerCount;
+              final channel = provider.channels[channelIndex];
               return ChannelTile(
                 channel: channel,
-                onTap: () => _playChannel(channel, index),
+                onTap: () => _playChannel(channel, channelIndex),
               );
             },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactWatchNowList(
+    ChannelProvider provider, {
+    required void Function(Channel channel, int index) onTap,
+  }) {
+    final showWatchNow = _shouldShowWatchNow(provider);
+    final headerCount = showWatchNow ? 1 : 0;
+
+    return ListView.builder(
+      itemCount: provider.channels.length + headerCount,
+      itemBuilder: (context, index) {
+        if (showWatchNow && index == 0) {
+          return _buildWatchNowSections(
+            provider.channels,
+            compact: true,
+            onChannelTap: (channel) {
+              final channelIndex = provider.channels.indexOf(channel);
+              if (channelIndex >= 0) {
+                onTap(channel, channelIndex);
+              }
+            },
+          );
+        }
+
+        final channelIndex = index - headerCount;
+        final channel = provider.channels[channelIndex];
+        final isSelected = _tabletSelectedChannel?.url == channel.url;
+        return Container(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              : null,
+          child: ChannelTile(
+            channel: channel,
+            compact: true,
+            onTap: () => onTap(channel, channelIndex),
           ),
         );
       },
@@ -842,26 +1081,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             );
                           }
-                          return ListView.builder(
-                            itemCount: provider.channels.length,
-                            itemBuilder: (context, index) {
-                              final channel = provider.channels[index];
-                              final isSelected = _tabletSelectedChannel?.url == channel.url;
-                              return Container(
-                                color: isSelected
-                                    ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-                                    : null,
-                                child: ChannelTile(
-                                  channel: channel,
-                                  compact: true,
-                                  onTap: () {
-                                    setState(() {
-                                      _tabletSelectedChannel = channel;
-                                      _tabletSelectedIndex = index;
-                                    });
-                                  },
-                                ),
-                              );
+                          return _buildCompactWatchNowList(
+                            provider,
+                            onTap: (channel, index) {
+                              setState(() {
+                                _tabletSelectedChannel = channel;
+                                _tabletSelectedIndex = index;
+                              });
                             },
                           );
                         },
@@ -1277,26 +1503,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             );
                           }
-                          return ListView.builder(
-                            itemCount: provider.channels.length,
-                            itemBuilder: (context, index) {
-                              final channel = provider.channels[index];
-                              final isSelected = _tabletSelectedChannel?.url == channel.url;
-                              return Container(
-                                color: isSelected
-                                    ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-                                    : null,
-                                child: ChannelTile(
-                                  channel: channel,
-                                  compact: true,
-                                  onTap: () {
-                                    setState(() {
-                                      _tabletSelectedChannel = channel;
-                                      _tabletSelectedIndex = index;
-                                    });
-                                  },
-                                ),
-                              );
+                          return _buildCompactWatchNowList(
+                            provider,
+                            onTap: (channel, index) {
+                              setState(() {
+                                _tabletSelectedChannel = channel;
+                                _tabletSelectedIndex = index;
+                              });
                             },
                           );
                         },
