@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-08-09T06:39:50.121888+00:00",
-  "total_channels": 21414,
-  "countries": 31,
+  "updated_at": "2026-08-10T07:13:40.067781+00:00",
+  "total_channels": 21416,
+  "countries": 32,
   "categories": 26,
   "top_countries": [
     {
       "name": "France",
-      "count": 301
+      "count": 300
     },
     {
       "name": "China",
@@ -92,11 +92,11 @@
     },
     {
       "name": "Entertainment",
-      "count": 221
+      "count": 220
     },
     {
       "name": "Documentary",
-      "count": 194
+      "count": 195
     },
     {
       "name": "Culture",
