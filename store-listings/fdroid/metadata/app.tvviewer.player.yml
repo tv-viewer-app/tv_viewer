@@ -1,0 +1,62 @@
+Categories:
+  - Multimedia
+License: MIT
+AuthorName: TV Viewer App
+AuthorEmail: tv.viewer.app@gmail.com
+AuthorWebSite: https://tv-viewer-app.github.io/tv_viewer/
+SourceCode: https://github.com/tv-viewer-app/tv_viewer
+IssueTracker: https://github.com/tv-viewer-app/tv_viewer/issues
+Changelog: https://github.com/tv-viewer-app/tv_viewer/blob/master/CHANGELOG.md
+
+AutoName: TV Viewer
+
+RepoType: git
+Repo: https://github.com/tv-viewer-app/tv_viewer.git
+
+Builds:
+  - versionName: 2.23.0
+    versionCode: 133
+    commit: d9e89b139b5907563d9bf98848846b9e2697a86b
+    subdir: flutter_app
+    sudo:
+      - mkdir -p /home/user/tv_viewer
+      - chown -R vagrant /home/user
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@3.32.0
+    rm:
+      - flutter_app/ios
+      - flutter_app/linux
+      - flutter_app/macos
+      - flutter_app/web
+      - flutter_app/windows
+    prebuild:
+      - export repo=/home/user/tv_viewer/flutter_app
+      - cd ../..
+      - mv tv_viewer $repo/..
+      - pushd $repo
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - popd
+      - mv /home/user/tv_viewer tv_viewer
+    scanignore:
+      - .flutter/bin/cache
+    scandelete:
+      - .flutter
+      - .pub-cache
+    build:
+      - export repo=/home/user/tv_viewer/flutter_app
+      - cd ../..
+      - mv tv_viewer $repo/..
+      - pushd $repo
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform="android-arm64"
+      - popd
+      - mv /home/user/tv_viewer tv_viewer
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+UpdateCheckData: flutter_app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 2.23.0
+CurrentVersionCode: 133
