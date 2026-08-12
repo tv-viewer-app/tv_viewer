@@ -15,6 +15,9 @@ class Channel {
   final String mediaType; // 'TV' or 'Radio'
   final String status;
   final int reportCount;
+  final int workingReports;
+  final int brokenReports;
+  final int failedReports;
   final bool isWorking;
   final DateTime? lastChecked;
   
@@ -42,6 +45,9 @@ class Channel {
     this.mediaType = 'TV',
     this.status = 'unchecked',
     this.reportCount = 0,
+    this.workingReports = 0,
+    this.brokenReports = 0,
+    this.failedReports = 0,
     this.isWorking = true,
     this.lastChecked,
     this.resolution,
@@ -576,6 +582,9 @@ class Channel {
         'mediaType': mediaType,
         'status': status,
         'reportCount': reportCount,
+        'workingReports': workingReports,
+        'brokenReports': brokenReports,
+        'failedReports': failedReports,
         'isWorking': isWorking,
         'lastChecked': lastChecked?.toIso8601String(),
         'resolution': resolution,
@@ -586,6 +595,21 @@ class Channel {
         final rawName = json['name'] ?? 'Unknown';
         final name = _repairEncoding(rawName is String ? rawName : rawName.toString());
         final language = json['language'] as String?;
+        final healthMetadata = switch (json['health_metadata'] ?? json['health_stats'] ?? json['health']) {
+          Map<String, dynamic> value => value,
+          Map value => Map<String, dynamic>.from(value),
+          _ => const <String, dynamic>{},
+        };
+
+        int readHealthCount(List<String> keys) {
+          for (final key in keys) {
+            final nestedValue = healthMetadata[key];
+            if (nestedValue is num) return nestedValue.toInt();
+            final topLevelValue = json[key];
+            if (topLevelValue is num) return topLevelValue.toInt();
+          }
+          return 0;
+        }
 
         // v2.1.0: Parse both old "url" (string) and new "urls" (list) formats
         List<String> urls;
@@ -598,6 +622,9 @@ class Channel {
         final workingUrlIndex = json['workingUrlIndex'] ?? json['working_url_index'] ?? 0;
         final status = (json['status'] as String? ?? '').trim().toLowerCase();
         final reportCount = (json['reportCount'] as num? ?? json['report_count'] as num?)?.toInt() ?? 0;
+        final workingReports = readHealthCount(['working_reports', 'workingReports']);
+        final brokenReports = readHealthCount(['broken_reports', 'brokenReports']);
+        final failedReports = readHealthCount(['failed_reports', 'failedReports']);
         final lastCheckedRaw = json['lastChecked'] ?? json['last_checked'];
         final lastChecked = lastCheckedRaw != null
             ? DateTime.parse(lastCheckedRaw.toString())
@@ -624,6 +651,9 @@ class Channel {
               ? status
               : (isWorking ? 'working' : (lastChecked != null ? 'failed' : 'unchecked')),
           reportCount: reportCount,
+          workingReports: workingReports,
+          brokenReports: brokenReports,
+          failedReports: failedReports,
           isWorking: isWorking,
           lastChecked: lastChecked,
           resolution: json['resolution'],
@@ -641,6 +671,16 @@ class Channel {
     }
     return '$bitrate bps';
   }
+
+  int get totalHealthReports => workingReports + brokenReports + failedReports;
+
+  double? get reliability =>
+      totalHealthReports > 0 ? workingReports / totalHealthReports : null;
+
+  double? get failureRate =>
+      totalHealthReports > 0 ? 1 - (reliability ?? 0) : null;
+
+  bool get hasReliabilityData => totalHealthReports > 0;
 
   int get healthScore {
     int score = 10;
@@ -671,6 +711,9 @@ class Channel {
     String? mediaType,
     String? status,
     int? reportCount,
+    int? workingReports,
+    int? brokenReports,
+    int? failedReports,
     bool? isWorking,
     DateTime? lastChecked,
     String? resolution,
@@ -692,6 +735,9 @@ class Channel {
       mediaType: mediaType ?? this.mediaType,
       status: status ?? this.status,
       reportCount: reportCount ?? this.reportCount,
+      workingReports: workingReports ?? this.workingReports,
+      brokenReports: brokenReports ?? this.brokenReports,
+      failedReports: failedReports ?? this.failedReports,
       isWorking: isWorking ?? this.isWorking,
       lastChecked: lastChecked ?? this.lastChecked,
       resolution: resolution ?? this.resolution,

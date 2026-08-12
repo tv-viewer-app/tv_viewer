@@ -274,18 +274,7 @@ class M3UService {
           final urls = ch['urls'];
           final urlList = urls is List ? urls.cast<String>() : <String>[];
           if (urlList.isEmpty) continue;
-          supabaseChannels.add(Channel(
-            name: ch['name'] as String? ?? '',
-            url: urlList.first,
-            urls: urlList,
-            category: ch['category'] as String? ?? 'Other',
-            country: ch['country'] as String?,
-            logo: ch['logo'] as String?,
-            mediaType: (ch['media_type'] as String?) ?? 'TV',
-            status: (ch['status'] as String? ?? 'unchecked').toLowerCase(),
-            reportCount: (ch['report_count'] as num?)?.toInt() ?? 0,
-            isWorking: (ch['status'] as String? ?? '').toLowerCase() == 'working',
-          ));
+          supabaseChannels.add(Channel.fromJson(ch));
         }
         logger.info('Loaded ${supabaseChannels.length} channels from Supabase');
       }

@@ -247,23 +247,51 @@ class SharedDbService {
           channel.putIfAbsent('report_count', () => 0);
         }
 
-        final healthUrl = Uri.parse('$_supabaseUrl/rest/v1/channel_status').replace(
-          queryParameters: {
-            'select': 'url_hash,status,report_count',
-          },
-        );
-
         try {
-          final healthResp = await http.get(
-            healthUrl,
-            headers: {
-              'apikey': _supabaseAnonKey,
-              'Authorization': '******',
-            },
-          ).timeout(const Duration(seconds: 15));
+          final selectVariants = <String>[
+            'url_hash,status,report_count,working_reports,broken_reports,failed_reports',
+            'url_hash,status,report_count',
+          ];
+          http.Response? healthResp;
+          String? selectedFields;
 
-          if (healthResp.statusCode == 200) {
-            final List<dynamic> healthList = json.decode(healthResp.body);
+          for (final fields in selectVariants) {
+            final probeUrl = Uri.parse('$_supabaseUrl/rest/v1/channel_status').replace(
+              queryParameters: {
+                'select': fields,
+                'limit': '1',
+              },
+            );
+            final probeResp = await http.get(
+              probeUrl,
+              headers: {
+                'apikey': _supabaseAnonKey,
+                'Authorization': '******',
+              },
+            ).timeout(const Duration(seconds: 10));
+            if (probeResp.statusCode == 200) {
+              selectedFields = fields;
+              break;
+            }
+          }
+
+          if (selectedFields != null) {
+            final healthUrl = Uri.parse('$_supabaseUrl/rest/v1/channel_status').replace(
+              queryParameters: {
+                'select': selectedFields,
+              },
+            );
+            healthResp = await http.get(
+              healthUrl,
+              headers: {
+                'apikey': _supabaseAnonKey,
+                'Authorization': '******',
+              },
+            ).timeout(const Duration(seconds: 15));
+          }
+
+          if (healthResp?.statusCode == 200) {
+            final List<dynamic> healthList = json.decode(healthResp!.body);
             final healthMap = <String, Map<String, dynamic>>{
               for (final item in healthList)
                 (item['url_hash'] as String? ?? ''): Map<String, dynamic>.from(item as Map),
@@ -276,10 +304,15 @@ class SharedDbService {
               if (health == null) continue;
               channel['status'] = health['status'] ?? channel['status'] ?? 'unchecked';
               channel['report_count'] = health['report_count'] ?? channel['report_count'] ?? 0;
+              channel['working_reports'] = health['working_reports'] ?? channel['working_reports'] ?? 0;
+              channel['broken_reports'] = health['broken_reports'] ?? channel['broken_reports'] ?? 0;
+              channel['failed_reports'] = health['failed_reports'] ?? channel['failed_reports'] ?? 0;
             }
             logger.info('Merged health metadata into ${channels.length} channels');
+          } else if (selectedFields == null) {
+            logger.warning('Failed to resolve supported channel health metadata fields');
           } else {
-            logger.warning('Failed to fetch channel health metadata: ${healthResp.statusCode}');
+            logger.warning('Failed to fetch channel health metadata: ${healthResp?.statusCode}');
           }
         } catch (e, stackTrace) {
           logger.error('Failed to merge channel health metadata', e, stackTrace);

@@ -48,6 +48,24 @@ class ChannelTile extends StatelessWidget {
         // EPG current program subtitle
         final currentProgram = provider.getCurrentProgram(channel.name);
         final hasEpg = provider.hasEpgData(channel.name);
+        final reliability = channel.reliability;
+        final reliabilityIcon = reliability == null
+            ? null
+            : reliability < 0.2
+                ? Icons.portable_wifi_off
+                : reliability < 0.4
+                    ? Icons.signal_wifi_statusbar_connected_no_internet_4
+                    : null;
+        final reliabilityColor = reliability == null
+            ? null
+            : reliability < 0.2
+                ? Theme.of(context).colorScheme.error
+                : reliability < 0.4
+                    ? Colors.orange.shade700
+                    : null;
+        final reliabilityTooltip = reliability == null
+            ? null
+            : 'Reliability ${(reliability * 100).toStringAsFixed(0)}%';
 
         return Dismissible(
           key: ValueKey('dismiss_${channel.url}'),
@@ -70,24 +88,48 @@ class ChannelTile extends StatelessWidget {
             ),
           ),
           child: ListTile(
-          dense: compact,
-          visualDensity: compact ? VisualDensity.compact : null,
-          leading: _buildLeading(),
-          title: Text(
-            channel.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: compact ? const TextStyle(fontSize: 13) : null,
-          ),
-          subtitle: compact
-              ? (metaLine.isNotEmpty
-                  ? Text(metaLine, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11))
-                  : null)
-              : _buildSubtitle(context, metaLine, currentProgram),
-          trailing: _buildTrailing(context, provider, hasEpg),
-          onTap: onTap,
-          onLongPress: () => _showChannelContextMenu(context),
+            dense: compact,
+            visualDensity: compact ? VisualDensity.compact : null,
+            leading: _buildLeading(),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    channel.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: compact ? const TextStyle(fontSize: 13) : null,
+                  ),
+                ),
+                if (reliabilityIcon != null) ...[
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: reliabilityTooltip!,
+                    child: Icon(
+                      reliabilityIcon,
+                      size: compact ? 14 : 16,
+                      color: reliabilityColor,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: compact
+                ? (metaLine.isNotEmpty
+                    ? Text(
+                        metaLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(fontSize: 11),
+                      )
+                    : null)
+                : _buildSubtitle(context, metaLine, currentProgram),
+            trailing: _buildTrailing(context, provider, hasEpg),
+            onTap: onTap,
+            onLongPress: () => _showChannelContextMenu(context),
           ),
         );
       },

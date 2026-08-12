@@ -6,6 +6,7 @@ import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../repositories/channel_repository.dart';
+import '../services/analytics_service.dart';
 import '../services/m3u_service.dart';
 import '../services/favorites_service.dart';
 import '../services/filters_service.dart';
@@ -1077,6 +1078,24 @@ class ChannelProvider extends ChangeNotifier {
     return 1;
   }
 
+  double _reliabilitySortValue(Channel channel) {
+    final reliability = channel.reliability;
+    if (reliability != null) return reliability;
+    if (_isWorkingCatalogStatus(channel)) return 0.55;
+    if (_isBrokenCatalogStatus(channel)) return 0.05;
+    return 0.4;
+  }
+
+  bool hasReliabilityWarning(Channel channel) {
+    final failureRate = channel.failureRate;
+    return failureRate != null && failureRate > 0.6;
+  }
+
+  bool isHighlyUnreliable(Channel channel) {
+    final reliability = channel.reliability;
+    return reliability != null && reliability < 0.2;
+  }
+
   bool _isBrokenCatalogStatus(Channel channel) {
     final status = channel.status.toLowerCase();
     return status == 'broken' || status == 'failed';
@@ -1093,6 +1112,7 @@ class ChannelProvider extends ChangeNotifier {
 
   bool _isHiddenByReliableDefault(Channel channel) {
     if (_showAllChannels) return false;
+    if (channel.hasReliabilityData) return false;
     return _isBrokenCatalogStatus(channel) && channel.reportCount >= 5;
   }
 
@@ -1247,6 +1267,11 @@ class ChannelProvider extends ChangeNotifier {
         final bStatus = _smartStatusScore(b);
         final statusCmp = bStatus.compareTo(aStatus);
         if (statusCmp != 0) return statusCmp;
+        final reliabilityCmp =
+            _reliabilitySortValue(b).compareTo(_reliabilitySortValue(a));
+        if (reliabilityCmp != 0) return reliabilityCmp;
+        final playCmp = _channelPlayCount(b).compareTo(_channelPlayCount(a));
+        if (playCmp != 0) return playCmp;
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
     } else {
@@ -1264,6 +1289,9 @@ class ChannelProvider extends ChangeNotifier {
             break;
           case SortField.status:
             cmp = _smartStatusScore(b).compareTo(_smartStatusScore(a));
+            if (cmp == 0) {
+              cmp = _reliabilitySortValue(b).compareTo(_reliabilitySortValue(a));
+            }
             if (cmp == 0) cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
             break;
           case SortField.category:
@@ -1560,6 +1588,7 @@ class ChannelProvider extends ChangeNotifier {
       } else {
         await FavoritesService.addFavorite(channel.url);
       }
+      AnalyticsService.instance.trackActivationMilestone('first_favorite');
     }
     
     // If currently viewing favorites, reapply filters

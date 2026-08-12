@@ -223,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'result_count': context.read<ChannelProvider>().channels.length,
         'platform': 'android',
       });
+      AnalyticsService.instance.trackActivationMilestone('first_search');
     });
   }
 
@@ -679,6 +680,23 @@ class _HomeScreenState extends State<HomeScreen> {
     return status != 'broken' && status != 'failed';
   }
 
+  bool _categoryHasAvailabilityWarning(List<Channel> channels, String category) {
+    final categoryChannels = channels
+        .where((c) => (c.category ?? '').toLowerCase() == category.toLowerCase())
+        .toList();
+    if (categoryChannels.isEmpty) return false;
+
+    final failingCount = categoryChannels.where((channel) {
+      final failureRate = channel.failureRate;
+      if (failureRate != null) {
+        return failureRate > 0.5;
+      }
+      return !_isWatchNowWorking(channel);
+    }).length;
+
+    return failingCount / categoryChannels.length > 0.5;
+  }
+
   Widget _buildWatchNowSections(
     List<Channel> channels, {
     required ValueChanged<Channel> onChannelTap,
@@ -703,6 +721,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildHorizontalSection(
             'Sports',
             sports,
+            showAvailabilityWarning: _categoryHasAvailabilityWarning(channels, 'Sports'),
             onChannelTap: onChannelTap,
             compact: compact,
           ),
@@ -710,6 +729,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildHorizontalSection(
             'Movies',
             movies,
+            showAvailabilityWarning: _categoryHasAvailabilityWarning(channels, 'Movies'),
             onChannelTap: onChannelTap,
             compact: compact,
           ),
@@ -717,6 +737,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildHorizontalSection(
             'News',
             news,
+            showAvailabilityWarning: _categoryHasAvailabilityWarning(channels, 'News'),
             onChannelTap: onChannelTap,
             compact: compact,
           ),
@@ -728,6 +749,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String title,
     List<Channel> channels, {
     required ValueChanged<Channel> onChannelTap,
+    bool showAvailabilityWarning = false,
     bool compact = false,
   }) {
     final titleStyle = compact
@@ -742,7 +764,22 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(title, style: titleStyle),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                Text(title, style: titleStyle),
+                if (showAvailabilityWarning)
+                  Text(
+                    '(some channels may be unavailable)',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      fontSize: compact ? 10 : 11,
+                    ),
+                  ),
+              ],
+            ),
           ),
           SizedBox(
             height: cardHeight,

@@ -154,7 +154,12 @@
         .card-logo { width: 40px; height: 40px; border-radius: var(--radius-sm); object-fit: cover; background: rgba(255,255,255,.05); flex-shrink: 0; }
         .card-mono { width: 40px; height: 40px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; }
         .card-info { flex: 1; min-width: 0; }
+        .card-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
         .card-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .reliability-inline-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .reliability-inline-dot.reliable { background: var(--defender-success, var(--success)); }
+        .reliability-inline-dot.flaky { background: var(--defender-high, var(--fav)); }
+        .reliability-inline-dot.unreliable { background: var(--defender-critical, var(--live)); }
         .card-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .card-epg { font-size: 10px; color: var(--accent); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .card-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; }
@@ -872,10 +877,14 @@ function renderChannels(chs) {
             ? `<img class="card-logo" src="${esc(ch.logo)}" data-fallback-name="${esc(ch.name||'')}">`
             : mono(ch.name);
         const health = effectiveHealth(ch);
+        const reliabilityState = reliabilityIndicatorState(ch);
+        const reliabilityDot = reliabilityState
+            ? `<span class="reliability-inline-dot ${reliabilityState}" title="Channel reliability"></span>`
+            : '';
         const isFav = favorites.has(ch.url);
         return `<div class="card" data-idx="${i}" data-url="${esc(ch.url||'')}">
             <div class="card-dot ${health}"></div>
-            <div class="card-top">${logo}<div class="card-info"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div><div class="health-badge ${health}">${esc(health)}</div></div></div>
+            <div class="card-top">${logo}<div class="card-info"><div class="card-name-row"><div class="card-name" title="${esc(ch.name)}">${esc(ch.name)}</div>${reliabilityDot}</div><div class="card-meta">${esc(ch.category||'')} ${ch.country?'• '+esc(ch.country):''}</div><div class="health-badge ${health}">${esc(health)}</div></div></div>
             <div class="card-epg" id="epg-${i}"></div>
             <div class="card-actions"><button onclick="event.stopPropagation();playChannel(${i})">▶ Play</button><button onclick="event.stopPropagation();toggleFav(${i})" style="${isFav?'color:var(--fav);border-color:var(--fav)':''}">${isFav?'★':'☆'}</button><button class="card-cast-btn" style="display:none" onclick="event.stopPropagation();castChannel(${i})" title="Cast to TV">📡</button><button class="report-btn" onclick="event.stopPropagation();reportBroken(${i})">⚠</button></div>
         </div>`;
@@ -2357,6 +2366,20 @@ function effectiveHealth(ch) {
     if (localH === 'broken') return 'offline';
     if (localH === 'working') return 'reliable';
     return ch.health || 'offline';
+}
+
+function reliabilityIndicatorState(ch) {
+    const status = (ch.status || '').toLowerCase();
+    const health = (ch.health || '').toLowerCase();
+    const reportCount = Number(ch.report_count || 0);
+    const hasKnownHealth = (status && status !== 'unchecked') || reportCount > 0;
+    if (!hasKnownHealth) return '';
+    if (status === 'broken' || status === 'failed' || status === 'offline' || status === 'stale' || health === 'offline') {
+        return 'unreliable';
+    }
+    if (health === 'unstable') return 'flaky';
+    if (status === 'working' || health === 'reliable') return 'reliable';
+    return status ? 'flaky' : '';
 }
 
 function channelSortStatusValue(ch) {

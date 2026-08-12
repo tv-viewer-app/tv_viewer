@@ -5,7 +5,17 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.24.0] - 2026-08-12
+
+### Added
+- Activation funnel analytics: tracks first_launch, first_search, first_play_attempt, first_successful_play, first_favorite, first_return_visit milestones
+- Session tracking with install age and session count for retention analysis
+- Channel reliability indicators in Flutter (warning icons for unreliable channels) and Web (colored dots)
+- Player fallback snackbar — shows "Trying alternative source..." when switching sources
+- Fallback analytics tracking for source switching events
+- Watch Now category health warnings when >50% channels are failing
+- Play Store ASO: English and German localized listing descriptions
+- F-Droid metadata following build-flutter.yml template for resubmission
 
 ### Fixed
 - Flutter channel catalog now merges Supabase `channel_status` health metadata into fetched channels

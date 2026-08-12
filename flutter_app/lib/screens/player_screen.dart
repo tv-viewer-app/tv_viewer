@@ -129,6 +129,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       country: widget.channel.country ?? '',
       category: widget.channel.category ?? '',
     );
+    AnalyticsService.instance.trackActivationMilestone('first_play_attempt');
   }
 
   void _trackSuccessfulPlayIfNeeded() {
@@ -141,6 +142,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       urlHash: _channelUrlHash,
       country: widget.channel.country ?? '',
       category: widget.channel.category ?? '',
+    );
+    AnalyticsService.instance.trackActivationMilestone(
+      'first_successful_play',
     );
 
     final startedAt = _playAttemptStartedAt;
@@ -168,6 +172,39 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       sourceUrlIndex: failure.sourceUrlIndex,
       errorCode: errorCode ?? failure.rawError,
     );
+  }
+
+  void _showAlternativeSourceSnackbar() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Trying alternative source...'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+  }
+
+  void _trackFallbackAttempt({
+    required int failedIndex,
+    required int nextIndex,
+    required _AnalyticsFailure failure,
+  }) {
+    AnalyticsService.instance.trackEvent('channel_source_fallback', {
+      'name': widget.channel.name,
+      'url_hash': _channelUrlHash,
+      'country': widget.channel.country ?? '',
+      'category': widget.channel.category ?? '',
+      'failed_source_index': failedIndex,
+      'next_source_index': nextIndex,
+      'failure_type': failure.failureType,
+      if (failure.httpStatus != null) 'http_status': failure.httpStatus,
+    });
   }
 
   int? _extractHttpStatus(String message) {
@@ -540,6 +577,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         final failure = _normalizeAnalyticsFailure(e, idx);
         _lastFailure = failure;
         _reportHealth(streamUrl, false, failure.rawError);
+        if (attempt < urls.length - 1) {
+          final nextIdx = (_currentUrlIndex + attempt + 1) % urls.length;
+          _showAlternativeSourceSnackbar();
+          _trackFallbackAttempt(
+            failedIndex: idx,
+            nextIndex: nextIdx,
+            failure: failure,
+          );
+        }
         // Continue to next URL
       }
     }
@@ -592,6 +638,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     }
     
     logger.info('Auto-fallback: source #${failedIndex + 1} → #${nextIdx + 1} for ${widget.channel.name}');
+    _showAlternativeSourceSnackbar();
+    _trackFallbackAttempt(
+      failedIndex: failedIndex,
+      nextIndex: nextIdx,
+      failure: failure,
+    );
     _isFallingBack = true;
     _initializePlayer(startIndex: nextIdx).then((_) {
       _isFallingBack = false;

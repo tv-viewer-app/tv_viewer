@@ -1,0 +1,47 @@
+Streame über 21.000 kostenlose IPTV-Sender aus aller Welt — ohne Anmeldung, ohne Abo, ohne Werbung.
+
+TV Viewer verbindet dich mit einer Community-Datenbank frei verfügbarer Live-TV- und Radio-Streams. Durchsuche nach Kategorie, finde Sender nach Name und starte sofort.
+
+🌍 SENDER AUS ALLER WELT
+• 21.000+ Sender aus über 150 Ländern
+• Live-TV, Sport, Nachrichten, Filme, Unterhaltung
+• Anime-Sender — HIDIVE, Pluto TV Anime, MAX Anime & mehr
+• Kostenlose Sender aus Deutschland, Österreich, Schweiz
+• Rakuten TV, ZDF, ARD und viele weitere
+• Radio-Sender für Hintergrund-Musik
+
+📺 STARKER PLAYER
+• Integrierter HLS/HTTP-Videoplayer
+• Multi-Source-Fallback — wenn ein Stream ausfällt, wird automatisch eine Alternative versucht
+• Bild-in-Bild-Modus zum Multitasking
+• Hintergrund-Audio für Radio
+• Zuverlässigkeitsanzeige für Streams
+
+🔍 FINDE WAS DU SUCHST
+• Smarte Suche über alle Sender
+• Schnellfilter: Sport, Nachrichten, Filme, Kinder, Musik, Anime
+• Watch Now — kuratierte Sektionen mit beliebten Sendern
+• Favoriten — speichere Sender für schnellen Zugriff
+
+🛡️ DATENSCHUTZ ZUERST
+• Kein Konto erforderlich
+• Keine persönlichen Daten gesammelt
+• Optionale anonyme Nutzungsstatistiken (nur bei Zustimmung)
+• Keine Werbung, kein Tracking
+• Open Source (MIT-Lizenz)
+
+📊 COMMUNITY-BETRIEBEN
+• Sender-Zuverlässigkeit wird von der Community verfolgt
+• Defekte Streams automatisch erkannt und markiert
+• Regelmäßig neue Sender aus Community-Quellen
+
+⚡ ZUVERLÄSSIGES STREAMING
+• Intelligente Sortierung — zuverlässige Streams zuerst
+• Automatischer Quellenwechsel bei Stream-Ausfall
+• Gesundheitsbewertung basierend auf Community-Berichten
+
+Auch verfügbar als Web-App (Docker) und Desktop-App (Windows/Linux).
+
+Quellcode: https://github.com/tv-viewer-app/tv_viewer
+
+Hinweis: TV Viewer aggregiert öffentlich verfügbare Streams aus Community-Verzeichnissen. Wir hosten keine Inhalte. Die Verfügbarkeit der Sender hängt von den Quellanbietern ab.

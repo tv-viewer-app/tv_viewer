@@ -1,0 +1,48 @@
+Stream 21,000+ free IPTV channels from around the world — no sign-up, no subscription, no ads.
+
+TV Viewer connects you to a community-powered database of publicly available live TV and radio streams. Browse by category, search by name, and start watching instantly.
+
+🌍 CHANNELS FROM EVERYWHERE
+• 21,000+ channels from 150+ countries
+• Live TV, sports, news, movies, entertainment
+• Anime channels — HIDIVE, Pluto TV Anime, MAX Anime & more
+• Free-to-air TV from Germany, Israel, US, India & beyond
+• Radio stations for background listening
+
+📺 POWERFUL PLAYER
+• Built-in HLS/HTTP video player
+• Multi-source fallback — if one stream fails, try another automatically
+• Picture-in-Picture mode for multitasking
+• Background audio for radio stations
+• Channel health indicators show stream reliability
+
+🔍 FIND WHAT YOU WANT
+• Smart search across all channels
+• Quick category filters: Sports, News, Movies, Kids, Music, Anime
+• Watch Now — curated sections with popular and trending channels
+• Favorites — save channels for quick access
+
+🛡️ PRIVACY FIRST
+• No account required
+• No personal data collected
+• Optional anonymous analytics (opt-in only)
+• No ads, no tracking, no profiling
+• Open source (MIT License)
+
+📊 COMMUNITY POWERED
+• Channel reliability tracked by the community
+• Broken streams automatically detected and flagged
+• New channels added regularly from community sources
+• Community statistics dashboard
+
+⚡ RELIABLE STREAMING
+• Smart channel sorting — reliable streams first
+• Automatic source fallback when streams go down
+• Health scoring based on community reports
+• Fast quarantine of consistently broken channels
+
+Also available as a web app (Docker) and desktop app (Windows/Linux).
+
+Source code: https://github.com/tv-viewer-app/tv_viewer
+
+Note: TV Viewer aggregates publicly available streams from community-maintained repositories. We do not host any content. Channel availability depends on the source providers.

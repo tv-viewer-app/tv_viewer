@@ -60,6 +60,9 @@ class AnalyticsService {
   // ---------------------------------------------------------------------------
   static const String _deviceIdKey = 'analytics_device_id';
   static const String _analyticsEnabledKey = 'analytics_enabled';
+  static const String _installDateKey = 'analytics_install_date';
+  static const String _sessionCountKey = 'analytics_session_count';
+  static const String _lastLaunchDateKey = 'analytics_last_launch_date_utc';
   static const int _maxQueueSize = 20;
   static const Duration _flushInterval = Duration(seconds: 30);
   static const Duration _httpTimeout = Duration(seconds: 10);
@@ -73,6 +76,7 @@ class AnalyticsService {
   String _appVersion = '';
   String _platform = '';
   String _userCountry = 'XX';
+  DateTime? _installDateUtc;
 
   final List<Map<String, dynamic>> _queue = [];
   final Set<String> _sentErrors = <String>{};
@@ -128,6 +132,23 @@ class AnalyticsService {
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuidV4();
         await prefs.safeSetString(_deviceIdKey, _deviceId);
+      }
+      final installDateString = prefs.getString(_installDateKey) ?? '';
+      if (installDateString.isEmpty) {
+        _installDateUtc = DateTime.now().toUtc();
+        await prefs.safeSetString(
+          _installDateKey,
+          _installDateUtc!.toIso8601String(),
+        );
+      } else {
+        final parsedInstallDate = DateTime.tryParse(installDateString)?.toUtc();
+        _installDateUtc = parsedInstallDate ?? DateTime.now().toUtc();
+        if (parsedInstallDate == null) {
+          await prefs.safeSetString(
+            _installDateKey,
+            _installDateUtc!.toIso8601String(),
+          );
+        }
       }
 
       // Start periodic flush
@@ -210,6 +231,59 @@ class AnalyticsService {
       'platform_os': _platform,
       'app_version': _appVersion,
     });
+  }
+
+  /// Track a first-time activation milestone for this device.
+  Future<void> trackActivationMilestone(String milestone) async {
+    try {
+      if (!_isInitialized) await initialize();
+
+      final prefs = await SharedPreferences.getInstance();
+      if (milestone == 'first_return_visit') {
+        final alreadyTracked = prefs.getBool('activation_$milestone') ?? false;
+        final today = DateTime.now().toUtc().toIso8601String().substring(0, 10);
+        final lastLaunchDay = prefs.getString(_lastLaunchDateKey) ?? '';
+        await prefs.safeSetString(_lastLaunchDateKey, today);
+
+        final isReturnVisit =
+            !alreadyTracked &&
+            lastLaunchDay.isNotEmpty &&
+            lastLaunchDay != today;
+        if (!isReturnVisit) {
+          return;
+        }
+      } else {
+        final key = 'activation_$milestone';
+        if (prefs.getBool(key) == true) return;
+      }
+
+      await prefs.safeSetBool('activation_$milestone', true);
+      await trackEvent('activation', {
+        'milestone': milestone,
+        'days_since_install': _daysSinceInstall(),
+      });
+    } catch (e, stackTrace) {
+      _logger.warning(
+        '[Analytics] Failed to track activation milestone: $milestone\n$stackTrace',
+        e,
+      );
+    }
+  }
+
+  /// Track a session start with install age and session count.
+  Future<void> trackSessionStart() async {
+    try {
+      if (!_isInitialized) await initialize();
+      await trackEvent('session_start', {
+        'days_since_install': _daysSinceInstall(),
+        'session_number': await _incrementSessionCount(),
+      });
+    } catch (e, stackTrace) {
+      _logger.warning(
+        '[Analytics] Failed to track session start\n$stackTrace',
+        e,
+      );
+    }
   }
 
   Map<String, dynamic> _channelEventData(
@@ -659,6 +733,31 @@ class AnalyticsService {
     _queue.insertAll(0, events);
     if (_queue.length > 100) {
       _queue.removeRange(0, _queue.length - 100);
+    }
+  }
+
+  int _daysSinceInstall() {
+    final installDate = _installDateUtc;
+    if (installDate == null) {
+      return 0;
+    }
+
+    final diff = DateTime.now().toUtc().difference(installDate);
+    return diff.isNegative ? 0 : diff.inDays;
+  }
+
+  Future<int> _incrementSessionCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nextCount = (prefs.getInt(_sessionCountKey) ?? 0) + 1;
+      await prefs.safeSetInt(_sessionCountKey, nextCount);
+      return nextCount;
+    } catch (e, stackTrace) {
+      _logger.warning(
+        '[Analytics] Failed to increment session count\n$stackTrace',
+        e,
+      );
+      return 1;
     }
   }
 

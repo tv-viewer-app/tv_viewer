@@ -47,6 +47,9 @@ void main() async {
   try {
     await analytics.initialize();
     await analytics.trackAppLaunch();
+    await analytics.trackActivationMilestone('first_launch');
+    await analytics.trackActivationMilestone('first_return_visit');
+    await analytics.trackSessionStart();
     // Perf: report startup time
     final startupMs = DateTime.now().difference(appStartTime).inMilliseconds;
     analytics.trackPerformance('app_startup', startupMs);
