@@ -5,7 +5,7 @@
 Original MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/39248
 - Reopened after the initial inactivity closure
 - DependencyInfoBlock and splitinstall fixes landed in v2.22.4
-- Reproducible ABI-split builds land in v2.24.1
+- Reproducible ABI-split builds land in v2.24.2
 
 ## Fixes Applied
 
