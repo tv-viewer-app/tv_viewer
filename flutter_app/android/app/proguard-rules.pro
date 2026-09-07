@@ -3,7 +3,6 @@
 -keep class io.flutter.plugin.**  { *; }
 -keep class io.flutter.util.** { *; }
 -keep class io.flutter.view.** { *; }
--keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
 # Video Player - ExoPlayer
@@ -85,5 +84,8 @@
 # F-Droid: Remove splitinstall classes (Google Play dynamic delivery)
 -dontwarn com.google.android.play.core.splitinstall.**
 -dontwarn com.google.android.play.core.splitcompat.**
+-assumenosideeffects class com.google.android.play.core.** { *; }
+-assumenosideeffects class io.flutter.embedding.engine.deferredcomponents.PlayStoreDeferredComponentManager { *; }
 -checkdiscard class com.google.android.play.core.splitinstall.** { *; }
 -checkdiscard class com.google.android.play.core.splitcompat.** { *; }
+-checkdiscard class io.flutter.embedding.engine.deferredcomponents.PlayStoreDeferredComponentManager** { *; }
