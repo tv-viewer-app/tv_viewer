@@ -14,9 +14,9 @@ RepoType: git
 Repo: https://github.com/tv-viewer-app/tv_viewer.git
 
 Builds:
-  - versionName: 2.24.1
-    versionCode: 1351
-    commit: 47d07276e9aa0d6bd5cf41d20016f94ccf488a39
+  - versionName: 2.24.2
+    versionCode: 1361
+    commit: 0b0eb4e333130112f1aab88b80c85e3ff0b6f7dd
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -50,9 +50,9 @@ Builds:
       - cd $ORIG
       - mv $repo app.tvviewer.player
 
-  - versionName: 2.24.1
-    versionCode: 1352
-    commit: 47d07276e9aa0d6bd5cf41d20016f94ccf488a39
+  - versionName: 2.24.2
+    versionCode: 1362
+    commit: 0b0eb4e333130112f1aab88b80c85e3ff0b6f7dd
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -86,9 +86,9 @@ Builds:
       - cd $ORIG
       - mv $repo app.tvviewer.player
 
-  - versionName: 2.24.1
-    versionCode: 1353
-    commit: 47d07276e9aa0d6bd5cf41d20016f94ccf488a39
+  - versionName: 2.24.2
+    versionCode: 1363
+    commit: 0b0eb4e333130112f1aab88b80c85e3ff0b6f7dd
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -131,5 +131,5 @@ VercodeOperation:
   - '%c * 10 + 2'
   - '%c * 10 + 3'
 UpdateCheckData: flutter_app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 2.24.1
-CurrentVersionCode: 1353
+CurrentVersion: 2.24.2
+CurrentVersionCode: 1363
