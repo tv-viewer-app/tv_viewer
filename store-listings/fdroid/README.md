@@ -1,16 +1,19 @@
 # F-Droid Submission
 
-## Status: Closed (needs resubmission)
+## Status: Under review
 
 Original MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/39248
-- Closed 2026-08-12 due to inactivity
-- All requested fixes were implemented in v2.22.4
+- Reopened after the initial inactivity closure
+- DependencyInfoBlock and splitinstall fixes landed in v2.22.4
+- Reproducible ABI-split builds land in v2.24.1
 
 ## Fixes Applied
 
 1. **DependencyInfoBlock disabled** — `flutter_app/android/app/build.gradle` line 82
 2. **Splitinstall ProGuard rules** — `flutter_app/android/app/proguard-rules.pro` (last 4 lines)
 3. **Metadata follows `build-flutter.yml` template** — see `metadata/app.tvviewer.player.yml`
+4. **Reproducible builds enabled** — developer-signed reference APKs plus signing-key pin
+5. **ABI splits enabled** — armeabi-v7a, arm64-v8a, and x86_64 use version-code suffixes 1, 2, and 3
 
 ## Resubmission Steps
 
