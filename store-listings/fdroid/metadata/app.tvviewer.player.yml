@@ -16,7 +16,7 @@ Repo: https://github.com/tv-viewer-app/tv_viewer.git
 Builds:
   - versionName: 2.24.1
     versionCode: 1351
-    commit: 266f2c04abedf2973080f35e16d50a324d747dbf
+    commit: 47d07276e9aa0d6bd5cf41d20016f94ccf488a39
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -52,7 +52,7 @@ Builds:
 
   - versionName: 2.24.1
     versionCode: 1352
-    commit: 266f2c04abedf2973080f35e16d50a324d747dbf
+    commit: 47d07276e9aa0d6bd5cf41d20016f94ccf488a39
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -88,7 +88,7 @@ Builds:
 
   - versionName: 2.24.1
     versionCode: 1353
-    commit: 266f2c04abedf2973080f35e16d50a324d747dbf
+    commit: 47d07276e9aa0d6bd5cf41d20016f94ccf488a39
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
