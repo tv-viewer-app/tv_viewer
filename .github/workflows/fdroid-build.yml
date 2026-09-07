@@ -1,10 +1,8 @@
 # =============================================================================
-# F-Droid Build — Builds unsigned APK suitable for F-Droid
+# F-Droid Build — Builds developer-signed reproducible APKs for F-Droid
 # =============================================================================
-# F-Droid requires reproducible, unsigned builds. This workflow produces an
-# APK without Google Play signing, proprietary SDKs, or non-free dependencies.
-#
-# The APK is also published as a GitHub Release asset for sideloading.
+# F-Droid rebuilds these APKs without the signing key and verifies that their
+# unsigned contents match the developer-signed release assets byte-for-byte.
 # =============================================================================
 
 name: F-Droid Build
@@ -44,37 +42,57 @@ jobs:
 
       - name: Get dependencies
         working-directory: flutter_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
-      - name: Build unsigned APK (F-Droid compatible)
+      - name: Decode release signing keystore
+        working-directory: flutter_app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Build reproducible ABI APKs
         working-directory: flutter_app
         run: |
-          # Build release APK without signing (debug signing = unsigned for F-Droid)
           flutter build apk --release \
-            --no-tree-shake-icons \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            --split-per-abi \
+            --no-tree-shake-icons
 
-      - name: Rename APK
+      - name: Rename ABI APKs
         run: |
           VERSION="${{ inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
-          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
-             "TV_Viewer_v${VERSION}_fdroid.apk"
-          echo "APK_PATH=TV_Viewer_v${VERSION}_fdroid.apk" >> $GITHUB_ENV
+          for ABI in armeabi-v7a arm64-v8a x86_64; do
+            SOURCE="flutter_app/build/app/outputs/flutter-apk/app-${ABI}-release.apk"
+            TARGET="TV_Viewer_v${VERSION}_fdroid-${ABI}.apk"
+            test -f "$SOURCE"
+            cp "$SOURCE" "$TARGET"
+          done
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: fdroid-apk
-          path: ${{ env.APK_PATH }}
+          name: fdroid-apks
+          path: TV_Viewer_v${{ env.VERSION }}_fdroid-*.apk
           retention-days: 90
 
       - name: Attach to release (if tag-triggered)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          gh release upload "${{ github.ref_name }}" "${{ env.APK_PATH }}" \
-            --clobber || true
+          if ! gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" \
+              --title "TV Viewer ${{ github.ref_name }}" \
+              --notes "Release in progress" --draft
+          fi
+          gh release upload "${{ github.ref_name }}" \
+            TV_Viewer_v${{ env.VERSION }}_fdroid-*.apk --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

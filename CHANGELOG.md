@@ -5,6 +5,16 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.1] - 2026-09-07
+
+### Added
+- ABI-specific Android version codes for armeabi-v7a, arm64-v8a, and x86_64
+- Developer-signed split APKs for F-Droid reproducible-build verification
+
+### Fixed
+- F-Droid release builds now exclude the encrypted Android DependencyInfoBlock
+- F-Droid release assets use the same source and build settings as F-Droid's builders
+
 ## [2.24.0] - 2026-08-12
 
 ### Added
