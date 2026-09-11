@@ -35,7 +35,7 @@ dependencies:
   
   # Utils
   url_launcher: ^6.3.2
-  intl: ^0.20.2
+  intl: ^0.20.3
   open_filex: ^4.5.0
   
   # Cryptography (SHA-256 hashing for analytics & shared DB)
