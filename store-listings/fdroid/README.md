@@ -5,7 +5,7 @@
 Original MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/39248
 - Reopened after the initial inactivity closure
 - DependencyInfoBlock and splitinstall fixes landed in v2.22.4
-- Reproducible ABI-split builds land in v2.24.2
+- Reproducible ABI-split builds updated for v2.24.3
 
 ## Fixes Applied
 
@@ -20,12 +20,15 @@ Original MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/39248
 ### Option A: Reopen existing MR
 Comment on !39248:
 ```
-Hi @linsui, apologies for the delay. Both requested fixes have been applied:
-- DependencyInfoBlock disabled in build.gradle
-- Splitinstall classes handled with proguard rules
+Hi @linsui and @seekme-seekyou, apologies for the delay. The MR branch is now
+updated to v2.24.3 with the requested fixes:
+- DependencyInfoBlock disabled for APKs and bundles
+- Play Core splitinstall and Flutter deferred-component references removed
+- Reproducible developer-signed APKs enabled
+- ABI splits configured with version codes 1371, 1372, and 1373
+- Metadata aligned with templates/build-flutter.yml
 
-The app is now at v2.23.0 (versionCode 133). I've also restructured the metadata
-to follow the build-flutter.yml template. Could you please reopen this MR? Thanks!
+Could you please rerun the pipeline and review the updated APK comparison?
 ```
 
 ### Option B: New MR to fdroiddata
@@ -51,7 +54,7 @@ git push origin app.tvviewer.player
 ## Key Details for Submission
 - **App ID:** app.tvviewer.player
 - **Source:** https://github.com/tv-viewer-app/tv_viewer
-- **Flutter version:** 3.32.0
+- **Flutter version:** 3.44.4
 - **Subdir:** flutter_app
-- **Current version:** 2.23.0+133
+- **Current version:** 2.24.3+137
 - **License:** MIT
