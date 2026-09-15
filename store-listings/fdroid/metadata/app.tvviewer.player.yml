@@ -23,7 +23,8 @@ Builds:
       - mkdir -p /home/runner/work/tv_viewer
       - chown -R vagrant /home/runner
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-    binary: https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-armeabi-v7a.apk
+    binary:
+      https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-armeabi-v7a.apk
     srclibs:
       - flutter@stable
     rm:
@@ -60,7 +61,8 @@ Builds:
       - mkdir -p /home/runner/work/tv_viewer
       - chown -R vagrant /home/runner
     output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-    binary: https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-arm64-v8a.apk
+    binary:
+      https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-arm64-v8a.apk
     srclibs:
       - flutter@stable
     rm:
@@ -97,7 +99,8 @@ Builds:
       - mkdir -p /home/runner/work/tv_viewer
       - chown -R vagrant /home/runner
     output: build/app/outputs/flutter-apk/app-x86_64-release.apk
-    binary: https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-x86_64.apk
+    binary:
+      https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-x86_64.apk
     srclibs:
       - flutter@stable
     rm:
