@@ -1,4 +1,5 @@
 Categories:
+  - Internet
   - Multimedia
 License: MIT
 AuthorName: TV Viewer App
@@ -26,11 +27,11 @@ Builds:
     srclibs:
       - flutter@stable
     rm:
-      - ios
-      - linux
-      - macos
-      - web
-      - windows
+      - flutter_app/ios
+      - flutter_app/linux
+      - flutter_app/macos
+      - flutter_app/web
+      - flutter_app/windows
     prebuild:
       - git -C $$flutter$$ checkout -q -f 3.44.4
       - export repo=/home/runner/work/tv_viewer/tv_viewer
@@ -43,7 +44,7 @@ Builds:
       - popd
       - mv $repo app.tvviewer.player
     scandelete:
-      - .pub-cache
+      - flutter_app/.pub-cache
     build:
       - export repo=/home/runner/work/tv_viewer/tv_viewer
       - cd ../..
@@ -67,11 +68,11 @@ Builds:
     srclibs:
       - flutter@stable
     rm:
-      - ios
-      - linux
-      - macos
-      - web
-      - windows
+      - flutter_app/ios
+      - flutter_app/linux
+      - flutter_app/macos
+      - flutter_app/web
+      - flutter_app/windows
     prebuild:
       - git -C $$flutter$$ checkout -q -f 3.44.4
       - export repo=/home/runner/work/tv_viewer/tv_viewer
@@ -84,7 +85,7 @@ Builds:
       - popd
       - mv $repo app.tvviewer.player
     scandelete:
-      - .pub-cache
+      - flutter_app/.pub-cache
     build:
       - export repo=/home/runner/work/tv_viewer/tv_viewer
       - cd ../..
@@ -108,11 +109,11 @@ Builds:
     srclibs:
       - flutter@stable
     rm:
-      - ios
-      - linux
-      - macos
-      - web
-      - windows
+      - flutter_app/ios
+      - flutter_app/linux
+      - flutter_app/macos
+      - flutter_app/web
+      - flutter_app/windows
     prebuild:
       - git -C $$flutter$$ checkout -q -f 3.44.4
       - export repo=/home/runner/work/tv_viewer/tv_viewer
@@ -125,7 +126,7 @@ Builds:
       - popd
       - mv $repo app.tvviewer.player
     scandelete:
-      - .pub-cache
+      - flutter_app/.pub-cache
     build:
       - export repo=/home/runner/work/tv_viewer/tv_viewer
       - cd ../..
