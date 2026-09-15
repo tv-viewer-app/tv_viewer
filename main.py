@@ -343,6 +343,7 @@ def main():
     # ── First-run consent dialog (Feature #140) ──────────────────────
     # Show before MainWindow creation so the user can decline and exit.
     if not getattr(config, 'CONSENT_ACCEPTED', False):
+        _consent_root = None
         try:
             # Use plain tk.Tk() for consent — CTk's singleton conflicts with Toplevel children
             import tkinter as _tk
@@ -356,8 +357,6 @@ def main():
                 pass
             from ui.consent_dialog import show_consent_dialog
             consent_result = show_consent_dialog(_consent_root)
-            _consent_root.destroy()
-            del _consent_root  # Fully release the Tk instance
             if not consent_result.get('accepted', False):
                 print("User declined consent. Exiting.")
                 sys.exit(0)
@@ -386,6 +385,12 @@ def main():
         except Exception as e:
             print(f"Warning: Consent dialog failed: {e}")
             # Allow app to continue if dialog fails
+        finally:
+            if _consent_root is not None:
+                try:
+                    _consent_root.destroy()
+                except Exception:
+                    pass
 
     # Import after path setup and requirements check
     # TV Mode is now the primary UI (refactored from MainWindow)

@@ -140,7 +140,13 @@ class _RepoManagementScreenState extends State<RepoManagementScreen> {
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () {
-              setState(() => _repos.insert(index, url));
+              setState(() {
+                if (!_repos.contains(url)) {
+                  final restoreIndex =
+                      index <= _repos.length ? index : _repos.length;
+                  _repos.insert(restoreIndex, url);
+                }
+              });
               _saveRepos();
             },
           ),

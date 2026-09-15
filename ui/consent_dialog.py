@@ -9,6 +9,7 @@ from tkinter import ttk
 import webbrowser
 
 from .constants import FluentColorsDark as FluentColors
+from .compat import Button, Checkbutton
 
 
 PRIVACY_POLICY_URL = "https://tv-viewer-app.github.io/tv_viewer/#privacy"
@@ -46,15 +47,26 @@ def show_consent_dialog(parent) -> dict:
     dlg.title("Welcome — Content Notice")
     dlg.geometry("520x560")
     dlg.resizable(False, False)
-    dlg.transient(parent)
-    dlg.grab_set()
     dlg.protocol("WM_DELETE_WINDOW", lambda: _on_exit())
+    if parent.state() != "withdrawn":
+        dlg.transient(parent)
 
-    # Center on parent
+    # Center on the screen when the owner is withdrawn. On Windows, making a
+    # Toplevel transient to a withdrawn root can hide the dialog completely.
     dlg.update_idletasks()
-    px = parent.winfo_x() + (parent.winfo_width() - 520) // 2
-    py = parent.winfo_y() + (parent.winfo_height() - 560) // 2
+    if parent.state() == "withdrawn":
+        px = (dlg.winfo_screenwidth() - 520) // 2
+        py = (dlg.winfo_screenheight() - 560) // 2
+    else:
+        px = parent.winfo_x() + (parent.winfo_width() - 520) // 2
+        py = parent.winfo_y() + (parent.winfo_height() - 560) // 2
     dlg.geometry(f"+{max(0, px)}+{max(0, py)}")
+    dlg.deiconify()
+    dlg.lift()
+    dlg.attributes("-topmost", True)
+    dlg.after_idle(lambda: dlg.attributes("-topmost", False))
+    dlg.grab_set()
+    dlg.focus_force()
 
     # ── Content ──────────────────────────────────────────────────────
     frame = ttk.Frame(dlg, padding=24)
@@ -101,7 +113,7 @@ def show_consent_dialog(parent) -> dict:
 
     # ── Checkboxes ───────────────────────────────────────────────────
     age_var = tk.BooleanVar(value=False)
-    age_cb = ttk.Checkbutton(
+    age_cb = Checkbutton(
         frame,
         text="I confirm I am 18 years of age or older",
         variable=age_var,
@@ -110,7 +122,7 @@ def show_consent_dialog(parent) -> dict:
     age_cb.pack(anchor="w", pady=(4, 4))
 
     analytics_var = tk.BooleanVar(value=True)
-    analytics_cb = ttk.Checkbutton(
+    analytics_cb = Checkbutton(
         frame,
         text="Allow anonymous usage analytics to help improve the app",
         variable=analytics_var,
@@ -146,7 +158,7 @@ def show_consent_dialog(parent) -> dict:
         result['analytics'] = analytics_var.get()
         dlg.destroy()
 
-    ttk.Button(
+    Button(
         btn_frame,
         text="Exit",
         command=_on_exit,
@@ -154,7 +166,7 @@ def show_consent_dialog(parent) -> dict:
         width=12,
     ).pack(side="left")
 
-    ttk.Button(
+    Button(
         btn_frame,
         text="Continue",
         command=_on_continue,

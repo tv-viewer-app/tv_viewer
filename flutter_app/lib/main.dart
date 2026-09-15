@@ -10,6 +10,7 @@ import 'services/analytics_service.dart';
 import 'services/background_audio_service.dart';
 import 'services/crashlytics_service.dart';
 import 'services/parental_controls_service.dart';
+import 'utils/error_classification.dart';
 
 void main() async {
   final appStartTime = DateTime.now(); // Perf: measure app startup time
@@ -85,6 +86,23 @@ void main() async {
         error,
         stackTrace,
         reason: 'Unhandled network error',
+        fatal: false,
+      );
+      return;
+    }
+
+    if (isRecoverableImageDecodeError(error)) {
+      analytics.trackError(
+        error,
+        stackTrace,
+        context: 'image_decode',
+        severity: 'warning',
+        isHandled: true,
+      );
+      crashlytics.recordError(
+        error,
+        stackTrace,
+        reason: 'Recoverable image decode error',
         fatal: false,
       );
       return;

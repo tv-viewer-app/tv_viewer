@@ -5,6 +5,13 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.3] - 2026-09-15
+
+### Fixed
+- Windows first launch now displays the consent dialog and main window instead of leaving a hidden background process
+- Repository removal Undo safely restores entries after the list changes, preventing an Android `RangeError`
+- Recoverable channel-logo decode failures are reported as handled warnings instead of fatal Android crashes
+
 ## [2.24.2] - 2026-09-07
 
 ### Fixed
