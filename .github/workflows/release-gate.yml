@@ -27,6 +27,7 @@ on:
         type: string
 
 permissions:
+  actions: write   # dispatch downstream distribution workflows
   contents: write  # publish job needs to create/edit releases
 
 concurrency:
@@ -294,6 +295,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: write
     steps:
       - uses: actions/checkout@v7
@@ -338,3 +340,12 @@ jobs:
 
           echo "## 🎉 Release Published" >> $GITHUB_STEP_SUMMARY
           echo "**${TAG}** — [View release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG})" >> $GITHUB_STEP_SUMMARY
+
+      - name: Dispatch distribution workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ needs.metadata.outputs.version }}"
+          gh workflow run fdroid-build.yml --ref master -f version="$TAG"
+          gh workflow run docker-publish.yml --ref master -f tag="$TAG"
+          echo "Dispatched F-Droid and Docker publication for $TAG"
