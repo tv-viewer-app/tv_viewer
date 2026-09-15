@@ -26,6 +26,8 @@ Builds:
     binary: https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-armeabi-v7a.apk
     srclibs:
       - flutter@stable
+    rm:
+      - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
       - git -C $$flutter$$ checkout -q -f 3.44.4
       - export repo=/home/runner/work/tv_viewer/tv_viewer
@@ -61,6 +63,8 @@ Builds:
     binary: https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-arm64-v8a.apk
     srclibs:
       - flutter@stable
+    rm:
+      - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
       - git -C $$flutter$$ checkout -q -f 3.44.4
       - export repo=/home/runner/work/tv_viewer/tv_viewer
@@ -96,6 +100,8 @@ Builds:
     binary: https://github.com/tv-viewer-app/tv_viewer/releases/download/v%v/TV_Viewer_v%v_fdroid-x86_64.apk
     srclibs:
       - flutter@stable
+    rm:
+      - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
       - git -C $$flutter$$ checkout -q -f 3.44.4
       - export repo=/home/runner/work/tv_viewer/tv_viewer
