@@ -30,7 +30,7 @@ Builds:
     rm:
       - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
-      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" .github/workflows/release-gate.yml
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" ../.github/workflows/release-gate.yml
         | head -n 1)
       - '[[ $flutterVersion ]]'
       - git -C $$flutter$$ checkout -q -f $flutterVersion
@@ -71,7 +71,7 @@ Builds:
     rm:
       - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
-      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" .github/workflows/release-gate.yml
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" ../.github/workflows/release-gate.yml
         | head -n 1)
       - '[[ $flutterVersion ]]'
       - git -C $$flutter$$ checkout -q -f $flutterVersion
@@ -112,7 +112,7 @@ Builds:
     rm:
       - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
-      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" .github/workflows/release-gate.yml
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" ../.github/workflows/release-gate.yml
         | head -n 1)
       - '[[ $flutterVersion ]]'
       - git -C $$flutter$$ checkout -q -f $flutterVersion
