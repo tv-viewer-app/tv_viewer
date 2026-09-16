@@ -30,7 +30,10 @@ Builds:
     rm:
       - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
-      - git -C $$flutter$$ checkout -q -f 3.44.4
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" .github/workflows/release-gate.yml
+        | head -n 1)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -q -f $flutterVersion
       - export repo=/home/runner/work/tv_viewer/tv_viewer
       - cd ../..
       - mv app.tvviewer.player $repo
@@ -68,7 +71,10 @@ Builds:
     rm:
       - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
-      - git -C $$flutter$$ checkout -q -f 3.44.4
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" .github/workflows/release-gate.yml
+        | head -n 1)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -q -f $flutterVersion
       - export repo=/home/runner/work/tv_viewer/tv_viewer
       - cd ../..
       - mv app.tvviewer.player $repo
@@ -106,7 +112,10 @@ Builds:
     rm:
       - store-listings/tv-viewer-chrome-extension.zip
     prebuild:
-      - git -C $$flutter$$ checkout -q -f 3.44.4
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\ '(.*)'/\1/p" .github/workflows/release-gate.yml
+        | head -n 1)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -q -f $flutterVersion
       - export repo=/home/runner/work/tv_viewer/tv_viewer
       - cd ../..
       - mv app.tvviewer.player $repo
