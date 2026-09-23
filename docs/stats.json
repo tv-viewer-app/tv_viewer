@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-09-22T10:38:50.103039+00:00",
-  "total_channels": 21502,
+  "updated_at": "2026-09-23T10:30:56.565997+00:00",
+  "total_channels": 21602,
   "countries": 36,
-  "categories": 26,
+  "categories": 31,
   "top_countries": [
     {
       "name": "France",
@@ -92,11 +92,11 @@
     },
     {
       "name": "Entertainment",
-      "count": 218
+      "count": 211
     },
     {
       "name": "Documentary",
-      "count": 195
+      "count": 196
     },
     {
       "name": "Culture",
@@ -116,7 +116,7 @@
     },
     {
       "name": "Comedy",
-      "count": 17
+      "count": 18
     },
     {
       "name": "Classic",
