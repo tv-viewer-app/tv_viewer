@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/app_distribution.dart';
 import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 import '../utils/pinned_http_client.dart';
@@ -53,7 +54,9 @@ class AnalyticsService {
 
   /// Service is only enabled when env vars are provided at build time.
   static bool get _enabled =>
-      _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
+      AppDistribution.allowsSupabase &&
+      _supabaseUrl.isNotEmpty &&
+      _supabaseAnonKey.isNotEmpty;
 
   // ---------------------------------------------------------------------------
   // Internal state
@@ -182,10 +185,13 @@ class AnalyticsService {
 
   /// Allow user to opt in/out of anonymous analytics collection.
   Future<void> setEnabled(bool enabled) async {
-    _userOptedIn = enabled;
+    final effectiveEnabled = AppDistribution.allowsSupabase && enabled;
+    _userOptedIn = effectiveEnabled;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.safeSetBool(_analyticsEnabledKey, enabled);
-    _logger.info('[Analytics] User opted ${enabled ? "in" : "out"}');
+    await prefs.safeSetBool(_analyticsEnabledKey, effectiveEnabled);
+    _logger.info(
+      '[Analytics] User opted ${effectiveEnabled ? "in" : "out"}',
+    );
   }
 
   // ---------------------------------------------------------------------------

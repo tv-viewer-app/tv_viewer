@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_distribution.dart';
 import '../constants.dart';
 import '../models/channel.dart';
 import '../utils/error_handler.dart';
@@ -10,7 +11,11 @@ import 'shared_db_service.dart';
 
 /// Service for fetching and parsing M3U playlists
 class M3UService {
-  static const List<String> defaultRepositories = [
+  static const List<String> _fdroidRepositories = [
+    'https://iptv-org.github.io/iptv/index.m3u',
+  ];
+
+  static const List<String> _standardRepositories = [
     // Primary comprehensive index (contains all non-NSFW channels)
     'https://iptv-org.github.io/iptv/index.m3u',
     // Country-specific priority sources
@@ -53,14 +58,21 @@ class M3UService {
   ];
 
   /// Adult/NSFW repositories — only fetched when adult content is enabled
-  static const List<String> adultRepositories = [
+  static List<String> get defaultRepositories => AppDistribution.isFdroid
+      ? _fdroidRepositories
+      : _standardRepositories;
+
+  static const List<String> _standardAdultRepositories = [
     'https://iptv-org.github.io/iptv/categories/xxx.m3u',
     'https://iptv-org.github.io/iptv/index.nsfw.m3u',
     'https://cdn.adultiptv.net/lists/all.m3u8',
   ];
 
   /// Custom Israeli channels with verified working CDN URLs
-  static const List<Map<String, String>> customChannels = [
+  static List<String> get adultRepositories =>
+      AppDistribution.isFdroid ? const [] : _standardAdultRepositories;
+
+  static const List<Map<String, String>> _standardCustomChannels = [
     // TV Channels
     {'name': 'Kan 11 News', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8', 'group': 'News', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': 'Kan 11 Subtitled', 'url': 'https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11_subs/live.livx/playlist.m3u8', 'group': 'General', 'country': 'Israel', 'language': 'Hebrew'},
@@ -118,6 +130,9 @@ class M3UService {
     {'name': '100FM K-Pop', 'url': 'https://gb25.streamgates.net/radios-audio/100KPop/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
     {'name': '100FM Mizrachit', 'url': 'https://gb25.streamgates.net/radios-audio/100Mizrachit/playlist.m3u8', 'group': 'Radio', 'country': 'Israel', 'language': 'Hebrew'},
   ];
+
+  static List<Map<String, String>> get customChannels =>
+      AppDistribution.isFdroid ? const [] : _standardCustomChannels;
 
   /// Fetch channels from an M3U URL
   static Future<List<Channel>> fetchFromUrl(String url) async {

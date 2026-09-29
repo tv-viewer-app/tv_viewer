@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_distribution.dart';
 import '../services/parental_controls_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
@@ -177,21 +178,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 // ── Privacy ─────────────────────────────────────
                 _buildSectionHeader(context, 'Privacy', Icons.shield),
-                SwitchListTile(
-                  title: const Text('Analytics & Telemetry'),
-                  subtitle: const Text('Help improve TV Viewer with anonymous usage data'),
-                  value: _analyticsEnabled,
-                  onChanged: (v) {
-                    setState(() => _analyticsEnabled = v);
-                    _settings.setAnalyticsEnabled(v);
-                  },
-                ),
+                if (AppDistribution.allowsSupabase)
+                  SwitchListTile(
+                    title: const Text('Analytics & Telemetry'),
+                    subtitle: const Text('Help improve TV Viewer with anonymous usage data'),
+                    value: _analyticsEnabled,
+                    onChanged: (v) {
+                      setState(() => _analyticsEnabled = v);
+                      _settings.setAnalyticsEnabled(v);
+                    },
+                  )
+                else
+                  const ListTile(
+                    leading: Icon(Icons.analytics_outlined),
+                    title: Text('Analytics & community database'),
+                    subtitle: Text(
+                      'Disabled in this F-Droid build; no Supabase data is sent.',
+                    ),
+                  ),
                 ListTile(
                   title: const Text('Privacy Policy'),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () {
                     launchUrl(
-                      Uri.parse('https://github.com/mst-ghi/tv-viewer/blob/main/PRIVACY.md'),
+                      Uri.parse(
+                        'https://github.com/tv-viewer-app/tv_viewer/blob/master/docs/PRIVACY.md',
+                      ),
                       mode: LaunchMode.externalApplication,
                     );
                   },
@@ -214,12 +226,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Version'),
                   subtitle: Text(_appVersion),
                 ),
-                ListTile(
-                  title: const Text('Check for updates'),
-                  subtitle: const Text('Latest release on GitHub'),
-                  trailing: const Icon(Icons.system_update, size: 20),
-                  onTap: _checkForUpdates,
-                ),
+                if (AppDistribution.allowsSelfUpdate)
+                  ListTile(
+                    title: const Text('Check for updates'),
+                    subtitle: const Text('Latest release on GitHub'),
+                    trailing: const Icon(Icons.system_update, size: 20),
+                    onTap: _checkForUpdates,
+                  )
+                else
+                  const ListTile(
+                    leading: Icon(Icons.system_update, size: 20),
+                    title: Text('Updates are managed by F-Droid'),
+                    subtitle: Text(
+                      'The app does not download or install APKs. Your F-Droid '
+                      'client checks for and installs updates.',
+                    ),
+                  ),
                 ListTile(
                   title: const Text('Open Source Licenses'),
                   trailing: const Icon(Icons.chevron_right),
@@ -237,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () {
                     launchUrl(
-                      Uri.parse('https://github.com/mst-ghi/tv-viewer'),
+                      Uri.parse('https://github.com/tv-viewer-app/tv_viewer'),
                       mode: LaunchMode.externalApplication,
                     );
                   },

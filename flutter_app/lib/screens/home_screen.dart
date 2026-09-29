@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../config/app_distribution.dart';
 import '../providers/channel_provider.dart';
 import '../models/channel.dart';
 import '../services/feedback_service.dart';
@@ -64,28 +65,40 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Load channels on startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showConsentIfNeeded();
-      context.read<ChannelProvider>().loadChannels();
-      _loadRecentHistory();
-      _checkRatingPrompt(); // BL-032: Check if we should show rating prompt
-      _checkAndShowOnboarding();
-      _checkForUpdates();
+      _initializeAfterConsent();
     });
+  }
+
+  Future<void> _initializeAfterConsent() async {
+    final accepted = await _showConsentIfNeeded();
+    if (!accepted || !mounted) return;
+
+    await Future.wait([
+      context.read<ChannelProvider>().loadChannels(),
+      _loadRecentHistory(),
+    ]);
+    if (!mounted) return;
+
+    _checkRatingPrompt();
+    _checkAndShowOnboarding();
+    if (AppDistribution.allowsSelfUpdate) {
+      _checkForUpdates();
+    }
   }
   
   /// Show first-launch consent dialog if not yet shown.
-  Future<void> _showConsentIfNeeded() async {
-    if (!mounted) return;
+  Future<bool> _showConsentIfNeeded() async {
+    if (!mounted) return false;
     final needsConsent = await ConsentDialog.needsConsent();
     if (needsConsent && mounted) {
       final accepted = await ConsentDialog.show(context);
       if (!accepted && mounted) {
-        // User declined — exit app
         Navigator.of(context).maybePop();
+        return false;
       }
     }
+    return mounted;
   }
 
   /// BL-032: Check and show rating prompt if needed
@@ -475,16 +488,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              const PopupMenuItem(
-                value: 'statistics',
-                child: Row(
-                  children: [
-                    Icon(Icons.bar_chart),
-                    SizedBox(width: 8),
-                    Text('Community Stats'),
-                  ],
+              if (AppDistribution.allowsSupabase)
+                const PopupMenuItem(
+                  value: 'statistics',
+                  child: Row(
+                    children: [
+                      Icon(Icons.bar_chart),
+                      SizedBox(width: 8),
+                      Text('Community Stats'),
+                    ],
+                  ),
                 ),
-              ),
               const PopupMenuItem(
                 value: 'about',
                 child: Row(

@@ -5,6 +5,17 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.4] - 2026-09-29
+
+### Changed
+- F-Droid builds disable the in-app GitHub updater, Supabase services, bundled adult sources, direct custom streams, and unreviewed default playlists
+- F-Droid updates are explicitly delegated to the installed F-Droid client
+- The F-Droid first-run notice is informational and no longer requires accepting an age declaration
+
+### Fixed
+- Android now waits for first-run consent before fetching playlists or contacting any external service
+- F-Droid APKs no longer request package-install permission or include the self-update `FileProvider`
+
 ## [2.24.3] - 2026-09-15
 
 ### Fixed

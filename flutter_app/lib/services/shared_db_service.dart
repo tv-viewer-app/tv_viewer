@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_distribution.dart';
 import '../utils/logger_service.dart';
 
 /// Service for syncing channel validation results with shared Supabase database
@@ -26,7 +27,10 @@ class SharedDbService {
   static const String _tableName = 'channel_status';
   
   // Automatically enabled when environment variables are set
-  static bool get _enabled => _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
+  static bool get _enabled =>
+      AppDistribution.allowsSupabase &&
+      _supabaseUrl.isNotEmpty &&
+      _supabaseAnonKey.isNotEmpty;
   
   // Cache duration - only fetch results checked within last 24 hours
   static const Duration _cacheDuration = Duration(hours: 24);

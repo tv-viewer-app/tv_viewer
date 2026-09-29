@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_distribution.dart';
 import '../utils/prefs_lock.dart';
 
 /// Community statistics screen showing aggregated usage data.
@@ -20,6 +21,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   static String get _supabaseAnonKey =>
       const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
   static bool get _hasSupabaseStatsConfig =>
+      AppDistribution.allowsSupabase &&
       _supabaseUrl.isNotEmpty &&
       _supabaseAnonKey.isNotEmpty &&
       _supabaseUrl != 'YOUR_SUPABASE_PROJECT_URL' &&

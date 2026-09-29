@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_distribution.dart';
 import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 import '../utils/pinned_http_client.dart';
@@ -60,6 +61,8 @@ class UpdateService {
   /// Pass [force]=true from the Settings "Check for updates" button to
   /// bypass both the 6-hour rate limit and the user-dismissed flag.
   static Future<UpdateInfo?> checkForUpdate({bool force = false}) async {
+    if (!AppDistribution.allowsSelfUpdate) return null;
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -162,7 +165,7 @@ class UpdateService {
     UpdateInfo info, {
     void Function(int received, int total)? onProgress,
   }) async {
-    if (!Platform.isAndroid) return false;
+    if (!AppDistribution.allowsSelfUpdate || !Platform.isAndroid) return false;
     final url = info.apkUrl;
     if (url == null || url.isEmpty) return false;
 
@@ -221,6 +224,7 @@ class UpdateService {
   /// Convenience: open the GitHub releases page in the browser. Fallback
   /// when in-app install isn't available or failed.
   static Future<void> openReleasesPage([String? htmlUrl]) {
+    if (!AppDistribution.allowsSelfUpdate) return Future.value();
     return launchUrl(
       Uri.parse(htmlUrl ?? _releasesPage),
       mode: LaunchMode.externalApplication,
@@ -233,7 +237,7 @@ class UpdateService {
     BuildContext context,
     UpdateInfo info,
   ) async {
-    if (!context.mounted) return;
+    if (!AppDistribution.allowsSelfUpdate || !context.mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => _UpdateDialog(info: info),

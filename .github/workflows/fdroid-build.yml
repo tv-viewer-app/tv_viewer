@@ -60,11 +60,25 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
 
+      - name: Apply F-Droid source policy
+        working-directory: flutter_app
+        run: |
+          python tool/prepare_fdroid.py
+          ! grep -q "REQUEST_INSTALL_PACKAGES" android/app/src/main/AndroidManifest.xml
+          ! grep -q "FileProvider" android/app/src/main/AndroidManifest.xml
+
+      - name: Test F-Droid distribution policy
+        working-directory: flutter_app
+        run: >-
+          flutter test test/config/fdroid_distribution_test.dart
+          --dart-define=FDROID_BUILD=true
+
       - name: Build reproducible ABI APKs
         working-directory: flutter_app
         run: |
           flutter build apk --release \
             --split-per-abi \
+            --dart-define=FDROID_BUILD=true \
             --no-tree-shake-icons
 
       - name: Rename ABI APKs

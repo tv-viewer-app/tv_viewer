@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_distribution.dart';
 import '../services/analytics_service.dart';
 import '../utils/prefs_lock.dart';
 
@@ -41,7 +42,7 @@ class _ConsentDialogWidget extends StatefulWidget {
 }
 
 class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
-  bool _ageConfirmed = false;
+  bool _ageConfirmed = !AppDistribution.requiresAgeConfirmation;
   bool _analyticsOptIn = false;
 
   @override
@@ -90,8 +91,12 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'This app streams publicly available IPTV channels. '
-                    'Some content may be intended for mature audiences.',
+                    AppDistribution.isFdroid
+                        ? 'This app plays community-maintained public channel '
+                            'lists. F-Droid builds do not enable bundled adult '
+                            'or unreviewed sources.'
+                        : 'This app streams publicly available IPTV channels. '
+                            'Some content may be intended for mature audiences.',
                     style: TextStyle(fontSize: 13),
                   ),
                 ],
@@ -100,41 +105,57 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
             const SizedBox(height: 16),
 
             // Age verification
-            CheckboxListTile(
-              value: _ageConfirmed,
-              onChanged: (v) => setState(() => _ageConfirmed = v ?? false),
-              title: const Text(
-                'I confirm I am 18 years or older',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            if (AppDistribution.requiresAgeConfirmation)
+              CheckboxListTile(
+                value: _ageConfirmed,
+                onChanged: (v) => setState(() => _ageConfirmed = v ?? false),
+                title: const Text(
+                  'I confirm I am 18 years or older',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Required to use this app',
+                  style: TextStyle(fontSize: 12),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
               ),
-              subtitle: const Text(
-                'Required to use this app',
-                style: TextStyle(fontSize: 12),
-              ),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-            ),
 
             const Divider(),
 
             // Analytics opt-in
-            CheckboxListTile(
-              value: _analyticsOptIn,
-              onChanged: (v) => setState(() => _analyticsOptIn = v ?? false),
-              title: const Text(
-                'Help improve TV Viewer',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            if (AppDistribution.allowsSupabase)
+              CheckboxListTile(
+                value: _analyticsOptIn,
+                onChanged: (v) => setState(() => _analyticsOptIn = v ?? false),
+                title: const Text(
+                  'Help improve TV Viewer',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Share anonymous usage data (no personal info, '
+                  'no viewing history). You can change this in Settings.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              )
+            else
+              const ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.analytics_outlined),
+                title: Text(
+                  'Analytics and community database are disabled',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  'This F-Droid build contains no Supabase credentials and '
+                  'does not send usage or channel-health data.',
+                  style: TextStyle(fontSize: 12),
+                ),
               ),
-              subtitle: const Text(
-                'Share anonymous usage data (no personal info, '
-                'no viewing history). You can change this in Settings.',
-                style: TextStyle(fontSize: 12),
-              ),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-            ),
 
             const SizedBox(height: 8),
 
@@ -174,11 +195,19 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
   Future<void> _accept(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.safeSetBool(ConsentDialog._consentShownKey, true);
-    await prefs.safeSetBool(ConsentDialog._ageVerifiedKey, true);
-    await prefs.safeSetBool(ConsentDialog._analyticsConsentKey, _analyticsOptIn);
+    await prefs.safeSetBool(
+      ConsentDialog._ageVerifiedKey,
+      AppDistribution.requiresAgeConfirmation && _ageConfirmed,
+    );
+    final analyticsEnabled =
+        AppDistribution.allowsSupabase && _analyticsOptIn;
+    await prefs.safeSetBool(
+      ConsentDialog._analyticsConsentKey,
+      analyticsEnabled,
+    );
 
     // Update analytics opt-in
-    await AnalyticsService.instance.setEnabled(_analyticsOptIn);
+    await AnalyticsService.instance.setEnabled(analyticsEnabled);
 
     if (context.mounted) {
       Navigator.of(context).pop(true);
