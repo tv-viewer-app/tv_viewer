@@ -318,6 +318,7 @@ jobs:
             echo "### 📥 Downloads"
             echo "- **Windows**: \`TV_Viewer-windows.zip\` (extract and run \`TV_Viewer.exe\`)"
             echo "- **Android**: \`TV_Viewer_v${VERSION}_Android.apk\`"
+            echo "- **F-Droid verification**: ABI-specific \`TV_Viewer_v${VERSION}_fdroid-*.apk\` files"
             echo "- **Linux**: \`TV_Viewer_v${VERSION}_linux_x86_64\`"
             echo "- **Docker**: \`docker pull asummoner/tvviewerapp:${VERSION}\` — [Docker Hub](https://hub.docker.com/r/asummoner/tvviewerapp)"
           } > release_notes.md
@@ -346,6 +347,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ needs.metadata.outputs.version }}"
-          gh workflow run fdroid-build.yml --ref master -f version="$TAG"
           gh workflow run docker-publish.yml --ref master -f tag="$TAG"
-          echo "Dispatched F-Droid and Docker publication for $TAG"
+          echo "Dispatched Docker publication for $TAG"

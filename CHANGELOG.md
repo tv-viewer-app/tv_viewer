@@ -5,6 +5,12 @@ All notable changes to TV Viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.5] - 2026-09-29
+
+### Fixed
+- F-Droid reference APKs are now added to the draft GitHub release before publication, preserving release immutability while keeping reproducible-build assets available
+- The standalone F-Droid workflow is now a manual verification build and no longer attempts to modify published releases
+
 ## [2.24.4] - 2026-09-29
 
 ### Changed

@@ -8,8 +8,6 @@
 name: F-Droid Build
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -18,7 +16,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-fdroid:
@@ -70,8 +68,8 @@ jobs:
       - name: Test F-Droid distribution policy
         working-directory: flutter_app
         run: >-
-          flutter test test/config/fdroid_distribution_test.dart
-          --dart-define=FDROID_BUILD=true
+          flutter test --dart-define=FDROID_BUILD=true
+          test/config/fdroid_distribution_test.dart
 
       - name: Build reproducible ABI APKs
         working-directory: flutter_app
@@ -104,10 +102,3 @@ jobs:
           name: fdroid-apks
           path: TV_Viewer_v${{ env.VERSION }}_fdroid-*.apk
           retention-days: 90
-
-      - name: Attach to release
-        run: |
-          gh release upload "$RELEASE_TAG" \
-            TV_Viewer_v${{ env.VERSION }}_fdroid-*.apk --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
