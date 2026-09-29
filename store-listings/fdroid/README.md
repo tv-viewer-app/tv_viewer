@@ -5,7 +5,7 @@
 Original MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/39248
 - Reopened after the initial inactivity closure
 - DependencyInfoBlock and splitinstall fixes landed in v2.22.4
-- Reproducible ABI-split builds updated for v2.24.4
+- Reproducible ABI-split builds updated for v2.24.5
 
 ## Fixes Applied
 
@@ -25,12 +25,12 @@ Original MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/39248
 ### Option A: Reopen existing MR
 Comment on !39248:
 ```
-Hi @linsui and @seekme-seekyou. The MR branch is now updated to v2.24.4 with
+Hi @linsui and @seekme-seekyou. The MR branch is now updated to v2.24.5 with
 the requested policy fixes:
 - DependencyInfoBlock disabled for APKs and bundles
 - Play Core splitinstall and Flutter deferred-component references removed
 - Reproducible developer-signed APKs enabled
-- ABI splits configured with version codes 1381, 1382, and 1383
+- ABI splits configured with version codes 1391, 1392, and 1393
 - Metadata aligned with templates/build-flutter.yml
 - Self-updater and REQUEST_INSTALL_PACKAGES removed from the F-Droid build
 - Only the curated iptv-org playlist is enabled by default
@@ -65,7 +65,7 @@ git push origin app.tvviewer.player
 - **Source:** https://github.com/tv-viewer-app/tv_viewer
 - **Flutter version:** 3.44.4
 - **Subdir:** flutter_app
-- **Current version:** 2.24.4+138
+- **Current version:** 2.24.5+139
 - **License:** MIT
 
 ## Supabase Behavior
