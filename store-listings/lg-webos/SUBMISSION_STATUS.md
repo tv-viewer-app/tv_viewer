@@ -1,9 +1,9 @@
 # LG Content Store submission status
 
-**Prepared:** September 30, 2026  
-**App:** TV Viewer  
-**Package ID:** `app.tvviewer.webos`  
-**Version:** 2.25.0  
+**Prepared:** September 30, 2026
+**App:** TV Viewer
+**Package ID:** `app.tvviewer.webos`
+**Version:** 2.25.0
 **Status:** Submission bundle prepared; LG account, device testing, content-rights
 review, and certification approval remain open.
 
