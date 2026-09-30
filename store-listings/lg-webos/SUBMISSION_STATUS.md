@@ -50,13 +50,16 @@ Use the full description from `README.md` in this directory.
 
 ## Upload set
 
-1. `app.tvviewer.webos_2.25.0_1080p_all.ipk`
-2. `app.tvviewer.webos_2.25.0_720p_all.ipk`
-3. `icon-400.png`
-4. The four files in `screenshots`
-5. `lg-self-evaluation-checklist-5.0-tv-viewer-draft.xlsx`
-6. `TV-Viewer-LG-webOS-UX-Scenario-v2.25.0.pptx`
-7. Privacy and support URLs listed above
+All Seller Lounge files are collected under:
+
+```text
+store-listings\lg-webos\upload-ready\
+```
+
+Start with `SELLER_LOUNGE_FILE_MAP.txt`, which maps each Seller Lounge field to
+the exact filename. The primary package is
+`TV_Viewer_v2.25.0_LG_webOS_1080p.ipk`; retain the 720p package as the HD
+fallback.
 
 ## Required actions before submission
 

@@ -60,6 +60,26 @@ only access content they are permitted to watch.
 - [ ] Run playback and remote tests on at least one physical LG TV
 - [ ] Upload both resolution packages and submit the App Self Checklist
 
+## Upload-ready Seller Lounge folder
+
+Generate one flat folder containing every file needed during Seller Lounge
+registration:
+
+```powershell
+python store-listings\lg-webos\tools\assemble_submission.py
+```
+
+Use:
+
+```text
+store-listings\lg-webos\upload-ready\
+```
+
+`SELLER_LOUNGE_FILE_MAP.txt` maps every Seller Lounge field to the exact file
+to upload. The folder includes both IPKs, the 400x400 app icon, the 1920x1080
+launcher background, screenshots, QA documents, privacy policy, and store
+listing copy.
+
 ## Certification notes
 
 - The application reads the public TV Viewer catalog through Supabase using a
