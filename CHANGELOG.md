@@ -23,6 +23,8 @@
 - LG webOS validation now blocks regressions in entry-screen Back behavior,
   minimum control sizing, minimum text sizing, wheel support, and public-client
   value naming.
+- GitHub Actions now uses a valid pinned Node setup action for webOS builds,
+  and automatic release detection handles multi-commit pushes correctly.
 
 All notable changes to TV Viewer will be documented in this file.
 
