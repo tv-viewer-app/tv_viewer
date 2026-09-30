@@ -12,6 +12,17 @@
 | Minimum planned platform | webOS TV 5.0 |
 | Privacy policy | `https://github.com/tv-viewer-app/tv_viewer/blob/master/PRIVACY_POLICY.md` |
 | Support | `https://github.com/tv-viewer-app/tv_viewer/issues` |
+| Contact Seller type | URL |
+| Contact Seller value | `https://github.com/tv-viewer-app/tv_viewer/issues` |
+| UK privacy policy | Yes |
+| UK data collected within app | No |
+| UK shared data | No |
+
+## Tag keywords
+
+```text
+live television radio news education documentary weather public television streaming IPTV
+```
 
 ## Short description
 

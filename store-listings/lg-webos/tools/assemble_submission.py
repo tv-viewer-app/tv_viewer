@@ -105,6 +105,19 @@ Store copy, privacy, and review notes:
   TV_Viewer_Privacy_Policy.md
   TV_Viewer_Content_Rights_and_Moderation.md
   TV_Viewer_Submission_Status.md
+
+Tag Keywords:
+  live television radio news education documentary weather public television streaming IPTV
+
+Contact Seller:
+  Type: URL
+  Value: https://github.com/tv-viewer-app/tv_viewer/issues
+
+UK data information:
+  Privacy Policy: Yes
+  Data collected within the app: No
+  Shared Data: No
+  Privacy Policy URL: https://github.com/tv-viewer-app/tv_viewer/blob/master/PRIVACY_POLICY.md
 """
 
 

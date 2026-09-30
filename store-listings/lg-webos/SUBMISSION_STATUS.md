@@ -34,6 +34,11 @@ review, and certification approval remain open.
 | Supported resolutions | 1920x1080 and 1280x720 |
 | Privacy policy | `https://github.com/tv-viewer-app/tv_viewer/blob/master/PRIVACY_POLICY.md` |
 | Support URL | `https://github.com/tv-viewer-app/tv_viewer/issues` |
+| Tag keywords | `live television radio news education documentary weather public television streaming IPTV` |
+| Contact Seller | URL: `https://github.com/tv-viewer-app/tv_viewer/issues` |
+| UK privacy policy | Yes |
+| UK data collected within app | No |
+| UK shared data | No |
 | Login required | No |
 | In-app purchase | No |
 | Advertising | No |
