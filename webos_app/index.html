@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#101217">
+  <title>TV Viewer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <img src="icon.png" alt="">
+        <div>
+          <strong>TV Viewer</strong>
+          <span>Live community television</span>
+        </div>
+      </div>
+      <nav class="top-actions" aria-label="Library">
+        <button class="focusable active" data-view="all" type="button">All channels</button>
+        <button class="focusable" data-view="favorites" type="button">Favorites <span id="favoriteCount">0</span></button>
+        <button class="focusable" id="openHelp" type="button">Help</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">LG webOS TV edition</p>
+          <h1>What do you want to watch?</h1>
+          <p>Use the directional pad to browse. Press OK to play and Back to return.</p>
+        </div>
+        <div class="connection-pill" id="connectionStatus">Waiting</div>
+      </section>
+
+      <section class="filter-bar" aria-label="Channel filters">
+        <label class="search-field">
+          <span>Search</span>
+          <input class="focusable" id="searchInput" type="search" placeholder="Channel name" autocomplete="off">
+        </label>
+        <label>
+          <span>Category</span>
+          <select class="focusable" id="categorySelect">
+            <option value="">All categories</option>
+            <option>Business</option>
+            <option>Culture</option>
+            <option>Documentary</option>
+            <option>Education</option>
+            <option>Legislative</option>
+            <option>News</option>
+            <option>Science</option>
+            <option>Weather</option>
+          </select>
+        </label>
+        <label>
+          <span>Type</span>
+          <select class="focusable" id="typeSelect">
+            <option value="">TV and radio</option>
+            <option value="TV">TV</option>
+            <option value="Radio">Radio</option>
+          </select>
+        </label>
+        <button class="focusable primary" id="applyFilters" type="button">Find channels</button>
+        <button class="focusable secondary" id="clearFilters" type="button">Clear</button>
+      </section>
+
+      <section class="catalog-header">
+        <div>
+          <h2 id="catalogTitle">All channels</h2>
+          <p id="catalogSummary">Accept the notice to load the catalog.</p>
+        </div>
+        <div class="page-actions">
+          <button class="focusable secondary" id="previousPage" type="button">Previous</button>
+          <span id="pageLabel">Page 1</span>
+          <button class="focusable secondary" id="nextPage" type="button">Next</button>
+        </div>
+      </section>
+
+      <section class="channel-grid" id="channelGrid" aria-live="polite"></section>
+      <section class="empty-state hidden" id="emptyState">
+        <h2>No channels found</h2>
+        <p>Change the filters or return to all channels.</p>
+      </section>
+    </main>
+  </div>
+
+  <section class="player-layer hidden" id="playerLayer" aria-label="Player">
+    <video id="videoPlayer" playsinline></video>
+    <div class="player-gradient"></div>
+    <div class="player-header">
+      <div>
+        <p class="eyebrow">Now playing</p>
+        <h2 id="playerTitle">Channel</h2>
+        <p id="playerMeta"></p>
+      </div>
+      <div class="live-badge">LIVE</div>
+    </div>
+    <div class="player-message hidden" id="playerMessage"></div>
+    <div class="player-controls">
+      <button class="focusable player-control" id="playPause" type="button">Pause</button>
+      <button class="focusable player-control" id="muteButton" type="button">Mute</button>
+      <button class="focusable player-control" id="favoriteButton" type="button">Add favorite</button>
+      <button class="focusable player-control" id="sourceButton" type="button">Next source</button>
+      <button class="focusable player-control" id="closePlayer" type="button">Back to channels</button>
+    </div>
+  </section>
+
+  <section class="modal-layer hidden" id="firstRunModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <p class="eyebrow">Before you start</p>
+      <h2>Community streams on your television</h2>
+      <p>TV Viewer plays links from public community-maintained catalogs. The LG edition limits discovery to news, education, documentary, culture, business, science, weather, and legislative channels. Availability and rights vary by source and location. Only watch content you are permitted to access.</p>
+      <p>No account is required. This webOS edition does not collect analytics. Favorites stay on this TV.</p>
+      <button class="focusable primary" id="acceptNotice" type="button">Continue</button>
+    </div>
+  </section>
+
+  <section class="modal-layer hidden" id="helpModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <p class="eyebrow">Remote controls</p>
+      <h2>How to use TV Viewer</h2>
+      <div class="help-grid">
+        <span>Directional pad</span><strong>Move focus</strong>
+        <span>OK / wheel click</span><strong>Select or play</strong>
+        <span>Back</span><strong>Close player or dialog</strong>
+        <span>Play / Pause</span><strong>Control playback</strong>
+      </div>
+      <p class="small">Some streams may not support your TV model or region. If playback fails, use Next source or choose another channel.</p>
+      <button class="focusable primary" id="closeHelp" type="button">Got it</button>
+    </div>
+  </section>
+
+  <div class="toast hidden" id="toast" role="status"></div>
+  <script src="hls.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

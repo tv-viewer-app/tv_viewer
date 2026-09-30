@@ -64,6 +64,7 @@ android/.gradle/
 .DS_Store
 Thumbs.db
 desktop.ini
+node_modules/
 build/
 dist/
 *.spec
@@ -103,3 +104,8 @@ watch_history.json
 
 # Play Store marketing artefacts (regenerate via scripts/generate_play_store_assets.py)
 play_store_assets/
+
+# LG Seller Lounge working files (generated locally and included in submission bundles)
+store-listings/lg-webos/templates/
+store-listings/lg-webos/*-draft.xlsx
+store-listings/lg-webos/*.pptx

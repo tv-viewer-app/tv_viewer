@@ -7,7 +7,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)
 ![Flutter](https://img.shields.io/badge/Flutter-3.32.0-02569B.svg)
 [![Docker](https://img.shields.io/badge/Docker-latest-2496ED.svg)](https://hub.docker.com/r/asummoner/tvviewerapp)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20Web%20%7C%20Docker-green.svg)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20LG%20webOS%20%7C%20Web%20%7C%20Docker-green.svg)
 
 > **🌐 [Visit the TV Viewer Landing Page →](https://tv-viewer-app.github.io/tv_viewer/)**
 
@@ -19,13 +19,16 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.20.2
+## ✨ What's New in v2.25.0
 
-- **Community Statistics page** now shows richer totals for channels, categories, countries, and recent additions
-- **Timezone-based country detection** improves local recommendations and privacy-preserving analytics on Android and Web
-- **Supabase backend migrated** to project `cdtxpefohpwtusmqengu`
-- **APKPure notify workflow** added to the release pipeline
-- **Docker Hub stays current** with `asummoner/tvviewerapp:latest`
+- **LG webOS TV client** with remote-first navigation, native/HLS.js playback,
+  local favorites, search, filters, and multi-source failover
+- **1080p and 720p IPK downloads** published with the other GitHub Release
+  clients
+- **LG UX compliance hardening** for Back-to-Home behavior, Magic Remote wheel
+  input, FHD control sizing, and TV-distance text legibility
+- **Curated public-interest discovery** for the LG edition with no analytics,
+  account, ads, or privileged webOS APIs
 
 _See the [CHANGELOG](CHANGELOG.md) for full release history._
 
@@ -48,12 +51,13 @@ _See the [CHANGELOG](CHANGELOG.md) for full release history._
 
 | Channel | Status | Notes |
 |---------|--------|-------|
-| GitHub Releases | ✅ Live | Windows zip, Linux source, Android APK + AAB assets |
+| GitHub Releases | ✅ Live | Windows, Linux, Android, and LG webOS assets |
 | Google Play | ✅ Live | Primary Android store distribution |
 | F-Droid | 🟡 MR open | `fdroid-build.yml` produces unsigned APK artifacts |
 | APKPure | 🟡 Pending | `apkpure-notify.yml` helps release discovery |
 | Samsung Galaxy Store | 🟡 Pending | Planned additional Android storefront |
 | Docker Hub | ✅ Live | `asummoner/tvviewerapp:latest` |
+| LG webOS TV | 🟡 GitHub client available | IPK downloads available; Seller Lounge certification pending |
 
 ## Downloads
 
@@ -62,6 +66,7 @@ _See the [CHANGELOG](CHANGELOG.md) for full release history._
 | Android | [Google Play](https://play.google.com/store/apps/details?id=app.tvviewer.player) / [Latest Release](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Android 8.0+ (API 26) |
 | Windows | [Latest Release](https://github.com/tv-viewer-app/tv_viewer/releases/latest) | Self-contained, VLC bundled |
 | Web / Docker | `docker run -p 8765:8765 asummoner/tvviewerapp:latest` | Browser-based, NAS-friendly |
+| LG webOS TV | Build from `webos_app/` or download a webOS release asset | webOS 5.0+; LG Seller Lounge publication pending |
 | Linux | [From source](#from-source-windowslinux) | Python 3.12+ + VLC |
 
 ## Quick Start
@@ -102,9 +107,10 @@ python -m web.server
 | Desktop | Python 3.12 + CustomTkinter + VLC | Native Windows/Linux client |
 | Mobile | Flutter 3.32.0 + Material 3 | Gradle 8.9, AGP 8.7.0, Kotlin 1.9.22 |
 | Web | FastAPI + vanilla JS + HLS.js | Browser UI + self-hosted Docker image |
+| LG webOS TV | Packaged HTML/CSS/JS + HLS.js | Remote-first standalone IPK |
 | Shared backend | Supabase (`cdtxpefohpwtusmqengu`) | Channels, status, analytics, aggregated stats |
 | Android audio | `just_audio` + `audio_service` | Background playback for radio streams |
-| CI/CD | 28 GitHub Actions workflows | Release, store, Docker, analytics, backend ops |
+| CI/CD | 29 GitHub Actions workflows | Release, store, Docker, webOS, analytics, backend ops |
 
 ## Documentation
 
@@ -124,25 +130,27 @@ python -m web.server
 ```
 tv_viewer_project/
 ├── main.py                 # Desktop entry point
-├── config.py               # Configuration and current version (2.20.2)
+├── config.py               # Configuration and current version (2.25.0)
 ├── Dockerfile              # Docker image definition
 ├── core/                   # Channel manager, repository, stream checker
 ├── ui/                     # Desktop UI
 ├── utils/                  # Shared utilities, analytics, normalization, Supabase client
 ├── web/                    # FastAPI backend + static web client
+├── webos_app/              # Standalone LG webOS TV client and IPK build
 ├── flutter_app/            # Flutter Android app source + fastlane metadata
 ├── tests/                  # Python tests (299+)
 ├── docs/                   # Project documentation
-└── .github/workflows/      # CI/CD automation (28 workflows)
+└── .github/workflows/      # CI/CD automation (29 workflows)
 ```
 
 ## CI/CD
 
-TV Viewer uses **28 GitHub Actions workflows** across validation, release orchestration, store publishing, Docker publishing, analytics, and Supabase maintenance. Key workflows include:
+TV Viewer uses **29 GitHub Actions workflows** across validation, release orchestration, store publishing, Docker publishing, webOS packaging, analytics, and Supabase maintenance. Key workflows include:
 
 - `ci.yml` — core CI for Python/Web changes
 - `build.yml` / `release.yml` / `release-gate.yml` — release pipeline and gating
 - `build-apk.yml` / `play-store-deploy.yml` — Android APK/AAB build and Google Play deployment
+- `webos-build.yml` — validates and packages the LG webOS IPK
 - `fdroid-build.yml` / `apkpure-notify.yml` — alternate Android distribution channels
 - `docker-publish.yml` — multi-arch Docker Hub publish (`latest` + version tags)
 - `supabase-*.yml` and analytics workflows — backend health, keepalive, monitoring, reporting

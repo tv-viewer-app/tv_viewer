@@ -1,0 +1,17 @@
+{
+  "id": "app.tvviewer.webos",
+  "version": "2.25.0",
+  "vendor": "TV Viewer",
+  "type": "web",
+  "main": "index.html",
+  "title": "TV Viewer",
+  "appDescription": "Community live TV and radio for the living room",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "splashBackground": "splash.png",
+  "iconColor": "#1565C0",
+  "bgColor": "#101217",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "requiredACG": []
+}

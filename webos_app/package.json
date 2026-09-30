@@ -1,0 +1,20 @@
+{
+  "name": "tv-viewer-webos",
+  "version": "2.25.0",
+  "private": true,
+  "description": "LG webOS TV client for TV Viewer",
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "package": "node scripts/package-all.mjs",
+    "capture-store-assets": "node scripts/capture-store-assets.mjs",
+    "generate-ux-scenario": "node scripts/generate-ux-scenario.mjs"
+  },
+  "devDependencies": {
+    "@webos-tools/cli": "3.2.6",
+    "playwright-core": "^1.55.1",
+    "pptxgenjs": "^4.0.1"
+  },
+  "overrides": {
+    "image-size": "2.0.4"
+  }
+}

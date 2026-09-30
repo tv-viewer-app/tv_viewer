@@ -1,12 +1,20 @@
 # Privacy Policy — TV Viewer
 
-**Last Updated:** April 2026
+**Last Updated:** September 30, 2026
 
 ## Overview
 
 TV Viewer is a free, open-source IPTV streaming application. We respect your privacy and are committed to protecting your personal data.
 
 ## Data We Collect
+
+### LG webOS TV Edition
+
+The LG webOS TV edition does not collect analytics, create a device identifier,
+or send channel health reports. It reads the public channel catalog from
+Supabase and connects directly to the stream selected by the user. Favorites
+and the first-run notice acknowledgement are stored only in the television's
+local application storage.
 
 ### With Your Consent (Optional Analytics)
 
@@ -38,6 +46,12 @@ TV Viewer requests only the minimum permissions needed to function:
 | `WAKE_LOCK` | Preventing the screen from sleeping during video playback |
 
 No camera, microphone, location, contacts, storage, or other sensitive permissions are requested.
+
+## LG webOS TV Permissions
+
+The webOS edition does not request Luna Bus access or sensitive device
+permissions. It requires network access only to load the public catalog and
+play user-selected streams.
 
 ## Data Storage
 

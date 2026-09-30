@@ -1,0 +1,56 @@
+name: LG webOS Build
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'webos_app/**'
+      - '.github/workflows/webos-build.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'webos_app/**'
+      - '.github/workflows/webos-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: webos_app
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fb9583b0c6ae88be0  # v6.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: webos_app/package-lock.json
+
+      - name: Install webOS tooling
+        run: npm ci
+
+      - name: Validate webOS application
+        run: npm run validate
+
+      - name: Package IPK
+        run: npm run package
+
+      - name: Verify package
+        run: |
+          test -f dist/app.tvviewer.webos_*_1080p_all.ipk
+          test -f dist/app.tvviewer.webos_*_720p_all.ipk
+          ls -lh dist/*.ipk
+
+      - name: Upload IPK artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: lg-webos-ipk
+          path: webos_app/dist/*.ipk
+          retention-days: 14

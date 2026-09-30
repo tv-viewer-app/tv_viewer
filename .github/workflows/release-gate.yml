@@ -85,6 +85,16 @@ jobs:
           fi
           echo "✅ pubspec.yaml version matches"
 
+      - name: Check webOS version matches tag
+        run: |
+          VERSION="${{ steps.resolve.outputs.version }}"
+          WEBOS_VERSION=$(python3 -c "import json; print(json.load(open('webos_app/appinfo.json'))['version'])")
+          if [ "$WEBOS_VERSION" != "$VERSION" ]; then
+            echo "::error::webos_app/appinfo.json version ($WEBOS_VERSION) != tag ($VERSION)"
+            exit 1
+          fi
+          echo "✅ webOS version matches"
+
       - name: Check CHANGELOG entry exists
         run: |
           VERSION="${{ steps.resolve.outputs.version }}"
@@ -204,7 +214,32 @@ jobs:
         run: flutter test --reporter expanded
 
   # ---------------------------------------------------------------------------
-  # Gate 5: Smoke test — build the Windows EXE and verify it's not corrupt
+  # Gate 5: LG webOS source validation + package build
+  # ---------------------------------------------------------------------------
+  webos-package:
+    name: LG webOS package
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: webos_app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: webos_app/package-lock.json
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run package
+      - run: |
+          test -f dist/app.tvviewer.webos_*_1080p_all.ipk
+          test -f dist/app.tvviewer.webos_*_720p_all.ipk
+
+  # ---------------------------------------------------------------------------
+  # Gate 6: Smoke test — build the Windows EXE and verify it's not corrupt
   # ---------------------------------------------------------------------------
   windows-smoke:
     name: Windows EXE smoke build
@@ -266,7 +301,7 @@ jobs:
   # ---------------------------------------------------------------------------
   gate-passed:
     name: Release gate passed
-    needs: [metadata, python-matrix, security, flutter-tests, windows-smoke]
+    needs: [metadata, python-matrix, security, flutter-tests, webos-package, windows-smoke]
     runs-on: ubuntu-latest
     steps:
       - run: |

@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.25.0] - 2026-09-30
+
+### Added
+- Standalone LG webOS TV application with a 1920x1080 ten-foot interface.
+- Directional-pad spatial navigation, Magic Remote pointer support, Back handling, and media-key playback controls.
+- Direct read-only access to the RLS-protected community channel catalog, with no Python server required on the television.
+- Native playback with packaged HLS.js fallback, multi-source switching, local favorites, filters, paging, and first-run content/privacy notice.
+- Reproducible 1080p and 720p webOS IPK packaging through the official `@webos-tools/cli`, including GitHub Actions artifacts and pre-publication release attachment support.
+
+### Changed
+- Application version advanced to 2.25.0 for the new LG TV platform.
+- LG webOS controls now meet the recommended FHD target height and all visible
+  FHD text uses at least 20px.
+
+### Fixed
+- Back from the first-run entry screen now exits to the LG Home screen instead
+  of being ignored.
+- Magic Remote wheel input now scrolls catalog pages in the wheel direction.
+- The public Supabase client value is explicitly named and documented as
+  publishable rather than credential-like.
+- LG webOS validation now blocks regressions in entry-screen Back behavior,
+  minimum control sizing, minimum text sizing, wheel support, and public-client
+  value naming.
+
 All notable changes to TV Viewer will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
