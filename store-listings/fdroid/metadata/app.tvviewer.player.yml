@@ -137,6 +137,7 @@ Builds:
         --no-tree-shake-icons
       - popd
       - mv $repo app.tvviewer.player
+
   - versionName: 2.24.5
     versionCode: 1391
     commit: d993f1d9e164dd1d28adee17876c94790ebd7af2
