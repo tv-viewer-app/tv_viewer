@@ -17,6 +17,7 @@ BUNDLE_NAME = f"lg-webos-submission-v{VERSION}"
 BUNDLE_DIR = OUTPUT_ROOT / BUNDLE_NAME
 ZIP_PATH = OUTPUT_ROOT / f"{BUNDLE_NAME}.zip"
 UPLOAD_DIR = LISTING_DIR / "upload-ready"
+TEST_IPK_ZIP_NAME = f"TV_Viewer_v{VERSION}_LG_webOS_1080p_Test_IPK.zip"
 
 FILES = {
     WEBOS_DIR / "dist" / f"app.tvviewer.webos_{VERSION}_1080p_all.ipk": Path(
@@ -100,6 +101,10 @@ QA documents:
   TV_Viewer_LG_Self_Checklist_v{VERSION}.xlsx
   TV_Viewer_LG_UX_Scenario_v{VERSION}.pptx
 
+QA Test IPK attachment:
+  {TEST_IPK_ZIP_NAME}
+  Upload this ZIP in "Enter Test IPK File or Test URL".
+
 Store copy, privacy, and review notes:
   TV_Viewer_Store_Listing.md
   TV_Viewer_Privacy_Policy.md
@@ -118,6 +123,78 @@ UK data information:
   Data collected within the app: No
   Shared Data: No
   Privacy Policy URL: https://github.com/tv-viewer-app/tv_viewer/blob/master/PRIVACY_POLICY.md
+
+QA registration:
+  UX Scenario: TV_Viewer_LG_UX_Scenario_v{VERSION}.pptx
+  Note category: Other Information
+  Test account/password: Not applicable
+  Voucher code: Not applicable
+  Service URL: Leave blank
+  Geo IP Block: No
+  Billing / paid content: Not applicable / No
+  In-App Ad: Not Applicable
+  DRM: Not Applicable
+  Streaming Protocol: HLS and HTTP/HTTPS, if both are offered
+  Video Codec: H.264/AVC
+  Audio Codec: AAC and MP3
+  HDR: Not Applicable
+"""
+
+QA_FIELD_GUIDE = f"""TV Viewer v{VERSION} - LG App QA field guide
+
+Reference email for QA results
+  Enter the submitter's preferred monitored email address in Seller Lounge.
+  Do not publish that personal email in store listing files.
+
+UX Scenario File
+  TV_Viewer_LG_UX_Scenario_v{VERSION}.pptx
+
+Note for Tester
+  Category: Other Information
+  Text:
+  TV Viewer is a free, open-source, remote-first live TV and radio player.
+  No account, password, voucher, purchase, advertisement, analytics, DRM, or
+  privileged webOS API is used. On first launch, accept the content notice;
+  the catalog then loads from the public TV Viewer service. Use the D-pad and
+  OK button to browse and open a channel. Back closes dialogs or playback and
+  exits from the catalog. Stream availability and regional accessibility are
+  controlled by independent stream providers. If a source fails, select Next
+  source. Please test network launch, D-pad/OK/Back, Magic Remote, playback,
+  Play/Pause, source switching, favorites, suspend/resume, and app exit.
+
+Optional QA attachment
+  TV_Viewer_LG_Self_Checklist_v{VERSION}.xlsx
+
+Test Account/Password
+  Select Not applicable.
+
+Voucher Code
+  Select Not applicable.
+
+Test IPK File or Test URL
+  Upload {TEST_IPK_ZIP_NAME}.
+  Leave Service URL blank.
+
+Geo IP Block
+  Select No. The app does not implement geo-blocking. Individual third-party
+  streams can still be unavailable by region.
+
+Billing / paid content
+  Select Not applicable or No paid content. There is no purchase, subscription,
+  external paid-account conversion, or third-party billing flow.
+
+In-App Ad
+  Select Not Applicable.
+
+Player Specification
+  DRM: Not Applicable
+  Streaming Protocol: HLS; also select HTTP/HTTPS if offered as a protocol
+  Video Codec: H.264/AVC
+  Audio Codec: AAC and MP3
+  HDR: Not Applicable
+
+Do not select MPEG-DASH, Smooth Streaming, PlayReady, Widevine, HEVC, or HDR
+unless a separately tested release explicitly adds and validates them.
 """
 
 
@@ -143,8 +220,25 @@ def main() -> None:
         target = UPLOAD_DIR / filename
         shutil.copy2(source, target)
         upload_copied.append(target)
+
+    primary_ipk = (
+        WEBOS_DIR / "dist" / f"app.tvviewer.webos_{VERSION}_1080p_all.ipk"
+    )
+    test_ipk_zip = UPLOAD_DIR / TEST_IPK_ZIP_NAME
+    with zipfile.ZipFile(
+        test_ipk_zip, "w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
+        archive.write(
+            primary_ipk,
+            f"TV_Viewer_v{VERSION}_LG_webOS_1080p.ipk",
+        )
+    upload_copied.append(test_ipk_zip)
+
     (UPLOAD_DIR / "SELLER_LOUNGE_FILE_MAP.txt").write_text(
         FILE_MAP, encoding="utf-8"
+    )
+    (UPLOAD_DIR / "QA_FIELD_GUIDE.txt").write_text(
+        QA_FIELD_GUIDE, encoding="utf-8"
     )
     (UPLOAD_DIR / "SHA256SUMS.txt").write_text(
         "\n".join(

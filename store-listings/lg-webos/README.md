@@ -102,3 +102,26 @@ listing copy.
 - The app calls no Luna Bus APIs and declares `"requiredACG": []`.
 - Store screenshots should demonstrate catalog browsing, visible D-pad focus,
   playback controls, filters, and favorites.
+
+## App QA registration values
+
+| Field | Value |
+|---|---|
+| UX Scenario File | `TV_Viewer_LG_UX_Scenario_v2.25.0.pptx` |
+| Note for Tester category | Other Information |
+| Test account/password | Not applicable |
+| Voucher code | Not applicable |
+| Test IPK attachment | `TV_Viewer_v2.25.0_LG_webOS_1080p_Test_IPK.zip` |
+| Service URL | Leave blank |
+| Geo IP Block | No |
+| Billing / paid content | Not applicable / No |
+| In-App Ad | Not Applicable |
+| DRM | Not Applicable |
+| Streaming protocol | HLS; HTTP/HTTPS if separately listed |
+| Video codec | H.264/AVC |
+| Audio codec | AAC and MP3 |
+| HDR | Not Applicable |
+
+The reference QA-results email is entered directly in Seller Lounge and is not
+stored in this public repository. The exact tester note is generated into
+`upload-ready/QA_FIELD_GUIDE.txt`.

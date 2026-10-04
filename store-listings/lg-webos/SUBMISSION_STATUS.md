@@ -1,6 +1,6 @@
 # LG Content Store submission status
 
-**Prepared:** September 30, 2026
+**Prepared:** October 1, 2026
 **App:** TV Viewer
 **Package ID:** `app.tvviewer.webos`
 **Version:** 2.25.0
@@ -44,6 +44,20 @@ review, and certification approval remain open.
 | Advertising | No |
 | Analytics in webOS build | No |
 | Privileged webOS APIs | None; `requiredACG` is an empty array |
+| QA UX scenario | `TV_Viewer_LG_UX_Scenario_v2.25.0.pptx` |
+| QA note category | Other Information |
+| Test account/password | Not applicable |
+| Voucher code | Not applicable |
+| Test IPK ZIP | `TV_Viewer_v2.25.0_LG_webOS_1080p_Test_IPK.zip` |
+| Service URL | Blank |
+| Geo IP Block | No |
+| Billing / paid content | Not applicable / No |
+| In-App Ad | Not Applicable |
+| DRM | Not Applicable |
+| Streaming protocol | HLS; HTTP/HTTPS if separately listed |
+| Video codec | H.264/AVC |
+| Audio codec | AAC and MP3 |
+| HDR | Not Applicable |
 
 **Short description**
 
