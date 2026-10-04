@@ -1,3 +1,6 @@
+AntiFeatures:
+  - NonFreeNet
+  - Tracking
 Categories:
   - Multimedia
   - Online Media Player
@@ -8,9 +11,6 @@ AuthorWebSite: https://tv-viewer-app.github.io/tv_viewer/
 SourceCode: https://github.com/tv-viewer-app/tv_viewer
 IssueTracker: https://github.com/tv-viewer-app/tv_viewer/issues
 Changelog: https://github.com/tv-viewer-app/tv_viewer/blob/master/CHANGELOG.md
-AntiFeatures:
-  - NonFreeNet
-  - Tracking
 
 AutoName: TV Viewer
 
