@@ -1,0 +1,7 @@
+Unified Android behavior across GitHub, Google Play, and F-Droid.
+
+- Removed in-app APK downloading and installation
+- Added a safe browser link for GitHub/Obtainium updates
+- Kept community statistics, shared channel health, and opt-in analytics
+- Removed simulated program-guide schedules
+- Corrected OpenStreetMap app identification

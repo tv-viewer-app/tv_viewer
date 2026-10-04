@@ -58,8 +58,10 @@ jobs:
       - name: Install dependencies
         run: cd flutter_app && flutter pub get
 
-      - name: Build release APK
-        run: cd flutter_app && flutter build apk --release
+      - name: Build release ABI APKs
+        run: >-
+          cd flutter_app &&
+          flutter build apk --release --split-per-abi --no-tree-shake-icons
 
       - name: Build release App Bundle (AAB) for Play Store
         run: cd flutter_app && flutter build appbundle --release
@@ -70,8 +72,10 @@ jobs:
         env:
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
-             "flutter_app/build/app/outputs/flutter-apk/tv-viewer-${TAG_NAME}.apk"
+          for ABI in armeabi-v7a arm64-v8a x86_64; do
+            cp "flutter_app/build/app/outputs/flutter-apk/app-${ABI}-release.apk" \
+               "flutter_app/build/app/outputs/flutter-apk/tv-viewer-${TAG_NAME}-${ABI}.apk"
+          done
           cp flutter_app/build/app/outputs/bundle/release/app-release.aab \
              "flutter_app/build/app/outputs/bundle/release/tv-viewer-${TAG_NAME}.aab"
 
@@ -93,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: tv-viewer-apk
-          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-*-release.apk
 
       - name: Upload AAB artifact (Play Store)
         if: github.event_name == 'workflow_dispatch'

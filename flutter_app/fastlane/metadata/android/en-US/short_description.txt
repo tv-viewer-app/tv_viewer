@@ -1,1 +1,1 @@
-Free open-source IPTV player with 16,000+ channels and community stats.
+Free open-source IPTV player with community channels and opt-in analytics.

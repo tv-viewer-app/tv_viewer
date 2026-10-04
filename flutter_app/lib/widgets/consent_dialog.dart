@@ -91,12 +91,8 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    AppDistribution.isFdroid
-                        ? 'This app plays community-maintained public channel '
-                            'lists. F-Droid builds do not enable bundled adult '
-                            'or unreviewed sources.'
-                        : 'This app streams publicly available IPTV channels. '
-                            'Some content may be intended for mature audiences.',
+                    'This app streams publicly available IPTV channels. '
+                    'Some content may be intended for mature audiences.',
                     style: TextStyle(fontSize: 13),
                   ),
                 ],
@@ -125,37 +121,22 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
             const Divider(),
 
             // Analytics opt-in
-            if (AppDistribution.allowsSupabase)
-              CheckboxListTile(
-                value: _analyticsOptIn,
-                onChanged: (v) => setState(() => _analyticsOptIn = v ?? false),
-                title: const Text(
-                  'Help improve TV Viewer',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                subtitle: const Text(
-                  'Share anonymous usage data (no personal info, '
-                  'no viewing history). You can change this in Settings.',
-                  style: TextStyle(fontSize: 12),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              )
-            else
-              const ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.analytics_outlined),
-                title: Text(
-                  'Analytics and community database are disabled',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  'This F-Droid build contains no Supabase credentials and '
-                  'does not send usage or channel-health data.',
-                  style: TextStyle(fontSize: 12),
-                ),
+            CheckboxListTile(
+              value: _analyticsOptIn,
+              onChanged: (v) => setState(() => _analyticsOptIn = v ?? false),
+              title: const Text(
+                'Help improve TV Viewer',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
+              subtitle: const Text(
+                'Share anonymous usage data (no personal info, '
+                'no viewing history). You can change this in Settings.',
+                style: TextStyle(fontSize: 12),
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
 
             const SizedBox(height: 8),
 

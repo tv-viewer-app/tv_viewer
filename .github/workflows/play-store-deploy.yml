@@ -116,8 +116,6 @@ jobs:
         working-directory: flutter_app
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "::error::ANDROID_KEYSTORE_BASE64 secret missing — cannot build signed AAB"
@@ -132,9 +130,7 @@ jobs:
           EOF
           flutter pub get
           flutter build appbundle --release \
-            --obfuscate --split-debug-info=build/debug-info \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+            --obfuscate --split-debug-info=build/debug-info
           mkdir -p ../aab
           cp build/app/outputs/bundle/release/app-release.aab ../aab/app-release.aab
 

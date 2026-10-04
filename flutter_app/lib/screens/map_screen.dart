@@ -419,7 +419,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.tvviewer.app',
+                userAgentPackageName: 'app.tvviewer.player',
                 tileProvider: NetworkTileProvider(),
                 keepBuffer: 8,
                 errorImage: _errorTileImage,

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../config/app_distribution.dart';
 import '../constants.dart';
 import '../models/channel.dart';
 import '../utils/error_handler.dart';
@@ -11,10 +10,6 @@ import 'shared_db_service.dart';
 
 /// Service for fetching and parsing M3U playlists
 class M3UService {
-  static const List<String> _fdroidRepositories = [
-    'https://iptv-org.github.io/iptv/index.m3u',
-  ];
-
   static const List<String> _standardRepositories = [
     // Primary comprehensive index (contains all non-NSFW channels)
     'https://iptv-org.github.io/iptv/index.m3u',
@@ -58,9 +53,7 @@ class M3UService {
   ];
 
   /// Adult/NSFW repositories — only fetched when adult content is enabled
-  static List<String> get defaultRepositories => AppDistribution.isFdroid
-      ? _fdroidRepositories
-      : _standardRepositories;
+  static List<String> get defaultRepositories => _standardRepositories;
 
   static const List<String> _standardAdultRepositories = [
     'https://iptv-org.github.io/iptv/categories/xxx.m3u',
@@ -69,8 +62,7 @@ class M3UService {
   ];
 
   /// Custom Israeli channels with verified working CDN URLs
-  static List<String> get adultRepositories =>
-      AppDistribution.isFdroid ? const [] : _standardAdultRepositories;
+  static List<String> get adultRepositories => _standardAdultRepositories;
 
   static const List<Map<String, String>> _standardCustomChannels = [
     // TV Channels
@@ -132,7 +124,7 @@ class M3UService {
   ];
 
   static List<Map<String, String>> get customChannels =>
-      AppDistribution.isFdroid ? const [] : _standardCustomChannels;
+      _standardCustomChannels;
 
   /// Fetch channels from an M3U URL
   static Future<List<Channel>> fetchFromUrl(String url) async {

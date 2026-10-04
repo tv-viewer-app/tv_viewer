@@ -53,7 +53,7 @@ _See the [CHANGELOG](CHANGELOG.md) for full release history._
 |---------|--------|-------|
 | GitHub Releases | ✅ Live | Windows, Linux, Android, and LG webOS assets |
 | Google Play | ✅ Live | Primary Android store distribution |
-| F-Droid | 🟡 MR open | `fdroid-build.yml` produces unsigned APK artifacts |
+| F-Droid | 🟡 MR open | Verifies the same ABI APK sources published on GitHub |
 | APKPure | 🟡 Pending | `apkpure-notify.yml` helps release discovery |
 | Samsung Galaxy Store | 🟡 Pending | Planned additional Android storefront |
 | Docker Hub | ✅ Live | `asummoner/tvviewerapp:latest` |
@@ -151,7 +151,8 @@ TV Viewer uses **29 GitHub Actions workflows** across validation, release orches
 - `build.yml` / `release.yml` / `release-gate.yml` — release pipeline and gating
 - `build-apk.yml` / `play-store-deploy.yml` — Android APK/AAB build and Google Play deployment
 - `webos-build.yml` — validates and packages the LG webOS IPK
-- `fdroid-build.yml` / `apkpure-notify.yml` — alternate Android distribution channels
+- `fdroid-build.yml` — reproducibility rebuild of the same Android ABI APKs
+- `apkpure-notify.yml` — alternate Android distribution notification
 - `docker-publish.yml` — multi-arch Docker Hub publish (`latest` + version tags)
 - `supabase-*.yml` and analytics workflows — backend health, keepalive, monitoring, reporting
 

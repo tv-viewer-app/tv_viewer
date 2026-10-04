@@ -328,28 +328,18 @@ jobs:
           EOF
           echo "✅ Signing keystore configured"
 
-      # Build AAB (Play Store) and APK (sideload + GitHub Release)
-      # AAB is required by Play Store for new uploads since 2021.
-      # --split-debug-info generates Dart debug symbols for crash reporting.
-      # --obfuscate reduces APK size and protects source.
-      # NDK debugSymbolLevel 'FULL' in build.gradle handles native symbols.
-      - name: Build APK + AAB
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      # Build the same ABI APKs published on GitHub and verified by F-Droid.
+      # F-Droid rebuilds these from source and applies its own signature.
+      - name: Build ABI APKs + AAB
         run: |
           mkdir -p build/debug-info
           flutter build apk --release \
-            --split-debug-info=build/debug-info \
-            --obfuscate \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+            --split-per-abi \
+            --no-tree-shake-icons
           # AAB build is best-effort (strip debug symbols may fail without NDK)
           flutter build appbundle --release \
             --split-debug-info=build/debug-info \
-            --obfuscate \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" || echo "⚠️ AAB build failed (non-fatal, APK available)"
+            --obfuscate || echo "⚠️ AAB build failed (non-fatal, APK available)"
 
       - name: Package native debug symbols
         run: |
@@ -374,9 +364,11 @@ jobs:
 
       - name: Verify outputs
         run: |
-          APK="build/app/outputs/flutter-apk/app-release.apk"
           AAB="build/app/outputs/bundle/release/app-release.aab"
-          [ -f "$APK" ] && echo "✅ APK: $(du -h $APK | cut -f1)" || { echo "❌ APK missing"; exit 1; }
+          for ABI in armeabi-v7a arm64-v8a x86_64; do
+            APK="build/app/outputs/flutter-apk/app-${ABI}-release.apk"
+            [ -f "$APK" ] && echo "✅ $ABI APK: $(du -h "$APK" | cut -f1)" || { echo "❌ $ABI APK missing"; exit 1; }
+          done
           [ -f "$AAB" ] && echo "✅ AAB: $(du -h $AAB | cut -f1)" || { echo "❌ AAB missing"; exit 1; }
           [ -f "/tmp/native-debug-symbols.zip" ] && echo "✅ Symbols: $(du -h /tmp/native-debug-symbols.zip | cut -f1)" || echo "⚠️ No symbols zip"
           ls build/debug-info/ 2>/dev/null | head -5 && echo "✅ Dart debug info present" || echo "⚠️ No Dart debug info"
@@ -388,19 +380,27 @@ jobs:
           INPUT_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           VERSION="$INPUT_VERSION"
-          APK_PATH=$(find build/app/outputs/flutter-apk -name "app-release.apk" | head -1)
           AAB_PATH=$(find build/app/outputs/bundle/release -name "app-release.aab" | head -1)
           if [ -n "$VERSION" ]; then
             if ! gh release view "$VERSION" >/dev/null 2>&1; then
               gh release create "$VERSION" --title "TV Viewer $VERSION" --notes "Release in progress" --draft
             fi
-            if [ -n "$APK_PATH" ]; then
-              cp "$APK_PATH" "/tmp/TV_Viewer_${VERSION}_Android.apk"
-              gh release upload "$VERSION" "/tmp/TV_Viewer_${VERSION}_Android.apk" --clobber
-            fi
+            CLEAN_VERSION="${VERSION#v}"
+            for ABI in armeabi-v7a arm64-v8a x86_64; do
+              APK_PATH="build/app/outputs/flutter-apk/app-${ABI}-release.apk"
+              TARGET="/tmp/TV_Viewer_v${CLEAN_VERSION}_Android-${ABI}.apk"
+              cp "$APK_PATH" "$TARGET"
+              gh release upload "$VERSION" "$TARGET" --clobber
+            done
+            # Keep the familiar Android.apk name as an arm64 alias for most
+            # current phones; it is byte-identical to the arm64 reference APK.
+            cp "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk" \
+              "/tmp/TV_Viewer_v${CLEAN_VERSION}_Android.apk"
+            gh release upload "$VERSION" \
+              "/tmp/TV_Viewer_v${CLEAN_VERSION}_Android.apk" --clobber
             if [ -n "$AAB_PATH" ]; then
-              cp "$AAB_PATH" "/tmp/TV_Viewer_${VERSION}_Android.aab"
-              gh release upload "$VERSION" "/tmp/TV_Viewer_${VERSION}_Android.aab" --clobber
+              cp "$AAB_PATH" "/tmp/TV_Viewer_v${CLEAN_VERSION}_Android.aab"
+              gh release upload "$VERSION" "/tmp/TV_Viewer_v${CLEAN_VERSION}_Android.aab" --clobber
             fi
             # Upload native debug symbols for Play Console crash reporting
             if [ -f "/tmp/native-debug-symbols.zip" ]; then
@@ -414,7 +414,7 @@ jobs:
         continue-on-error: true
         with:
           name: android-apk
-          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-*-release.apk
           retention-days: 7
 
       - name: Upload AAB artifact
@@ -424,53 +424,6 @@ jobs:
           name: android-aab
           path: flutter_app/build/app/outputs/bundle/release/app-release.aab
           retention-days: 7
-
-      # Build and upload F-Droid reference APKs while the release is still a
-      # draft. Published releases are immutable and reject later asset uploads.
-      - name: Apply F-Droid source policy
-        run: |
-          python tool/prepare_fdroid.py
-          ! grep -q "REQUEST_INSTALL_PACKAGES" android/app/src/main/AndroidManifest.xml
-          ! grep -q "FileProvider" android/app/src/main/AndroidManifest.xml
-
-      - name: Test F-Droid distribution policy
-        run: >-
-          flutter test --dart-define=FDROID_BUILD=true
-          test/config/fdroid_distribution_test.dart
-
-      - name: Build F-Droid ABI APKs
-        run: |
-          flutter build apk --release \
-            --split-per-abi \
-            --dart-define=FDROID_BUILD=true \
-            --no-tree-shake-icons
-
-      - name: Upload F-Droid APKs to draft release
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INPUT_VERSION: ${{ inputs.version || github.ref_name }}
-        run: |
-          TAG="$INPUT_VERSION"
-          VERSION="${TAG#v}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "TV Viewer $TAG" --notes "Release in progress" --draft
-          fi
-          for ABI in armeabi-v7a arm64-v8a x86_64; do
-            SOURCE="build/app/outputs/flutter-apk/app-${ABI}-release.apk"
-            TARGET="/tmp/TV_Viewer_v${VERSION}_fdroid-${ABI}.apk"
-            test -f "$SOURCE"
-            cp "$SOURCE" "$TARGET"
-            gh release upload "$TAG" "$TARGET" --clobber
-          done
-
-      - name: Upload F-Droid artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        continue-on-error: true
-        with:
-          name: fdroid-apks
-          path: flutter_app/build/app/outputs/flutter-apk/app-*-release.apk
-          retention-days: 90
 
   # ===========================================================================
   # Job 3: LG webOS — official CLI → IPK
@@ -502,8 +455,22 @@ jobs:
           test -f dist/app.tvviewer.webos_*_1080p_all.ipk
           test -f dist/app.tvviewer.webos_*_720p_all.ipk
 
+      - name: Check whether webOS matches release tag
+        id: webos-version
+        env:
+          INPUT_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          TAG_VERSION="${INPUT_VERSION#v}"
+          WEBOS_VERSION=$(node -p "require('./appinfo.json').version")
+          if [ "$WEBOS_VERSION" = "$TAG_VERSION" ]; then
+            echo "matches=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "matches=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping webOS release upload: package v$WEBOS_VERSION, release v$TAG_VERSION"
+          fi
+
       - name: Upload to draft release
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && steps.webos-version.outputs.matches == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ inputs.version || github.ref_name }}

@@ -104,10 +104,12 @@ jobs:
             mv "release-assets/TV_Viewer.exe" \
                "release-assets/TV_Viewer_v${VERSION}_Windows.exe"
           fi
-          if [ -f "release-assets/app-release.apk" ]; then
-            mv "release-assets/app-release.apk" \
-               "release-assets/TV_Viewer_v${VERSION}_Android.apk"
-          fi
+          for ABI in armeabi-v7a arm64-v8a x86_64; do
+            SOURCE="release-assets/app-${ABI}-release.apk"
+            if [ -f "$SOURCE" ]; then
+              mv "$SOURCE" "release-assets/TV_Viewer_v${VERSION}_Android-${ABI}.apk"
+            fi
+          done
           echo "📦 Release assets:"
           ls -lh release-assets/ 2>/dev/null || echo "(no artifacts downloaded — builds uploaded directly)"
 

@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_distribution.dart';
+import '../config/backend_config.dart';
 import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 import '../utils/pinned_http_client.dart';
@@ -44,12 +45,16 @@ class AnalyticsService {
   // Supabase configuration — compile-time env overrides hardcoded defaults
   // The anon key is public and safe to embed (protected by RLS policies)
   // ---------------------------------------------------------------------------
-  // Credentials must be provided via --dart-define at build time.
-  // No hardcoded defaults — analytics stays off until explicitly configured.
   static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const String.fromEnvironment(
+        'SUPABASE_URL',
+        defaultValue: BackendConfig.supabaseUrl,
+      );
   static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      const String.fromEnvironment(
+        'SUPABASE_ANON_KEY',
+        defaultValue: BackendConfig.supabasePublishableKey,
+      );
   static const String _tableName = 'analytics_events';
 
   /// Service is only enabled when env vars are provided at build time.

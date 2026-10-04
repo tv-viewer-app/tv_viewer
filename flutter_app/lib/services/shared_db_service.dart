@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import '../config/app_distribution.dart';
+import '../config/backend_config.dart';
 import '../utils/logger_service.dart';
 
 /// Service for syncing channel validation results with shared Supabase database
@@ -18,12 +19,16 @@ import '../utils/logger_service.dart';
 /// - last_checked (TIMESTAMP): Last validation timestamp
 /// - response_time_ms (INTEGER): Response time in milliseconds
 class SharedDbService {
-  // Credentials must be provided via --dart-define at build time.
-  // No hardcoded defaults — shared DB stays off until explicitly configured.
   static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const String.fromEnvironment(
+        'SUPABASE_URL',
+        defaultValue: BackendConfig.supabaseUrl,
+      );
   static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      const String.fromEnvironment(
+        'SUPABASE_ANON_KEY',
+        defaultValue: BackendConfig.supabasePublishableKey,
+      );
   static const String _tableName = 'channel_status';
   
   // Automatically enabled when environment variables are set

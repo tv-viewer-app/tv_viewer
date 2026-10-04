@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.25.1] - 2026-10-04
+
+### Changed
+- Android now has one product configuration across GitHub, Google Play, and
+  F-Droid; store signing and packaging no longer change app features.
+- GitHub publishes the same ABI-specific APKs used for F-Droid reproducible
+  build verification, plus an arm64 `Android.apk` compatibility alias.
+- Supabase community statistics, shared channel health, and explicitly opt-in
+  anonymous analytics remain available in every Android distribution through
+  the public RLS-restricted client configuration.
+- The Android store description now accurately discloses FMStream, community
+  playlist hosts, Supabase services, and optional analytics.
+- Sideload users update through their app store, Obtainium, or the GitHub
+  Releases page instead of an in-app APK installer.
+
+### Fixed
+- Removed simulated program-guide schedules and invented current/next program
+  titles; unavailable schedules are now reported as unavailable.
+- Corrected the OpenStreetMap user-agent package identifier to
+  `app.tvviewer.player`.
+- Removed the Android package-install permission and update `FileProvider` from
+  every distribution.
+- Added the missing Android version-code 141 changelog.
+
 ## [2.25.0] - 2026-09-30
 
 ### Added

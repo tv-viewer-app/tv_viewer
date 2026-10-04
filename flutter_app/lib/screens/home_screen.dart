@@ -26,7 +26,6 @@ import 'player_screen.dart';
 import 'radio_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
-import '../services/update_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -82,9 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _checkRatingPrompt();
     _checkAndShowOnboarding();
-    if (AppDistribution.allowsSelfUpdate) {
-      _checkForUpdates();
-    }
   }
   
   /// Show first-launch consent dialog if not yet shown.
@@ -111,14 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
           FeedbackService.showRatingPrompt(context);
         }
       });
-    }
-  }
-  
-  /// Check for app updates via GitHub Releases API
-  Future<void> _checkForUpdates() async {
-    final info = await UpdateService.checkForUpdate();
-    if (info != null && mounted) {
-      await UpdateService.showUpdateDialog(context, info);
     }
   }
   
@@ -892,8 +880,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onRefreshChannels() async {
     final provider = context.read<ChannelProvider>();
     await provider.fetchChannels();
-    // Also check for new app version (force bypasses 24h rate limit)
-    _checkForUpdates();
   }
 
   /// Builds the channel list/grid content (loading, empty, or populated).

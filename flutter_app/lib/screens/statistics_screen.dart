@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_distribution.dart';
+import '../config/backend_config.dart';
 import '../utils/prefs_lock.dart';
 
 /// Community statistics screen showing aggregated usage data.
@@ -17,9 +18,15 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   static String get _supabaseUrl =>
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const String.fromEnvironment(
+        'SUPABASE_URL',
+        defaultValue: BackendConfig.supabaseUrl,
+      );
   static String get _supabaseAnonKey =>
-      const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      const String.fromEnvironment(
+        'SUPABASE_ANON_KEY',
+        defaultValue: BackendConfig.supabasePublishableKey,
+      );
   static bool get _hasSupabaseStatsConfig =>
       AppDistribution.allowsSupabase &&
       _supabaseUrl.isNotEmpty &&

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../config/app_distribution.dart';
 import '../services/parental_controls_service.dart';
 import '../services/settings_service.dart';
-import '../services/update_service.dart';
 import '../widgets/pin_dialog.dart';
 import 'parental_settings_screen.dart';
 import 'repo_management_screen.dart';
@@ -178,24 +176,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 // ── Privacy ─────────────────────────────────────
                 _buildSectionHeader(context, 'Privacy', Icons.shield),
-                if (AppDistribution.allowsSupabase)
-                  SwitchListTile(
-                    title: const Text('Analytics & Telemetry'),
-                    subtitle: const Text('Help improve TV Viewer with anonymous usage data'),
-                    value: _analyticsEnabled,
-                    onChanged: (v) {
-                      setState(() => _analyticsEnabled = v);
-                      _settings.setAnalyticsEnabled(v);
-                    },
-                  )
-                else
-                  const ListTile(
-                    leading: Icon(Icons.analytics_outlined),
-                    title: Text('Analytics & community database'),
-                    subtitle: Text(
-                      'Disabled in this F-Droid build; no Supabase data is sent.',
-                    ),
+                SwitchListTile(
+                  title: const Text('Analytics & Telemetry'),
+                  subtitle: const Text(
+                    'Opt in to anonymous usage data; no viewing history',
                   ),
+                  value: _analyticsEnabled,
+                  onChanged: (v) {
+                    setState(() => _analyticsEnabled = v);
+                    _settings.setAnalyticsEnabled(v);
+                  },
+                ),
                 ListTile(
                   title: const Text('Privacy Policy'),
                   trailing: const Icon(Icons.open_in_new, size: 18),
@@ -226,22 +217,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Version'),
                   subtitle: Text(_appVersion),
                 ),
-                if (AppDistribution.allowsSelfUpdate)
-                  ListTile(
-                    title: const Text('Check for updates'),
-                    subtitle: const Text('Latest release on GitHub'),
-                    trailing: const Icon(Icons.system_update, size: 20),
-                    onTap: _checkForUpdates,
-                  )
-                else
-                  const ListTile(
-                    leading: Icon(Icons.system_update, size: 20),
-                    title: Text('Updates are managed by F-Droid'),
-                    subtitle: Text(
-                      'The app does not download or install APKs. Your F-Droid '
-                      'client checks for and installs updates.',
-                    ),
+                ListTile(
+                  leading: const Icon(Icons.system_update, size: 20),
+                  title: const Text('Get updates'),
+                  subtitle: const Text(
+                    'Use your app store, Obtainium, or GitHub Releases.',
                   ),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () {
+                    launchUrl(
+                      Uri.parse(
+                        'https://github.com/tv-viewer-app/tv_viewer/releases',
+                      ),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  },
+                ),
                 ListTile(
                   title: const Text('Open Source Licenses'),
                   trailing: const Icon(Icons.chevron_right),
@@ -288,27 +279,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  /// Force a fresh GitHub Releases check, bypassing the 24h rate limit
-  /// and any user-dismissed flag. Shows a small snackbar while running.
-  Future<void> _checkForUpdates() async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Checking for updates…'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-    final info = await UpdateService.checkForUpdate(force: true);
-    if (!mounted) return;
-    if (info == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text("You're up to date")),
-      );
-      return;
-    }
-    await UpdateService.showUpdateDialog(context, info);
   }
 
   Future<void> _openParentalSettings() async {

@@ -162,7 +162,7 @@ The release system spans GitHub Releases plus store-specific workflows:
 - `build.yml`, `release-gate.yml`, `release.yml` — canonical release path
 - `build-apk.yml` — ad-hoc Android APK/AAB builds
 - `play-store-deploy.yml` — Google Play publishing
-- `fdroid-build.yml` — F-Droid-compatible unsigned APK generation
+- `fdroid-build.yml` — reproducibility rebuild of the canonical Android ABI APKs
 - `apkpure-notify.yml` — APKPure release discovery automation
 - `docker-publish.yml` — multi-arch Docker Hub publishing
 

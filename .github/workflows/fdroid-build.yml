@@ -1,11 +1,11 @@
 # =============================================================================
-# F-Droid Build — Builds developer-signed reproducible APKs for F-Droid
+# Android Reproducibility — Rebuilds the same ABI APKs published on GitHub
 # =============================================================================
 # F-Droid rebuilds these APKs without the signing key and verifies that their
 # unsigned contents match the developer-signed release assets byte-for-byte.
 # =============================================================================
 
-name: F-Droid Build
+name: Android Reproducibility Build
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  build-fdroid:
+  build-android-reproducible:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -58,25 +58,11 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
 
-      - name: Apply F-Droid source policy
-        working-directory: flutter_app
-        run: |
-          python tool/prepare_fdroid.py
-          ! grep -q "REQUEST_INSTALL_PACKAGES" android/app/src/main/AndroidManifest.xml
-          ! grep -q "FileProvider" android/app/src/main/AndroidManifest.xml
-
-      - name: Test F-Droid distribution policy
-        working-directory: flutter_app
-        run: >-
-          flutter test --dart-define=FDROID_BUILD=true
-          test/config/fdroid_distribution_test.dart
-
       - name: Build reproducible ABI APKs
         working-directory: flutter_app
         run: |
           flutter build apk --release \
             --split-per-abi \
-            --dart-define=FDROID_BUILD=true \
             --no-tree-shake-icons
 
       - name: Rename ABI APKs
@@ -89,7 +75,7 @@ jobs:
           VERSION="${RELEASE_TAG#v}"
           for ABI in armeabi-v7a arm64-v8a x86_64; do
             SOURCE="flutter_app/build/app/outputs/flutter-apk/app-${ABI}-release.apk"
-            TARGET="TV_Viewer_v${VERSION}_fdroid-${ABI}.apk"
+            TARGET="TV_Viewer_v${VERSION}_Android-${ABI}.apk"
             test -f "$SOURCE"
             cp "$SOURCE" "$TARGET"
           done
@@ -99,6 +85,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: fdroid-apks
-          path: TV_Viewer_v${{ env.VERSION }}_fdroid-*.apk
+          name: android-reproducible-apks
+          path: TV_Viewer_v${{ env.VERSION }}_Android-*.apk
           retention-days: 90

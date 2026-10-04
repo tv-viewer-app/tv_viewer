@@ -85,15 +85,14 @@ jobs:
           fi
           echo "✅ pubspec.yaml version matches"
 
-      - name: Check webOS version matches tag
+      - name: Check webOS package version
         run: |
-          VERSION="${{ steps.resolve.outputs.version }}"
           WEBOS_VERSION=$(python3 -c "import json; print(json.load(open('webos_app/appinfo.json'))['version'])")
-          if [ "$WEBOS_VERSION" != "$VERSION" ]; then
-            echo "::error::webos_app/appinfo.json version ($WEBOS_VERSION) != tag ($VERSION)"
+          if ! [[ "$WEBOS_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid webOS package version: $WEBOS_VERSION"
             exit 1
           fi
-          echo "✅ webOS version matches"
+          echo "✅ webOS package version is valid: $WEBOS_VERSION"
 
       - name: Check CHANGELOG entry exists
         run: |
@@ -353,8 +352,8 @@ jobs:
             echo "### 📥 Downloads"
             echo "- **Windows**: \`TV_Viewer-windows.zip\` (extract and run \`TV_Viewer.exe\`)"
             echo "- **Android**: \`TV_Viewer_v${VERSION}_Android.apk\`"
-            echo "- **LG webOS TV**: \`TV_Viewer_v${VERSION}_LG_webOS_1080p.ipk\` or \`TV_Viewer_v${VERSION}_LG_webOS_720p.ipk\`"
-            echo "- **F-Droid verification**: ABI-specific \`TV_Viewer_v${VERSION}_fdroid-*.apk\` files"
+            echo "- **LG webOS TV**: versioned independently; use the latest release containing LG webOS IPK assets"
+            echo "- **Android ABI builds**: \`TV_Viewer_v${VERSION}_Android-armeabi-v7a.apk\`, \`-arm64-v8a.apk\`, and \`-x86_64.apk\` (the same binaries used for F-Droid reproducibility checks)"
             echo "- **Linux**: \`TV_Viewer_v${VERSION}_linux_x86_64\`"
             echo "- **Docker**: \`docker pull asummoner/tvviewerapp:${VERSION}\` — [Docker Hub](https://hub.docker.com/r/asummoner/tvviewerapp)"
           } > release_notes.md
