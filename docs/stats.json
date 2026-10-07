@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-10-06T12:28:56.859797+00:00",
-  "total_channels": 21708,
+  "updated_at": "2026-10-07T12:22:04.575399+00:00",
+  "total_channels": 21811,
   "countries": 41,
   "categories": 43,
   "top_countries": [
     {
       "name": "France",
-      "count": 189
+      "count": 168
     },
     {
       "name": "China",
@@ -61,6 +61,14 @@
       "count": 21
     },
     {
+      "name": "AU",
+      "count": 18
+    },
+    {
+      "name": "BY",
+      "count": 18
+    },
+    {
       "name": "Czech Republic",
       "count": 18
     },
@@ -69,19 +77,11 @@
       "count": 17
     },
     {
-      "name": "BY",
-      "count": 16
-    },
-    {
       "name": "FR",
       "count": 16
     },
     {
       "name": "AL",
-      "count": 15
-    },
-    {
-      "name": "BE",
       "count": 15
     }
   ],
@@ -96,7 +96,7 @@
     },
     {
       "name": "Entertainment",
-      "count": 137
+      "count": 116
     },
     {
       "name": "Culture",
@@ -113,6 +113,10 @@
     {
       "name": "Animation",
       "count": 25
+    },
+    {
+      "name": "Australia",
+      "count": 20
     },
     {
       "name": "Comedy",
@@ -135,16 +139,12 @@
       "count": 8
     },
     {
-      "name": "Bulgaria",
+      "name": "Belarus",
       "count": 8
     },
     {
-      "name": "Argentina",
-      "count": 7
-    },
-    {
-      "name": "Belarus",
-      "count": 6
+      "name": "Bulgaria",
+      "count": 8
     }
   ]
 }
