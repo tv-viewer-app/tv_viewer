@@ -1,15 +1,13 @@
 AntiFeatures:
   NonFreeNet:
-    en-US: >-
-      Uses community playlist hosts and FMStream, and connects to the shared
-      Supabase channel catalog and statistics service. These network services
-      are not self-hostable from the app.
+    en-US: Uses community playlist hosts and FMStream, and connects to the shared
+      Supabase channel catalog and statistics service. These network services are
+      not self-hostable from the app.
   Tracking:
-    en-US: >-
-      Anonymous usage analytics are sent to Supabase only after explicit opt-in.
-      Channel-health reports and automatic contributions of newly found
-      playlist channels are separately opt-in and disabled by default. Health
-      reports include hashes that can be matched to known stream URLs.
+    en-US: Anonymous usage analytics are sent to Supabase only after explicit opt-in.
+      Channel-health reports and automatic contributions of newly found playlist channels
+      are separately opt-in and disabled by default. Health reports include hashes
+      that can be matched to known stream URLs.
 Categories:
   - Multimedia
   - Online Media Player
