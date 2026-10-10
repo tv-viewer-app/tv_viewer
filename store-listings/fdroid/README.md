@@ -79,6 +79,11 @@ git push origin app.tvviewer.player
 - **Current version:** 2.25.2+142
 - **License:** MIT
 
+The 2.25.2 recipe is release preparation, not a published build. After the
+source PR is merged, update every `Builds.commit` to the immutable commit on
+`master` and wait for the release assets before asking F-Droid to rerun its
+reproducible-build pipeline.
+
 ## Supabase Behavior
 
 All Android distributions use the same public Supabase publishable client

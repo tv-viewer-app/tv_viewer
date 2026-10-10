@@ -31,6 +31,7 @@ void main() {
 
   test('community health and playlist writes do not send requests by default',
       () async {
+    expect(SharedDbService.isConfigured, isTrue);
     var requestCount = 0;
     final client = MockClient((_) async {
       requestCount++;
@@ -64,5 +65,26 @@ void main() {
     }, () => client);
 
     expect(requestCount, 0);
+  });
+
+  test('explicit channel submission works while automatic sharing is off',
+      () async {
+    expect(await settings.getCommunityChannelSharingEnabled(), isFalse);
+    final client = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, endsWith('/rest/v1/channels'));
+      expect(request.body, contains('https://example.test/live.m3u8'));
+      return http.Response('', 201);
+    });
+
+    final submitted = await http.runWithClient(
+      () => SharedDbService().contributeChannel({
+        'name': 'Example',
+        'url': 'https://example.test/live.m3u8',
+      }),
+      () => client,
+    );
+
+    expect(submitted, isTrue);
   });
 }
