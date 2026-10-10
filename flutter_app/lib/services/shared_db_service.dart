@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import '../config/app_distribution.dart';
 import '../config/backend_config.dart';
+import 'settings_service.dart';
 import '../utils/logger_service.dart';
 
 /// Service for syncing channel validation results with shared Supabase database
@@ -53,6 +54,10 @@ class SharedDbService {
            _supabaseUrl != 'YOUR_SUPABASE_PROJECT_URL' &&
            _supabaseAnonKey != 'YOUR_SUPABASE_ANON_KEY';
   }
+
+  static Future<bool> get _canShareCommunityChannelData async =>
+      isConfigured &&
+      await SettingsService.instance.getCommunityChannelSharingEnabled();
   
   /// Fetch recent channel validation results from shared database
   /// 
@@ -165,8 +170,8 @@ class SharedDbService {
   /// Accepts a list of channel results to batch upload
   /// Returns true if upload succeeded, false otherwise
   Future<bool> uploadResults(List<ChannelResult> results) async {
-    if (!isConfigured) {
-      logger.debug('SharedDbService: Service not configured or disabled');
+    if (!await _canShareCommunityChannelData) {
+      logger.debug('SharedDbService: Channel sharing is disabled or unavailable');
       return false;
     }
     
@@ -342,8 +347,15 @@ class SharedDbService {
   /// Contribute discovered channels back to the shared database
   /// 
   /// Performs upsert so existing channels get updated, new ones added.
-  Future<int> contributeChannels(List<Map<String, dynamic>> channels) async {
-    if (!isConfigured || channels.isEmpty) return 0;
+  Future<int> contributeChannels(
+    List<Map<String, dynamic>> channels, {
+    bool userInitiated = false,
+  }) async {
+    if (!isConfigured ||
+        channels.isEmpty ||
+        (!userInitiated && !await _canShareCommunityChannelData)) {
+      return 0;
+    }
 
     try {
       final payload = <Map<String, dynamic>>[];
@@ -450,7 +462,7 @@ class SharedDbService {
     required String status, // 'working' or 'failed'
     int? responseTimeMs,
   }) async {
-    if (!isConfigured) return;
+    if (!await _canShareCommunityChannelData) return;
     
     try {
       final urlHash = hashUrl(url);
@@ -491,7 +503,7 @@ class SharedDbService {
   /// Uses Supabase RPC or a PATCH with headers to increment the count.
   /// Fire-and-forget: never blocks the UI.
   static Future<void> reportBrokenChannel(String urlHash) async {
-    if (!isConfigured) return;
+    if (!await _canShareCommunityChannelData) return;
     
     try {
       // First, try to get current report_count
@@ -543,7 +555,7 @@ class SharedDbService {
   /// Contribute a single channel to the shared database.
   /// Convenience wrapper around [contributeChannels].
   Future<bool> contributeChannel(Map<String, dynamic> channel) async {
-    final count = await contributeChannels([channel]);
+    final count = await contributeChannels([channel], userInitiated: true);
     return count > 0;
   }
 }

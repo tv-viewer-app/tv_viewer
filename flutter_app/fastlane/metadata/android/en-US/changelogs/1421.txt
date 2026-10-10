@@ -1,0 +1,4 @@
+TV Viewer 2.25.2 (version code 1421)
+
+- Community channel sharing is now off by default and requires opt-in
+- Clarified privacy information about channel URL hashes

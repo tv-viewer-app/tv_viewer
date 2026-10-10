@@ -18,6 +18,8 @@ class SettingsService {
   static const String _keyDefaultGroupBy = 'default_group_by';
   static const String _keyCustomRepos = 'custom_repos';
   static const String _keyAnalyticsEnabled = 'analytics_enabled';
+  static const String _keyCommunityChannelSharingEnabled =
+      'community_channel_sharing_enabled';
   static const String _keyBackgroundPlayback = 'background_playback';
 
   // ── Default values ───────────────────────────────────────────────
@@ -25,7 +27,8 @@ class SettingsService {
   static const int defaultRequestTimeout = 10;
   static const String defaultThemeMode = 'system'; // 'dark', 'light', 'system'
   static const String defaultGroupBy = 'category'; // 'category', 'country'
-  static const bool defaultAnalyticsEnabled = true;
+  static const bool defaultAnalyticsEnabled = false;
+  static const bool defaultCommunityChannelSharingEnabled = false;
   static const bool defaultBackgroundPlayback = true;
 
   SharedPreferences? _prefs;
@@ -120,7 +123,7 @@ class SettingsService {
 
   // ── Privacy Settings ─────────────────────────────────────────────
 
-  /// Whether analytics/telemetry is enabled.
+  /// Whether analytics/telemetry is enabled. Disabled unless explicitly opted in.
   Future<bool> getAnalyticsEnabled() async {
     final prefs = await _getPrefs();
     return prefs.getBool(_keyAnalyticsEnabled) ?? defaultAnalyticsEnabled;
@@ -129,6 +132,18 @@ class SettingsService {
   Future<void> setAnalyticsEnabled(bool enabled) async {
     final prefs = await _getPrefs();
     await prefs.safeSetBool(_keyAnalyticsEnabled, enabled);
+  }
+
+  /// Whether channel health reports and automatic playlist contributions are enabled.
+  Future<bool> getCommunityChannelSharingEnabled() async {
+    final prefs = await _getPrefs();
+    return prefs.getBool(_keyCommunityChannelSharingEnabled) ??
+        defaultCommunityChannelSharingEnabled;
+  }
+
+  Future<void> setCommunityChannelSharingEnabled(bool enabled) async {
+    final prefs = await _getPrefs();
+    await prefs.safeSetBool(_keyCommunityChannelSharingEnabled, enabled);
   }
 
   // ── Playback Settings ───────────────────────────────────────────

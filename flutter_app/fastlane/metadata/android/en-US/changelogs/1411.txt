@@ -1,0 +1,6 @@
+TV Viewer 2.25.1 (version code 1411)
+
+- Unified Android features across distribution channels
+- Removed the in-app APK installer and update permission
+- Removed simulated TV schedules
+- Fixed OpenStreetMap app identification
