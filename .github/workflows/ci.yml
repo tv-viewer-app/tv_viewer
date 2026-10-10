@@ -192,6 +192,9 @@ jobs:
           fi
           echo "✅ No errors in flutter analyze"
 
+      - name: Run Flutter tests
+        run: flutter test
+
   # ---------------------------------------------------------------------------
   # Job 3: Security — pip-audit dependency vulnerability scan
   # ---------------------------------------------------------------------------

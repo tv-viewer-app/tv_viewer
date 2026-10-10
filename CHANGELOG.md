@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.25.2] - 2026-10-10
+
+### Changed
+- Community channel health reports and automatic playlist contributions now
+  require an explicit opt-in and are off by default.
+- Analytics remains separately opt-in and is off by default in Settings.
+- F-Droid metadata now explains the `NonFreeNet` and `Tracking` disclosures.
+- Added version-code-specific changelogs for all Android ABI builds.
+
+### Fixed
+- Corrected privacy disclosures to explain that URL hashes can be matched to
+  known streams and health reports can reveal checked or played channels.
+
 ## [2.25.1] - 2026-10-04
 
 ### Changed

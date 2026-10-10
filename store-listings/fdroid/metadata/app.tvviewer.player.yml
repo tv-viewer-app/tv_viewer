@@ -1,6 +1,15 @@
 AntiFeatures:
-  - NonFreeNet
-  - Tracking
+  NonFreeNet:
+    en-US: >-
+      Uses community playlist hosts and FMStream, and connects to the shared
+      Supabase channel catalog and statistics service. These network services
+      are not self-hostable from the app.
+  Tracking:
+    en-US: >-
+      Anonymous usage analytics are sent to Supabase only after explicit opt-in.
+      Channel-health reports and automatic contributions of newly found
+      playlist channels are separately opt-in and disabled by default. Health
+      reports include hashes that can be matched to known stream URLs.
 Categories:
   - Multimedia
   - Online Media Player
@@ -18,9 +27,9 @@ RepoType: git
 Repo: https://github.com/tv-viewer-app/tv_viewer.git
 
 Builds:
-  - versionName: 2.25.1
-    versionCode: 1411
-    commit: a331ce0db5593bbee5f53026fd6a2245340e8619
+  - versionName: 2.25.2
+    versionCode: 1421
+    commit: cc5180ade4aa5a3fcde380e1dc613f3f9b21b514
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -59,9 +68,9 @@ Builds:
       - popd
       - mv $repo app.tvviewer.player
 
-  - versionName: 2.25.1
-    versionCode: 1412
-    commit: a331ce0db5593bbee5f53026fd6a2245340e8619
+  - versionName: 2.25.2
+    versionCode: 1422
+    commit: cc5180ade4aa5a3fcde380e1dc613f3f9b21b514
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -100,9 +109,9 @@ Builds:
       - popd
       - mv $repo app.tvviewer.player
 
-  - versionName: 2.25.1
-    versionCode: 1413
-    commit: a331ce0db5593bbee5f53026fd6a2245340e8619
+  - versionName: 2.25.2
+    versionCode: 1423
+    commit: cc5180ade4aa5a3fcde380e1dc613f3f9b21b514
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -150,5 +159,5 @@ VercodeOperation:
   - '%c * 10 + 2'
   - '%c * 10 + 3'
 UpdateCheckData: flutter_app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 2.25.1
-CurrentVersionCode: 1413
+CurrentVersion: 2.25.2
+CurrentVersionCode: 1423

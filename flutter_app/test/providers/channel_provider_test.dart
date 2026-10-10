@@ -1,16 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tv_viewer/providers/channel_provider.dart';
 import 'package:tv_viewer/models/channel.dart';
 import 'package:tv_viewer/services/shared_db_service.dart';
+import 'package:tv_viewer/services/settings_service.dart';
 
 /// Unit tests for ChannelProvider
 /// Coverage: Filtering logic, state management, search functionality
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ChannelProvider Tests', () {
     late ChannelProvider provider;
     late List<Channel> sampleChannels;
 
-    setUp(() {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.instance.initialize();
+
       provider = ChannelProvider();
       
       // Create sample channels for testing

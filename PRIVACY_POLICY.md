@@ -27,10 +27,24 @@ If you opt in to anonymous analytics, we collect:
 - **Crash reports** — technical error information to fix bugs
 - **Session duration** — how long the app is used per session
 
+### Optional Community Channel Sharing
+
+Channel health reporting and automatic contributions of newly found playlist
+channels are disabled by default. If enabled in Settings, the app sends
+SHA-256 hashes of stream URLs with working/broken status, check timestamps,
+and response times to the shared channel database. It may also send newly
+discovered channel names, stream URLs, categories, countries, and logos.
+
+URL hashes are not anonymous: a hash can be matched against a known public
+stream URL, and health reports may reveal which streams were checked or played.
+You can enable or disable this sharing at any time in Settings. Submitting a
+channel through the explicit “Contribute a Channel” action sends the channel
+details you enter.
+
 ### What We Do NOT Collect
 
 - Your name, email, or any personal identifiers
-- Channel URLs or names you watch (URLs are one-way hashed before any transmission)
+- Raw channel URLs through health reports (health reports send SHA-256 URL hashes)
 - Your IP address (not stored by our analytics backend)
 - Your location (beyond the country from your locale setting)
 - Your contacts, photos, files, or any other device data
@@ -60,9 +74,14 @@ Analytics data, when opted in, is stored in a Supabase database with:
 - No personally identifiable information (PII)
 - Automatic data retention policies
 
+Community channel data, if the separate sharing setting is enabled, is stored
+in the shared Supabase catalog. Channel submissions entered through the
+contribution form are shared only when the user submits them.
+
 ## Your Rights
 
 - **Opt out anytime**: Go to Settings → disable "Help improve TV Viewer"
+- **Community sharing**: Go to Settings → disable "Share community channel data"
 - **No account required**: The app works fully without any data collection
 - **Data deletion**: Contact us to request deletion of your anonymous device ID
 

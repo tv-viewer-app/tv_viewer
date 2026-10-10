@@ -25,7 +25,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _requestTimeout = 10;
   String _themeMode = 'system';
   String _defaultGroupBy = 'category';
-  bool _analyticsEnabled = true;
+  bool _analyticsEnabled = false;
+  bool _communityChannelSharingEnabled = false;
   bool _backgroundPlayback = false;
   String _appVersion = '';
   bool _isLoading = true;
@@ -43,6 +44,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeMode = await _settings.getThemeMode();
     final groupBy = await _settings.getDefaultGroupBy();
     final analytics = await _settings.getAnalyticsEnabled();
+    final communityChannelSharing =
+        await _settings.getCommunityChannelSharingEnabled();
     final backgroundPlayback = await _settings.getBackgroundPlayback();
 
     String version = '';
@@ -60,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _themeMode = themeMode;
         _defaultGroupBy = groupBy;
         _analyticsEnabled = analytics;
+        _communityChannelSharingEnabled = communityChannelSharing;
         _backgroundPlayback = backgroundPlayback;
         _appVersion = version;
         _isLoading = false;
@@ -185,6 +189,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (v) {
                     setState(() => _analyticsEnabled = v);
                     _settings.setAnalyticsEnabled(v);
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Share community channel data'),
+                  subtitle: const Text(
+                    'Off by default. Sends URL hashes for health reports and '
+                    'may share raw URLs for new playlist channels. Hashes can '
+                    'match known streams.',
+                  ),
+                  value: _communityChannelSharingEnabled,
+                  onChanged: (v) {
+                    setState(() => _communityChannelSharingEnabled = v);
+                    _settings.setCommunityChannelSharingEnabled(v);
                   },
                 ),
                 ListTile(
