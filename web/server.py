@@ -1700,7 +1700,6 @@ def _update_top_channel_play_counts_cache(
 
 
 async def _refresh_top_channel_play_counts_cache(force: bool = False) -> Dict[str, int]:
-    global _top_channel_play_counts_cache, _top_channel_play_counts_cache_time
     now = time.time()
     if (
         not force
@@ -2817,7 +2816,6 @@ _refresh_lock = threading.Lock()
 @app.post("/api/refresh")
 async def refresh_channels():
     """Trigger a background channel refresh from repositories."""
-    global _refresh_in_progress
     if _refresh_in_progress:
         return {"status": "already_in_progress"}
 
