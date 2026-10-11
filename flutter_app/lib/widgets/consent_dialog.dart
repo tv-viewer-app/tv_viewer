@@ -129,8 +129,8 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
               subtitle: const Text(
-                'Share anonymous usage data (no personal info, '
-                'no viewing history). You can change this in Settings.',
+                'Share usage, channel names and URL hashes, and error reports. '
+                'Hashes can match known streams. You can change this in Settings.',
                 style: TextStyle(fontSize: 12),
               ),
               controlAffinity: ListTileControlAffinity.leading,

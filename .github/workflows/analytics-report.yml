@@ -24,6 +24,7 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       run: |
+        set -o pipefail
         echo "## 📊 Weekly Analytics Report (last 7 days)" >> $GITHUB_STEP_SUMMARY
         python scripts/analytics_dashboard.py --days 7 2>&1 | tee /tmp/report-7d.txt
         echo '```' >> $GITHUB_STEP_SUMMARY
@@ -35,6 +36,7 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       run: |
+        set -o pipefail
         echo "## 📊 Monthly Trend (last 30 days)" >> $GITHUB_STEP_SUMMARY
         python scripts/analytics_dashboard.py --days 30 2>&1 | tee /tmp/report-30d.txt
         echo '```' >> $GITHUB_STEP_SUMMARY

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
+import 'analytics_service.dart';
 
 /// Centralized settings service for TV Viewer app.
 ///
@@ -130,8 +131,7 @@ class SettingsService {
   }
 
   Future<void> setAnalyticsEnabled(bool enabled) async {
-    final prefs = await _getPrefs();
-    await prefs.safeSetBool(_keyAnalyticsEnabled, enabled);
+    await AnalyticsService.instance.setEnabled(enabled);
   }
 
   /// Whether channel health reports and automatic playlist contributions are enabled.

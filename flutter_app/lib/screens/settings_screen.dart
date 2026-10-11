@@ -183,7 +183,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: const Text('Analytics & Telemetry'),
                   subtitle: const Text(
-                    'Opt in to anonymous usage data; no viewing history',
+                    'Off by default. Shares usage, channel names and URL '
+                    'hashes, and error reports. Hashes can match known streams.',
                   ),
                   value: _analyticsEnabled,
                   onChanged: (v) {
@@ -210,7 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () {
                     launchUrl(
                       Uri.parse(
-                        'https://github.com/tv-viewer-app/tv_viewer/blob/master/docs/PRIVACY.md',
+                        'https://github.com/tv-viewer-app/tv_viewer/blob/master/PRIVACY_POLICY.md',
                       ),
                       mode: LaunchMode.externalApplication,
                     );

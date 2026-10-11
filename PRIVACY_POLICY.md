@@ -24,8 +24,14 @@ If you opt in to anonymous analytics, we collect:
 - **App version and platform** (e.g., Android 14, Windows 11)
 - **Country** — derived from your system locale (e.g., "US", "IL")
 - **Feature usage** — which app features are used (e.g., search, map, filters)
+- **Playback events** — channel names, stream URL hashes, playback outcomes,
+  and performance. Hashes can be matched to known streams; this is not
+  anonymous viewing history.
 - **Crash reports** — technical error information to fix bugs
 - **Session duration** — how long the app is used per session
+
+Disabling analytics in Android Settings immediately stops new collection and
+discards queued events. Requests already sent cannot be recalled.
 
 ### Optional Community Channel Sharing
 

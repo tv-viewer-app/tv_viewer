@@ -17,6 +17,7 @@ import json
 import argparse
 from pathlib import Path
 from datetime import datetime, timedelta
+from urllib.parse import parse_qsl
 
 try:
     import requests
@@ -77,11 +78,27 @@ _TIME_FILTER = ""  # Set by --days flag
 
 
 def _query(params: str, limit: int = 1000) -> list:
-    """Query Supabase REST API."""
-    url = f"{SUPABASE_URL}/rest/v1/{TABLE}?{params}{_TIME_FILTER}&limit={limit}"
-    resp = requests.get(url, headers=_headers(), timeout=15)
-    resp.raise_for_status()
-    return resp.json()
+    """Read up to limit rows, including servers with a smaller page cap."""
+    url = f"{SUPABASE_URL}/rest/v1/{TABLE}"
+    query = parse_qsl(params + _TIME_FILTER)
+    if not any(key == 'order' for key, _ in query):
+        query.append(('order', 'created_at.asc,id.asc'))
+    rows = []
+    while len(rows) < limit:
+        page_size = min(1000, limit - len(rows))
+        resp = requests.get(
+            url, headers=_headers(),
+            params=query + [('limit', str(page_size)), ('offset', str(len(rows)))],
+            timeout=15,
+        )
+        resp.raise_for_status()
+        page = resp.json()
+        if not page:
+            break
+        rows.extend(page)
+    if len(rows) == limit:
+        print(f"WARNING: query reached its {limit:,}-row cap; results may be incomplete")
+    return rows
 
 
 def _query_count(params: str) -> int:
@@ -92,6 +109,7 @@ def _query_count(params: str) -> int:
     headers['Range-Unit'] = 'items'
     headers['Range'] = '0-0'
     resp = requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
     count_header = resp.headers.get('content-range', '*/0')
     return int(count_header.split('/')[-1])
 
@@ -168,7 +186,7 @@ def dashboard_summary():
                     data = json.loads(data)
                 except (json.JSONDecodeError, TypeError):
                     data = {}
-            c = data.get('country', '') or data.get('lang', '')[:2] if data.get('lang') else ''
+            c = data.get('country', '') or data.get('lang', '')[:2]
         if c and did:
             device_country[did] = c
     country_counts = {}
@@ -357,10 +375,7 @@ def show_performance():
     print("Performance Metrics (stream_to_first_frame)")
     print("=" * 60)
 
-    events = _query('analytics_events',
-                    select='event_data',
-                    extra=f'&event_type=eq.perf_metric{_TIME_FILTER}',
-                    limit=500)
+    events = _query('select=event_data&event_type=eq.perf_metric', limit=500)
 
     if not events:
         print("  No performance data yet (perf_metric events will appear after v2.16.8+)")
