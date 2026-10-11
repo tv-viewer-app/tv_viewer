@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.25.3] - 2026-10-11
+
+### Fixed
+- Android analytics consent changes now apply immediately, discard queued
+  events on opt-out, and prevent failed in-flight uploads from restoring them.
+- Analytics reports no longer crash in the performance section; query
+  pagination, country fallback, and workflow failure propagation are corrected.
+
+### Changed
+- Settings and privacy disclosures explain optional playback analytics.
+
 ## [2.25.2] - 2026-10-10
 
 ### Changed

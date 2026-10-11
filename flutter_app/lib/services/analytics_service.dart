@@ -80,6 +80,7 @@ class AnalyticsService {
 
   bool _isInitialized = false;
   bool _userOptedIn = false;
+  int _consentGeneration = 0;
   String _deviceId = '';
   String _appVersion = '';
   String _platform = '';
@@ -190,8 +191,14 @@ class AnalyticsService {
 
   /// Allow user to opt in/out of anonymous analytics collection.
   Future<void> setEnabled(bool enabled) async {
+    if (!_isInitialized) await initialize();
     final effectiveEnabled = AppDistribution.allowsSupabase && enabled;
     _userOptedIn = effectiveEnabled;
+    if (!effectiveEnabled) {
+      _consentGeneration++;
+      _queue.clear();
+      _sentErrors.clear();
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.safeSetBool(_analyticsEnabledKey, effectiveEnabled);
     _logger.info(
@@ -703,6 +710,7 @@ class AnalyticsService {
 
     // Snapshot and clear the queue so new events don't interfere.
     final batch = List<Map<String, dynamic>>.from(_queue);
+    final consentGeneration = _consentGeneration;
     _queue.clear();
 
     try {
@@ -727,11 +735,15 @@ class AnalyticsService {
       } else {
         _logger.warning(
             '[Analytics] Flush failed: ${response.statusCode}');
-        _requeue(batch);
+        if (isConfigured && consentGeneration == _consentGeneration) {
+          _requeue(batch);
+        }
       }
     } catch (e) {
       _logger.warning('[Analytics] Flush error', e);
-      _requeue(batch);
+      if (isConfigured && consentGeneration == _consentGeneration) {
+        _requeue(batch);
+      }
     }
   }
 

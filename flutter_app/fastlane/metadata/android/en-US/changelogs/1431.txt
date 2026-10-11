@@ -1,0 +1,5 @@
+TV Viewer 2.25.3
+
+- Analytics consent changes apply immediately
+- Queued analytics are discarded on opt-out
+- Clarified optional playback analytics disclosures

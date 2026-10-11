@@ -9,16 +9,17 @@ Features:
 • Search, favorites, source selector, and watch history
 • Picture-in-Picture (PiP) support where available
 • No account required and no ads
-• Optional anonymous usage analytics (opt-in only)
+• Optional usage and playback analytics (opt-in only)
 • Optional community sharing is off by default; when enabled, health reports
   use URL hashes and new playlist channels may be shared with their stream URLs
 • Self-hosted web/Docker edition also available
 • Regular updates with new channels and fixes from the community
 
 Privacy:
-• No personal data collected
+• No account or contact details collected
 • No account or login required
-• Analytics are opt-in and anonymous
+• Analytics are off by default; optional playback events include channel names
+  and URL hashes that can be matched to known streams
 • Channel health reports and automatic playlist contributions are off by default
   and can be enabled in Settings; URL hashes may be matched to known stream URLs
 • Country detection uses device timezone only
