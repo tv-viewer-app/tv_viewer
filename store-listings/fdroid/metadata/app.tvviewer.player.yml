@@ -5,10 +5,10 @@ AntiFeatures:
       not self-hostable from the app.
   Tracking:
     en-US: Optional usage analytics include channel names, stream URL hashes and errors,
-      and are sent to Supabase only after explicit opt-in.
-      Channel-health reports and automatic contributions of newly found playlist channels
-      are separately opt-in and disabled by default. Health reports include hashes
-      that can be matched to known stream URLs.
+      and are sent to Supabase only after explicit opt-in. Channel-health reports
+      and automatic contributions of newly found playlist channels are separately
+      opt-in and disabled by default. Health reports include hashes that can be matched
+      to known stream URLs.
 Categories:
   - Multimedia
   - Online Media Player
