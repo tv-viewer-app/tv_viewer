@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.25.4] - 2026-10-13
+
+### Fixed
+- Optional Android crash telemetry selects the first stack frame instead of a
+  release-build banner, with URLs and file paths redacted.
+- Analytics reports show channel failures even when no crashes were recorded.
+- Performance reports include up to 50,000 recent events instead of only the
+  oldest 500, and label bounded crash samples accurately.
+
 ## [2.25.3] - 2026-10-11
 
 ### Fixed

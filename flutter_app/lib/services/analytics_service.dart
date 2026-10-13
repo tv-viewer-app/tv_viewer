@@ -416,9 +416,16 @@ class AnalyticsService {
   Future<void> trackCrash(dynamic error, StackTrace? stack) async {
     String firstLine = '';
     if (stack != null) {
-      final lines = stack.toString().split('\n');
+      final lines = stack.toString().split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
       if (lines.isNotEmpty) {
-        firstLine = lines.first.trim();
+        final frame = lines.firstWhere(
+          (line) => RegExp(r'^#\d+\s').hasMatch(line),
+          orElse: () => lines.first,
+        );
+        firstLine = _sanitizeErrorMessage(frame);
       }
     }
 

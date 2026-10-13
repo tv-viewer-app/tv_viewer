@@ -219,9 +219,8 @@ def show_crashes():
 
     if not crashes:
         print("  No crashes recorded. ✅")
-        return
-
-    print(f"  Total crash events: {len(crashes)}")
+    else:
+        print(f"  Recent crash events: {len(crashes)} (up to 50)")
 
     # Group by error type
     error_types = {}
@@ -375,7 +374,10 @@ def show_performance():
     print("Performance Metrics (stream_to_first_frame)")
     print("=" * 60)
 
-    events = _query('select=event_data&event_type=eq.perf_metric', limit=500)
+    events = _query(
+        'select=event_data&event_type=eq.perf_metric&order=created_at.desc,id.desc',
+        limit=50000,
+    )
 
     if not events:
         print("  No performance data yet (perf_metric events will appear after v2.16.8+)")
