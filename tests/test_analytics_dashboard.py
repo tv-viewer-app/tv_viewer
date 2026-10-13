@@ -41,7 +41,10 @@ def test_performance_uses_supported_query_and_reports_latency(monkeypatch, capsy
     ])
     monkeypatch.setattr(dashboard, "_query", query)
     dashboard.show_performance()
-    query.assert_called_once_with("select=event_data&event_type=eq.perf_metric", limit=500)
+    query.assert_called_once_with(
+        "select=event_data&event_type=eq.perf_metric&order=created_at.desc,id.desc",
+        limit=50000,
+    )
     assert "1200ms" in capsys.readouterr().out
 
 
@@ -51,3 +54,28 @@ def test_count_propagates_http_failure(monkeypatch):
     monkeypatch.setattr(dashboard.requests, "get", lambda *a, **k: failed)
     with pytest.raises(requests.HTTPError):
         dashboard._query_count("select=id")
+
+
+def test_channel_failures_reported_without_crashes(monkeypatch, capsys):
+    query = Mock(side_effect=[
+        [],
+        [{"event_data": {"error_code": "network_timeout"}}],
+    ])
+    monkeypatch.setattr(dashboard, "_query", query)
+    dashboard.show_crashes()
+    output = capsys.readouterr().out
+    assert "No crashes recorded" in output
+    assert "network_timeout" in output
+    assert query.call_count == 2
+
+
+def test_performance_includes_recent_events_beyond_old_cap(monkeypatch, capsys):
+    events = [
+        {"event_data": {"metric": "stream_to_first_frame", "duration_ms": 9000}}
+        for _ in range(501)
+    ]
+    monkeypatch.setattr(dashboard, "_query", Mock(return_value=events))
+    dashboard.show_performance()
+    output = capsys.readouterr().out
+    assert "Samples: 501" in output
+    assert "REGRESSION" in output
