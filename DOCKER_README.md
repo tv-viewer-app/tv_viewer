@@ -4,7 +4,7 @@
 [![Docker Image Size](https://img.shields.io/docker/image-size/asummoner/tvviewerapp/latest)](https://hub.docker.com/r/asummoner/tvviewerapp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/asummoner/tvviewerapp)](https://hub.docker.com/r/asummoner/tvviewerapp)
 
-**Lightweight IPTV streaming web interface with 16,000+ channels. Perfect for NAS devices, home servers, and self-hosted media setups.**
+**Lightweight IPTV streaming web interface for a community-maintained channel catalog. Designed for NAS devices, home servers, and self-hosted media setups.**
 
 🌐 **[Project Homepage](https://tv-viewer-app.github.io/tv_viewer/)** | 📦 **[Source Code](https://github.com/tv-viewer-app/tv_viewer)** | 📋 **[Changelog](https://github.com/tv-viewer-app/tv_viewer/blob/master/CHANGELOG.md)**
 
@@ -14,12 +14,16 @@
 
 TV Viewer is a self-hosted web application that aggregates free-to-air IPTV streams from around the world into a beautiful, modern interface. Deploy it on your NAS or any Docker host and watch live TV from any browser — no app installs, no subscriptions, no VLC required.
 
+TV Viewer does not host or license third-party streams. Availability and
+content rights are determined by each source provider; users are responsible
+for ensuring their use is lawful.
+
 **Why use TV Viewer?**
-- **Zero configuration** — launches with 16,000+ channels pre-loaded
+- **Community catalog** — loads the configured channel catalog; availability varies by upstream sources
 - **Runs anywhere** — Synology, QNAP, Unraid, TrueNAS, Raspberry Pi, any Docker host
 - **Tiny footprint** — under 50 MB RAM, 0.1 CPU core minimum
 - **Browser-based** — works on phones, tablets, smart TVs, laptops
-- **Privacy-first** — no accounts, no tracking, no cloud dependency
+- **Privacy controls** — no account required; Supabase catalog access and optional features use network services as described in the privacy policy
 
 ## Quick Start
 
@@ -31,7 +35,7 @@ Then open **http://your-server-ip:8765** in any browser. That's it!
 
 ## Features
 
-- 🌍 **16,000+ live TV channels** from 55+ countries
+- 🌍 **Live TV and radio streams** from a community-maintained catalog
 - 🎬 **In-browser HLS playback** — no VLC or external player needed
 - 🔀 **Multi-source failover** — automatically switches to backup streams
 - 📡 **Built-in CORS proxy** — plays streams that normally block browsers

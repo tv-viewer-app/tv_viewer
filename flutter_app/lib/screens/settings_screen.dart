@@ -183,8 +183,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: const Text('Analytics & Telemetry'),
                   subtitle: const Text(
-                    'Off by default. Shares usage, channel names and URL '
-                    'hashes, and error reports. Hashes can match known streams.',
+                    'Off by default. Shares usage, a random install ID, '
+                    'channel names, URL hashes, and error reports. Hashes can '
+                    'match known streams.',
                   ),
                   value: _analyticsEnabled,
                   onChanged: (v) {

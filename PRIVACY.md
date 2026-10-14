@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Effective date:** 2 May 2026
-**Last updated:** 2 May 2026
+**Last updated:** 14 October 2026
 **Applies to:** TV Viewer Android app (`app.tvviewer.player`) and TV Viewer Windows desktop app
 
 TV Viewer ("the app", "we", "our") is a free, open-source IPTV player developed by the TV Viewer community on GitHub. We respect your privacy and are committed to keeping data collection to the absolute minimum required to make the app work.
@@ -10,9 +10,15 @@ TV Viewer ("the app", "we", "our") is a free, open-source IPTV player developed 
 
 - **No accounts.** You don't sign up, you don't sign in.
 - **No advertising.** No ads, no ad SDKs, no ad IDs.
-- **No tracking across apps or websites.**
-- **No selling or sharing of personal data with third parties for marketing.**
-- **Analytics are strictly opt-in** and contain no personal data.
+- **No ads or advertising SDKs.** Optional analytics and community sharing are
+  separate from advertising and controlled in the app.
+- **No sale of data for advertising.** Data needed for the public catalog,
+  optional community sharing, and optional analytics is sent to Supabase as
+  described below.
+- **Analytics and community health sharing are optional and separate.** Their
+  payloads include pseudonymous data such as channel names, URL hashes, and
+  (for analytics) a random install identifier. URL hashes may be matched to
+  known public streams.
 - **The app is open source** — anyone can audit exactly what it does at https://github.com/tv-viewer-app/tv_viewer.
 
 ---
@@ -26,9 +32,11 @@ TV Viewer ("the app", "we", "our") is a free, open-source IPTV player developed 
 | IPTV stream URLs you play | Required to load the video stream you selected | Sent only to the IPTV server hosting the stream (third party — see §3) |
 | HTTP requests to M3U playlist sources | Required to fetch the channel list | Sent only to the configured playlist URLs (third party — see §3) |
 | HTTP requests to GitHub Releases API | Used by the in-app update checker to detect new versions | Sent only to `api.github.com` |
-| **Channel-health pings** (SHA-256 hash of the stream URL + working/failed flag + country code) | Powers the **crowdsourced channel catalog** described in §1.2A — channels that fail playback for many users are auto-removed; channels that consistently work for users in your region get prioritised | Sent to our Supabase database (see §3). The plaintext URL is never sent — only its SHA-256 hash. |
+| Supabase channel catalog and health data | Supplies the public channel catalog. On Android, community-health data is fetched only when **Share community channel data** is enabled. | Sent to Supabase. Catalog access remains available when community sharing is off. |
 
-These requests are **standard network calls** required for the app to function. The channel-health pings carry no personal data and no device identifier — only the URL hash, status, and country code.
+The app also connects to selected stream and playlist providers to play streams
+and load channel lists. As with other network services, providers may process
+connection metadata such as IP addresses under their own privacy policies.
 
 ### 1.2 Crowdsourced channel catalog (how the app stays up to date)
 
@@ -36,54 +44,80 @@ The app's channel catalog is **collaboratively maintained by all users**. Two da
 
 | Flow | What is sent | Tied to your identity? | Visible to other users? |
 |------|--------------|------------------------|--------------------------|
-| **Channel submissions** (you tap **Submit channel** and fill in the form) | The channel name, stream URL, category and country **you typed** | No — submissions are anonymous, no UUID attached | Yes — accepted submissions appear in the public catalog that every other app user fetches |
-| **Channel-health pings** (automatic — see §1.1) | SHA-256 **hash** of the URL you played + working/failed status + country code | No — these pings carry no UUID | Indirectly — they are aggregated to score every URL. URLs that fail for many users are removed from the catalog for everyone. The raw pings are not exposed; only the aggregate verdict is. |
+| **Channel submissions** (you tap **Submit channel** and fill in the form) | The channel name, stream URL, category and country **you typed** | No account or app-generated device ID is attached; network providers may process connection metadata | Yes — accepted submissions appear in the public catalog that every other app user fetches |
+| **In-app feedback** (you tap **Send**) | Feedback text, rating, category, and a submission timestamp are prefilled in a GitHub issue form; analytics records only category, rating, message presence, and length when analytics is enabled | GitHub receives the form request when opened; the user must submit the issue | The issue is public if submitted |
+| **Community health sharing** (optional on Android) | SHA-256 hash of a stream URL, health status, check time, and response time; the hash may be matched to a known public URL | No account or app-generated device ID is attached; network providers may process connection metadata | Health feedback is used in the shared channel experience. On Android, this data is fetched only when community sharing is enabled. |
+| **Automatic playlist contributions** (optional on Android) | May include channel names, stream URLs, categories, countries, and logos | No account or app-generated device ID is attached; network providers may process connection metadata | Submitted channel details may appear in the shared catalog. |
 
-**M3U / repository URLs you add manually in Settings → Repositories are stored only on your device.** They are *not* uploaded to the shared catalog. Only channels you explicitly submit through the **Submit channel** dialog are shared.
+**M3U / repository URLs you add manually in Settings → Repositories are stored only on your device.** They are not uploaded as repository URLs. On Android, if community sharing is enabled, newly discovered channel details may be contributed to the shared catalog; explicit submissions are also published there.
 
 ### 1.3 Information you can choose to share (opt-in only)
 
-The first time you launch the Windows desktop app, a consent dialog asks whether you want to enable **anonymous usage analytics**. The Android app does **not** collect analytics by default.
+Analytics is off by default and requires opt-in. The Android first-use dialog
+and Settings provide separate controls for analytics and community channel
+sharing. Windows has its own privacy controls; the exact options differ by
+client.
 
-If — and only if — you opt in, we collect the following events. Each event includes the **anonymous device identifier** and **approximate location** described in the Play Store data-safety table at §1.4 below.
+If — and only if — you opt in to analytics, events may include a random
+per-install identifier, app/platform details, country derived from device
+locale, feature usage, crash diagnostics, and playback-related data such as
+channel names or URL hashes. URL hashes are not anonymous: they can be matched
+against known stream URLs. See the app settings and source code for current
+event fields.
 
 | Event | Triggered when | Properties sent |
 |---|---|---|
 | `app_launch` / `app_start` | App opens | platform, app version, timestamp |
-| `channel_play` | You start a channel | category, country code of the channel, **SHA-256 hash of the URL** (no plaintext URL or channel name) |
-| `channel_fail` | A channel fails to play | category, country code, URL hash, error type |
-| `favorite` | You add or remove a favourite | category, country code, URL hash, action (`add`/`remove`) |
+| `channel_play` | You start a channel | channel name, category, channel country, source, and URL hash; no plaintext stream URL |
+| `channel_fail` | A channel fails to play | channel name, category, channel country, source, URL hash, failure type, and available error details |
+| `favorite` | You add or remove a favourite | channel metadata including name, category, country, source, and URL hash, plus action (`add`/`remove`) |
 | `feature_use` | You open a major feature | feature name (e.g. `map_open`, `search`, `fullscreen`) — **no search query text** |
 | `filter_used` (Android only) | You apply a filter | filter type (e.g. `country`) — **no filter values** |
 | `scan_complete` | A health scan finishes | total channels, working count, duration in seconds |
 | `session_end` | App closes | session duration, channels played, channels favourited |
 | `app_crash` | An uncaught exception occurs | exception class, message (truncated to 200 chars), first stack-trace line, app version |
+| `feedback_submitted` | You open the in-app feedback form | feedback category, rating, whether text was entered, text length, and timestamp; the feedback text itself is prefilled in a GitHub issue form, not sent in this analytics event |
 
-We do **not** collect: your name, email, phone number, precise location, IP address (Supabase logs the connection IP for ≤ 30 days at the network layer but we do not retain or analyse it), the names or URLs of channels you watch, your search queries, your watch history, your favourites list, or the list of other apps installed on your device.
+The app does not ask for your name, email, or phone number. Search text,
+watch-history lists, favorites, and installed-app lists are not sent as
+analytics fields. Channel names and URL hashes can still reveal channel
+activity, and service providers may process connection metadata such as IP
+addresses.
 
 You can disable analytics at any time:
-- **Windows:** Settings → Privacy → Disable analytics
-- **Android:** Settings → Privacy controls → Analytics off
+- **Windows:** Settings → Privacy
+- **Android:** Settings → Analytics & Telemetry
+
+On Android, **Share community channel data** is separate from analytics. When
+off, the app does not send health reports or fetch shared health feedback.
+Channels without a local health check show **Unknown**; local checks and the
+public channel catalog remain available. When on, the app sends URL-hashed
+health reports and fetches shared feedback. New playlist-channel contributions
+may include stream URLs. You can change either setting in Android Settings.
 
 ### 1.4 Play Store data-safety mapping (Android)
 
-This is the same information formatted to match the categories in the Google Play Store **Data safety** form so you can verify exactly what we declared:
+This is a working mapping to Google Play **Data safety** categories, not a
+substitute for checking the current Play Console declaration. Re-verify every
+row against the exact submitted build and Play Console form before release:
 
 | Play Store category | Subtype | Collected? | Shared? | Optional? | Purpose | What it is in our code |
 |---|---|---|---|---|---|---|
-| **Location** | Approximate location | ✅ Yes | ❌ No | ✅ Yes (opt-in) | Analytics | Two-letter country code derived from your **system locale only** — never from IP geolocation or GPS. (The country code attached to crowdsourced channel-health pings is also locale-derived.) |
-| **App info & performance** | Crash logs | ✅ Yes | ❌ No | ✅ Yes (opt-in) | App functionality, Analytics | Exception class, truncated message, first stack-trace line — no user data |
+| **Location** | Approximate location | ✅ Yes | ❌ No | ✅ Yes (opt-in) | Analytics | Android estimates country from the device timezone, with locale as a fallback; Windows uses system locale. No GPS or IP geolocation. Channel-country fields in playback events describe the channel, not the user's location. |
+| **App info & performance** | Crash logs | ✅ Yes | ❌ No | ✅ Yes (opt-in) | Analytics | Exception class, sanitized/truncated message, and first stack-trace line |
 | **App info & performance** | Diagnostics | ✅ Yes | ❌ No | ✅ Yes (opt-in) | Analytics | Session duration, scan results, app version, platform |
-| **App info & performance** | Other app performance data | ✅ Yes | ✅ Yes (aggregated, anonymous) | ❌ No (required for the catalog to work) | App functionality, Analytics | Per-stream **channel-health pings** — SHA-256 hash of the URL plus a working/failed flag. Aggregated across all users so failing channels are removed from the catalog and working channels are surfaced first. No device identifier is attached. |
-| **App activity** | App interactions | ✅ Yes | ❌ No | ✅ Yes (opt-in) | Analytics | `feature_use`, `favorite`, `channel_play` events — names of features used, never of channels watched |
-| **App activity** | Other user-generated content | ✅ Yes | ✅ **Yes — published in the public channel catalog visible to all users** | ❌ No (only triggered when you tap **Submit channel** / **Send feedback**) | App functionality | Channel name + stream URL + category + country code you type into the **Submit channel** dialog; the freeform text + rating you type into the **Send feedback** dialog. Submissions are **anonymous** (no UUID, no email) but the channel content itself becomes part of the public catalog every other app user fetches. |
-| **Device or other IDs** | Device or other IDs | ✅ Yes | ❌ No | ✅ Yes (opt-in) | Analytics | A **per-install random UUID v4** generated by the app and stored locally with file mode `0o600`. It is not the Android Advertising ID, the Android ID, the IMEI, or any hardware identifier. Uninstalling the app erases it. **Note:** the UUID is *only* attached to opt-in analytics events — never to channel-health pings or channel submissions. |
+| **App info & performance** | Other app performance data | ✅ Yes, if community sharing is enabled | ✅ Yes | ✅ Yes (Android opt-in) | App functionality | URL-hashed channel-health reports and shared health feedback. Hashes can be matched to known streams. |
+| **App activity** | App interactions | ✅ Yes, with analytics enabled | Sent to Supabase with opt-in analytics | ✅ Yes (opt-in) | Analytics | Events may include feature names and playback/favorite channel names and URL hashes. Search query text is not sent. |
+| **App activity** | Other user-generated content | ✅ Yes | ✅ **Yes — catalog submissions are public; feedback issues are public if submitted** | Yes—only when you submit; automatic contributions are controlled by community sharing | App functionality | Submitted channel details can become public. In-app feedback opens a GitHub issue form with the text prefilled; do not include private or sensitive information. |
+| **Device or other IDs** | Device or other IDs | ✅ Yes, if analytics is enabled | Sent with opt-in analytics | ✅ Yes (opt-in) | Analytics | A random per-install identifier is used for analytics. It is not the Android Advertising ID or a hardware identifier. |
 
-Categories we **do not** collect (do not check on the Play Console form):
+The app does not request or intentionally send the following data categories.
+Verify this list against the current app bundle and Play Console declarations
+before each submission:
 
 | Play Store category | Why not |
 |---|---|
-| Personal info (name, email, address, race, religion, sexual orientation, etc.) | Never collected |
+| Personal info (name, email, address, race, religion, sexual orientation, etc.) | Not requested by the app; do not include personal information in submitted channel data or feedback |
 | Financial info | App is free; no payments |
 | Health & fitness | Not collected |
 | Messages, photos, audio, files | Not collected |
@@ -95,9 +129,11 @@ Categories we **do not** collect (do not check on the Play Console form):
 
 ### 1.5 Information stored only on your device
 
-The following is saved locally on your device and **never transmitted to us**:
+The following is saved locally on your device:
 
-- Favourite channels, recently watched channels, watch history
+- Favourite channels, recently watched channels, and watch history. The
+  separate opt-in analytics service may send an individual favorite action
+  with channel metadata; it does not upload the local favorites or history list.
 - M3U / repository URLs you add manually in **Settings → Repositories**
 - App preferences (theme, sort order, filters)
 - Channel logo cache (`~/.tv_viewer/logos/` on Windows, app cache on Android)
@@ -126,42 +162,49 @@ TV Viewer connects to several third-party services to deliver its functionality.
 
 | Service | Purpose | Privacy policy |
 |---------|---------|----------------|
-| GitHub (`api.github.com`, `github.com`) | Update checks, release downloads | https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement |
+| GitHub (`api.github.com`, `github.com`) | Update checks, release downloads, and user-initiated in-app feedback issue forms | https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement |
 | Public M3U playlist hosts (e.g., iptv-org) | Channel list source | Varies by host — see the source list in app Settings |
 | IPTV stream providers | The actual video streams you play | Varies by provider — TV Viewer is a player, not a stream host |
-| Google Play Integrity API | Verifies the app installation is genuine on Android | https://policies.google.com/privacy |
-| Supabase (analytics back-end, opt-in only) | Receives anonymous opt-in analytics from Windows | https://supabase.com/privacy |
+| Supabase | Public catalog, optional Android community health, and opt-in analytics | https://supabase.com/privacy |
 
-When you play a stream, the IPTV provider hosting that stream necessarily sees your IP address — this is a fundamental requirement of internet streaming and is true of every video player. TV Viewer does not add any additional disclosure beyond what your video player would normally make.
+When you play a stream, the IPTV provider hosting that stream receives the network request and may process connection metadata, including your IP address. This is required for streaming.
 
 ## 4. How We Use Information
 
-We use the limited data described above only to:
+We use the data described above to:
 
 1. Deliver the channel list and play the streams you select
 2. Notify you when an update is available
-3. Diagnose crashes and improve the app (only if you opted in)
+3. Handle channel submissions and optional community health sharing
+4. Analyze optional usage events and diagnose crashes if you opt in
 
 We do **not** use any data for advertising, profiling, scoring, or selling to third parties.
 
 ## 5. Data Retention
 
 - **On-device data:** retained until you uninstall the app or clear app data.
-- **Opt-in analytics:** retained for up to 12 months in aggregated form, then deleted.
-- **Crash reports:** retained for up to 12 months for debugging, then deleted.
-- We do not retain backups of personal data because we do not collect personal data.
+- **Supabase-hosted catalog, health reports, and analytics:** retention depends
+  on service configuration and operational practices; this policy does not
+  promise a fixed deletion period.
+- **Third-party providers:** retention is governed by the provider's own
+  policies and settings.
 
 ## 6. Your Rights
 
 Even though we collect very little data, you have full control:
 
 - **Opt out of analytics** at any time in app Settings.
+- **Disable community sharing on Android** at any time in Settings; health
+  reports stop and shared health feedback is no longer fetched.
 - **Erase all on-device data** by uninstalling the app or using your OS "Clear app data" option.
-- **Request deletion** of any opt-in analytics tied to your install by contacting us (see §10). Because the analytics are anonymous, we may need details such as your install date and approximate region to locate the records.
-- **Access / portability:** Because we do not store personal data tied to identifiable individuals, there is normally nothing personal to export. If you believe you have personal data with us, contact us and we will assist.
+- **Request access or deletion:** contact us using the private contact method in
+  §10. We will assess what data can be located and handled; URL hashes and
+  other pseudonymous data are not necessarily anonymous.
 
 If you are in the EU/UK, you have rights under GDPR/UK-GDPR (access, rectification, erasure, restriction, objection, portability, and to lodge a complaint with your supervisory authority).
-If you are in California, you have rights under CCPA/CPRA. We do **not** sell or share personal information.
+If you are in California, contact us with privacy requests under applicable
+CCPA/CPRA rules. We do not use data for cross-context behavioral advertising
+or sell it.
 
 ## 7. Children's Privacy
 
@@ -171,25 +214,28 @@ TV Viewer is **not directed at children under 13**. The app contains community-c
 
 - The app is open source — its source code is publicly auditable.
 - Network calls use HTTPS where the upstream service supports it.
-- The Android app is signed with our official upload key (SHA-1 `56:21:F2:7C:DA:DC:12:C3:22:A4:00:BD:74:28:27:97:EA:97:6B:E4`); installs from sources other than Google Play that don't match this fingerprint may be tampered with.
 - We follow the principle of minimum data collection: the strongest security posture is to not have the data in the first place.
 
 ## 9. International Transfers
 
-If you opt in to analytics, the anonymous data is transmitted to Supabase, whose servers may be located outside your country (typically the EU or US). By opting in, you consent to this transfer. You can opt out at any time.
+Supabase and other providers may process data in locations outside your country.
+Review their current privacy information for details. Analytics and Android
+community sharing can be disabled in the app; public catalog access and
+required network requests may still transmit connection metadata.
 
 ## 10. Contact
 
-TV Viewer is a community open-source project, not a company — we do not run a customer-support inbox. All privacy questions, deletion requests, and concerns are handled through our public GitHub repository, which gives every request a permanent, auditable record:
+For privacy questions and data requests, contact the project privately at
+**tvviewerapp@proton.me**. Do not post personal information or private stream
+URLs in a public issue. For security-sensitive reports, use GitHub Security
+Advisories:
 
-- **General privacy questions or deletion requests (public):** open an issue at https://github.com/tv-viewer-app/tv_viewer/issues using the "Privacy request" template, or label your issue `privacy`. A maintainer will respond in the issue thread.
 - **Confidential or security-sensitive disclosures (private):** open a private vulnerability report via GitHub Security Advisories at https://github.com/tv-viewer-app/tv_viewer/security/advisories/new — only repository maintainers can read it. See also [`SECURITY.md`](https://github.com/tv-viewer-app/tv_viewer/blob/master/SECURITY.md).
 
-A free GitHub account is required to use either channel. If you cannot use GitHub for accessibility or other reasons, please indicate this in your initial message and we will arrange an alternative.
 
 ## 11. Changes to This Policy
 
-We may update this policy from time to time. The "Last updated" date at the top reflects the most recent change. Material changes will be announced in the app's release notes and in the GitHub repository. Continued use of the app after a change means you accept the updated policy.
+We may update this policy from time to time. The "Last updated" date at the top reflects the most recent change. Material changes will be announced in the app's release notes and in the GitHub repository. Review the policy periodically; continued use does not replace any consent required by applicable law.
 
 ## 12. Open Source & Transparency
 

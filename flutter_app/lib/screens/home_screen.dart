@@ -10,6 +10,7 @@ import '../services/feedback_service.dart';
 import '../services/onboarding_service.dart';
 import '../services/analytics_service.dart';
 import '../services/parental_controls_service.dart';
+import '../services/settings_service.dart';
 import '../services/watch_history_service.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/contribute_channel_dialog.dart';
@@ -60,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // When true, the home Scaffold hides its AppBar/drawer/channel list and
   // gives 100% of the screen to the player.
   bool _playerFullscreen = false;
+  bool _communitySharingEnabled = false;
 
   @override
   void initState() {
@@ -78,6 +80,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadRecentHistory(),
     ]);
     if (!mounted) return;
+    final communitySharingEnabled =
+        await SettingsService.instance.getCommunityChannelSharingEnabled();
+    if (!mounted) return;
+    setState(() => _communitySharingEnabled = communitySharingEnabled);
 
     _checkRatingPrompt();
     _checkAndShowOnboarding();
@@ -117,6 +123,22 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _recentChannels = recent;
       });
+    }
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
+    if (!mounted) return;
+
+    final communitySharingEnabled =
+        await SettingsService.instance.getCommunityChannelSharingEnabled();
+    if (!mounted) return;
+    if (_communitySharingEnabled != communitySharingEnabled) {
+      setState(() => _communitySharingEnabled = communitySharingEnabled);
+      await context.read<ChannelProvider>().loadChannels();
     }
   }
   
@@ -364,10 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: compactAppBar ? const EdgeInsets.all(0) : const EdgeInsets.all(8),
             constraints: compactAppBar ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
             tooltip: 'Settings',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+            onPressed: _openSettings,
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -841,10 +860,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const Spacer(),
-                    Icon(
-                      Icons.circle,
-                      size: 8,
-                      color: _isWatchNowWorking(channel) ? Colors.green : Colors.grey,
+                    Tooltip(
+                      message: channel.isHealthUnknown
+                          ? 'Health unknown'
+                          : _isWatchNowWorking(channel)
+                              ? 'Reported working'
+                              : 'Reported unavailable',
+                      child: Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: channel.isHealthUnknown
+                            ? Colors.grey
+                            : _isWatchNowWorking(channel)
+                                ? Colors.green
+                                : Colors.red,
+                      ),
                     ),
                   ],
                 ),
@@ -971,6 +1001,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                if (!_communitySharingEnabled)
+                  SliverToBoxAdapter(child: _buildCommunityHealthNotice()),
                 if (showWatchNow)
                   SliverToBoxAdapter(
                     child: _buildWatchNowSections(
@@ -1010,7 +1042,8 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final showWatchNow = _shouldShowWatchNow(provider);
-        final headerCount = showWatchNow ? 1 : 0;
+        final noticeCount = _communitySharingEnabled ? 0 : 1;
+        final headerCount = (showWatchNow ? 1 : 0) + noticeCount;
 
         return RefreshIndicator(
           onRefresh: _onRefreshChannels,
@@ -1018,7 +1051,11 @@ class _HomeScreenState extends State<HomeScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: provider.channels.length + headerCount,
             itemBuilder: (context, index) {
-              if (showWatchNow && index == 0) {
+              if (noticeCount == 1 && index == 0) {
+                return _buildCommunityHealthNotice();
+              }
+              final contentIndex = index - noticeCount;
+              if (showWatchNow && contentIndex == 0) {
                 return _buildWatchNowSections(
                   provider.channels,
                   onChannelTap: (channel) {
@@ -1037,6 +1074,35 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCommunityHealthNotice() {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.help_outline),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Community health sharing is off. Channels without a local '
+                'check show Unknown, and shared health feedback is unavailable. '
+                'Enable “Share community channel data” in Settings to send '
+                'health reports and see community feedback. The public channel '
+                'catalog remains available; usage analytics is separate.',
+              ),
+            ),
+            TextButton(
+              onPressed: _openSettings,
+              child: const Text('Settings'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

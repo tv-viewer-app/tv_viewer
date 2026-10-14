@@ -80,4 +80,4 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         repository: ${{ env.IMAGE_NAME }}
         readme-filepath: ./DOCKER_README.md
-        short-description: "Lightweight IPTV streaming web app | 16,000+ channels | NAS-ready | Browser-based"
+        short-description: "Lightweight IPTV streaming web app | Community catalog | NAS-ready | Browser-based"

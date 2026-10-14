@@ -730,7 +730,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
-            'All data is anonymous and aggregated.\nNo personal information is collected.',
+            'Statistics shown here are aggregated. Optional analytics and community sharing are controlled separately in Settings.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.outline),
             textAlign: TextAlign.center));

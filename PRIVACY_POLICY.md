@@ -14,19 +14,21 @@ The LG webOS TV edition does not collect analytics, create a device identifier,
 or send channel health reports. It reads the public channel catalog from
 Supabase and connects directly to the stream selected by the user. Favorites
 and the first-run notice acknowledgement are stored only in the television's
-local application storage.
+local application storage. Requests to Supabase and stream providers may expose
+connection metadata, such as an IP address, to those services.
 
 ### With Your Consent (Optional Analytics)
 
-If you opt in to anonymous analytics, we collect:
+If you opt in to analytics, we collect:
 
-- **Anonymous device ID** — a randomly generated identifier, not linked to your identity
+- **Random install identifier** — a pseudonymous identifier, not an account or hardware ID
 - **App version and platform** (e.g., Android 14, Windows 11)
-- **Country** — derived from your system locale (e.g., "US", "IL")
+- **Country estimate** — inferred from the device timezone, with locale as a fallback
 - **Feature usage** — which app features are used (e.g., search, map, filters)
 - **Playback events** — channel names, stream URL hashes, playback outcomes,
-  and performance. Hashes can be matched to known streams; this is not
-  anonymous viewing history.
+  and performance. Hashes can be matched to known streams; individual events
+  can reveal playback activity even though they are not a local watch-history
+  list.
 - **Crash reports** — technical error information to fix bugs
 - **Session duration** — how long the app is used per session
 
@@ -49,13 +51,20 @@ stream URL, and health reports may reveal which streams were checked or played.
 Usage analytics remains a separate, optional setting and is not required to
 receive shared channel-health feedback. You can enable or disable this sharing
 at any time in Settings. Submitting a channel through the explicit
-“Contribute a Channel” action sends the channel details you enter.
+“Contribute a Channel” action sends the channel details you enter. The in-app
+feedback flow opens a GitHub issue form with your text, rating, and category
+prefilled; analytics records only the category, rating, message presence, and
+length when enabled. Do not include private or sensitive information, and
+review the form before submitting it publicly.
 
 ### What We Do NOT Collect
 
-- Your name, email, or any personal identifiers
+- The app does not request your name, email, or phone number as standard
+  fields; information you choose to include in a public GitHub feedback issue
+  is sent to GitHub
 - Raw channel URLs through health reports (health reports send SHA-256 URL hashes)
-- Your IP address (not stored by our analytics backend)
+- Network connection metadata: the app does not intentionally send IP addresses
+  as analytics fields, but service providers may process them when handling requests
 - Your location (beyond the country from your locale setting)
 - Your contacts, photos, files, or any other device data
 
@@ -79,25 +88,32 @@ play user-selected streams.
 
 ## Data Storage
 
-Analytics data, when opted in, is stored in a Supabase database with:
-- Row-Level Security (RLS) policies restricting access
-- No personally identifiable information (PII)
-- Automatic data retention policies
+The public channel catalog, community health data, and opt-in analytics use
+Supabase. Access controls are applied to the service, but channel names and
+URL hashes can be matched to known streams and should not be treated as
+anonymous. Data retention depends on service configuration; this policy does
+not promise a fixed deletion period.
 
-Community channel data, if the separate sharing setting is enabled, is stored
-in the shared Supabase catalog. Channel submissions entered through the
-contribution form are shared only when the user submits them.
+On Android, community sharing controls both sending channel-health reports and
+fetching shared health feedback. When sharing is off, the public channel
+catalog remains available and local checks continue to work; channels without
+a local check show Unknown. When sharing is enabled, newly discovered playlist
+channel details may be contributed to the shared catalog. Explicit channel
+submissions are published when submitted.
 
 ## Your Rights
 
 - **Opt out anytime**: Go to Settings → disable "Help improve TV Viewer"
 - **Community sharing**: Go to Settings → disable "Share community channel data"
-- **No account required**: The app works fully without any data collection
-- **Data deletion**: Contact us to request deletion of your anonymous device ID
+- **No account required**: Public catalog and streaming requests still connect
+  to network services, which may process connection metadata.
+- **Data requests**: Contact tvviewerapp@proton.me. Pseudonymous identifiers
+  and URL hashes are not necessarily anonymous; we will assess what can be
+  located and handled.
 
 ## Third-Party Services
 
-- **Supabase** (analytics backend): [supabase.com/privacy](https://supabase.com/privacy)
+- **Supabase** (public catalog, optional community health, and opt-in analytics): [supabase.com/privacy](https://supabase.com/privacy)
 - **IPTV streams**: TV Viewer discovers publicly available streams from open repositories. We do not host, control, or moderate stream content.
 
 ## Content Disclaimer

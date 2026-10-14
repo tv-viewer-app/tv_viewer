@@ -2,7 +2,7 @@
 
 Stores three boolean opt-ins under ``~/.tv_viewer/consent.json``:
 
-    - analytics:   anonymous usage stats / Supabase telemetry
+    - analytics:   optional pseudonymous usage stats / Supabase telemetry
     - online_db:   fetch crowdsourced channel database from network
     - geo_ip:      use IP geolocation to pin the local channel row
 

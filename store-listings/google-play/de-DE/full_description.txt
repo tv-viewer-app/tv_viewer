@@ -1,9 +1,9 @@
-Streame über 21.000 kostenlose IPTV-Sender aus aller Welt — ohne Anmeldung, ohne Abo, ohne Werbung.
+Kostenlose IPTV-Streams aus einem gemeinschaftlich gepflegten Katalog — ohne Anmeldung, ohne Abo, ohne Werbung.
 
 TV Viewer verbindet dich mit einer Community-Datenbank frei verfügbarer Live-TV- und Radio-Streams. Durchsuche nach Kategorie, finde Sender nach Name und starte sofort.
 
 🌍 SENDER AUS ALLER WELT
-• 21.000+ Sender aus über 150 Ländern
+• Live-TV und Radio aus aller Welt
 • Live-TV, Sport, Nachrichten, Filme, Unterhaltung
 • Anime-Sender — HIDIVE, Pluto TV Anime, MAX Anime & mehr
 • Kostenlose Sender aus Deutschland, Österreich, Schweiz
@@ -15,7 +15,7 @@ TV Viewer verbindet dich mit einer Community-Datenbank frei verfügbarer Live-TV
 • Multi-Source-Fallback — wenn ein Stream ausfällt, wird automatisch eine Alternative versucht
 • Bild-in-Bild-Modus zum Multitasking
 • Hintergrund-Audio für Radio
-• Zuverlässigkeitsanzeige für Streams
+• Stream-Status aus einem lokalen Test oder — bei aktivierter Community-Freigabe — aus gemeinsamen Rückmeldungen
 
 🔍 FINDE WAS DU SUCHST
 • Smarte Suche über alle Sender
@@ -25,23 +25,28 @@ TV Viewer verbindet dich mit einer Community-Datenbank frei verfügbarer Live-TV
 
 🛡️ DATENSCHUTZ ZUERST
 • Kein Konto erforderlich
-• Keine persönlichen Daten gesammelt
-• Optionale anonyme Nutzungsstatistiken (nur bei Zustimmung)
-• Keine Werbung, kein Tracking
+• Optionale Nutzungsanalyse ist standardmäßig deaktiviert und kann Sendernamen, URL-Hashes und eine zufällige Installations-ID enthalten
+• Separate optionale Community-Freigabe sendet URL-Hashes von Gesundheitsberichten und lädt gemeinsame Statusmeldungen ab
+• URL-Hashes können bekannten Streams zugeordnet werden; neue Senderbeiträge können Stream-URLs enthalten
+• Keine Werbung und keine Werbe-SDKs
 • Open Source (MIT-Lizenz)
 
 📊 COMMUNITY-BETRIEBEN
-• Sender-Zuverlässigkeit wird von der Community verfolgt
-• Defekte Streams automatisch erkannt und markiert
+• Mit aktivierter Community-Freigabe Berichte senden und gemeinsame Statusmeldungen erhalten
+• Ohne Freigabe ist der Status ungeprüfter Sender „Unbekannt“; lokale Tests und der öffentliche Katalog bleiben verfügbar
 • Regelmäßig neue Sender aus Community-Quellen
 
 ⚡ ZUVERLÄSSIGES STREAMING
 • Intelligente Sortierung — zuverlässige Streams zuerst
 • Automatischer Quellenwechsel bei Stream-Ausfall
-• Gesundheitsbewertung basierend auf Community-Berichten
+• Senderstatus basiert auf lokalen Tests oder bei aktivierter Freigabe auf gemeinsamen Berichten
 
 Auch verfügbar als Web-App (Docker) und Desktop-App (Windows/Linux).
 
 Quellcode: https://github.com/tv-viewer-app/tv_viewer
+
+TV Viewer hostet oder lizenziert keine Streams Dritter. Verfügbarkeit und
+Nutzungsrechte richten sich nach den jeweiligen Quellen; Nutzer sind dafür
+verantwortlich, die geltenden Gesetze einzuhalten.
 
 Hinweis: TV Viewer aggregiert öffentlich verfügbare Streams aus Community-Verzeichnissen. Wir hosten keine Inhalte. Die Verfügbarkeit der Sender hängt von den Quellanbietern ab.

@@ -14,20 +14,20 @@ import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 import '../utils/pinned_http_client.dart';
 
-/// Anonymous, privacy-first analytics service backed by Supabase REST API.
+/// Opt-in, pseudonymous analytics service backed by Supabase REST API.
 ///
 /// Features:
 ///   - No Firebase dependency — uses Supabase REST directly
-///   - Anonymous: random UUID per install, no PII collected
-///   - Privacy: all URLs are SHA-256 hashed before transmission
+///   - Pseudonymous: random UUID per install; no account or hardware ID
+///   - Privacy: stream URLs are SHA-256 hashed; channel names may be included
 ///   - Batched: events are queued and flushed every 30 s or at 20 events
 ///   - Fail-safe: errors are logged but never crash the host app
-///   - Auto-enabled only when SUPABASE_URL and SUPABASE_ANON_KEY are set
+///   - Sends events only after the user opts in and service configuration exists
 ///
 /// Database table (Supabase):
 ///   analytics_events
 ///     id            — bigint, auto-increment (primary key)
-///     device_id     — uuid (anonymous install identifier)
+///     device_id     — uuid (pseudonymous install identifier)
 ///     event_type    — text
 ///     event_data    — jsonb
 ///     app_version   — text
@@ -115,7 +115,7 @@ class AnalyticsService {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  /// Initialise the service: load or generate the anonymous device ID,
+  /// Initialise the service: load or generate the pseudonymous install ID,
   /// resolve app version and platform, and start the periodic flush timer.
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -134,7 +134,7 @@ class AnalyticsService {
         _appVersion = 'unknown';
       }
 
-      // Load or generate anonymous device ID and opt-in preference
+      // Load or generate pseudonymous install ID and opt-in preference
       final prefs = await SharedPreferences.getInstance();
       _userOptedIn = prefs.getBool(_analyticsEnabledKey) ?? false;
       _deviceId = prefs.getString(_deviceIdKey) ?? '';
@@ -189,7 +189,7 @@ class AnalyticsService {
     await flush();
   }
 
-  /// Allow user to opt in/out of anonymous analytics collection.
+  /// Allow user to opt in/out of analytics collection.
   Future<void> setEnabled(bool enabled) async {
     if (!_isInitialized) await initialize();
     final effectiveEnabled = AppDistribution.allowsSupabase && enabled;

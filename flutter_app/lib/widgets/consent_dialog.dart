@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_distribution.dart';
 import '../services/analytics_service.dart';
+import '../services/settings_service.dart';
 import '../utils/prefs_lock.dart';
 
 /// First-launch consent dialog for analytics and age verification.
@@ -44,6 +45,7 @@ class _ConsentDialogWidget extends StatefulWidget {
 class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
   bool _ageConfirmed = !AppDistribution.requiresAgeConfirmation;
   bool _analyticsOptIn = false;
+  bool _communitySharingOptIn = false;
 
   @override
   Widget build(BuildContext context) {
@@ -129,8 +131,30 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
               subtitle: const Text(
-                'Share usage, channel names and URL hashes, and error reports. '
-                'Hashes can match known streams. You can change this in Settings.',
+                'Share usage, a random install ID, channel names, URL hashes, '
+                'and error reports. Hashes can match known streams. '
+                'You can change this in Settings.',
+                style: TextStyle(fontSize: 12),
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
+
+            CheckboxListTile(
+              value: _communitySharingOptIn,
+              onChanged: (v) =>
+                  setState(() => _communitySharingOptIn = v ?? false),
+              title: const Text(
+                'Share community channel data',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text(
+                'Optional. When on, sends URL-hashed channel health reports '
+                'and fetches shared health feedback. Hashes can match known '
+                'streams; new channels may include stream URLs. When off, '
+                'shared health is unknown unless you check a channel locally. '
+                'The public catalog stays available. Usage analytics is separate.',
                 style: TextStyle(fontSize: 12),
               ),
               controlAffinity: ListTileControlAffinity.leading,
@@ -185,6 +209,9 @@ class _ConsentDialogWidgetState extends State<_ConsentDialogWidget> {
     await prefs.safeSetBool(
       ConsentDialog._analyticsConsentKey,
       analyticsEnabled,
+    );
+    await SettingsService.instance.setCommunityChannelSharingEnabled(
+      AppDistribution.allowsSupabase && _communitySharingOptIn,
     );
 
     // Update analytics opt-in

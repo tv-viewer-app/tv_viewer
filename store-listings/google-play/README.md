@@ -3,9 +3,8 @@
 ## Current Status
 - Package: app.tvviewer.player
 - Live on Google Play
-- 17 total installs, 7 WAU
-- Top markets: Germany (3), Israel (2), US (1), Russia (1)
-- Top content: Anime, German free-TV (Rakuten TV), Israeli channels
+- Verify current installs, active users, and top markets in Play Console before
+  using metrics in external materials.
 
 ## Listing — English (en-US)
 
@@ -13,7 +12,7 @@
 TV Viewer — Free Live TV & IPTV
 
 ### Short Description (80 chars max)
-Stream 21,000+ free IPTV channels — live TV, radio, sports, anime & movies.
+Free IPTV streams — live TV, radio, sports, anime & movies.
 
 ### Full Description (4000 chars max)
 See en-US/full_description.txt
@@ -24,7 +23,7 @@ See en-US/full_description.txt
 TV Viewer — Kostenloses Live-TV
 
 ### Short Description
-21.000+ kostenlose IPTV-Sender streamen — Live-TV, Radio, Sport, Anime & Filme.
+Kostenlose IPTV-Streams — Live-TV, Radio, Sport, Anime & Filme.
 
 ### Full Description
 See de-DE/full_description.txt

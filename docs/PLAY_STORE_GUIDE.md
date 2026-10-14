@@ -140,15 +140,15 @@ Take screenshots of these key screens:
 
 ### Short description (80 chars max):
 ```
-Free IPTV player. Watch 5000+ live TV channels from around the world.
+Free IPTV player for live TV and radio streams from around the world.
 ```
 
 ### Full description (4000 chars max):
 ```
-TV Viewer is a free, open-source IPTV player that lets you watch thousands of live TV channels from around the world — completely free, with no account required.
+TV Viewer is a free, open-source IPTV player for live TV and radio streams from a community-maintained catalog. No account or subscription is required.
 
-🌍 5000+ CHANNELS
-Automatically fetches channels from multiple IPTV repositories worldwide. News, sports, entertainment, music, kids, documentaries, and more — from over 100 countries.
+🌍 COMMUNITY CATALOG
+Browse channels from public IPTV repositories and community submissions. Availability depends on the upstream source.
 
 🔍 SMART SEARCH & FILTERS
 • Filter by country, category, or media type
@@ -162,14 +162,15 @@ Browse channels on an interactive world map. Tap any country to see its availabl
 ⭐ FAVORITES & HISTORY
 Save your favorite channels for instant access. Recently watched history lets you jump back to what you were watching.
 
-📡 AUTO CHANNEL SCANNING
-Built-in stream checker validates channels in the background. Dead or broken channels are automatically hidden. Only working streams are shown.
+📡 CHANNEL HEALTH
+Local checks are available. On Android, optional community sharing sends URL-hashed health reports and fetches shared feedback. With sharing off, channels without a local check show Unknown; the public catalog remains available.
 
 🔒 PRIVACY FIRST
 • No account or sign-up required
 • No ads — ever
-• Optional anonymous analytics (off by default)
-• No channel names or URLs are collected
+• Optional analytics is off by default and may include channel names, URL hashes, and a random install identifier
+• Separate optional community sharing sends URL-hashed health reports and fetches shared channel-health feedback
+• URL hashes may be matched to known streams
 • Parental controls with PIN lock
 • Open source — inspect every line of code on GitHub
 
@@ -179,7 +180,7 @@ Built-in stream checker validates channels in the background. Dead or broken cha
 • HTTP/HTTPS streams
 • Custom M3U playlists
 
-TV Viewer is and always will be free. It is not affiliated with any TV network or content provider. All streams are sourced from publicly available IPTV repositories.
+TV Viewer does not host streams or claim rights to third-party content. Availability and rights are determined by each source provider; users are responsible for ensuring their use complies with applicable law.
 ```
 
 ### Category: **Entertainment** → **Video Players & Editors**
@@ -202,12 +203,12 @@ Required for all apps. Based on our implementation:
 
 | Question | Answer |
 |----------|--------|
-| Does your app collect or share user data? | Yes (optional analytics) |
-| Is data collection optional? | **Yes** — user must opt in |
-| Data types collected | App activity (features used), crash logs, app info (version) |
-| Is data encrypted in transit? | **Yes** (HTTPS/TLS to Supabase) |
-| Can users request data deletion? | Yes (uninstall removes all local data; analytics is anonymous) |
-| Is data shared with third parties? | **No** |
+| Does your app collect or share user data? | Yes. Analytics and Android community sharing are separate opt-ins; public catalog and streaming requests also use network services. |
+| Is data collection optional? | Analytics and Android community health sharing require separate opt-ins. Public catalog and playback requests are needed for those features. |
+| Data types collected | Depending on the feature: channel names, URL hashes, health status, crash diagnostics, app/platform metadata, and a random analytics install identifier. |
+| Is data encrypted in transit? | Network calls use HTTPS where supported; verify all services and redirects before submission. |
+| Can users request data deletion? | Contact tvviewerapp@proton.me; do not describe pseudonymous data as anonymous. |
+| Is data shared with third parties? | Supabase receives catalog requests, enabled community health reports/reads, and opted-in analytics; stream and playlist providers receive their network requests. |
 
 ### Ads Declaration
 - **Does your app contain ads?** No

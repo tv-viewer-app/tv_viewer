@@ -171,12 +171,17 @@ class ChannelTile extends StatelessWidget {
 
   Widget _buildLeading() {
     final size = compact ? 28.0 : 40.0;
+    final statusColor = channel.isHealthUnknown
+        ? Colors.grey
+        : channel.isWorking
+            ? Colors.green
+            : Colors.red;
 
     // Channel logo via SafeChannelLogo (handles URL validation,
     // 429 backoff via cache, and crash-safe fallback). #147 #194 #199.
     return CircleAvatar(
       radius: size / 2,
-      backgroundColor: channel.isWorking ? Colors.green : Colors.grey,
+      backgroundColor: statusColor,
       child: ClipOval(
         child: SafeChannelLogo(
           url: channel.logo,
@@ -259,11 +264,21 @@ class ChannelTile extends StatelessWidget {
         if (channel.mediaType == 'Radio')
           Icon(Icons.radio, size: compact ? 12 : 16, color: Colors.blue),
         SizedBox(width: compact ? 2 : 4),
-        // Working status indicator
-        Icon(
-          channel.isWorking ? Icons.check_circle : Icons.error,
-          color: channel.isWorking ? Colors.green : Colors.red,
-          size: iconSize,
+        Tooltip(
+          message: channel.isHealthUnknown
+              ? 'Health unknown — no local check or shared health result is available'
+              : channel.isWorking
+                  ? 'Reported working'
+                  : 'Reported unavailable',
+          child: Icon(
+            channel.isHealthUnknown
+                ? Icons.help_outline
+                : channel.isWorking
+                    ? Icons.check_circle
+                    : Icons.error,
+            color: statusColor,
+            size: iconSize,
+          ),
         ),
       ],
     );

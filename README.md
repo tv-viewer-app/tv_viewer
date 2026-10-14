@@ -1,17 +1,21 @@
 # 📺 TV Viewer
 
-**Community-powered IPTV player with 16,000+ crowdsourced channels, privacy-first analytics, and community statistics.**
+**Community-powered IPTV player for live TV and radio streams, with optional analytics and community health sharing.**
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/tv-viewer-app/tv_viewer)](https://github.com/tv-viewer-app/tv_viewer/releases/latest)
-![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![Flutter](https://img.shields.io/badge/Flutter-3.32.0-02569B.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![Flutter](https://img.shields.io/badge/Flutter-3.44.4-02569B.svg)
 [![Docker](https://img.shields.io/badge/Docker-latest-2496ED.svg)](https://hub.docker.com/r/asummoner/tvviewerapp)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20LG%20webOS%20%7C%20Web%20%7C%20Docker-green.svg)
 
 > **🌐 [Visit the TV Viewer Landing Page →](https://tv-viewer-app.github.io/tv_viewer/)**
 
-TV Viewer is a free, open-source IPTV player where the community maintains the channel list. Users report broken streams, submit new channels, and anonymously share aggregate usage signals that improve stream health and discovery for everyone. No account needed. No ads. No tracking by default.
+TV Viewer is a free, open-source IPTV player that browses community-maintained streams. Users can submit channels and, where supported, opt in to community health sharing. Optional analytics is separate; channel names and URL hashes may be included, and URL hashes can match known streams. No account or ads.
+
+TV Viewer does not host or license third-party streams. Availability and
+content rights are determined by each source provider; users are responsible
+for ensuring their use is lawful.
 
 ## Support the Project 🍺
 
@@ -19,31 +23,29 @@ If TV Viewer saves you a cable bill or just makes your day better, consider supp
 
 <a href="https://ko-fi.com/tvviewerapp"><img src="https://img.shields.io/badge/Ko--fi-Buy%20Me%20a%20Beer%20🍺-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 
-## ✨ What's New in v2.25.0
+## ✨ What's New in v2.25.4
 
-- **LG webOS TV client** with remote-first navigation, native/HLS.js playback,
-  local favorites, search, filters, and multi-source failover
-- **1080p and 720p IPK downloads** published with the other GitHub Release
-  clients
-- **LG UX compliance hardening** for Back-to-Home behavior, Magic Remote wheel
-  input, FHD control sizing, and TV-distance text legibility
-- **Curated public-interest discovery** for the LG edition with no analytics,
-  account, ads, or privileged webOS APIs
+- **Safer crash diagnostics** — opt-in crash telemetry selects a useful stack
+  frame and redacts URLs and local file paths
+- **Clearer failure reports** — analytics reports show channel failures even
+  when no crash events were recorded
+- **Better performance reports** — include more recent events and accurately
+  label bounded crash samples
 
 _See the [CHANGELOG](CHANGELOG.md) for full release history._
 
 ## Features
 
-- 🌍 **16,000+ channels worldwide** — Aggregated from community-maintained playlists and configurable sources
-- 👥 **Crowdsourced quality** — Users report broken streams and submit fixes from the app or GitHub
-- 📊 **Community Statistics** — Anonymous aggregated usage data for active users, plays, countries, and platform trends
+- 🌍 **Community channel catalog** — Aggregated from community-maintained playlists and configurable sources
+- 👥 **Community health** — Android sharing is optional and controls both health reports and shared feedback; channels without a local check show Unknown when disabled
+- 📊 **Community Statistics** — Aggregate usage totals; analytics is optional and off by default
 - 🌐 **Timezone-based country detection** — Privacy-friendly local country inference without GPS or IP lookup
 - 📂 **Rich browsing** — Filter by category, country, language, and media type (TV/Radio)
 - 📻 **Dedicated radio experience** — Background audio playback, genre browsing, and now-playing controls on Android
 - 🔀 **Multi-source failover** — Switch between alternative stream sources without leaving playback
 - 💾 **Offline-friendly caching** — Local cache and favorites still work when Supabase is unavailable
-- 📺 **EPG support** — XMLTV-based now/next program data with live progress bars
-- 🔒 **Privacy-first telemetry** — Opt-in analytics only, with no login and no PII collection
+- 📺 **EPG support** — Available in supported clients when program data is supplied by a source
+- 🔒 **Privacy controls** — Separate opt-ins for analytics and Android community health sharing; pseudonymous data may include channel names and URL hashes
 - 🛡️ **Hardened web backend** — SSRF protections, safe Supabase writes, and server-side statistics aggregation
 - 🐳 **Self-hosted web/Docker edition** — FastAPI + HLS.js UI for NAS and browser deployments
 

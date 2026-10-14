@@ -383,7 +383,7 @@
             <div class="step fade-in">
                 <div class="step-num">🤝</div>
                 <h3>Contribute</h3>
-                <p>Report broken channels, submit new ones, rate stream quality. Your feedback makes the list better for everyone.</p>
+                <p>With community sharing enabled, report stream health and receive shared feedback. You can also submit new channels to help improve the public catalog.</p>
             </div>
         </div>
     </div>
@@ -392,39 +392,24 @@
 <!-- ═══════════════ What's New ═══════════════ -->
 <section class="features" id="whats-new" style="padding-bottom: 0;">
     <div class="container">
-        <div class="section-tag">v2.14.2 — Latest Release</div>
-        <h2 class="section-title">What's New</h2>
-        <p class="section-subtitle">CI.</p>
+        <div class="section-tag">v2.25.4 — Latest Release</div>
+        <h2 class="section-title">What's New in v2.25.4</h2>
+        <p class="section-subtitle">More reliable optional diagnostics and clearer analytics reports.</p>
         <div class="features-grid">
             <div class="feature-card fade-in">
-                <span class="feature-icon">🔄</span>
-                <h3>CORS Proxy</h3>
-                <p>Server-side stream proxy rewrites HLS manifests so channels play reliably in any browser — no extensions needed.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">🐳</span>
-                <h3>Docker Deployment</h3>
-                <p>Run the web interface anywhere with one command: <code>docker run -p 8765:8765 tv-viewer-web</code></p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">📺</span>
-                <h3>Cast Menu</h3>
-                <p>Cast to Chromecast, AirPlay, Picture-in-Picture, or open in a new tab — all from the player toolbar.</p>
-            </div>
-            <div class="feature-card fade-in">
-                <span class="feature-icon">🗺️</span>
-                <h3>Map Channel Browser</h3>
-                <p>Click any country on the interactive map to browse and play its channels in a side panel.</p>
+                <span class="feature-icon">🛡️</span>
+                <h3>Safer Crash Diagnostics</h3>
+                <p>Optional crash telemetry selects a useful stack frame and redacts URLs and local file paths.</p>
             </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">📊</span>
-                <h3>Stream Stats Overlay</h3>
-                <p>Live resolution, buffer health, bitrate, and dropped frames — toggle with the stats button during playback.</p>
+                <h3>Clearer Failure Reports</h3>
+                <p>Analytics reports show channel failures even when no crash events were recorded.</p>
             </div>
             <div class="feature-card fade-in">
-                <span class="feature-icon">✅</span>
-                <h3>Automated Tests</h3>
-                <p>23 API tests validate health, channels, proxy, EPG, favorites, and Docker config before every release.</p>
+                <span class="feature-icon">📈</span>
+                <h3>Better Performance Reports</h3>
+                <p>Reports include more recent events and label bounded crash samples accurately.</p>
             </div>
         </div>
     </div>
@@ -439,8 +424,8 @@
         <div class="features-grid">
             <div class="feature-card fade-in">
                 <span class="feature-icon">🌍</span>
-                <h3>16,000+ User-Contributed Streams</h3>
-                <p>News, music, lifestyle, regional channels, public broadcasters and documentaries — submitted by users from around the world. Aggregated from 80+ public sources and refreshed daily.</p>
+                <h3>Community-Maintained Stream Catalog</h3>
+                <p>News, music, regional channels, public broadcasters and documentaries from public sources and community submissions.</p>
             </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">👥</span>
@@ -455,7 +440,7 @@
             <div class="feature-card fade-in">
                 <span class="feature-icon">🔒</span>
                 <h3>Privacy First</h3>
-                <p>No tracking by default. No account required. Optional anonymous analytics (opt-in only). Honours GDPR data-subject rights. Open source — audit it yourself.</p>
+                <p>No account or advertising SDKs. Analytics is off by default; community health sharing is a separate choice. URL hashes can be matched to known streams. Open source under the MIT License.</p>
             </div>
             <div class="feature-card fade-in">
                 <span class="feature-icon">⚡</span>
@@ -465,7 +450,7 @@
             <div class="feature-card fade-in">
                 <span class="feature-icon">🎨</span>
                 <h3>Beautiful Player</h3>
-                <p>EPG program guide (when supplied by the source), favorites, watch history, parental controls with PIN lock, advanced search with filters, and more.</p>
+                <p>EPG is available in supported clients when program data is supplied by the source. Other features include favorites, watch history, parental controls with PIN lock, and advanced search.</p>
             </div>
         </div>
     </div>
@@ -485,7 +470,7 @@
                     <li>Tap "Report Broken" on any dead channel</li>
                     <li>Submit new channel URLs you discover</li>
                     <li>Rate stream quality to help others</li>
-                    <li>Health data syncs anonymously to the shared database</li>
+                    <li>Optional community sharing sends URL-hashed health reports and receives shared status feedback; hashes may match known streams</li>
                 </ul>
                 <h3 style="margin-top: 24px;">Contribute via GitHub</h3>
                 <p>For bulk submissions or detailed reports, open an issue with our channel report template.</p>

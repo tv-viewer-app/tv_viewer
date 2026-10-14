@@ -91,7 +91,7 @@ The Docker image is published as **`asummoner/tvviewerapp`** with both versioned
 
 ## Shared Backend (Supabase)
 
-Supabase is the system of record for shared channel metadata, crowd-sourced health, and anonymous analytics. The active project is **`cdtxpefohpwtusmqengu`**.
+Supabase is the system of record for shared channel metadata, community health, and opt-in analytics. Analytics and Android community-health sharing are separately controlled; channel URL hashes can be matched to known streams. The active project is **`cdtxpefohpwtusmqengu`**.
 
 Key data surfaces:
 
@@ -99,7 +99,7 @@ Key data surfaces:
 |--------|---------|
 | `channels` | Shared channel catalog with URL hashes, metadata, and source info |
 | `channel_status` | Working/broken status and report counts |
-| `analytics_events` | Opt-in anonymous analytics events |
+| `analytics_events` | Opt-in analytics events; payloads can include pseudonymous channel names and URL hashes |
 | `v_channels_with_sources` | RLS-respecting view for client consumption |
 | `mv_daily_active_users` | Aggregated stats for dashboards and community statistics |
 

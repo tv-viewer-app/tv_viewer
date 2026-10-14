@@ -137,7 +137,7 @@ def format_crash_report(
 ```
 
 ---
-*This crash report was generated automatically. No personal data was collected.*
+*Generated automatically. Review the exception and traceback for personal or sensitive details before submitting this issue publicly.*
 """
     
     return title, body
@@ -257,7 +257,7 @@ def install_global_handler():
                 "TV Viewer - Crash Detected",
                 f"An error occurred:\n\n{exc_type.__name__}: {str(exc_value)[:100]}\n\n"
                 "Would you like to report this crash?\n\n"
-                "(This will open GitHub to create an issue. No personal data is collected.)",
+                "(This opens a GitHub issue draft. Review it for personal or sensitive details before submitting.)",
                 icon='error'
             )
             

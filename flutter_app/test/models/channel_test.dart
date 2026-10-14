@@ -361,6 +361,26 @@ void main() {
         expect(channel.category ?? '', '');
         expect(channel.logo ?? '', '');
         expect(channel.bitrate ?? 0, 0);
+        expect(channel.status, 'unchecked');
+        expect(channel.isHealthUnknown, isTrue);
+      });
+
+      test('Clearing shared health also clears its cached check timestamp', () {
+        final checkedAt = DateTime.utc(2026, 10, 14);
+        final channel = Channel.fromJson({
+          'name': 'Channel',
+          'url': 'https://example.com/stream.m3u8',
+          'status': 'working',
+          'lastChecked': checkedAt.toIso8601String(),
+        });
+
+        final sanitized = channel.copyWith(
+          status: 'unchecked',
+          clearLastChecked: true,
+        );
+
+        expect(sanitized.lastChecked, isNull);
+        expect(sanitized.isHealthUnknown, isTrue);
       });
 
       test('EC-DATA-10: Handle null values in JSON', () {

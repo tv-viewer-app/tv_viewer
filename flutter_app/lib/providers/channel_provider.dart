@@ -12,6 +12,7 @@ import '../services/favorites_service.dart';
 import '../services/filters_service.dart';
 import '../services/parental_controls_service.dart';
 import '../services/shared_db_service.dart';
+import '../services/settings_service.dart';
 import '../services/epg_service.dart';
 import '../models/epg_info.dart';
 import '../utils/logger_service.dart';
@@ -305,6 +306,22 @@ class ChannelProvider extends ChangeNotifier {
       // Load LOCAL health cache FIRST (primary source of truth)
       final localHealthCache = await _loadLocalHealthCache();
       logger.info('Loaded LOCAL health cache for ${localHealthCache.length} channels');
+
+      final communitySharingEnabled =
+          await SettingsService.instance.getCommunityChannelSharingEnabled();
+      if (!communitySharingEnabled) {
+        _channels = _channels
+            .map((channel) => channel.copyWith(
+                  status: 'unchecked',
+                  reportCount: 0,
+                  workingReports: 0,
+                  brokenReports: 0,
+                  failedReports: 0,
+                  isWorking: true,
+                  clearLastChecked: true,
+                ))
+            .toList();
+      }
       
       // Try to fetch health cache from Supabase (optional, timeout: 5s)
       Map<String, ChannelStatusResult> supabaseHealthCache = {};

@@ -219,7 +219,7 @@ class _HelpScreenState extends State<HelpScreen> {
           _buildFaqItem(
             question: 'Why does the app request network permissions?',
             answer:
-                'Network access is required to fetch channel lists and stream video content. No personal data is collected or transmitted.',
+                'Network access is required to fetch the public channel catalog and stream video. Optional analytics and community health sharing are controlled separately in Settings; URL hashes may match known streams.',
           ),
           _buildFaqItem(
             question: 'Can I export the channel list?',
@@ -251,7 +251,7 @@ class _HelpScreenState extends State<HelpScreen> {
             icon: Icons.play_circle_outline,
             title: 'Video Won\'t Play',
             description:
-                'Try these steps:\n1. Check if the channel is marked as working (green checkmark)\n2. Run a scan to verify stream status\n3. Try playing in an external player\n4. Restart the app',
+                'Try these steps:\n1. Check the channel health indicator (Unknown means no local check or shared result is available)\n2. Run a local scan to verify stream status\n3. Try playing in an external player\n4. Restart the app',
           ),
           _buildTroubleshootingItem(
             icon: Icons.slow_motion_video,
@@ -263,7 +263,7 @@ class _HelpScreenState extends State<HelpScreen> {
             icon: Icons.sync_problem,
             title: 'Scan Taking Too Long',
             description:
-                'Scanning 5000+ channels can take 5-10 minutes. The app checks streams in batches of 5. You can cancel anytime and work with partial results.',
+                'Scan time depends on the number of selected channels and your network. The app checks streams in batches, and you can cancel and keep partial results.',
           ),
           _buildTroubleshootingItem(
             icon: Icons.error_outline,

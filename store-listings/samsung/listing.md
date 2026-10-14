@@ -11,28 +11,29 @@
 - **Supported Devices:** All Galaxy phones and tablets (Android 8.0+)
 
 ## Short Description
-Free IPTV streaming app with 16,000+ live TV and radio channels from 100+ countries. No ads, no account needed.
+Free IPTV player with live TV and radio streams from a community-maintained catalog. No ads, no account needed.
 
 ## Full Description
 
-TV Viewer brings you free live TV and radio from around the world — right on your Samsung Galaxy device.
+TV Viewer is a free IPTV player for live TV and radio streams from around the world.
 
 ✨ KEY FEATURES:
 
-🌍 16,000+ Channels — Live TV and radio from 100+ countries
+🌍 Community Catalog — Live TV and radio streams from around the world
 📺 Rich Categories — News, Sports, Entertainment, Music, Kids, Movies, Documentary & more
 🔍 Smart Search — Find channels by name, country, or category
 ⭐ Favorites — Quick access to your preferred channels
 📻 Radio Mode — Dedicated radio player with background playback
 🔊 Background Audio — Keep listening while using other apps
-📖 EPG Guide — Electronic Program Guide shows current & upcoming programs
 🖼️ Picture-in-Picture — Watch while multitasking (Android 8.0+)
 🌙 Dark Theme — Easy on the eyes, Material Design 3
 
 🔒 PRIVACY & TRUST:
 - No account required
 - No ads — ever
-- No tracking or data collection
+- Optional analytics is off by default and may include channel names, URL hashes, and a random install identifier
+- Separate optional community sharing sends URL-hashed health reports and fetches shared channel-health feedback
+- URL hashes may match known streams; channels without a local health check show Unknown when sharing is off
 - 100% open source (MIT license)
 - Community-powered channel database
 
@@ -47,7 +48,8 @@ The app connects to publicly available IPTV streams (M3U/HLS). All content is pr
 ## What's New
 - Screen wake lock fix for One UI 6+ (Android 14)
 - Background playback improvements
-- 16,000+ channels from community database
+- Community sharing now controls both sending health reports and receiving shared health feedback
+- Channels without a local health check show Unknown when sharing is off
 - Performance optimizations
 
 ## Keywords

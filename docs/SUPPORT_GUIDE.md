@@ -533,7 +533,7 @@ Step 1: Confirm the app still works
 
 Step 2: Check internet connectivity
   - Try loading a website in a browser
-  - If offline, health sharing resumes automatically when connectivity returns
+  - Shared health feedback loads only when community sharing is enabled and connectivity returns
 
 Step 3: Check Supabase status
   - Visit https://status.supabase.com for service status
@@ -551,7 +551,10 @@ Step 4: Check firewall/proxy
 **Important Notes:**
 - **Offline-first design:** All core features (channel loading, playback, caching) work without Supabase
 - **Automatic recovery:** Health sharing resumes silently when Supabase becomes reachable
-- **No user data at risk:** Supabase stores only anonymous, aggregate channel health votes — no PII
+- **Privacy note:** channel-health reports use URL hashes that can be matched to
+  known streams. Users can disable community sharing; channels without a local
+  check then show Unknown, while the public catalog and local checks remain
+  available.
 
 **Escalation Criteria:**
 - App hangs on startup waiting for Supabase → L2

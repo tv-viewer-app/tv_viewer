@@ -1,9 +1,9 @@
-"""Anonymous, privacy-first analytics service backed by Supabase REST API.
+"""Opt-in, pseudonymous analytics service backed by Supabase REST API.
 
-Collects lightweight, anonymous usage telemetry (app launches, stream
-failures, scan stats, crashes) for improving TV Viewer.  No PII is ever
-collected — channel URLs are SHA-256 hashed, and the only identifier is a
-random UUID stored locally.
+Collects optional usage telemetry (app launches, stream failures, scan stats,
+crashes) for improving TV Viewer. Channel URLs are SHA-256 hashed, and a random
+install UUID is included; neither hashes nor UUIDs should be treated as
+anonymous identifiers.
 
 The service is **opt-in only** — it is enabled when ``SUPABASE_URL`` and
 ``SUPABASE_ANON_KEY`` are set **and** ``config.TELEMETRY_ENABLED`` is ``True``
@@ -14,7 +14,7 @@ Database table (Supabase)::
 
     analytics_events
       id            — bigint, auto-increment (primary key)
-      device_id     — uuid (anonymous install identifier)
+      device_id     — uuid (pseudonymous install identifier)
       event_type    — text
       event_data    — jsonb
       app_version   — text
@@ -94,7 +94,7 @@ ENABLED: bool = bool(SUPABASE_URL and SUPABASE_ANON_KEY and _TELEMETRY_ON)
 # Flush when the queue reaches this size.
 MAX_QUEUE_SIZE: int = 20
 
-# Persistent file that stores the anonymous device UUID.
+# Persistent file that stores the pseudonymous install UUID.
 # Shared with telemetry.py to avoid creating phantom duplicate devices.
 _DEVICE_ID_PATH: Path = Path.home() / ".tv_viewer_device_id"
 
@@ -146,7 +146,7 @@ def _hash_url(url: str) -> str:
 
 
 def get_device_id() -> str:
-    """Public accessor returning a stable anonymous device UUID.
+    """Public accessor returning a stable pseudonymous install UUID.
 
     Loaded from ``~/.tv_viewer_device_id`` (created on first call with
     owner-only permissions).  Safe to call from any thread.
@@ -155,7 +155,7 @@ def get_device_id() -> str:
 
 
 def _load_or_create_device_id() -> str:
-    """Load the anonymous device UUID from disk, or create one on first run."""
+    """Load the pseudonymous install UUID from disk, or create one on first run."""
     try:
         if _DEVICE_ID_PATH.exists():
             stored = _DEVICE_ID_PATH.read_text(encoding="utf-8").strip()

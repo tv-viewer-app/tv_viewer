@@ -8,6 +8,9 @@
   when sharing is off.
 - Settings, privacy policy, store listing, and F-Droid disclosures explain the
   reciprocal health-sharing behavior and separate analytics opt-in.
+- Current privacy and store documentation now describes analytics identifiers
+  and URL hashes as pseudonymous, and explains that in-app feedback opens a
+  public GitHub issue form for user review and submission.
 
 ## [2.25.4] - 2026-10-13
 

@@ -250,8 +250,6 @@ class FeedbackService {
     // Compose issue body to prefill on the GitHub new-issue form
     final issueBody = '''**Rating:** ${'⭐' * rating} ($rating/5)
 **Category:** $type
-**App version:** v2.9.6
-
 ## Feedback
 
 $feedback

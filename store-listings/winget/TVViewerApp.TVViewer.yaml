@@ -9,12 +9,13 @@ PublisherUrl: https://github.com/tv-viewer-app/tv_viewer
 PublisherSupportUrl: https://github.com/tv-viewer-app/tv_viewer/issues
 License: MIT
 LicenseUrl: https://github.com/tv-viewer-app/tv_viewer/blob/master/LICENSE
-ShortDescription: Free IPTV streaming with 21,000+ live TV and radio channels worldwide
+ShortDescription: Free IPTV player for live TV and radio streams worldwide
 Description: |-
   TV Viewer is a free, open-source IPTV streaming application.
-  Browse 21,000+ live TV and radio channels from 100+ countries.
-  Features: search, favorites, EPG guide, background playback.
-  No ads, no account required, no tracking.
+  Browse live TV and radio streams from a community-maintained catalog.
+  Features: search, favorites, and background playback.
+  No ads or account required. Optional analytics is off by default.
+  TV Viewer does not host third-party streams; availability and rights depend on each provider.
 Tags:
   - iptv
   - tv

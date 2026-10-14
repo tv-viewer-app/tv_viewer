@@ -1,11 +1,11 @@
 /// Example: Using the Supabase-backed Analytics and Crashlytics Services
 ///
-/// This file demonstrates how to use the anonymous analytics service
+/// This file demonstrates how to use the opt-in analytics service
 /// in your application. Copy these patterns into your actual code.
 ///
 /// The analytics service uses Supabase REST API — no Firebase required.
-/// All data is anonymous: URLs are SHA-256 hashed, and the only identifier
-/// is a random UUID generated per install and stored in shared_preferences.
+/// Data is pseudonymous: URLs are SHA-256 hashed, and a random install
+/// identifier is stored in shared_preferences. Channel names may also be sent.
 
 import 'package:flutter/material.dart';
 import 'package:tv_viewer/constants.dart';

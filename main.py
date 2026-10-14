@@ -279,7 +279,7 @@ def main():
     except Exception as e:
         print(f"Warning: Could not install thread crash hook: {e}")
     
-    # Initialize anonymous analytics in a background daemon thread so the
+    # Initialize opt-in analytics in a background daemon thread so the
     # UI can render without waiting on network/disk I/O (Issue #163).
     def _init_analytics_async():
         try:

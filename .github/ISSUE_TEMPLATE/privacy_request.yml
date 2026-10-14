@@ -1,5 +1,5 @@
-name: 🔒 Privacy request
-description: Privacy question, data-deletion request, or GDPR/CCPA enquiry
+name: 🔒 General privacy question
+description: Non-sensitive question about the privacy policy
 title: "[Privacy] "
 labels: ["privacy"]
 body:
@@ -8,33 +8,23 @@ body:
       value: |
         Thanks for contacting us about privacy. Please review our [Privacy Policy](https://tv-viewer-app.github.io/tv_viewer/privacy.html) first — most questions (what we collect, how to opt out of analytics, how to erase local data) are answered there.
 
-        ⚠️ **Do not post personal information** (name, email, address, IP) in this public issue. If your request requires confidential info, open a [private security advisory](https://github.com/tv-viewer-app/tv_viewer/security/advisories/new) instead.
+        ⚠️ This is a public issue. Do not post personal information, private stream URLs, install identifiers, or data-subject requests here. For a private privacy or deletion request, email **tvviewerapp@proton.me**. Use a [private security advisory](https://github.com/tv-viewer-app/tv_viewer/security/advisories/new) only for security vulnerabilities.
   - type: dropdown
     id: kind
     attributes:
       label: Type of request
       options:
-        - General privacy question
-        - Data deletion request (opt-in analytics)
-        - GDPR access / portability request
-        - CCPA "do not sell/share" request
-        - Children's-privacy concern (under 13)
-        - Other
+        - General privacy-policy question
     validations:
       required: true
   - type: textarea
     id: details
     attributes:
       label: Details
-      description: What would you like us to do? Include the platform (Android / Windows) and app version.
-      placeholder: e.g. "Please delete any opt-in analytics for installs from approximately April 2026 in the EU region."
+      description: Ask a non-sensitive question about the published policy. Use the private email above for personal data requests.
+      placeholder: Do not include personal information, identifiers, or stream URLs.
     validations:
       required: true
-  - type: input
-    id: install_window
-    attributes:
-      label: Install date / region (optional, helps us locate anonymous analytics records)
-      placeholder: e.g. "installed ~April 2026, Germany"
   - type: checkboxes
     id: confirmations
     attributes:

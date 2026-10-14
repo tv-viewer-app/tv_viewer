@@ -649,7 +649,9 @@ class Channel {
           mediaType: json['media_type'] ?? json['mediaType'] ?? 'TV',
           status: status.isNotEmpty
               ? status
-              : (isWorking ? 'working' : (lastChecked != null ? 'failed' : 'unchecked')),
+              : (lastChecked != null
+                  ? (isWorking ? 'working' : 'failed')
+                  : 'unchecked'),
           reportCount: reportCount,
           workingReports: workingReports,
           brokenReports: brokenReports,
@@ -681,6 +683,13 @@ class Channel {
       totalHealthReports > 0 ? 1 - (reliability ?? 0) : null;
 
   bool get hasReliabilityData => totalHealthReports > 0;
+
+  bool get isHealthUnknown {
+    final normalizedStatus = status.toLowerCase();
+    return normalizedStatus.isEmpty ||
+        normalizedStatus == 'unchecked' ||
+        normalizedStatus == 'unknown';
+  }
 
   int get healthScore {
     int score = 10;
@@ -716,6 +725,7 @@ class Channel {
     int? failedReports,
     bool? isWorking,
     DateTime? lastChecked,
+    bool clearLastChecked = false,
     String? resolution,
     int? bitrate,
   }) {
@@ -739,7 +749,7 @@ class Channel {
       brokenReports: brokenReports ?? this.brokenReports,
       failedReports: failedReports ?? this.failedReports,
       isWorking: isWorking ?? this.isWorking,
-      lastChecked: lastChecked ?? this.lastChecked,
+      lastChecked: clearLastChecked ? null : (lastChecked ?? this.lastChecked),
       resolution: resolution ?? this.resolution,
       bitrate: bitrate ?? this.bitrate,
     );

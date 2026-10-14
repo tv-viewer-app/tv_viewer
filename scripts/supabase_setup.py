@@ -9,9 +9,10 @@ It will:
   4. Print instructions for GitHub Secrets (CI builds)
 
 PRIVACY NOTICE:
-  No personal data is collected. All device IDs and channel URLs are SHA-256
-  hashed before being sent to Supabase. The publishable key only allows INSERT to
-  analytics_events (write-only) and read/write to channel_status.
+  This script sends a test event to Supabase and may expose connection metadata
+  to the service provider. TV Viewer analytics and health payloads can include
+  pseudonymous identifiers, channel names, or URL hashes; hashes may match known
+  streams. Do not use real or sensitive channel data for setup tests.
 
 Usage:
     python scripts/supabase_setup.py

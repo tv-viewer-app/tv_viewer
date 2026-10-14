@@ -1,6 +1,6 @@
-"""Privacy-first usage telemetry to Supabase.
+"""Opt-in usage telemetry to Supabase.
 
-Tracks anonymous, aggregate usage patterns:
+Tracks pseudonymous usage patterns:
 - App starts (country from locale, platform, version)
 - Channel plays (country, category — NO channel names or URLs)
 - Channel failures (country, category, error type)
@@ -8,10 +8,11 @@ Tracks anonymous, aggregate usage patterns:
 - Favorites (add/remove with hashed URL)
 - Session end (duration, engagement depth)
 
-Privacy guarantees:
-- No PII: no usernames, IPs, emails, or device identifiers
-- No channel names or URLs (only hashed URL for dedup)
-- Anonymous device ID (random UUID, no hardware fingerprint)
+Privacy notes:
+- Event payloads do not intentionally include usernames or email addresses;
+  service providers may still process connection metadata such as IP addresses
+- This module's channel events use hashed URLs rather than plaintext URLs
+- A random install UUID is pseudonymous, not anonymous or a hardware ID
 - User can opt out via config (TELEMETRY_ENABLED = False)
 - Fire-and-forget: never blocks UI, silently drops on failure
 
@@ -74,7 +75,7 @@ _EXECUTOR = ThreadPoolExecutor(max_workers=3, thread_name_prefix='telemetry')
 
 
 def _get_device_id() -> str:
-    """Get or create anonymous device ID (random UUID, no hardware info)."""
+    """Get or create pseudonymous install ID (random UUID, no hardware info)."""
     try:
         if os.path.exists(_DEVICE_ID_FILE):
             with open(_DEVICE_ID_FILE, 'r') as f:
@@ -176,7 +177,7 @@ def track(event_type: str, event_data: Optional[Dict[str, Any]] = None):
     Args:
         event_type: One of: app_start, channel_play, channel_fail,
                     feature_use, scan_start, scan_complete
-        event_data: Dict of anonymous event properties
+        event_data: Dict of pseudonymous event properties
     """
     if not is_configured():
         return

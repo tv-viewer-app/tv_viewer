@@ -1,9 +1,9 @@
-Stream 21,000+ free IPTV channels from around the world — no sign-up, no subscription, no ads.
+Browse a community-maintained catalog of free IPTV streams from around the world — no sign-up, no subscription, no ads.
 
 TV Viewer connects you to a community-powered database of publicly available live TV and radio streams. Browse by category, search by name, and start watching instantly.
 
 🌍 CHANNELS FROM EVERYWHERE
-• 21,000+ channels from 150+ countries
+• Live TV and radio streams from around the world
 • Live TV, sports, news, movies, entertainment
 • Anime channels — HIDIVE, Pluto TV Anime, MAX Anime & more
 • Free-to-air TV from Germany, Israel, US, India & beyond
@@ -14,7 +14,7 @@ TV Viewer connects you to a community-powered database of publicly available liv
 • Multi-source fallback — if one stream fails, try another automatically
 • Picture-in-Picture mode for multitasking
 • Background audio for radio stations
-• Channel health indicators show stream reliability
+• Channel health status comes from a local check or, when community sharing is enabled, shared feedback
 
 🔍 FIND WHAT YOU WANT
 • Smart search across all channels
@@ -24,22 +24,22 @@ TV Viewer connects you to a community-powered database of publicly available liv
 
 🛡️ PRIVACY FIRST
 • No account required
-• No personal data collected
-• Optional anonymous analytics (opt-in only)
-• No ads, no tracking, no profiling
+• Optional analytics is off by default and may include channel names, URL hashes, and a random install identifier
+• Separate optional community sharing sends URL-hashed health reports and fetches shared health feedback
+• URL hashes can be matched to known streams; newly contributed channels may include stream URLs
+• No ads or advertising SDKs
 • Open source (MIT License)
 
 📊 COMMUNITY POWERED
-• Channel reliability tracked by the community
-• Broken streams automatically detected and flagged
+• Enable community sharing to send health reports and receive shared status feedback
+• With sharing off, channels without a local check show Unknown; local checks and the public catalog remain available
 • New channels added regularly from community sources
 • Community statistics dashboard
 
 ⚡ RELIABLE STREAMING
 • Smart channel sorting — reliable streams first
 • Automatic source fallback when streams go down
-• Health scoring based on community reports
-• Fast quarantine of consistently broken channels
+• Channel status uses local checks or shared reports when community sharing is enabled
 
 Also available as a web app (Docker) and desktop app (Windows/Linux).
 
