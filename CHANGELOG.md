@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.25.5] - 2026-10-14
+
+### Changed
+- Android community sharing now controls both sending channel-health reports
+  and fetching shared feedback; the public channel catalog remains available
+  when sharing is off.
+- Settings, privacy policy, store listing, and F-Droid disclosures explain the
+  reciprocal health-sharing behavior and separate analytics opt-in.
+
 ## [2.25.4] - 2026-10-13
 
 ### Fixed

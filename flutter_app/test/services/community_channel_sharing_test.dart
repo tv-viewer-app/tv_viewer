@@ -67,6 +67,104 @@ void main() {
     expect(requestCount, 0);
   });
 
+  test('shared health reads are disabled by default', () async {
+    var requestCount = 0;
+    final client = MockClient((request) async {
+      requestCount++;
+      return http.Response(
+        '[{"url_hash":"hash","status":"working",'
+        '"last_checked":"2026-10-14T12:00:00Z","response_time_ms":120}]',
+        200,
+      );
+    });
+
+    final results = await http.runWithClient(
+      () => SharedDbService().fetchRecentResults(),
+      () => client,
+    );
+
+    expect(results, isEmpty);
+    expect(requestCount, 0);
+  });
+
+  test('shared health results are available when community sharing is enabled',
+      () async {
+    await settings.setCommunityChannelSharingEnabled(true);
+    final client = MockClient((request) async {
+      expect(request.url.path, endsWith('/rest/v1/channel_status'));
+      return http.Response(
+        '[{"url_hash":"hash","status":"working",'
+        '"last_checked":"2026-10-14T12:00:00Z","response_time_ms":120}]',
+        200,
+      );
+    });
+
+    final results = await http.runWithClient(
+      () => SharedDbService().fetchRecentResults(),
+      () => client,
+    );
+
+    expect(results.keys, contains('hash'));
+    expect(results['hash']!.status, isTrue);
+    expect(results['hash']!.responseTimeMs, 120);
+  });
+
+  test('public channel catalog remains available without community sharing',
+      () async {
+    var requestCount = 0;
+    final client = MockClient((request) async {
+      requestCount++;
+      expect(request.url.path, endsWith('/rest/v1/channels'));
+      return http.Response(
+        '[{"url_hash":"hash","name":"Example","urls":'
+        '["https://example.test/live.m3u8"],"category":"News",'
+        '"country":"US","media_type":"TV","source":"test"}]',
+        200,
+      );
+    });
+
+    final channels = await http.runWithClient(
+      () => SharedDbService().fetchChannels(),
+      () => client,
+    );
+
+    expect(channels, hasLength(1));
+    expect(channels.single['status'], 'unchecked');
+    expect(channels.single['report_count'], 0);
+    expect(requestCount, 1);
+  });
+
+  test('shared health feedback is fetched when community sharing is enabled',
+      () async {
+    await settings.setCommunityChannelSharingEnabled(true);
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/channels')) {
+        return http.Response(
+          '[{"url_hash":"hash","name":"Example","urls":'
+          '["https://example.test/live.m3u8"],"category":"News",'
+          '"country":"US","media_type":"TV","source":"test"}]',
+          200,
+        );
+      }
+      expect(request.url.path, endsWith('/channel_status'));
+      return http.Response(
+        '[{"url_hash":"hash","status":"working","report_count":7,'
+        '"working_reports":6,"broken_reports":1,"failed_reports":0}]',
+        200,
+      );
+    });
+
+    final channels = await http.runWithClient(
+      () => SharedDbService().fetchChannels(),
+      () => client,
+    );
+
+    expect(channels, hasLength(1));
+    expect(channels.single['status'], 'working');
+    expect(channels.single['report_count'], 7);
+    expect(channels.single['working_reports'], 6);
+  });
+
   test('explicit channel submission works while automatic sharing is off',
       () async {
     expect(await settings.getCommunityChannelSharingEnabled(), isFalse);

@@ -76,21 +76,22 @@ git push origin app.tvviewer.player
 - **Source:** https://github.com/tv-viewer-app/tv_viewer
 - **Flutter version:** 3.44.4
 - **Subdir:** flutter_app
-- **Current version:** 2.25.2+142
+- **Latest published version:** 2.25.4+144
+- **Next release:** 2.25.5+145 (pending source release)
 - **License:** MIT
 
-The 2.25.2 recipe is release preparation, not a published build. After the
-source PR is merged, update every `Builds.commit` to the immutable commit on
-`master` and wait for the release assets before asking F-Droid to rerun its
+The next recipe update is release preparation, not a published build. After the
+source PR is merged and release assets are available, update every `Builds.commit`
+to the immutable commit on `master` before asking F-Droid to rerun its
 reproducible-build pipeline.
 
 ## Supabase Behavior
 
 All Android distributions use the same public Supabase publishable client
 configuration. Supabase row-level security is the authorization boundary.
-With explicit opt-in, `analytics_events` stores anonymous product events.
-Shared catalog reads remain available. Channel health reports and automatic
-contributions of newly found playlist channels are disabled by default and
-require a separate opt-in. Health reports transmit URL hashes, which may be
-matched to known streams. Explicit channel submissions send the details entered
-by the user. The metadata explains both `NonFreeNet` and `Tracking`.
+With explicit opt-in, `analytics_events` stores product events. Shared catalog
+reads remain available. Community sharing is separately opt-in: it sends
+URL-hashed health reports and fetches shared health feedback. Automatic
+contributions of newly found playlist channels may include stream URLs. Health
+hashes can be matched to known streams. Explicit channel submissions send the
+details entered by the user. The metadata explains both `NonFreeNet` and `Tracking`.

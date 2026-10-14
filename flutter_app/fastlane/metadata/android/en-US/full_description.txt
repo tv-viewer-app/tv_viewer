@@ -10,8 +10,9 @@ Features:
 • Picture-in-Picture (PiP) support where available
 • No account required and no ads
 • Optional usage and playback analytics (opt-in only)
-• Optional community sharing is off by default; when enabled, health reports
-  use URL hashes and new playlist channels may be shared with their stream URLs
+• Community sharing sends URL-hashed health reports and fetches shared
+  channel-health feedback; when off, no shared health data is exchanged.
+  New playlist channels may be shared with their stream URLs when enabled
 • Self-hosted web/Docker edition also available
 • Regular updates with new channels and fixes from the community
 
@@ -20,8 +21,8 @@ Privacy:
 • No account or login required
 • Analytics are off by default; optional playback events include channel names
   and URL hashes that can be matched to known streams
-• Channel health reports and automatic playlist contributions are off by default
-  and can be enabled in Settings; URL hashes may be matched to known stream URLs
+• In Settings, community sharing controls both sending health reports and
+  fetching shared health feedback; URL hashes may match known stream URLs
 • Country detection uses device timezone only
 • All source code is open and auditable
 
@@ -31,7 +32,8 @@ Network services:
 • Channel playlists are fetched from community and third-party hosts
 • FMStream.org is queried for public radio-station listings
 • Supabase provides the shared channel database, aggregated community statistics, optional analytics, and URL-hashed channel-health exchange
-• Analytics and channel health/playlist contributions require separate opt-ins
+• Usage analytics is separate and not required for shared health feedback;
+  community sharing is required to send reports and fetch that feedback
 
 Permissions:
 • Internet: Required to stream content

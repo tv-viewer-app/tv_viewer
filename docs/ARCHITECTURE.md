@@ -63,7 +63,8 @@ Key modules:
 - `flutter_app/lib/screens/radio_screen.dart` — radio-focused playback experience
 - `flutter_app/lib/screens/statistics_screen.dart` — Community Statistics page
 - `flutter_app/lib/services/analytics_service.dart` — opt-in analytics + timezone-based country detection
-- `flutter_app/lib/services/shared_db_service.dart` — Supabase reads/writes for shared health data
+- `flutter_app/lib/services/shared_db_service.dart` — public catalog reads plus
+  community-consent-gated Supabase health reads and writes
 - `flutter_app/lib/services/audio_handler.dart` — background audio playback
 
 Flutter builds inject Supabase credentials with `--dart-define` at build time.

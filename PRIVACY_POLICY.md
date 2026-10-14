@@ -1,6 +1,6 @@
 # Privacy Policy — TV Viewer
 
-**Last Updated:** September 30, 2026
+**Last Updated:** October 14, 2026
 
 ## Overview
 
@@ -35,17 +35,21 @@ discards queued events. Requests already sent cannot be recalled.
 
 ### Optional Community Channel Sharing
 
-Channel health reporting and automatic contributions of newly found playlist
-channels are disabled by default. If enabled in Settings, the app sends
-SHA-256 hashes of stream URLs with working/broken status, check timestamps,
-and response times to the shared channel database. It may also send newly
-discovered channel names, stream URLs, categories, countries, and logos.
+On Android, the **Share community channel data** setting controls both sending
+and receiving community health data. When off, the app does not send channel
+health reports or fetch channel-health feedback from Supabase; the public
+channel catalog remains available, and local channel checks continue to work.
+When enabled, the app sends SHA-256 hashes of stream URLs with working/broken
+status, check timestamps, and response times, and fetches shared health feedback
+from Supabase. It may also send newly discovered channel names, stream URLs,
+categories, countries, and logos.
 
 URL hashes are not anonymous: a hash can be matched against a known public
 stream URL, and health reports may reveal which streams were checked or played.
-You can enable or disable this sharing at any time in Settings. Submitting a
-channel through the explicit “Contribute a Channel” action sends the channel
-details you enter.
+Usage analytics remains a separate, optional setting and is not required to
+receive shared channel-health feedback. You can enable or disable this sharing
+at any time in Settings. Submitting a channel through the explicit
+“Contribute a Channel” action sends the channel details you enter.
 
 ### What We Do NOT Collect
 

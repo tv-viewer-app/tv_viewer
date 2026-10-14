@@ -134,7 +134,7 @@ class SettingsService {
     await AnalyticsService.instance.setEnabled(enabled);
   }
 
-  /// Whether channel health reports and automatic playlist contributions are enabled.
+  /// Whether community health reports, feedback reads, and playlist contributions are enabled.
   Future<bool> getCommunityChannelSharingEnabled() async {
     final prefs = await _getPrefs();
     return prefs.getBool(_keyCommunityChannelSharingEnabled) ??

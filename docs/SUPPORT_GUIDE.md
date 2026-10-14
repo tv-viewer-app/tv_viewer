@@ -528,7 +528,8 @@ Step 4: If source selector is missing
 ```
 Step 1: Confirm the app still works
   - TV Viewer is fully functional offline — Supabase is optional
-  - Channels load from local cache; only crowd-sourced health data is affected
+  - Channels load from local cache; local checks continue to work
+  - Shared health feedback requires community sharing to be enabled
 
 Step 2: Check internet connectivity
   - Try loading a website in a browser

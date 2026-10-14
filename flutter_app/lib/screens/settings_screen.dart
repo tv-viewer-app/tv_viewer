@@ -195,9 +195,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: const Text('Share community channel data'),
                   subtitle: const Text(
-                    'Off by default. Sends URL hashes for health reports and '
-                    'may share raw URLs for new playlist channels. Hashes can '
-                    'match known streams.',
+                    'When on, sends URL-hashed health reports and fetches '
+                    'shared channel-health feedback from Supabase. When off, '
+                    'no new shared health data is exchanged. New playlist '
+                    'channels may share their URLs. Usage analytics is '
+                    'separate and not required for feedback.',
                   ),
                   value: _communityChannelSharingEnabled,
                   onChanged: (v) {

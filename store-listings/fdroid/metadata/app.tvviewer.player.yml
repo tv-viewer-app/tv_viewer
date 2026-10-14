@@ -6,9 +6,10 @@ AntiFeatures:
   Tracking:
     en-US: Optional usage analytics include channel names, stream URL hashes and errors,
       and are sent to Supabase only after explicit opt-in. Channel-health reports
-      and automatic contributions of newly found playlist channels are separately
-      opt-in and disabled by default. Health reports include hashes that can be matched
-      to known stream URLs.
+      are separately opt-in; enabling community sharing sends URL-hashed reports
+      and fetches shared health feedback. Automatic contributions of newly found
+      playlist channels may include stream URLs. Analytics is not required for
+      feedback. Health hashes can match known URLs.
 Categories:
   - Multimedia
   - Online Media Player
