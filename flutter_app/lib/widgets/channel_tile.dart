@@ -199,6 +199,11 @@ class ChannelTile extends StatelessWidget {
   ) {
     final isFavorite = provider.isFavorite(channel);
     final iconSize = compact ? 16.0 : 20.0;
+    final statusColor = channel.isHealthUnknown
+        ? Colors.grey
+        : channel.isWorking
+            ? Colors.green
+            : Colors.red;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
