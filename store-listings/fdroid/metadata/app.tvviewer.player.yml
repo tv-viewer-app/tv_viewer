@@ -152,7 +152,7 @@ Builds:
 
   - versionName: 2.25.5
     versionCode: 1451
-    commit: ca0d32e8f3d73731152d4c5064ad40cfe3d38a61
+    commit: 1c3e80c
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -193,7 +193,7 @@ Builds:
 
   - versionName: 2.25.5
     versionCode: 1452
-    commit: ca0d32e8f3d73731152d4c5064ad40cfe3d38a61
+    commit: 1c3e80c
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
@@ -234,7 +234,7 @@ Builds:
 
   - versionName: 2.25.5
     versionCode: 1453
-    commit: ca0d32e8f3d73731152d4c5064ad40cfe3d38a61
+    commit: 1c3e80c
     subdir: flutter_app
     sudo:
       - mkdir -p /home/runner/work/tv_viewer
