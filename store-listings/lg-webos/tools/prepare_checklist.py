@@ -1,4 +1,5 @@
 from copy import copy
+from datetime import date
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -11,7 +12,7 @@ OUTPUT = ROOT / "lg-self-evaluation-checklist-5.0-tv-viewer-draft.xlsx"
 
 PASS = {
     5: "Headless Chromium launch and packaged-app smoke test passed.",
-    6: "Main page, loading state, splash, overscan-safe layout, and 16:9 screenshots reviewed at 1920x1080.",
+    6: "Desktop browser checks cover the main page, loading state, and 16:9 screenshots at 1920x1080. TV overscan remains pending.",
     9: "Both 1920x1080 and 1280x720 IPKs are built and validated.",
     10: "English UI and Seller Lounge screenshots visually reviewed for clipping and broken text.",
     11: "All selectable controls implement a visible white focus outline and scale state.",
@@ -104,7 +105,7 @@ for sheet in wb.worksheets:
     sheet.freeze_panes = copy(sheet.freeze_panes)
 
 ws["N1"].comment = Comment(
-    "DRAFT prepared September 30, 2026. Yellow blank result cells require "
+    f"DRAFT prepared {date.today().isoformat()}. Yellow blank result cells require "
     "physical LG TV or webOS Cloud Test Lab verification before upload.",
     "TV Viewer",
 )

@@ -1,6 +1,6 @@
 # LG Content Store submission status
 
-**Prepared:** October 1, 2026
+**Prepared:** October 16, 2026
 **App:** TV Viewer
 **Package ID:** `app.tvviewer.webos`
 **Version:** 2.25.0
@@ -11,7 +11,7 @@ review, and certification approval remain open.
 
 | Workstream | Status | Evidence |
 |---|---|---|
-| webOS application | Ready for device validation | FHD and HD IPKs build from the same validated source |
+| webOS application | Ready for device validation | Both IPKs rebuilt locally on October 16; source validation and browser navigation/screenshot checks passed |
 | Store metadata | Prepared | Listing copy and exact field values below |
 | Store artwork | Prepared | 400x400 icon, 1920x1080 splash, four FHD screenshots |
 | UX scenario | Prepared | `TV-Viewer-LG-webOS-UX-Scenario-v2.25.0.pptx` |
@@ -94,6 +94,14 @@ fallback.
    evidence exists.
 6. Complete the Seller Lounge age-rating questionnaire.
 7. Upload the final artifacts and submit for LG review.
+
+The LG package remains 2.25.0 independently of the Android/desktop 2.25.5
+candidate: no LG runtime changes require a version bump. The submission bundle
+includes the current privacy policy, not just the policy from its initial build.
+Reconfirm LG's UK data-collection and sharing answers against that policy:
+the app has no analytics or health reporting, but Supabase and stream providers
+receive connection metadata when serving requests. Do not treat the table's
+proposed answers as a legal or LG classification determination.
 
 ## Go/no-go rule
 

@@ -77,8 +77,22 @@ Generate one flat folder containing every file needed during Seller Lounge
 registration:
 
 ```powershell
+npm --prefix webos_app ci
+npm --prefix webos_app run validate
+npm --prefix webos_app run package
+npm --prefix webos_app run capture-store-assets
+npm --prefix webos_app run generate-ux-scenario
+python store-listings\lg-webos\tools\prepare_checklist.py
 python store-listings\lg-webos\tools\assemble_submission.py
 ```
+
+Before running `prepare_checklist.py`, download LG's official
+[App Self Checklist archive](https://webostv.developer.lge.com/assets/checklist/documents_for_app_qa.zip).
+Save its `self_evaluation_checklist_5.0.xlsx` as
+`store-listings\lg-webos\templates\lg-self-evaluation-checklist-5.0-original.xlsx`.
+The template and generated documents are intentionally not committed.
+Screenshot capture requires Microsoft Edge (or its path in `EDGE_PATH`).
+Browser checks are preparation evidence, not LG device certification.
 
 Use:
 
@@ -90,6 +104,12 @@ store-listings\lg-webos\upload-ready\
 to upload. The folder includes both IPKs, the 400x400 app icon, the 1920x1080
 launcher background, screenshots, QA documents, privacy policy, and store
 listing copy.
+
+The portable `dist\lg-webos-submission-v2.25.0.zip` also includes this flat
+`upload-ready` folder, both field guides, and SHA-256 manifests. The checklist
+is a draft until the pending device and content-review cases are completed.
+Screenshots are desktop-browser illustrations; the player-controls image uses
+the app poster and is not evidence of successful stream playback.
 
 ## Certification notes
 

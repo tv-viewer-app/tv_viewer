@@ -122,7 +122,7 @@ function addTitle(slide, title, subtitle) {
   }
 }
 
-function addScreenshot(slide, filename, x = 0.58, y = 1.28, w = 8.35) {
+function addScreenshot(slide, filename, x = 0.58, y = 1.28, w = 8.15) {
   const imagePath = path.join(screenshotDir, filename);
   if (!fs.existsSync(imagePath)) {
     throw new Error(`Missing screenshot: ${imagePath}`);
@@ -145,6 +145,20 @@ function addScreenshot(slide, filename, x = 0.58, y = 1.28, w = 8.35) {
     },
   });
   slide.addImage({ path: imagePath, x, y, w, h });
+  const caption = filename === "03-player-controls.png"
+    ? "Player-controls illustration, not playback evidence. LG TV / Cloud Test Lab validation PENDING."
+    : "Desktop-browser capture of intended UI. LG TV / Cloud Test Lab validation PENDING; not certification evidence.";
+  slide.addText(caption, {
+    x,
+    y: 5.94,
+    w,
+    h: 0.22,
+    fontFace: "Arial",
+    fontSize: 9,
+    color: COLORS.muted,
+    margin: 0,
+    fit: "shrink",
+  });
 }
 
 function addStepPanel(slide, title, steps, x = 9.2, y = 1.28, w = 3.55) {
@@ -382,7 +396,7 @@ function addStatusBadge(slide, text, color, x, y, w) {
   addStatusBadge(slide, "REMOTE-FIRST", "1676D2", 9.18, 2.08, 2.65);
   addStatusBadge(slide, "NO ANALYTICS", "107C10", 9.18, 2.71, 2.65);
   addStatusBadge(slide, "PUBLIC-INTEREST CATALOG", "744DA9", 9.18, 3.34, 2.65);
-  slide.addText("Prepared September 30, 2026", {
+  slide.addText(`Prepared ${new Date().toISOString().slice(0, 10)}`, {
     x: 0.75,
     y: 6.68,
     w: 3.6,
@@ -458,7 +472,7 @@ function addStatusBadge(slide, text, color, x, y, w) {
   addTitle(
     slide,
     "4. Remote-control and Magic Remote behavior",
-    "All core functions are available without pointer input; Magic Remote pointer interaction remains supported.",
+    "Designed for D-pad and pointer input; physical Magic Remote validation remains PENDING.",
   );
   addScreenshot(slide, "02-remote-help.png");
   addStepPanel(slide, "Key mapping", [
@@ -589,7 +603,7 @@ function addStatusBadge(slide, text, color, x, y, w) {
   addTitle(
     slide,
     "6. Certification execution and exit criteria",
-    "Desktop automation supports preparation; final attestation requires an LG TV, App CTS, or Cloud Test Lab evidence.",
+    "LG TV / official Cloud Test Lab device evidence and required LG App CTS results remain PENDING.",
   );
   const rows = [
     ["Launch", "Cold and warm launch, splash, first-run notice", "Pending LG TV / Cloud Test Lab"],

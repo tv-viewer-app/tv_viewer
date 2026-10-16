@@ -1,6 +1,6 @@
 # Privacy Policy — TV Viewer
 
-**Last Updated:** October 14, 2026
+**Last Updated:** October 16, 2026
 
 ## Overview
 
@@ -118,11 +118,21 @@ submissions are published when submitted.
 
 ## Content Disclaimer
 
-TV Viewer aggregates publicly available IPTV streams. Some channels may contain mature content. Users must confirm they are 18+ on first launch. Parental controls are available in Settings.
+The Android and desktop editions aggregate publicly available IPTV streams.
+Some channels may contain mature content. Their first-run flow requires an
+18+ confirmation; parental controls are available in Settings.
+
+The LG webOS edition instead limits discovery to public-interest categories
+and shows a content and privacy notice. It does not provide the Android
+Settings controls or an age-verification service. Category and name filtering
+cannot guarantee the suitability or distribution rights of every live stream.
 
 ## Children's Privacy
 
-This app is not intended for children under 18. We do not knowingly collect data from minors.
+TV Viewer is not directed at children. The Android and desktop editions require
+an 18+ confirmation. The LG edition's store age rating must be determined
+through LG's questionnaire and review, not inferred from its catalog filters.
+We do not knowingly collect data from minors.
 
 ## Changes to This Policy
 
@@ -130,6 +140,7 @@ We may update this policy with new app versions. Changes will be noted in the ap
 
 ## Contact
 
-For privacy questions or data deletion requests:
-- **GitHub Issues**: [github.com/tv-viewer-app/tv_viewer/issues](https://github.com/tv-viewer-app/tv_viewer/issues)
-- **GitHub Issues**: [Report a privacy concern](https://github.com/tv-viewer-app/tv_viewer/issues)
+For private privacy questions or data deletion requests, contact
+tvviewerapp@proton.me. Do not include personal data in public GitHub issues.
+For non-sensitive policy questions, use
+[GitHub Issues](https://github.com/tv-viewer-app/tv_viewer/issues).

@@ -259,6 +259,13 @@ def main() -> None:
         shutil.copy2(source, target)
         copied.append(target)
 
+    for source in sorted(UPLOAD_DIR.iterdir()):
+        if source.is_file():
+            target = BUNDLE_DIR / "upload-ready" / source.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            copied.append(target)
+
     manifest = BUNDLE_DIR / "SHA256SUMS.txt"
     manifest.write_text(
         "\n".join(
