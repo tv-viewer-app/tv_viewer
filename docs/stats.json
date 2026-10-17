@@ -1,20 +1,20 @@
 {
-  "updated_at": "2026-10-16T10:23:00.405700+00:00",
-  "total_channels": 21865,
-  "countries": 42,
+  "updated_at": "2026-10-17T09:55:39.681034+00:00",
+  "total_channels": 21904,
+  "countries": 48,
   "categories": 43,
   "top_countries": [
-    {
-      "name": "France",
-      "count": 167
-    },
     {
       "name": "China",
       "count": 159
     },
     {
+      "name": "France",
+      "count": 159
+    },
+    {
       "name": "Brazil",
-      "count": 103
+      "count": 104
     },
     {
       "name": "CZ",
