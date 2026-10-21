@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-19T11:39:30.039588+00:00",
-  "total_channels": 21955,
-  "countries": 51,
+  "updated_at": "2026-10-21T10:53:17.598496+00:00",
+  "total_channels": 22018,
+  "countries": 54,
   "categories": 43,
   "top_countries": [
     {
@@ -10,7 +10,7 @@
     },
     {
       "name": "France",
-      "count": 155
+      "count": 148
     },
     {
       "name": "Brazil",
@@ -88,7 +88,7 @@
   "top_categories": [
     {
       "name": "Education",
-      "count": 383
+      "count": 384
     },
     {
       "name": "Documentary",
@@ -96,7 +96,7 @@
     },
     {
       "name": "Entertainment",
-      "count": 116
+      "count": 115
     },
     {
       "name": "Culture",
