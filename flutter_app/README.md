@@ -60,3 +60,22 @@ flutter_app/
 - `provider` - State management
 - `http` / `dio` - HTTP client
 - `shared_preferences` - Local storage
+
+## Reliability checks
+
+Run the focused Android recovery regressions from `flutter_app`:
+
+```bash
+flutter test test/screens/android_reliability_test.dart test/utils/logger_storage_test.dart
+```
+
+Repository saves and retained Undo actions must not update a disposed screen.
+Community statistics discard malformed caches, retain valid offline data, and
+keep newly fetched data visible when local cache writes fail, with a Snackbar
+explaining that the data could not be saved. Log export filesystem failures
+reach the existing export-error Snackbar rather than appearing as "no logs".
+
+The tests reproduce these application failure paths, not the precise production
+incidents: issues #295/#296, #299, and #304 only contain framework stack frames.
+Issue #308's range error has no confirmed application callsite, and #309 is a
+debug layout overflow; neither is claimed fixed by these changes.

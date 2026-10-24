@@ -44,6 +44,7 @@ class _RepoManagementScreenState extends State<RepoManagementScreen> {
 
   Future<void> _saveRepos() async {
     await _settings.setCustomRepos(_repos);
+    if (!mounted) return;
     setState(() => _isCustom = true);
   }
 
@@ -90,6 +91,7 @@ class _RepoManagementScreenState extends State<RepoManagementScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (result != null && result.trim().isNotEmpty) {
       final url = result.trim();
       final validationError = _validateUrl(url);
@@ -140,6 +142,7 @@ class _RepoManagementScreenState extends State<RepoManagementScreen> {
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () {
+              if (!mounted) return;
               setState(() {
                 if (!_repos.contains(url)) {
                   final restoreIndex =

@@ -123,6 +123,34 @@ void main() {
     expect(find.text('Unable to load statistics'), findsNothing);
   });
 
+  testWidgets('valid fresh cache does not require a network request',
+      (tester) async {
+    stored['flutter.$cacheKey'] = '{"total_events":17,"total_plays":0}';
+    stored['flutter.$cacheTimeKey'] = DateTime.now().millisecondsSinceEpoch;
+    var requests = 0;
+
+    await showStatistics(tester, MockClient((_) async {
+      requests++;
+      return http.Response('', 500);
+    }));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('17'), findsOneWidget);
+    expect(requests, 0);
+  });
+
+  testWidgets('empty server response shows retry instead of throwing',
+      (tester) async {
+    await showStatistics(
+      tester,
+      MockClient((_) async => http.Response('', 200)),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Unable to load statistics'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
   testWidgets('statistics remain visible when cache writes run out of space',
       (tester) async {
     failWrites = true;
@@ -156,6 +184,34 @@ void main() {
       release.complete();
       await locked;
     }
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      jsonDecode(stored['flutter.custom_repos']! as String),
+      ['https://example.test/b.m3u'],
+    );
+  });
+
+  testWidgets('repository undo left in messenger is safe after route disposal',
+      (tester) async {
+    stored['flutter.custom_repos'] =
+        '["https://example.test/a.m3u","https://example.test/b.m3u"]';
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: const Scaffold(body: Text('Home')),
+    ));
+    navigatorKey.currentState!.push(MaterialPageRoute<void>(
+      builder: (_) => const RepoManagementScreen(),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.delete_outline).first);
+    await tester.pumpAndSettle();
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

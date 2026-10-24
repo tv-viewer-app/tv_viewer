@@ -291,6 +291,9 @@ class LoggerService {
       info('Logs exported to: ${exportFile.path}');
       
       return exportFile;
+    } on FileSystemException catch (e, stackTrace) {
+      error('Failed to export logs', e, stackTrace);
+      rethrow;
     } catch (e, stackTrace) {
       error('Failed to export logs', e, stackTrace);
       return null;

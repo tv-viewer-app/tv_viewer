@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_distribution.dart';
 import '../config/backend_config.dart';
+import '../utils/logger_service.dart';
 import '../utils/prefs_lock.dart';
 
 /// Community statistics screen showing aggregated usage data.
@@ -55,34 +56,37 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Future<void> _loadStatistics() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Try cache first
-    final cachedTime = prefs.getInt(_cacheTimeKey) ?? 0;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - cachedTime < _cacheTtl.inMilliseconds) {
+    Map<String, dynamic>? cachedData;
+    final client = http.Client();
+    try {
+      final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getString(_cacheKey);
-      if (cached != null) {
+      cachedData = _decodeCachedStatistics(cached);
+      if (cached != null && cachedData == null) {
+        await prefs.safeRemove(_cacheKey);
+        await prefs.safeRemove(_cacheTimeKey);
+      }
+
+      final cachedTime = prefs.getInt(_cacheTimeKey) ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (cachedData != null &&
+          now - cachedTime < _cacheTtl.inMilliseconds) {
         if (!mounted) return;
         setState(() {
-          _data = jsonDecode(cached);
+          _data = cachedData;
           _error = null;
           _showWebStatsButton = false;
           _loading = false;
         });
         return;
       }
-    }
+      if (!_hasSupabaseStatsConfig) {
+        await prefs.safeRemove(_cacheKey);
+        await prefs.safeRemove(_cacheTimeKey);
+        _showCommunityStatsFallback();
+        return;
+      }
 
-    if (!_hasSupabaseStatsConfig) {
-      await prefs.safeRemove(_cacheKey);
-      await prefs.safeRemove(_cacheTimeKey);
-      _showCommunityStatsFallback();
-      return;
-    }
-
-    final client = http.Client();
-    try {
       final headers = {
         'apikey': _supabaseAnonKey,
         'Authorization': 'Bearer $_supabaseAnonKey',
@@ -148,8 +152,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         return;
       }
 
-      await prefs.safeSetString(_cacheKey, jsonEncode(result));
-      await prefs.safeSetInt(_cacheTimeKey, now);
+      var cacheSaved = false;
+      try {
+        cacheSaved = await prefs.safeSetString(_cacheKey, jsonEncode(result)) &&
+            await prefs.safeSetInt(_cacheTimeKey, now);
+        if (!cacheSaved) {
+          logger.warning('Statistics cache write was not confirmed');
+        }
+      } on Exception catch (error) {
+        logger.warning('Unable to save statistics cache', error);
+      }
 
       if (!mounted) return;
       setState(() {
@@ -158,23 +170,46 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         _showWebStatsButton = false;
         _loading = false;
       });
-    } catch (e) {
+      if (!cacheSaved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Statistics loaded, but could not be saved on this device.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      logger.warning('Unable to load statistics', error);
       if (!mounted) return;
-      // Try stale cache
-      final cached = prefs.getString(_cacheKey);
       setState(() {
-        if (cached != null) {
-          _data = jsonDecode(cached);
-          _error = null;
-          _showWebStatsButton = false;
-        } else {
-          _error = 'Unable to load statistics';
-          _showWebStatsButton = false;
-        }
+        _data = cachedData;
+        _error = cachedData == null ? 'Unable to load statistics' : null;
+        _showWebStatsButton = false;
         _loading = false;
       });
     } finally {
       client.close();
+    }
+  }
+
+  Map<String, dynamic>? _decodeCachedStatistics(String? cached) {
+    if (cached == null) return null;
+    try {
+      final decoded = jsonDecode(cached);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Statistics cache must be an object');
+      }
+      return _normalizeStatisticsPayload({
+        ...decoded,
+        'user_countries': decoded['countries'],
+      });
+    } on FormatException catch (error) {
+      logger.warning('Discarding invalid statistics cache', error);
+      return null;
+    } on TypeError catch (error) {
+      logger.warning('Discarding invalid statistics cache schema', error);
+      return null;
     }
   }
 
