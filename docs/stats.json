@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-10-26T11:56:34.253547+00:00",
-  "total_channels": 22344,
+  "updated_at": "2026-10-28T11:52:33.706792+00:00",
+  "total_channels": 22412,
   "countries": 56,
   "categories": 43,
   "top_countries": [
@@ -10,7 +10,7 @@
     },
     {
       "name": "France",
-      "count": 139
+      "count": 136
     },
     {
       "name": "Brazil",
@@ -45,16 +45,16 @@
       "count": 25
     },
     {
+      "name": "CL",
+      "count": 25
+    },
+    {
       "name": "FI",
       "count": 25
     },
     {
       "name": "ES",
       "count": 23
-    },
-    {
-      "name": "CL",
-      "count": 22
     },
     {
       "name": "Argentina",
@@ -96,7 +96,7 @@
     },
     {
       "name": "Entertainment",
-      "count": 115
+      "count": 112
     },
     {
       "name": "Culture",
@@ -123,12 +123,12 @@
       "count": 18
     },
     {
-      "name": "Azerbaijan",
-      "count": 10
+      "name": "Chile",
+      "count": 12
     },
     {
-      "name": "Chile",
-      "count": 9
+      "name": "Azerbaijan",
+      "count": 10
     },
     {
       "name": "Classic",
