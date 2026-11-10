@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-11-09T14:46:06.181290+00:00",
-  "total_channels": 23582,
-  "countries": 59,
-  "categories": 52,
+  "updated_at": "2026-11-10T13:59:41.409945+00:00",
+  "total_channels": 23976,
+  "countries": 60,
+  "categories": 47,
   "top_countries": [
     {
       "name": "China",
@@ -10,7 +10,7 @@
     },
     {
       "name": "France",
-      "count": 128
+      "count": 127
     },
     {
       "name": "Brazil",
@@ -88,15 +88,15 @@
   "top_categories": [
     {
       "name": "Education",
-      "count": 392
+      "count": 368
     },
     {
       "name": "Documentary",
-      "count": 212
+      "count": 218
     },
     {
       "name": "Culture",
-      "count": 53
+      "count": 59
     },
     {
       "name": "Business",
@@ -108,15 +108,15 @@
     },
     {
       "name": "Animation;Kids",
-      "count": 30
-    },
-    {
-      "name": "Animation",
-      "count": 26
+      "count": 38
     },
     {
       "name": "Comedy",
-      "count": 22
+      "count": 31
+    },
+    {
+      "name": "Animation",
+      "count": 28
     },
     {
       "name": "Australia",
@@ -124,7 +124,11 @@
     },
     {
       "name": "Cooking",
-      "count": 13
+      "count": 15
+    },
+    {
+      "name": "Auto",
+      "count": 14
     },
     {
       "name": "Chile",
@@ -133,10 +137,6 @@
     {
       "name": "Classic",
       "count": 12
-    },
-    {
-      "name": "Auto",
-      "count": 10
     },
     {
       "name": "Azerbaijan",
