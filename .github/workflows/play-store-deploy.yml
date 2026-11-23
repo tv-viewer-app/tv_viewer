@@ -103,7 +103,7 @@ jobs:
       # --- Fallback: build AAB from source if release didn't have one ---
       - name: Set up Java 17
         if: steps.dl-release.outputs.found != 'true'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: '17' }
 
       - name: Set up Flutter
